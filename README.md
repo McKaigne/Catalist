@@ -9,8 +9,7 @@ By default everything stays on your machine. No account, no server, no
 network needed. If you want your list on more than one device, a
 [self-hosted server](#self-hosted-server) is planned.
 
-> **TBA (screenshot):** The Library screen with the tab bar, the list, and the details pane.
-<!-- docs/media/catalist-library.png -->
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/c058cf86-98c6-422d-b69c-281c634d7a91" />
 
 [Install](#install) · [Quick start](#quick-start) · [Importing from MAL](#importing-from-mal) ·
 [The terminal app](#the-terminal-app) · [CLI mode](#cli-mode) ·

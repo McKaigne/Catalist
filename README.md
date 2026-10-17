@@ -23,18 +23,25 @@ network needed. If you want your list on more than one device, a
 
 ## What you get
 
-- **`catalist`, the app.** A multi-screen TUI for your lists. Jump between
-  screens with the number keys `1` to `8`: library, in progress, search,
-  browse, stats, and more, all drawn with FTXUI.
-- **Vim motions and mouse support.** `j`/`k`, `gg`/`G`, `/` search and `:`
-  commands, or just click and scroll. Use whichever you like, or both.
-- **MAL import.** Bring your existing anime and manga list over from a
-  MyAnimeList export.
+- **`catalist`, the app.** A unified floating-card TUI for your watchlists.
+  Switch between media tabs with `1`, `2`, and `3`: Anime (`󰴙`), Manga (`󱥬`),
+  and Statistics Overview (`󰄫`), all drawn with FTXUI.
+- **APA-style minimalist catalog.** A table layout with zero border T-junctions
+  or horizontal rule clutter. Column headers and entry rows align down to the
+  individual character.
+- **Vim motions and deep mouse support.** `j`/`k`, `gg`/`G`, `/` search with live
+  case-insensitive yellow highlighting, or just click and scroll. Scrub progress
+  directly on the gauge, click star clusters to rate, and step episodes with `[-]`/`[+]`.
+- **Zero-prompt record creation.** Instant entry creation with `n` or `a`
+  without tedious multi-field modal prompts.
+- **MAL import.** Ingest existing anime and manga lists directly from a
+  MyAnimeList XML export.
 - **A CLI mode** *(planned)*. Nushell-style commands that pipe in and out:
   show only your 9/10s, sort by rating or date, change a rating or status in
   one line, export to JSON or CSV.
-- **Local first.** Your list is a file you own. Nothing leaves your machine
-  unless you set up a server yourself.
+- **Local first.** Your list is stored in plain CSV files you own under
+  `~/.config/catalist/`. Nothing leaves your machine unless you set up a
+  server yourself.
 - **Self-hosted server** *(planned)*. Run `catalist serve` on your own
   machine or home server and use the same TUI and CLI against it from any
   device.
@@ -67,12 +74,12 @@ cmake --build build
 ./build/catalist --version
 ```
 
-**Nix development shell.** To get the compiler, CMake and FTXUI in one
+**Nix development shell.** To get the compiler, CMake, and FTXUI in one
 reproducible environment:
 
 ```bash
 nix develop
-cmake -B build && cmake --build build
+cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
 ```
 
 `catalist --version` confirms the install.
@@ -80,30 +87,34 @@ cmake -B build && cmake --build build
 ## Quick start
 
 ```bash
-catalist                      # open the TUI
-catalist import mal ~/animelist.xml
+catalist                      # open the interactive TUI
+catalist import ~/animelist.xml
+catalist import --clean ~/animelist.xml ~/mangalist.xml
 ```
 
-To leave the TUI, press `q` (or `:q` then `Enter`). Changes are saved as you
+To leave the TUI, press `q` (or `:q` then `ret`). Changes are saved to disk as you
 make them.
-
-> **TBA (GIF):** First run: import a MAL export, then open the TUI and move around.
-<!-- docs/media/quick-start.gif -->
 
 Inside the TUI:
 
-| Keys | What |
+| Keys | Action |
 | --- | --- |
-| `j` `k` | Move down and up the list |
-| `gg` `G` | Jump to the top and bottom |
-| `1` to `8` | Jump straight to a screen |
-| `Tab` `Shift+Tab` | Next and previous screen |
-| `h` `l` | Move between panes within a screen |
-| `/` | Search your list |
-| `Enter` | Open the selected entry |
-| `:` | Command line |
-| `?` | Keys for the current view |
-| `q` | Quit |
+| `1` `2` `3` | Jump directly to Anime (`󰴙`), Manga (`󱥬`), or Overview (`󰄫`) |
+| `Tab` / `[` `]` | Cycle between tabs |
+| `j` `k` / Wheel | Move up and down the catalog with smooth viewport tracking |
+| `gg` `G` | Jump to the first and last entry |
+| `c` `t` `s` `r` `p` | Sort by Date, Title, Status, Rating, or Progress (tap again to flip) |
+| `n` `a` | Instantly create a new record without manual input forms |
+| `d` | Delete selected entry (prompts `[y/N]` confirmation, undoable with `u`) |
+| `ret` | Enter in-place cell edit mode (`h`/`l` column, `j`/`k` adjust) |
+| `y` | Copy selected title to system clipboard (`wl-copy` / OSC 52) |
+| `/` | Search catalog with live case-insensitive yellow match highlighting |
+| `o` | Open selected record directly on MyAnimeList in default browser |
+| `u` / `Ctrl+Z` | Undo last edit or deletion |
+| `Ctrl+R` / `Ctrl+Y` | Redo last undone action |
+| `Esc` / `Backspace` | Step back to Categories sidebar |
+| `:` | Open command line (`:w`, `:q`, `:undo`, `:backup`, `:sync`) |
+| `q` | Save all lists and quit |
 
 ## Importing from MAL
 
@@ -111,78 +122,117 @@ On MyAnimeList, export your list from your profile's export page. It gives
 you an XML file for anime and another for manga.
 
 ```bash
-catalist import mal ~/animelist.xml
-catalist import mal ~/mangalist.xml
+catalist import ~/animelist.xml
+catalist import ~/mangalist.xml
 ```
 
-> **TBA (GIF):** Importing an anime export and a manga export, then the Library filling up.
-<!-- docs/media/import-mal.gif -->
+To wipe the existing category and replace it cleanly:
+
+```bash
+catalist import --clean ~/animelist.xml
+```
 
 Titles, status, score, progress, and dates come across. Importing the same
 file twice does not duplicate entries: each one is matched by MyAnimeList's own
 database id and type, and kept as `mal_id` on the entry. Importing is done entirely from the
-file you give it, so your MAL credentials are never needed.
+file you give it, so your MAL credentials are never needed. Backup snapshots are
+automatically archived to `~/.config/catalist/backups/`.
 
 Support for other sources such as AniList is *(planned)*.
 
 ## The terminal app
 
 ```bash
-catalist                      # the default list
+catalist                      # launch interactive watchlist
 ```
 
-The app is a set of full-window screens. A tab bar at the top names them,
-the active one is highlighted, and a status bar at the bottom shows the
-current mode, filter, and any messages.
+The interface is organized into decoupled, floating cards styled in Catppuccin Mocha.
+A top tab bar switches media profiles, a sidebar indexes categories and rating tiers,
+an APA-style minimalist table displays records with character-level alignment and
+zero border T-junctions, a detail card inspects entries, and a bottom status ribbon
+displays layman mode descriptors (`BROWSE`, `SEARCH`, `EDIT`, `NOTES`, `COMMAND`).
 
-### Screens
+### Tabs
 
-Press the number key to jump to a screen, or cycle with `Tab` and `Shift+Tab`.
-Each screen remembers its cursor and filter while you are away.
+Switch profiles with number keys, click the tabs directly, or cycle with `Tab` or `[` and `]`:
 
-| Key | Screen | Shows |
+| Key | Tab | Description |
 | --- | --- | --- |
-| `1` | Help | Keys and commands for the current screen |
-| `2` | Library | Every entry, with sorting and filtering, and a details pane for the selected one |
-| `3` | In progress | Only what you are currently watching or reading |
-| `4` | Search | Search by title, status, rating, or year, with results as you type |
-| `5` | Browse | Entries grouped by status, type, or year |
-| `6` | Stats | Counts, average rating, and progress at a glance *(planned)* |
-| `7` | Editor | Edit every field of the selected entry in one place *(planned)* |
-| `8` | Sources | Import from MAL, and later sync with other sites *(planned)* |
+| `1` | Anime (`󰴙`) | Anime catalog, categorized views, and episode progress |
+| `2` | Manga (`󱥬`) | Manga catalog, reading progress, and volume tracking |
+| `3` | Overview (`󰄫`) | Total time spent, score distributions, and status progress bars |
 
-Not every screen has to exist at once. The set may change as the project
-grows, but the number keys stay put.
+*(Note: Screen numbers `4` to `8` covering dedicated browse, editor, and remote sync screens remain planned for future releases).*
 
-> **TBA (GIF):** Jumping between screens with `1` to `8`, and cycling with `Tab`.
-<!-- docs/media/screens.gif -->
+### Navigation & Keybindings
 
-> **TBA (screenshot):** The Search (`4`) and Browse (`5`) screens side by side.
-<!-- docs/media/search-browse.png -->
+#### Browse Mode (`[ BROWSE ]`)
 
-### Moving around
+The default catalog navigation mode:
 
-Everything works from the keyboard with vim-style motions, and everything also
-works with the mouse: click to focus and select, double click to open, and
-scroll with the wheel. Mouse support can be turned off in the
-[configuration](#configuration).
-
-> **TBA (GIF):** Vim motions (`j` `k` `gg` `G` `/`) followed by clicking and scrolling with the mouse.
-<!-- docs/media/navigation.gif -->
-
-### Editing an entry
-
-Select an entry and change it in place:
-
-| Keys | What |
+| Keys | Action |
 | --- | --- |
-| `r` | Set the rating (0 to 10) |
-| `s` | Set the status (watching, completed, on hold, dropped, planned) |
-| `+` `-` | Increase or decrease progress by one |
-| `d` | Remove the entry (asks first) |
+| `j` `k` / Mouse Wheel | Move up and down the list |
+| `gg` `G` | Jump to first and last entry |
+| `c` `t` `s` `r` `p` | Sort by Date, Title, Status, Rating, or Progress (tap again to flip order) |
+| `n` `a` | Create a new record instantly |
+| `d` | Delete selected entry (prompts `[y/N]` confirmation) |
+| `ret` | Enter in-place cell edit mode |
+| `y` | Copy selected title to system clipboard (`wl-copy` / OSC 52) |
+| `/` | Focus search bar |
+| `o` | Open record on MyAnimeList in default browser |
+| `u` / `Ctrl+Z` | Undo last action |
+| `Ctrl+R` / `Ctrl+Y` | Redo last action |
+| `Esc` / `Backspace` | Move focus to Categories sidebar |
+| `:` | Open command line |
+| `q` | Save and quit |
 
-> **TBA (GIF):** Setting a rating, changing a status, and stepping progress with `+`.
-<!-- docs/media/editing.gif -->
+#### Search Mode (`[ SEARCH ]`)
+
+Activated by pressing `/` or clicking the search card. Hotkeys are suspended so all
+alphanumeric input goes directly into the search buffer:
+
+| Keys | Action |
+| --- | --- |
+| *Typed characters* | Live filter with case-insensitive yellow match highlighting on screen |
+| `ret` / `ArrowDown` | Apply filter and return focus to the catalog rows |
+| `Esc` | Clear search query and return to Browse mode |
+
+#### In-Place Cell Edit Mode (`[ EDIT <FIELD> ]`)
+
+Press `ret` on any catalog entry to adjust values without modal windows:
+
+| Keys | Action |
+| --- | --- |
+| `h` `l` | Switch active column between `Progress`, `Rating`, and `Status` |
+| `j` `k` / `+` `-` | Decrement or increment field value in place |
+| `ret` | Open Title and Notes editor in the detail card |
+| `Esc` / `Backspace` | Commit edits and return to Browse mode |
+
+#### Detail Card Editor (`[ NOTES ]`)
+
+| Keys | Action |
+| --- | --- |
+| `Tab` / `Down` | Move between Title input and Notes input |
+| `ret` (on Notes) / `Esc` | Commit title and notes to disk and return to Browse mode |
+
+### Mouse Interactivity
+
+Everything can be controlled with the mouse:
+- **Tabs:** Click `Anime`, `Manga`, or `Overview` to switch views.
+- **Search & Creation:** Click the search card to type; click `[+ New]` to create an entry.
+- **Sorting:** Click table column headers (`Date`, `Title`, `Status`, `Rating`, `Progress`) to toggle sort order; active sort columns display natural directional indicators (`▲` / `▼`) with clean underline styling.
+- **Selection & Hover:** Moving the cursor over the table auto-highlights the entry under the pointer. Titles longer than the column width marquee-scroll smoothly.
+- **Scrolling:** The mouse wheel scrolls up and down the list smoothly without snapping to stationary pointer positions.
+- **Detail Card Controls:**
+  - Click `[-]` or `[+]` to step episodes/chapters.
+  - Click anywhere along the progress gauge to scrub progress to that exact percentage.
+  - Click directly across the 5-star cluster to set scores between `0/10` and `10/10`.
+  - Click the status badge to cycle watch/read status.
+  - Click `[Delete]` to trigger confirmation.
+  - Click Title or Notes to open the inline text editor.
+  - Click metadata fields (Title, ID, Dates) to copy their values to the system clipboard.
+- **Sidebar:** Click any category or star rating tier to apply the filter and focus the catalog.
 
 ## CLI mode
 
@@ -227,7 +277,7 @@ catalist ls --type anime --status completed --year 2023 --rating ">=9"
 ```
 
 In a terminal, a list is a table with a header, a rule under it, and a count
-at the bottom (colors not shown here):
+at the bottom:
 
 ```text
 $ catalist ls --sort rating --reverse --limit 6
@@ -244,32 +294,17 @@ $ catalist ls --sort rating --reverse --limit 6
  6 of 142 entries
 ```
 
-Ratings, progress and IDs line up on the right, and an unknown total shows
-as `?`. See [IDs](#ids) for what the `ID` column means.
-
-> **TBA (GIF):** Running `catalist ls` with a few filters and sort orders in a terminal.
-<!-- docs/media/cli-list.gif -->
-
 ### IDs
 
 Every entry has a plain whole-number ID, like `4` or `131`. It is assigned when
 the entry is added, never reused, and never changes, so you can type
-`catalist set 131 --rating 9` or keep it in a script. The column simply gets
-wider as the list grows (`9`, `112`, `1043`) and stays right-aligned. Whether
-an entry is anime or manga is its own `TYPE` column, not part of the ID.
-
-An entry also remembers where it came from, in separate fields:
+`catalist set 131 --rating 9` or keep it in a script.
 
 | Field | What |
 | --- | --- |
 | `id` | catalist's own number, local to your list |
 | `mal_id` | The MyAnimeList database id, filled in by `import mal` |
 | `anilist_id` | The AniList id, for future sync *(planned)* |
-
-`mal_id` is how re-importing the same export updates entries instead of
-duplicating them. MyAnimeList numbers anime and manga separately, so an anime
-and a manga can share the same number. Entries are matched on type and
-`mal_id` together.
 
 ```bash
 catalist show 131                             # by catalist id
@@ -313,10 +348,6 @@ catalist set "Frieren" --tag favorite --note "rewatch with friends"
 catalist rm "Frieren" --yes                   # permanent; asks without --yes
 ```
 
-Titles can be a partial match when it is unambiguous. If more than one entry
-matches, the command stops and lists the candidates, or use its [ID](#ids)
-(from `ls --ids`).
-
 ### Output formats and pipes
 
 ```bash
@@ -328,84 +359,13 @@ printf 'Frieren\n' | catalist show -          # read titles or ids from stdin
 catalist ls --plain                           # one title per line, no table
 ```
 
-When the output is not a terminal, `catalist` drops colors and table borders
-on its own, so it plays well with any program that reads text. `--plain`
-gives you bare titles, one per line, on demand.
-
-The same list as above, piped into `cowsay`. Piped, the rule under the header
-and the count line are dropped, and the columns stay aligned. Use `cowsay -n`
-so it does not re-wrap the table at 40 columns:
-
-```text
-$ catalist ls --sort rating --reverse --limit 6 | cowsay -n
-
- _______________________________________________________
-/  ID  TITLE         TYPE   STATUS     RATING  PROGRESS \
-|   4  Frieren       anime  completed   10/10     28/28 |
-|  17  Vinland Saga  anime  completed    9/10     48/48 |
-| 112  Berserk       manga  reading      9/10     364/? |
-|  38  Mushishi      anime  completed    9/10     46/46 |
-|   9  Odd Taxi      anime  completed    8/10     13/13 |
-\ 131  Chainsaw Man  manga  reading      8/10     190/? /
- -------------------------------------------------------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
-```
-
-> **TBA (GIF):** Piping `catalist` into `cowsay`, `fzf`, and `lolcat`.
-<!-- docs/media/cli-pipes.gif -->
-
-More ideas:
-
-```bash
-catalist random --status planned --plain | cowsay   # a cow picks your next watch
-catalist ls --status watching --plain | fzf         # pick one interactively
-catalist ls --rating ">=9" --plain | wc -l          # how many 9s and up
-catalist ls --sort finished --reverse --limit 5 | lolcat
-```
-
-Anything that reads from stdin works: `cowsay`, `fzf`, `sort`, `head`,
-`grep`, `wc`, `less`, or a script of your own.
-
-In nushell the JSON output becomes structured data you can keep filtering:
-
-```nu
-catalist ls --json | from json | where rating >= 9 | sort-by started
-```
-
-Elsewhere, `jq` works just as well:
-
-```bash
-catalist ls --json | jq '.[] | select(.rating <= 7) | .title'
-```
-
 ### Exporting and importing
 
 ```bash
 catalist export json > backup.json
 catalist export csv > backup.csv
-catalist import mal ~/animelist.xml
+catalist import ~/animelist.xml
 catalist import json backup.json
-```
-
-### Scripting conventions
-
-Global flags work before or after the command, and `--` ends flag parsing.
-`--no-input` makes a command fail instead of asking a question, which is what
-you want in scripts. `NO_COLOR` turns off colors.
-
-| Result | Exit code / output |
-| --- | --- |
-| Success | `0`; command data on stdout |
-| Operation failure | `1` |
-| Usage / argument error | `2` |
-| `--json` failure | Structured error on stderr |
-
-```json
-{"error":{"code":"usage","message":"unknown flag --raiting. Did you mean \"rating\"?"}}
 ```
 
 ### Shell completion
@@ -414,10 +374,6 @@ you want in scripts. `NO_COLOR` turns off colors.
 catalist completion bash > ~/.catalist-completion.bash
 source ~/.catalist-completion.bash
 ```
-
-Zsh, Fish, and PowerShell are supported the same way with `catalist completion
-zsh|fish|powershell`. Suggestions include commands, flags, sort keys,
-statuses, and titles from your list.
 
 ## Self-hosted server
 
@@ -435,30 +391,6 @@ catalist use home                             # make it the default
 catalist use local                            # and back
 ```
 
-> **TBA (GIF):** Starting `catalist serve`, connecting from another terminal, and using the TUI against it.
-<!-- docs/media/server.gif -->
-
-What the server is meant to be:
-
-- **The same binary.** `catalist serve` is a mode of the program you already
-  have. There is nothing else to install.
-- **Same everything, either backend.** The TUI, every CLI command, and the
-  import and export tools work the same against a local file or a server.
-- **Token authentication.** The server generates a token on first run.
-  `catalist connect` asks for it once and stores it for you. Put the server
-  behind HTTPS with a reverse proxy when it is exposed to the internet.
-- **Simple to run.** It binds to loopback by default (`127.0.0.1`), and
-  `--bind` and `--base-path` change that. A Nix module, a systemd unit, and a
-  container image are planned so it can run on a home server.
-- **Your data stays plain.** The server stores your list in the same local
-  data format, so `export` and moving back to local-only always work.
-
-Open questions for later: how to handle two devices editing the same entry
-at once, and whether to offer a read-only web page for quick lookups.
-
-The server is not required for anything else in this README. A local list
-works fully offline, forever.
-
 ## Configuration
 
 *(planned)* Settings live in a single config file under
@@ -467,40 +399,40 @@ works fully offline, forever.
 | Key | What |
 | --- | --- |
 | `mouse` | Turn mouse support on or off |
-| `vim_motions` | Turn vim-style keys on or off |
 | `theme` | Color scheme for the TUI |
-| `data_file` | Where your list is stored |
-| `default_sort` | Default sort key for `ls` and the Library screen |
-| `default_workspace` | `local`, or the name of a saved server |
+| `default_media` | Default startup media (`anime` or `manga`) |
+| `default_sort` | Default sort key (`score`, `date`, `title`, `progress`) |
+| `reverse_sort` | Default sort direction (`true` or `false`) |
 
-Your list lives in a local data file under the XDG data directory
-(`~/.local/share/catalist/` by default). It never leaves your machine unless
-you connect to a server you host yourself.
+Your watchlist lives in local CSV files under the XDG config directory
+(`~/.config/catalist/` by default).
 
 ## Project layout
 
 ```
-src/main.cpp          entry point, argument parsing
-src/ui/               FTXUI components: tab bar, list, details, status bar
-src/ui/screens/       one file per numbered screen (help, library, ...)
-src/model/            entries, statuses, ratings
-src/storage/          reading and writing the local data file
-src/import/           MAL import
-src/cli/              CLI mode commands, filters, sorting, output formatting
-src/server/           self-hosted server mode (planned)
-src/backend/          local and remote backends behind one interface (planned)
-flake.nix             Nix package, dev shell, and `nix run` entry point
-CMakeLists.txt        build, with FTXUI fetched at configure time
+src/main.cpp          entry point, CLI argument parsing, import dispatcher
+src/tui.cpp           interactive dashboard, floating cards, mouse engine, key handling
+src/database.cpp      CRUD operations, filtering, in-memory models, CSV persistence
+src/entry.cpp         data definitions, formatting, Nerd Font icons, star meter
+src/mal_parser.cpp    MyAnimeList XML import engine with CDATA extraction
+src/sync.cpp          upstream metadata sync via Jikan API
+src/config.cpp        configuration loading and serialization
+include/catalist/     header prototypes and Catppuccin Mocha theme definitions
+flake.nix             Nix flake package and development environment
+CMakeLists.txt        CMake build definition with automated FTXUI fetching
 ```
 
 ## Roadmap
 
 - [x] Pick the stack: C++ with FTXUI, Nix for easy running
-- [ ] Tab bar and numbered screens (`1` to `8`) with `Tab` cycling
-- [ ] Library screen with details pane and status bar
-- [ ] Add, edit, and remove entries
-- [ ] Vim motions and mouse support
-- [ ] MAL import
+- [x] Tab bar and numbered profiles (`1` Anime, `2` Manga, `3` Overview) with `Tab` cycling
+- [x] Decoupled card layout with minimal APA table, details pane, and status bar
+- [x] Instant add (`n`/`a`), in-place cell edit (`ret`), and delete (`d`)
+- [x] Vim motions, clamped navigation, and deep mouse support
+- [x] Live search with case-insensitive substring highlighting
+- [x] System clipboard integration via `wl-copy` and OSC 52
+- [x] MyAnimeList XML import engine with automated backup snapshots
+- [ ] Numbered screen tabs `4` to `8` (dedicated Browse, Editor, Sources)
 - [ ] CLI `ls` with filters (type, status, rating, year, tag) and sorting
 - [ ] CLI quick edits: `add`, `set`, `rm`, progress stepping
 - [ ] Piping in and out: `--json`, `--csv`, `--ids`, stdin with `-`

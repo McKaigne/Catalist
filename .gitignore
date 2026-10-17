@@ -1,0 +1,21 @@
+# Build outputs
+build/
+bin/
+*.o
+*.a
+*.so
+*.pdf
+*.xml
+result
+
+# Dev environments & caches
+.cache/
+.direnv/
+compile_commands.json
+
+# Local runtime data
+watchlist.tsv
+*.log
+
+# Academic Submission Documentation (kept local, hidden from public repo)
+ACADEMIC_DOCUMENTATION.md

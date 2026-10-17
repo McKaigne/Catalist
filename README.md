@@ -1,4 +1,4 @@
-# catalist
+# Catalist
 
 Your anime and manga watchlist, in the terminal. A fast local TUI and a
 pipe-friendly CLI in one C++ binary, built with [FTXUI](https://github.com/ArthurSonzogni/FTXUI).

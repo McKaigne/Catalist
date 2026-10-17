@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/McKaigne/Catalist/actions/workflows/ci.yml/badge.svg)](https://github.com/McKaigne/Catalist/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/3815eb46-3ea2-4688-a36e-7f1b062ca178" />
 
 A fast, local terminal watchlist and manager for Anime and Manga built in C++17 with [FTXUI](https://github.com/ArthurSonzogni/FTXUI). Everything runs offline from local CSV files you own.
 

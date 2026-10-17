@@ -9,6 +9,9 @@ By default everything stays on your machine. No account, no server, no
 network needed. If you want your list on more than one device, a
 [self-hosted server](#self-hosted-server) is planned.
 
+> **TBA (screenshot):** The Library screen with the tab bar, the list, and the details pane.
+<!-- docs/media/catalist-library.png -->
+
 [Install](#install) · [Quick start](#quick-start) · [Importing from MAL](#importing-from-mal) ·
 [The terminal app](#the-terminal-app) · [CLI mode](#cli-mode) ·
 [Self-hosted server](#self-hosted-server) ·
@@ -58,7 +61,7 @@ git. FTXUI is fetched automatically during the configure step.
 
 ```bash
 git clone https://github.com/McKaigne/Catalist
-cd catalist
+cd Catalist
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ./build/catalist --version
@@ -83,6 +86,9 @@ catalist import mal ~/animelist.xml
 
 To leave the TUI, press `q` (or `:q` then `Enter`). Changes are saved as you
 make them.
+
+> **TBA (GIF):** First run: import a MAL export, then open the TUI and move around.
+<!-- docs/media/quick-start.gif -->
 
 Inside the TUI:
 
@@ -109,8 +115,12 @@ catalist import mal ~/animelist.xml
 catalist import mal ~/mangalist.xml
 ```
 
+> **TBA (GIF):** Importing an anime export and a manga export, then the Library filling up.
+<!-- docs/media/import-mal.gif -->
+
 Titles, status, score, progress, and dates come across. Importing the same
-file twice does not duplicate entries. Importing is done entirely from the
+file twice does not duplicate entries: each one is matched by MyAnimeList's own
+database id and type, and kept as `mal_id` on the entry. Importing is done entirely from the
 file you give it, so your MAL credentials are never needed.
 
 Support for other sources such as AniList is *(planned)*.
@@ -144,12 +154,21 @@ Each screen remembers its cursor and filter while you are away.
 Not every screen has to exist at once. The set may change as the project
 grows, but the number keys stay put.
 
+> **TBA (GIF):** Jumping between screens with `1` to `8`, and cycling with `Tab`.
+<!-- docs/media/screens.gif -->
+
+> **TBA (screenshot):** The Search (`4`) and Browse (`5`) screens side by side.
+<!-- docs/media/search-browse.png -->
+
 ### Moving around
 
 Everything works from the keyboard with vim-style motions, and everything also
 works with the mouse: click to focus and select, double click to open, and
 scroll with the wheel. Mouse support can be turned off in the
 [configuration](#configuration).
+
+> **TBA (GIF):** Vim motions (`j` `k` `gg` `G` `/`) followed by clicking and scrolling with the mouse.
+<!-- docs/media/navigation.gif -->
 
 ### Editing an entry
 
@@ -161,6 +180,9 @@ Select an entry and change it in place:
 | `s` | Set the status (watching, completed, on hold, dropped, planned) |
 | `+` `-` | Increase or decrease progress by one |
 | `d` | Remove the entry (asks first) |
+
+> **TBA (GIF):** Setting a rating, changing a status, and stepping progress with `+`.
+<!-- docs/media/editing.gif -->
 
 ## CLI mode
 
@@ -210,20 +232,50 @@ at the bottom (colors not shown here):
 ```text
 $ catalist ls --sort rating --reverse --limit 6
 
- ID   TITLE         TYPE   STATUS     RATING  PROGRESS
+  ID  TITLE         TYPE   STATUS     RATING  PROGRESS
  ───  ────────────  ─────  ─────────  ──────  ────────
- a12  Frieren       anime  completed   10/10     28/28
- a07  Vinland Saga  anime  completed    9/10     48/48
- m31  Berserk       manga  reading      9/10     364/?
- a45  Mushishi      anime  completed    9/10     46/46
- a19  Odd Taxi      anime  completed    8/10     13/13
- m08  Chainsaw Man  manga  reading      8/10     190/?
+   4  Frieren       anime  completed   10/10     28/28
+  17  Vinland Saga  anime  completed    9/10     48/48
+ 112  Berserk       manga  reading      9/10     364/?
+  38  Mushishi      anime  completed    9/10     46/46
+   9  Odd Taxi      anime  completed    8/10     13/13
+ 131  Chainsaw Man  manga  reading      8/10     190/?
 
  6 of 142 entries
 ```
 
-Ratings and progress line up on the right, and an unknown total shows as
-`?`. The `ID` column is the stable id you can pass to other commands.
+Ratings, progress and IDs line up on the right, and an unknown total shows
+as `?`. See [IDs](#ids) for what the `ID` column means.
+
+> **TBA (GIF):** Running `catalist ls` with a few filters and sort orders in a terminal.
+<!-- docs/media/cli-list.gif -->
+
+### IDs
+
+Every entry has a plain whole-number ID, like `4` or `131`. It is assigned when
+the entry is added, never reused, and never changes, so you can type
+`catalist set 131 --rating 9` or keep it in a script. The column simply gets
+wider as the list grows (`9`, `112`, `1043`) and stays right-aligned. Whether
+an entry is anime or manga is its own `TYPE` column, not part of the ID.
+
+An entry also remembers where it came from, in separate fields:
+
+| Field | What |
+| --- | --- |
+| `id` | catalist's own number, local to your list |
+| `mal_id` | The MyAnimeList database id, filled in by `import mal` |
+| `anilist_id` | The AniList id, for future sync *(planned)* |
+
+`mal_id` is how re-importing the same export updates entries instead of
+duplicating them. MyAnimeList numbers anime and manga separately, so an anime
+and a manga can share the same number. Entries are matched on type and
+`mal_id` together.
+
+```bash
+catalist show 131                             # by catalist id
+catalist show --mal-id 52991 --type anime     # by MyAnimeList id
+catalist ls --mal-id 52991 --type anime --ids # find your id for it
+```
 
 ### Ordering
 
@@ -262,8 +314,8 @@ catalist rm "Frieren" --yes                   # permanent; asks without --yes
 ```
 
 Titles can be a partial match when it is unambiguous. If more than one entry
-matches, the command stops and lists the candidates, or use the stable id
-from `ls --ids`.
+matches, the command stops and lists the candidates, or use its [ID](#ids)
+(from `ls --ids`).
 
 ### Output formats and pipes
 
@@ -288,13 +340,13 @@ so it does not re-wrap the table at 40 columns:
 $ catalist ls --sort rating --reverse --limit 6 | cowsay -n
 
  _______________________________________________________
-/ ID   TITLE         TYPE   STATUS     RATING  PROGRESS \
-| a12  Frieren       anime  completed   10/10     28/28 |
-| a07  Vinland Saga  anime  completed    9/10     48/48 |
-| m31  Berserk       manga  reading      9/10     364/? |
-| a45  Mushishi      anime  completed    9/10     46/46 |
-| a19  Odd Taxi      anime  completed    8/10     13/13 |
-\ m08  Chainsaw Man  manga  reading      8/10     190/? /
+/  ID  TITLE         TYPE   STATUS     RATING  PROGRESS \
+|   4  Frieren       anime  completed   10/10     28/28 |
+|  17  Vinland Saga  anime  completed    9/10     48/48 |
+| 112  Berserk       manga  reading      9/10     364/? |
+|  38  Mushishi      anime  completed    9/10     46/46 |
+|   9  Odd Taxi      anime  completed    8/10     13/13 |
+\ 131  Chainsaw Man  manga  reading      8/10     190/? /
  -------------------------------------------------------
         \   ^__^
          \  (oo)\_______
@@ -302,6 +354,9 @@ $ catalist ls --sort rating --reverse --limit 6 | cowsay -n
                 ||----w |
                 ||     ||
 ```
+
+> **TBA (GIF):** Piping `catalist` into `cowsay`, `fzf`, and `lolcat`.
+<!-- docs/media/cli-pipes.gif -->
 
 More ideas:
 
@@ -380,6 +435,9 @@ catalist use home                             # make it the default
 catalist use local                            # and back
 ```
 
+> **TBA (GIF):** Starting `catalist serve`, connecting from another terminal, and using the TUI against it.
+<!-- docs/media/server.gif -->
+
 What the server is meant to be:
 
 - **The same binary.** `catalist serve` is a mode of the program you already
@@ -457,7 +515,7 @@ CMakeLists.txt        build, with FTXUI fetched at configure time
 
 ## Contributing
 
-This is a class project, but ideas and bug reports are welcome. Open an issue
+This is a class project, but ideas and bug reports are welcome. [Open an issue](https://github.com/McKaigne/Catalist/issues)
 with what you expected and what happened.
 
 ## License

@@ -44,7 +44,7 @@ network needed. If you want your list on more than one device, a
 and flakes enabled, nothing else needs to be installed:
 
 ```bash
-nix run github:<your-username>/catalist
+nix run github:McKaigne/Catalist
 ```
 
 Or from a checkout:
@@ -57,7 +57,7 @@ nix run .
 git. FTXUI is fetched automatically during the configure step.
 
 ```bash
-git clone https://github.com/<your-username>/catalist
+git clone https://github.com/McKaigne/Catalist
 cd catalist
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build

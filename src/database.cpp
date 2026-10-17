@@ -222,9 +222,9 @@ void Database::createBackupSnapshot() {
   std::filesystem::create_directories(bdir);
 
   auto now = std::chrono::system_clock::now();
-  auto in_time_t = std::chrono::system_clock::to_time_t(now);
+  auto inTimeT = std::chrono::system_clock::to_time_t(now);
   std::stringstream ss;
-  ss << std::put_time(std::localtime(&in_time_t), "%Y%m%d_%H%M%S");
+  ss << std::put_time(std::localtime(&inTimeT), "%Y%m%d_%H%M%S");
   std::string timestamp = ss.str();
 
   if (std::filesystem::exists(getCsvPath(MediaType::Anime))) {
@@ -239,16 +239,16 @@ void Database::createBackupSnapshot() {
   }
 }
 
-static std::vector<std::string> parseCsvLine(const std::string& line) {
+static std::vector<std::string> parseCsvRecord(const std::string& record) {
   std::vector<std::string> fields;
   std::string field;
   bool inQuotes = false;
 
-  for (size_t i = 0; i < line.size(); ++i) {
-    char c = line[i];
+  for (size_t i = 0; i < record.size(); ++i) {
+    char c = record[i];
     if (inQuotes) {
       if (c == '"') {
-        if (i + 1 < line.size() && line[i + 1] == '"') {
+        if (i + 1 < record.size() && record[i + 1] == '"') {
           field += '"';
           ++i;
         } else {
@@ -289,6 +289,7 @@ void Database::autoHealIds() {
   }
 }
 
+// RFC 4180 Multiline CSV Loader
 bool Database::loadCsv(MediaType type, const std::filesystem::path& path) {
   std::ifstream file(path);
   if (!file.is_open()) return false;
@@ -297,45 +298,63 @@ bool Database::loadCsv(MediaType type, const std::filesystem::path& path) {
   list.clear();
 
   std::string line;
+  std::string recordBuffer;
+  bool insideQuotes = false;
   bool needsHeal = false;
 
   while (std::getline(file, line)) {
-    if (line.empty() || line[0] == '#') continue;
+    if (recordBuffer.empty() && (line.empty() || line[0] == '#')) continue;
 
-    auto fields = parseCsvLine(line);
-    if (fields.size() < 7) continue;
-
-    Entry e;
-    e.type = type;
-
-    try { e.id = std::stoi(fields[0]); } catch (...) { continue; }
-    try { e.malId = std::stoi(fields[1]); } catch (...) { e.malId = 0; }
-    if (fields.size() > 2 && !fields[2].empty()) {
-      try { e.anilistId = std::stoi(fields[2]); } catch (...) { e.anilistId = 0; }
+    for (size_t i = 0; i < line.size(); ++i) {
+      if (line[i] == '"') {
+        if (insideQuotes && i + 1 < line.size() && line[i + 1] == '"') {
+          ++i;
+        } else {
+          insideQuotes = !insideQuotes;
+        }
+      }
     }
 
-    size_t offset = (fields.size() >= 16) ? 3 : 2;
+    recordBuffer += (recordBuffer.empty() ? "" : "\n") + line;
 
-    e.title = unescapeCsv(fields[offset]);
-    e.status = stringToStatus(fields[offset + 1]);
-    try { e.score = std::stoi(fields[offset + 2]); } catch (...) { e.score = 0; }
-    try { e.progress = std::stoi(fields[offset + 3]); } catch (...) { e.progress = 0; }
-    try { e.totalUnits = std::stoi(fields[offset + 4]); } catch (...) { e.totalUnits = 0; }
+    if (!insideQuotes) {
+      auto fields = parseCsvRecord(recordBuffer);
+      recordBuffer.clear();
 
-    if (fields.size() > offset + 5) { try { e.volumes = std::stoi(fields[offset + 5]); } catch (...) {} }
-    if (fields.size() > offset + 6) { try { e.totalVolumes = std::stoi(fields[offset + 6]); } catch (...) {} }
-    if (fields.size() > offset + 7) { try { e.rewatched = std::stoi(fields[offset + 7]); } catch (...) {} }
-    if (fields.size() > offset + 8) e.startDate = unescapeCsv(fields[offset + 8]);
-    if (fields.size() > offset + 9) e.finishDate = unescapeCsv(fields[offset + 9]);
-    if (fields.size() > offset + 10) e.notes = unescapeCsv(fields[offset + 10]);
-    if (fields.size() > offset + 11) e.updatedAt = unescapeCsv(fields[offset + 11]);
+      if (fields.size() < 7) continue;
 
-    if (e.malId > 0 && e.id != e.malId) {
-      e.id = e.malId;
-      needsHeal = true;
+      Entry e;
+      e.type = type;
+
+      try { e.id = std::stoi(fields[0]); } catch (...) { continue; }
+      try { e.malId = std::stoi(fields[1]); } catch (...) { e.malId = 0; }
+      if (fields.size() > 2 && !fields[2].empty()) {
+        try { e.anilistId = std::stoi(fields[2]); } catch (...) { e.anilistId = 0; }
+      }
+
+      size_t offset = (fields.size() >= 16) ? 3 : 2;
+
+      e.title = unescapeCsv(fields[offset]);
+      e.status = stringToStatus(fields[offset + 1]);
+      try { e.score = std::stoi(fields[offset + 2]); } catch (...) { e.score = 0; }
+      try { e.progress = std::stoi(fields[offset + 3]); } catch (...) { e.progress = 0; }
+      try { e.totalUnits = std::stoi(fields[offset + 4]); } catch (...) { e.totalUnits = 0; }
+
+      if (fields.size() > offset + 5) { try { e.volumes = std::stoi(fields[offset + 5]); } catch (...) {} }
+      if (fields.size() > offset + 6) { try { e.totalVolumes = std::stoi(fields[offset + 6]); } catch (...) {} }
+      if (fields.size() > offset + 7) { try { e.rewatched = std::stoi(fields[offset + 7]); } catch (...) {} }
+      if (fields.size() > offset + 8) e.startDate = unescapeCsv(fields[offset + 8]);
+      if (fields.size() > offset + 9) e.finishDate = unescapeCsv(fields[offset + 9]);
+      if (fields.size() > offset + 10) e.notes = unescapeCsv(fields[offset + 10]);
+      if (fields.size() > offset + 11) e.updatedAt = unescapeCsv(fields[offset + 11]);
+
+      if (e.malId > 0 && e.id != e.malId) {
+        e.id = e.malId;
+        needsHeal = true;
+      }
+
+      list.push_back(e);
     }
-
-    list.push_back(e);
   }
 
   if (needsHeal) {

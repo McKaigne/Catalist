@@ -7,7 +7,7 @@ namespace catalist {
 
 class MetadataSync {
 public:
-  static size_t syncOngoing(Database& db, std::string& out_msg);
+  static size_t syncOngoing(Database& db, std::string& outMsg);
 };
 
 } // namespace catalist

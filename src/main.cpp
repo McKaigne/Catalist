@@ -1,7 +1,7 @@
 #include "catalist/database.hpp"
 #include "catalist/config.hpp"
 #include "catalist/tui.hpp"
-#include "catalist/mal_parser.hpp"
+#include "catalist/malParser.hpp"
 
 #include <iostream>
 #include <string>

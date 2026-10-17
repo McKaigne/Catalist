@@ -1,6 +1,6 @@
 #include "catalist/tui.hpp"
 #include "catalist/theme.hpp"
-#include "catalist/mal_parser.hpp"
+#include "catalist/malParser.hpp"
 #include "catalist/sync.hpp"
 
 #include <ftxui/dom/elements.hpp>
@@ -341,9 +341,9 @@ void AppTui::run() {
     e.totalUnits = 0;
 
     auto now = std::chrono::system_clock::now();
-    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    auto inTimeT = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d");
+    ss << std::put_time(std::localtime(&inTimeT), "%Y-%m-%d");
     e.startDate = ss.str();
     e.updatedAt = ss.str();
 

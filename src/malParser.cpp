@@ -1,4 +1,4 @@
-#include "catalist/mal_parser.hpp"
+#include "catalist/malParser.hpp"
 #include <fstream>
 #include <regex>
 
@@ -28,7 +28,6 @@ size_t MalParser::importXml(const std::string& filepath, Database& db, bool clea
 
   size_t imported = 0;
 
-  // Ingest Anime blocks
   std::regex animeRe("<anime>([\\s\\S]*?)</anime>");
   auto animeBegin = std::sregex_iterator(content.begin(), content.end(), animeRe);
   auto animeEnd = std::sregex_iterator();
@@ -72,7 +71,6 @@ size_t MalParser::importXml(const std::string& filepath, Database& db, bool clea
     imported++;
   }
 
-  // Ingest Manga blocks
   std::regex mangaRe("<manga>([\\s\\S]*?)</manga>");
   auto mangaBegin = std::sregex_iterator(content.begin(), content.end(), mangaRe);
   auto mangaEnd = std::sregex_iterator();

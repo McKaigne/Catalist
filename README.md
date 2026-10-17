@@ -25,9 +25,6 @@ network needed. If you want your list on more than one device, a
 - **`catalist`, the app.** A unified floating-card TUI for your watchlists.
   Switch between media tabs with `1`, `2`, and `3`: Anime (`󰴙`), Manga (`󱥬`),
   and Statistics Overview (`󰄫`), all drawn with FTXUI.
-- **APA-style minimalist catalog.** A table layout with zero border T-junctions
-  or horizontal rule clutter. Column headers and entry rows align down to the
-  individual character.
 - **Vim motions and deep mouse support.** `j`/`k`, `gg`/`G`, `/` search with live
   case-insensitive yellow highlighting, or just click and scroll. Scrub progress
   directly on the gauge, click star clusters to rate, and step episodes with `[-]`/`[+]`.

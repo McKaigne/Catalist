@@ -25,6 +25,7 @@ namespace ansi {
   const std::string Bold    = "\033[1m";
   const std::string Dim     = "\033[2m";
   const std::string Mauve   = "\033[38;2;203;166;247m";
+  const std::string Lavender= "\033[38;2;180;190;254m";
   const std::string Peach   = "\033[38;2;250;179;135m";
   const std::string Yellow  = "\033[38;2;249;226;175m";
   const std::string Green   = "\033[38;2;166;227;161m";
@@ -182,12 +183,14 @@ void CliDispatcher::printUsage() {
             << "  ls                   List watchlist entries (table, plain, CSV, or JSON)\n"
             << "  show <id|title|->    Show detailed information for an entry\n"
             << "  count                Count matching entries\n"
-            << "  random               Pick a random entry matching filters\n\n"
+            << "  random               Pick a random entry matching filters\n"
+            << "  stats                Display watch and read telemetry\n\n"
             << "Mutation Commands:\n"
             << "  add <title> [flags]  Add a new anime or manga entry\n"
-            << "  set <id|title|->     Update fields on existing records (supports pipeline input)\n"
+            << "  set <id|title|->     Update fields on existing records\n"
             << "  rm <id|title|->      Remove entries (-y to skip confirmation)\n\n"
-            << "Data Commands:\n"
+            << "Data Interchange:\n"
+            << "  export <json|csv>    Dump entire database to stdout\n"
             << "  import <file.xml>    Ingest MyAnimeList XML export\n"
             << "  --version, -v        Display version info\n"
             << "  --help, -h           Show this message\n\n"
@@ -236,6 +239,8 @@ int CliDispatcher::dispatch(int argc, char* argv[], Database& db, AppConfig& con
   if (command == "set") return executeSet(args, db);
   if (command == "rm") return executeRm(args, db);
   if (command == "random") return executeRandom(args, db);
+  if (command == "stats") return executeStats(args, db);
+  if (command == "export") return executeExport(args, db);
   if (command == "import") return executeImport(args, db);
 
   emitError("usage", "unknown command '" + command + "'. Run 'catalist --help' for usage.", false);
@@ -1125,6 +1130,162 @@ int CliDispatcher::executeRandom(const std::vector<std::string>& args, Database&
 
   printSingleDetail(picked, false);
   return 0;
+}
+
+int CliDispatcher::executeStats(const std::vector<std::string>& args, const Database& db) {
+  bool jsonMode = false;
+  std::optional<MediaType> filterType;
+
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == "--json") jsonMode = true;
+    else if (args[i] == "--type" || args[i] == "-t") {
+      if (++i < args.size()) {
+        std::string t = args[i];
+        std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+        if (t == "anime" || t == "a") filterType = MediaType::Anime;
+        else if (t == "manga" || t == "m") filterType = MediaType::Manga;
+      }
+    }
+  }
+
+  auto getStatsObj = [&](MediaType type) {
+    std::ostringstream ss;
+    ss << "{"
+       << "\"total\":" << db.getEntries(type).size() << ","
+       << "\"daysSpent\":" << std::fixed << std::setprecision(1) << db.daysSpent(type) << ","
+       << "\"meanScore\":" << db.averageScore(type) << ","
+       << "\"completedPercent\":" << db.completedPercentage(type) << ","
+       << "\"progressUnits\":" << db.totalProgress(type) << ","
+       << "\"rewatched\":" << db.totalRewatched(type) << ","
+       << "\"watching\":" << db.countByStatus(type, WatchStatus::Watching) << ","
+       << "\"completed\":" << db.countByStatus(type, WatchStatus::Completed) << ","
+       << "\"onHold\":" << db.countByStatus(type, WatchStatus::OnHold) << ","
+       << "\"dropped\":" << db.countByStatus(type, WatchStatus::Dropped) << ","
+       << "\"planned\":" << db.countByStatus(type, WatchStatus::PlanToWatch);
+    if (type == MediaType::Manga) {
+      ss << ",\"volumes\":" << db.totalVolumes(MediaType::Manga);
+    }
+    ss << "}";
+    return ss.str();
+  };
+
+  if (jsonMode) {
+    if (filterType.has_value()) {
+      std::cout << getStatsObj(filterType.value()) << "\n";
+    } else {
+      std::cout << "{\"anime\":" << getStatsObj(MediaType::Anime)
+                << ",\"manga\":" << getStatsObj(MediaType::Manga) << "}\n";
+    }
+    return 0;
+  }
+
+  bool color = shouldColor();
+
+  auto printMediaStats = [&](MediaType type) {
+    std::string name = (type == MediaType::Anime ? "Anime" : "Manga");
+    size_t tot = db.getEntries(type).size();
+    size_t cWatch = db.countByStatus(type, WatchStatus::Watching);
+    size_t cComp = db.countByStatus(type, WatchStatus::Completed);
+    size_t cHold = db.countByStatus(type, WatchStatus::OnHold);
+    size_t cDrop = db.countByStatus(type, WatchStatus::Dropped);
+    size_t cPlan = db.countByStatus(type, WatchStatus::PlanToWatch);
+
+    if (color) std::cout << ansi::Bold << (type == MediaType::Anime ? ansi::Lavender : ansi::Peach) << "=== " << name << " Telemetry ===" << ansi::Reset << "\n";
+    else std::cout << "=== " << name << " Telemetry ===\n";
+
+    std::cout << "  Total Records:      " << tot << "\n";
+    std::cout << "  Days Logged:        " << std::fixed << std::setprecision(1) << db.daysSpent(type) << " days\n";
+    std::cout << "  Mean Rating:        " << std::fixed << std::setprecision(2) << db.averageScore(type) << " / 10\n";
+    std::cout << "  Completed:          " << std::fixed << std::setprecision(1) << db.completedPercentage(type) << "%\n";
+    std::cout << "  " << (type == MediaType::Anime ? "Episodes" : "Chapters") << " Logged:   " << db.totalProgress(type) << "\n";
+    if (type == MediaType::Manga) {
+      std::cout << "  Volumes Logged:     " << db.totalVolumes(MediaType::Manga) << "\n";
+    }
+    std::cout << "  Status Breakdown:   "
+              << (color ? ansi::Green : "") << cWatch << " " << (type == MediaType::Anime ? "watching" : "reading") << ", "
+              << (color ? ansi::Blue : "") << cComp << " completed, "
+              << (color ? ansi::Yellow : "") << cHold << " on-hold, "
+              << (color ? ansi::Red : "") << cDrop << " dropped, "
+              << (color ? ansi::Subtext : "") << cPlan << " planned"
+              << (color ? ansi::Reset : "") << "\n\n";
+  };
+
+  if (!filterType.has_value() || filterType.value() == MediaType::Anime) {
+    printMediaStats(MediaType::Anime);
+  }
+  if (!filterType.has_value() || filterType.value() == MediaType::Manga) {
+    printMediaStats(MediaType::Manga);
+  }
+
+  return 0;
+}
+
+int CliDispatcher::executeExport(const std::vector<std::string>& args, const Database& db) {
+  if (args.empty()) {
+    emitError("usage", "usage: catalist export <json|csv> [--type <anime|manga>]", false);
+    return 2;
+  }
+
+  std::string formatStr = args[0];
+  std::transform(formatStr.begin(), formatStr.end(), formatStr.begin(), ::tolower);
+
+  std::optional<MediaType> filterType;
+  for (size_t i = 1; i < args.size(); ++i) {
+    if (args[i] == "--type" || args[i] == "-t") {
+      if (++i < args.size()) {
+        std::string t = args[i];
+        std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+        if (t == "anime" || t == "a") filterType = MediaType::Anime;
+        else if (t == "manga" || t == "m") filterType = MediaType::Manga;
+      }
+    }
+  }
+
+  if (formatStr == "json") {
+    if (filterType.has_value()) {
+      std::cout << formatJsonEntries(db.getEntries(filterType.value()));
+    } else {
+      std::cout << "{\n  \"anime\": " << formatJsonEntries(db.getEntries(MediaType::Anime))
+                << ",\n  \"manga\": " << formatJsonEntries(db.getEntries(MediaType::Manga))
+                << "\n}\n";
+    }
+    return 0;
+  }
+
+  if (formatStr == "csv") {
+    std::cout << "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at\n";
+    auto dumpList = [](const std::vector<Entry>& list) {
+      for (const auto& e : list) {
+        std::cout << e.id << ","
+                  << e.malId << ","
+                  << e.anilistId << ","
+                  << (e.type == MediaType::Anime ? "anime" : "manga") << ","
+                  << escapeCsv(e.title) << ","
+                  << escapeCsv(statusToString(e.status, e.type)) << ","
+                  << e.score << ","
+                  << e.progress << ","
+                  << e.totalUnits << ","
+                  << e.volumes << ","
+                  << e.totalVolumes << ","
+                  << e.rewatched << ","
+                  << escapeCsv(e.startDate) << ","
+                  << escapeCsv(e.finishDate) << ","
+                  << escapeCsv(e.notes) << ","
+                  << escapeCsv(e.updatedAt) << "\n";
+      }
+    };
+
+    if (!filterType.has_value() || filterType.value() == MediaType::Anime) {
+      dumpList(db.getEntries(MediaType::Anime));
+    }
+    if (!filterType.has_value() || filterType.value() == MediaType::Manga) {
+      dumpList(db.getEntries(MediaType::Manga));
+    }
+    return 0;
+  }
+
+  emitError("usage", "unsupported export format '" + formatStr + "'. Expected 'json' or 'csv'.", false);
+  return 2;
 }
 
 int CliDispatcher::executeImport(const std::vector<std::string>& args, Database& db) {

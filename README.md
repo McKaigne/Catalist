@@ -109,7 +109,7 @@ The `:sync` command is an **optional, opt-in metadata reconciliation tool** that
 ---
 
 <details>
-<summary><b>CLI Mode & Pipeline Usage (ls, count, show, add, set, rm, random)</b></summary>
+<summary><b>CLI Mode & Pipeline Usage (ls, count, show, add, set, rm, random, stats, export)</b></summary>
 
 When arguments are passed, `catalist` operates headlessly for shell scripting and Nushell pipelines:
 
@@ -128,16 +128,22 @@ catalist set "Dungeon Meshi" -p sub 1         # progress sub 1
 catalist set "Dungeon Meshi" -r 10 -s completed
 catalist rm "Dungeon Meshi" -y                # remove with -y bypass
 
-# Batch Pipeline Mutations (accepts stdin via -)
+# Pipeline Mutations (accepts stdin via -)
 catalist ls --rating ">=9" --ids | catalist set - -n "Peak fiction"
 catalist ls --status dropped --ids | catalist rm - -y
+
+# Analytics & Data Interchange
+catalist stats
+catalist stats --type anime --json
+catalist export json > backup.json
+catalist export csv > backup.csv
 ```
 
 ### CLI Flag Reference
 
 | Flag | Shorthand | Description |
 | :--- | :--- | :--- |
-| `-t, --type <anime|manga>` | `-t` | Media type filter or assignment |
+| `-t, --type <anime\|manga>` | `-t` | Media type filter or assignment |
 | `-s, --status <status>` | `-s` | `watching`, `reading`, `completed`, `on-hold`, `dropped`, `planned` |
 | `-r, --rating <spec>` | `-r` | Filter: `9`, `'>=9'`, `'<=7'`, `'6..8'`, `'unrated'`. Set: `0..10` |
 | `-p, --progress <val>` | `-p` | Set absolute, or step: `add [N]`, `a [N]`, `sub [N]`, `s [N]`, `+N`, `-N` |
@@ -175,13 +181,13 @@ catalist --server home ls --rating ">=9"
 ```
 src/main.cpp          Entry point and argument dispatcher
 src/tui.cpp           Interactive dashboard, floating cards, mouse engine, key handling
-src/cli.cpp           CLI query and mutation engine, stepping parser, JSON serializer
+src/cli.cpp           CLI query/mutation engine, stepping parser, analytics, export
 src/database.cpp      CRUD operations, RFC 4180 multiline CSV engine, filtering
 src/entry.cpp         Data models, formatting, Nerd Font icons, star meter
 src/malParser.cpp     MAL XML import engine with CDATA extraction
 src/sync.cpp          Opt-in Jikan API upstream metadata sync
 src/config.cpp        Configuration loader and serializer
-tests/testMain.cpp    Headless verification suite (CSV, XML, sorting, CLI mutations)
+tests/testMain.cpp    Headless verification suite (CSV, XML, sorting, CLI mutations, stats)
 flake.nix             Nix development environment and flake derivation
 CMakeLists.txt        Build configuration with offline fallback and test targets
 ```
@@ -202,10 +208,10 @@ CMakeLists.txt        Build configuration with offline fallback and test targets
 - [x] Headless verification test suite and GitHub Actions CI
 - [x] CLI `ls` with filters (type, status, rating, year, tag), sorting, and output formats
 - [x] CLI mutations (`add`, `set` with `add`/`sub` stepping, `rm`, `random`)
+- [x] CLI telemetry analytics (`catalist stats`)
+- [x] CLI full database dumps (`catalist export <json|csv>`)
 - [x] Pipeline support (`--plain`, `--ids`, `--json`, `--csv`, stdin `-`)
 - [ ] Dedicated screen tabs `4` to `8` in TUI
-- [ ] CLI export/import for standalone JSON/CSV dumps
-- [ ] CLI analytics summary (`catalist stats`)
 - [ ] Shell completion (Bash, Zsh, Fish)
 - [ ] Polymorphic backend abstraction
 - [ ] Self-hosted server daemon (`catalist serve`) with token authentication

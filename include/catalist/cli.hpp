@@ -47,6 +47,8 @@ public:
   static int executeSet(const std::vector<std::string>& args, Database& db);
   static int executeRm(const std::vector<std::string>& args, Database& db);
   static int executeRandom(const std::vector<std::string>& args, Database& db);
+  static int executeStats(const std::vector<std::string>& args, const Database& db);
+  static int executeExport(const std::vector<std::string>& args, const Database& db);
   static int executeImport(const std::vector<std::string>& args, Database& db);
 };
 

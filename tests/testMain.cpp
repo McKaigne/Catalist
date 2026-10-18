@@ -143,7 +143,6 @@ void testCliMutations() {
   std::cout << "[RUN ] Testing CLI mutations (add, set with stepping, rm)..." << std::endl;
   catalist::Database db;
 
-  // 1. Add entry via CLI dispatcher
   std::vector<std::string> addArgs = {
     "Dungeon Meshi", "-t", "anime", "-s", "watching", "-e", "24", "-p", "10", "-r", "9"
   };
@@ -156,7 +155,6 @@ void testCliMutations() {
   TEST_ASSERT(entries[0].totalUnits == 24);
   TEST_ASSERT(entries[0].score == 9);
 
-  // 2. Set with stepping: -p a 2 (add 2)
   std::vector<std::string> setStepArgs = {
     std::to_string(id), "-p", "a", "2"
   };
@@ -164,7 +162,6 @@ void testCliMutations() {
   auto eOpt = db.getById(catalist::MediaType::Anime, id);
   TEST_ASSERT(eOpt.has_value() && eOpt->progress == 12);
 
-  // 3. Set with stepping: -p sub 2 (subtract 2)
   std::vector<std::string> setSubArgs = {
     std::to_string(id), "-p", "sub", "2"
   };
@@ -172,7 +169,6 @@ void testCliMutations() {
   eOpt = db.getById(catalist::MediaType::Anime, id);
   TEST_ASSERT(eOpt.has_value() && eOpt->progress == 10);
 
-  // 4. Set to max progress -> auto complete
   std::vector<std::string> setMaxArgs = {
     std::to_string(id), "-p", "24"
   };
@@ -180,7 +176,6 @@ void testCliMutations() {
   eOpt = db.getById(catalist::MediaType::Anime, id);
   TEST_ASSERT(eOpt.has_value() && eOpt->progress == 24 && eOpt->status == catalist::WatchStatus::Completed);
 
-  // 5. Remove entry: rm <id> -y
   std::vector<std::string> rmArgs = {
     std::to_string(id), "-y"
   };
@@ -189,6 +184,25 @@ void testCliMutations() {
   TEST_ASSERT(!eOpt.has_value());
 
   std::cout << "[PASS] CLI mutations and progress stepping tests passed." << std::endl;
+}
+
+void testCliAnalyticsAndExport() {
+  std::cout << "[RUN ] Testing CLI analytics (stats) and export (json, csv)..." << std::endl;
+  catalist::Database db;
+  db.seedDefaults();
+
+  // Test stats JSON
+  TEST_ASSERT(catalist::CliDispatcher::executeStats({"--json"}, db) == 0);
+  TEST_ASSERT(catalist::CliDispatcher::executeStats({"--type", "anime", "--json"}, db) == 0);
+
+  // Test export JSON
+  TEST_ASSERT(catalist::CliDispatcher::executeExport({"json"}, db) == 0);
+  TEST_ASSERT(catalist::CliDispatcher::executeExport({"json", "--type", "anime"}, db) == 0);
+
+  // Test export CSV
+  TEST_ASSERT(catalist::CliDispatcher::executeExport({"csv"}, db) == 0);
+
+  std::cout << "[PASS] CLI analytics and export tests passed." << std::endl;
 }
 
 int main() {
@@ -201,9 +215,10 @@ int main() {
   testSortAndFilter();
   testCliParsers();
   testCliMutations();
+  testCliAnalyticsAndExport();
 
   std::cout << "========================================" << std::endl;
-  std::cout << "   All automated tests passed (5/5)     " << std::endl;
+  std::cout << "   All automated tests passed (6/6)     " << std::endl;
   std::cout << "========================================" << std::endl;
   return 0;
 }

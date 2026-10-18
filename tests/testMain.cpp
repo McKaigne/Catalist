@@ -1,6 +1,7 @@
 #include "catalist/database.hpp"
 #include "catalist/entry.hpp"
 #include "catalist/malParser.hpp"
+#include "catalist/cli.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -115,6 +116,30 @@ void testSortAndFilter() {
   std::cout << "[PASS] Database sorting and filtering predicates passed." << std::endl;
 }
 
+void testCliParsers() {
+  std::cout << "[RUN ] Testing CLI relational and range rating specs..." << std::endl;
+  int minS = -1, maxS = -1;
+  bool unrated = false;
+
+  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("9", minS, maxS, unrated) && minS == 9 && maxS == 9);
+  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec(">=8", minS, maxS, unrated) && minS == 8 && maxS == 10);
+  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("<=6", minS, maxS, unrated) && minS == 0 && maxS == 6);
+  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("7..9", minS, maxS, unrated) && minS == 7 && maxS == 9);
+  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("unrated", minS, maxS, unrated) && unrated && minS == 0);
+
+  // Test JSON serialization of an Entry
+  catalist::Entry e;
+  e.id = 42;
+  e.title = "Odd Taxi";
+  e.score = 8;
+  std::string json = catalist::CliDispatcher::formatJsonEntry(e);
+  TEST_ASSERT(json.find("\"id\":42") != std::string::npos);
+  TEST_ASSERT(json.find("\"title\":\"Odd Taxi\"") != std::string::npos);
+  TEST_ASSERT(json.find("\"rating\":8") != std::string::npos);
+
+  std::cout << "[PASS] CLI argument and formatting tests passed." << std::endl;
+}
+
 int main() {
   std::cout << "========================================" << std::endl;
   std::cout << "   Catalist Headless Verification Suite  " << std::endl;
@@ -123,9 +148,10 @@ int main() {
   testCsvMultilineRoundTrip();
   testMalXmlIngestion();
   testSortAndFilter();
+  testCliParsers();
 
   std::cout << "========================================" << std::endl;
-  std::cout << "   All automated tests passed (3/3)     " << std::endl;
+  std::cout << "   All automated tests passed (4/4)     " << std::endl;
   std::cout << "========================================" << std::endl;
   return 0;
 }

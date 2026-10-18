@@ -23,6 +23,7 @@ add_executable(catalist
   src/database.cpp
   src/malParser.cpp
   src/sync.cpp
+  src/cli.cpp
   src/tui.cpp
   src/main.cpp
 )
@@ -43,6 +44,7 @@ add_executable(catalist_tests
   src/database.cpp
   src/malParser.cpp
   src/sync.cpp
+  src/cli.cpp
 )
 
 target_link_libraries(catalist_tests PRIVATE

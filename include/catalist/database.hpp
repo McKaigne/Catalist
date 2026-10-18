@@ -17,6 +17,16 @@ enum class SortKey {
   Id
 };
 
+struct ActivityRecord {
+  std::string timestamp;
+  MediaType type = MediaType::Anime;
+  std::string title;
+  WatchStatus status = WatchStatus::Watching;
+  int progress = 0;
+  int totalUnits = 0;
+  int score = 0;
+};
+
 class Database {
 public:
   Database();
@@ -49,12 +59,18 @@ public:
   static std::filesystem::path getConfigDir();
   std::filesystem::path getConfigPath() const;
   std::filesystem::path getCsvPath(MediaType type) const;
+  std::filesystem::path getHistoryPath() const;
   std::filesystem::path getBackupDir() const;
 
   bool loadAll();
   bool saveAll() const;
   bool loadCsv(MediaType type, const std::filesystem::path& path);
   bool saveCsv(MediaType type, const std::filesystem::path& path) const;
+
+  void logActivity(const ActivityRecord& record);
+  std::vector<ActivityRecord> getRecentActivity(MediaType type, size_t limit = 3) const;
+  bool loadHistory();
+  bool saveHistory() const;
 
   void createBackupSnapshot();
   void autoHealIds();
@@ -64,6 +80,7 @@ private:
   std::filesystem::path configDir_;
   std::vector<Entry> animeEntries_;
   std::vector<Entry> mangaEntries_;
+  std::vector<ActivityRecord> historyRecords_;
   int nextLocalId_ = 10001;
 
   std::vector<Entry>& getList(MediaType type);

@@ -25,6 +25,9 @@ add_executable(catalist
   src/sync.cpp
   src/cli.cpp
   src/remoteSearch.cpp
+  src/themeRegistry.cpp
+  src/keybindManager.cpp
+  src/commandPalette.cpp
   src/tui.cpp
   src/main.cpp
 )
@@ -47,6 +50,9 @@ add_executable(catalist_tests
   src/sync.cpp
   src/cli.cpp
   src/remoteSearch.cpp
+  src/themeRegistry.cpp
+  src/keybindManager.cpp
+  src/commandPalette.cpp
 )
 
 target_link_libraries(catalist_tests PRIVATE

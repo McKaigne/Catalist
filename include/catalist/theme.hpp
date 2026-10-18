@@ -25,30 +25,36 @@ namespace theme {
 }
 
 namespace icon {
-  const std::string AppLogo    = "󰄛"; // Cat logo
-  const std::string Library    = "󰓹"; // Bookshelf
-  const std::string InProgress = "󰐌"; // Play circle
-  const std::string Search     = ""; // Search glass
-  const std::string Stats      = "󰄫"; // Dashboard / chart
+  const std::string AppLogo     = "󰄛"; // Cat logo
+  const std::string Library     = "󰓹"; // Bookshelf
+  const std::string InProgress  = "󰐌"; // Play circle
+  const std::string Search      = ""; // Search glass
+  const std::string Stats       = "󰄫"; // Dashboard / chart
+  const std::string Sync        = "󰓦"; // Sync arrows
 
-  const std::string Anime      = "󰴙"; // Anime icon
-  const std::string Manga      = "󱥬"; // Manga icon
+  const std::string Anime       = "󰴙"; // Anime icon
+  const std::string Manga       = "󱥬"; // Manga icon
 
-  const std::string Watching   = "󰐌"; // Play circle
-  const std::string Completed  = ""; // Check circle
-  const std::string OnHold     = "󰏥"; // Pause circle
-  const std::string Dropped    = "󰅙"; // Dropped icon
-  const std::string Plan       = "󰥔"; // Clock outline
+  const std::string Watching    = "󰐌"; // Play circle
+  const std::string Completed   = "󰗠"; // Checked circle icon
+  const std::string OnHold      = "󰏥"; // Pause circle
+  const std::string Dropped     = "󰅙"; // Dropped icon
+  const std::string Plan        = "󰥔"; // Clock outline
 
-  // 5-Star System Glyphs
-  const std::string StarFull   = "";
-  const std::string StarHalf   = "";
-  const std::string StarEmpty  = "";
+  // Selection Checkbox Glyphs
+  const std::string CheckSingle = "󰄲"; // Single-select checked icon
+  const std::string CheckMulti  = "󰄸"; // Multi-select checked icon
+  const std::string CheckBlank  = "󰄮"; // Unchecked outline
 
-  const std::string Gauge      = "󰑋";
-  const std::string Keyboard   = "󰌌";
-  const std::string Web        = "󰖟";
-  const std::string Warn       = "⚠️";
+  // 5-Star Glyphs
+  const std::string StarFull    = "";
+  const std::string StarHalf    = "";
+  const std::string StarEmpty   = "";
+
+  const std::string Gauge       = "󰑋";
+  const std::string Keyboard    = "󰌌";
+  const std::string Web         = "󰖟";
+  const std::string Warn        = "⚠️";
 }
 
 } // namespace catalist

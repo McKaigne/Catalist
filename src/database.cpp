@@ -225,6 +225,10 @@ std::filesystem::path Database::getCsvPath(MediaType type) const {
   return configDir_ / (type == MediaType::Anime ? "anime.csv" : "manga.csv");
 }
 
+std::filesystem::path Database::getHistoryPath() const {
+  return configDir_ / "history.csv";
+}
+
 std::filesystem::path Database::getBackupDir() const {
   return configDir_ / "backups";
 }
@@ -401,9 +405,73 @@ bool Database::saveCsv(MediaType type, const std::filesystem::path& path) const 
   return true;
 }
 
+void Database::logActivity(const ActivityRecord& record) {
+  historyRecords_.insert(historyRecords_.begin(), record);
+  if (historyRecords_.size() > 100) {
+    historyRecords_.resize(100);
+  }
+  saveHistory();
+}
+
+std::vector<ActivityRecord> Database::getRecentActivity(MediaType type, size_t limit) const {
+  std::vector<ActivityRecord> res;
+  for (const auto& h : historyRecords_) {
+    if (h.type == type) {
+      res.push_back(h);
+      if (res.size() >= limit) break;
+    }
+  }
+  return res;
+}
+
+bool Database::loadHistory() {
+  auto hPath = getHistoryPath();
+  std::ifstream file(hPath);
+  if (!file.is_open()) return false;
+
+  historyRecords_.clear();
+  std::string line;
+  while (std::getline(file, line)) {
+    if (line.empty() || line[0] == '#') continue;
+    auto fields = parseCsvRecord(line);
+    if (fields.size() < 7) continue;
+
+    ActivityRecord r;
+    r.timestamp = unescapeCsv(fields[0]);
+    r.type = (fields[1] == "anime" ? MediaType::Anime : MediaType::Manga);
+    r.title = unescapeCsv(fields[2]);
+    r.status = stringToStatus(fields[3]);
+    try { r.progress = std::stoi(fields[4]); } catch (...) { r.progress = 0; }
+    try { r.totalUnits = std::stoi(fields[5]); } catch (...) { r.totalUnits = 0; }
+    try { r.score = std::stoi(fields[6]); } catch (...) { r.score = 0; }
+    historyRecords_.push_back(r);
+  }
+  return true;
+}
+
+bool Database::saveHistory() const {
+  std::filesystem::create_directories(configDir_);
+  auto hPath = getHistoryPath();
+  std::ofstream file(hPath);
+  if (!file.is_open()) return false;
+
+  file << "#timestamp,type,title,status,progress,total_units,score\n";
+  for (const auto& h : historyRecords_) {
+    file << escapeCsv(h.timestamp) << ","
+         << (h.type == MediaType::Anime ? "anime" : "manga") << ","
+         << escapeCsv(h.title) << ","
+         << escapeCsv(statusToString(h.status, h.type)) << ","
+         << h.progress << ","
+         << h.totalUnits << ","
+         << h.score << "\n";
+  }
+  return true;
+}
+
 bool Database::loadAll() {
   bool a = loadCsv(MediaType::Anime, getCsvPath(MediaType::Anime));
   bool m = loadCsv(MediaType::Manga, getCsvPath(MediaType::Manga));
+  loadHistory();
   autoHealIds();
   return a || m;
 }
@@ -412,6 +480,7 @@ bool Database::saveAll() const {
   std::filesystem::create_directories(configDir_);
   bool a = saveCsv(MediaType::Anime, getCsvPath(MediaType::Anime));
   bool m = saveCsv(MediaType::Manga, getCsvPath(MediaType::Manga));
+  saveHistory();
   return a && m;
 }
 
@@ -425,6 +494,16 @@ void Database::seedDefaults() {
   addEntry({116778, 116778, 105778, "Chainsaw Man", MediaType::Manga, WatchStatus::Watching, 9, 217, 0, 18, 0, 0, "0000-00-00", "0000-00-00", "Part 2 ongoing.", "2026-10-17", false});
   addEntry({135496, 135496, 132049, "Dandadan", MediaType::Manga, WatchStatus::Watching, 9, 167, 0, 16, 0, 0, "0000-00-00", "0000-00-00", "Peak art.", "2026-10-17", false});
   addEntry({126146, 126146, 117195, "[Oshi no Ko]", MediaType::Manga, WatchStatus::Completed, 8, 166, 166, 16, 16, 0, "0000-00-00", "2024-11-14", "Entertainment industry.", "2026-10-17", false});
+
+  if (historyRecords_.empty()) {
+    logActivity({"Oct 16, 6:08 PM", MediaType::Anime, "Kusuriya no Hitorigoto 3rd Season", WatchStatus::Watching, 3, 12, 0});
+    logActivity({"Oct 16, 6:08 PM", MediaType::Anime, "Kyouran Reijou Nia Liston: Byoujaku Reijou ni Tensei shita Kamigoroshi no Bujin no Karei Naru Musouroku", WatchStatus::Watching, 2, 25, 0});
+    logActivity({"Oct 09, 7:18 AM", MediaType::Anime, "Mushoku Tensei III: Isekai Ittara Honki Dasu", WatchStatus::Completed, 14, 14, 9});
+
+    logActivity({"Yesterday, 8:46 AM", MediaType::Manga, "Kimi no Koto ga Daidaidaidaidaisuki na 100-nin no Kanojo", WatchStatus::Watching, 257, 0, 10});
+    logActivity({"Oct 04, 8:04 PM", MediaType::Manga, "Damedol to Sekai ni Hitori dake no Fan", WatchStatus::Watching, 55, 0, 0});
+    logActivity({"Oct 03, 9:43 PM", MediaType::Manga, "Mikadono Sanshimai wa Angai, Choroi.", WatchStatus::Watching, 218, 0, 8});
+  }
 }
 
 } // namespace catalist

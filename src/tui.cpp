@@ -1,5 +1,4 @@
 #include "catalist/tui.hpp"
-#include "catalist/theme.hpp"
 #include "catalist/malParser.hpp"
 #include "catalist/sync.hpp"
 #include "catalist/remoteSearch.hpp"
@@ -19,6 +18,8 @@
 #include <thread>
 #include <atomic>
 #include <iostream>
+#include <set>
+#include <filesystem>
 
 namespace catalist {
 
@@ -50,35 +51,69 @@ static std::string clipTitle(const std::string& str, size_t maxCodePoints, size_
   return res;
 }
 
+static std::string formatCommas(long long n) {
+  std::string s = std::to_string(n);
+  int insertPosition = static_cast<int>(s.length()) - 3;
+  while (insertPosition > 0) {
+    s.insert(insertPosition, ",");
+    insertPosition -= 3;
+  }
+  return s;
+}
+
+static std::string formatDays(double days) {
+  long long whole = static_cast<long long>(days);
+  int frac = static_cast<int>(std::round((days - whole) * 10.0)) % 10;
+  return formatCommas(whole) + "." + std::to_string(frac);
+}
+
 static std::string formatSimpleDate(const std::string& dateStr) {
-  if (dateStr.empty() || dateStr.find("0000") == 0) {
-    return "-       ";
-  }
-  if (dateStr.size() >= 7) {
-    return dateStr.substr(0, 7) + " ";
-  }
+  if (dateStr.empty() || dateStr.find("0000") == 0) return "-       ";
+  if (dateStr.size() >= 7) return dateStr.substr(0, 7) + " ";
   std::string padded = dateStr;
   while (padded.size() < 8) padded += " ";
   return padded;
 }
 
-static Element highlightMatches(const std::string& textStr, const std::string& query, bool isRowActive) {
+static std::string getFormattedTimestamp() {
+  auto now = std::chrono::system_clock::now();
+  auto inTimeT = std::chrono::system_clock::to_time_t(now);
+  auto tm = *std::localtime(&inTimeT);
+  char buf[32];
+  std::strftime(buf, sizeof(buf), "%b %d, %I:%M %p", &tm);
+  return std::string(buf);
+}
+
+// Explicit UTF-8 byte constants for Powerline Extra rounded caps: U+E0B6 and U+E0B4
+static Element makePill(const std::string& textStr, ftxui::Color fg, ftxui::Color bg, bool boldText = true) {
+  static const std::string capLeft = "\xEE\x82\xB6";
+  static const std::string capRight = "\xEE\x82\xB4";
+  auto content = text(textStr) | color(fg) | bgcolor(bg);
+  if (boldText) content = content | bold;
+  return hbox({
+    text(capLeft) | color(bg),
+    content,
+    text(capRight) | color(bg)
+  });
+}
+
+static Element highlightMatches(const std::string& textStr, const std::string& query, bool isRowActive, const ThemePalette& theme) {
   if (query.empty()) {
-    auto el = text(textStr) | color(theme::Text);
+    auto el = text(textStr) | color(theme.text);
     if (isRowActive) el = el | bold;
     return el;
   }
 
   std::string lowerText = textStr;
   std::string lowerQuery = query;
-  std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(), [](unsigned char c) { return std::tolower(c); });
-  std::transform(lowerQuery.begin(), lowerQuery.end(), lowerQuery.begin(), [](unsigned char c) { return std::tolower(c); });
+  std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(), ::tolower);
+  std::transform(lowerQuery.begin(), lowerQuery.end(), lowerQuery.begin(), ::tolower);
 
   size_t lastPos = 0;
   size_t pos = lowerText.find(lowerQuery, 0);
 
   if (pos == std::string::npos) {
-    auto el = text(textStr) | color(theme::Text);
+    auto el = text(textStr) | color(theme.text);
     if (isRowActive) el = el | bold;
     return el;
   }
@@ -86,21 +121,21 @@ static Element highlightMatches(const std::string& textStr, const std::string& q
   Elements parts;
   while (pos != std::string::npos) {
     if (pos > lastPos) {
-      auto nonMatch = text(textStr.substr(lastPos, pos - lastPos)) | color(theme::Text);
+      auto nonMatch = text(textStr.substr(lastPos, pos - lastPos)) | color(theme.text);
       if (isRowActive) nonMatch = nonMatch | bold;
       parts.push_back(nonMatch);
     }
     auto matchEl = text(textStr.substr(pos, lowerQuery.size()))
                    | bold
-                   | color(theme::Crust)
-                   | bgcolor(theme::Yellow);
+                   | color(theme.crust)
+                   | bgcolor(theme.yellow);
     parts.push_back(matchEl);
     lastPos = pos + lowerQuery.size();
     pos = lowerText.find(lowerQuery, lastPos);
   }
 
   if (lastPos < textStr.size()) {
-    auto post = text(textStr.substr(lastPos)) | color(theme::Text);
+    auto post = text(textStr.substr(lastPos)) | color(theme.text);
     if (isRowActive) post = post | bold;
     parts.push_back(post);
   }
@@ -108,28 +143,60 @@ static Element highlightMatches(const std::string& textStr, const std::string& q
   return hbox(std::move(parts));
 }
 
+static bool isSortAscending(SortKey key, bool reverse) {
+  switch (key) {
+    case SortKey::Score:
+    case SortKey::Progress:
+    case SortKey::Date:
+      return reverse;
+    case SortKey::Title:
+    case SortKey::Status:
+    case SortKey::Id:
+      return !reverse;
+  }
+  return false;
+}
+
+static std::string getSortArrow(SortKey key, bool reverse) {
+  return isSortAscending(key, reverse) ? " ▲" : " ▼";
+}
+
 AppTui::AppTui(Database& db, AppConfig& config)
     : db_(db), config_(config) {}
 
 void AppTui::run() {
   auto screen = ScreenInteractive::Fullscreen();
+  auto* screenPtr = &screen; // Decoupled pointer to eliminate non-copyable lambda capture errors
 
+  AppMode appMode = AppMode::Nor;
+  FocusedCard focusedCard = FocusedCard::Catalog;
+  int detailsCursorIndex = 0; // 0: Status, 1: Rating, 2: Progress, 3: Title, 4: Notes
   ViewTab currentTab = (config_.defaultMedia == "manga") ? ViewTab::Manga : ViewTab::Anime;
-  ActiveTier currentTier = ActiveTier::Catalog;
-  EditField activeCellField = EditField::Progress;
   SortKey currentSort = SortKey::Score;
   bool reverseSort = config_.reverseSort;
 
-  int sidebarSelected = 0;
+  // Interactive Panel Cursors for Sync & Settings
+  int syncActivePanel = 0;      // 0: Operations Panel, 1: Backups Repository
+  int syncActionCursor = 0;     // 0: Reconcile, 1: Create Snapshot, 2: Import XML
+  int syncBackupCursor = 0;
+
+  int settingsActivePanel = 0;  // 0: Themes, 1: Preferences
+  int settingsThemeCursor = 0;
+  int settingsPrefCursor = 0;
+
+  int sidebarSelected = 1;
   int catalogSelected = 0;
+  std::set<WatchStatus> multiFilterStatuses;
+  std::set<int> multiFilterScores;
+  std::set<int> visualSelectedIds;
+
   std::string searchQuery = "";
-  std::string commandBuffer = "";
   std::string inspectorTitleBuffer = "";
   std::string inspectorNotesBuffer = "";
   std::string statusMessage = "Ready.";
   int pendingDeleteId = 0;
-  bool commandModeActive = false;
 
+  bool isOnlineModalOpen = false;
   std::string remoteSearchQuery = "";
   std::vector<RemoteSearchResult> remoteResults;
   std::vector<std::string> remoteResultLabels;
@@ -137,35 +204,24 @@ void AppTui::run() {
   bool remoteLoading = false;
   std::string remoteStatusMsg = "";
 
-  int marqueeEntryId = -1;
-  auto marqueeStartTime = std::chrono::steady_clock::now();
+  bool isInspectorEditingNotes = false;
+  bool isInspectorEditingTitle = false;
+
+  std::atomic<bool> syncIsRunning{false};
 
   std::vector<std::string> sidebarLabels;
   std::vector<std::string> catalogIndexLabels;
   std::vector<Entry> displayedEntries;
 
-  Box tabAnimeBox, tabMangaBox, tabOverviewBox;
+  Box tabAboutBox, tabAnimeBox, tabMangaBox, tabOverviewBox, tabSyncBox, tabSettingsBox;
   Box headerDateBox, headerTitleBox, headerStatusBox, headerRatingBox, headerProgressBox;
-  Box searchBarBox, newEntryBtnBox;
-  Box sidebarCardBox, catalogCardBox, detailCardBox;
+  Box searchBarBox;
   std::vector<Box> rowBoxes;
   std::vector<Box> sidebarBoxes;
   std::vector<Box> modalResultBoxes;
 
-  Box detailsTitleBox, detailsIdBox, detailsMalIdBox, detailsDeleteBox;
-  Box detailsStatusBox, detailsRatingBox;
-  Box detailsProgressMinusBox, detailsProgressPlusBox, detailsProgressGaugeBox;
-  Box detailsStartBox, detailsFinishBox, detailsNotesBox;
-
-  auto boxContains = [](const Box& b, int x, int y) {
-    return (b.x_min != 0 || b.x_max != 0 || b.y_min != 0 || b.y_max != 0) &&
-           x >= b.x_min && x <= b.x_max &&
-           y >= b.y_min && y <= b.y_max;
-  };
-
   auto copyToClipboard = [&](const std::string& str) {
     if (str.empty()) return;
-
     FILE* pipe = popen("wl-copy 2>/dev/null", "w");
     if (!pipe) pipe = popen("xclip -selection clipboard 2>/dev/null", "w");
     if (!pipe) pipe = popen("pbcopy 2>/dev/null", "w");
@@ -173,23 +229,7 @@ void AppTui::run() {
       fwrite(str.data(), 1, str.size(), pipe);
       pclose(pipe);
     }
-
-    static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::string b64 = "";
-    int val = 0, valb = -6;
-    for (unsigned char c : str) {
-      val = (val << 8) + c;
-      valb += 8;
-      while (valb >= 0) {
-        b64.push_back(b64_table[(val >> valb) & 0x3F]);
-        valb -= 6;
-      }
-    }
-    if (valb > -6) b64.push_back(b64_table[((val << 8) >> (valb + 8)) & 0x3F]);
-    while (b64.size() % 4) b64.push_back('=');
-    std::cout << "\033]52;c;" << b64 << "\007" << std::flush;
-
-    statusMessage = "Copied name: \"" + clipTitle(str, 24) + "\"";
+    statusMessage = "Copied: \"" + clipTitle(str, 24) + "\"";
   };
 
   auto openInBrowser = [&](const Entry& e) {
@@ -214,23 +254,6 @@ void AppTui::run() {
     statusMessage = "Opened: " + url;
   };
 
-  auto getSortArrow = [](SortKey key, bool reverse) -> std::string {
-    bool desc = false;
-    switch (key) {
-      case SortKey::Score:
-      case SortKey::Progress:
-      case SortKey::Date:
-        desc = !reverse;
-        break;
-      case SortKey::Title:
-      case SortKey::Status:
-      case SortKey::Id:
-        desc = reverse;
-        break;
-    }
-    return desc ? " ▼" : " ▲";
-  };
-
   auto recordAction = [&](HistoryAction::Type type, MediaType media, const Entry& before, const Entry& after) {
     undoStack_.push_back({type, media, before, after});
     redoStack_.clear();
@@ -245,13 +268,9 @@ void AppTui::run() {
     undoStack_.pop_back();
     redoStack_.push_back(act);
 
-    if (act.type == HistoryAction::Mutate) {
-      db_.updateEntry(act.before);
-    } else if (act.type == HistoryAction::Delete) {
-      db_.addEntry(act.before);
-    } else if (act.type == HistoryAction::Add) {
-      db_.removeEntry(act.media, act.after.id);
-    }
+    if (act.type == HistoryAction::Mutate) db_.updateEntry(act.before);
+    else if (act.type == HistoryAction::Delete) db_.addEntry(act.before);
+    else if (act.type == HistoryAction::Add) db_.removeEntry(act.media, act.after.id);
     db_.saveAll();
     statusMessage = "Action undone.";
   };
@@ -265,13 +284,9 @@ void AppTui::run() {
     redoStack_.pop_back();
     undoStack_.push_back(act);
 
-    if (act.type == HistoryAction::Mutate) {
-      db_.updateEntry(act.after);
-    } else if (act.type == HistoryAction::Delete) {
-      db_.removeEntry(act.media, act.before.id);
-    } else if (act.type == HistoryAction::Add) {
-      db_.addEntry(act.after);
-    }
+    if (act.type == HistoryAction::Mutate) db_.updateEntry(act.after);
+    else if (act.type == HistoryAction::Delete) db_.removeEntry(act.media, act.before.id);
+    else if (act.type == HistoryAction::Add) db_.addEntry(act.after);
     db_.saveAll();
     statusMessage = "Action redone.";
   };
@@ -280,13 +295,15 @@ void AppTui::run() {
     MediaType media = (currentTab == ViewTab::Manga) ? MediaType::Manga : MediaType::Anime;
 
     sidebarLabels = {
+      "  LIBRARY",
       icon::Library    + " All Media    (" + std::to_string(db_.getEntries(media).size()) + ")",
+      "  STATUS",
       icon::Watching   + (media == MediaType::Manga ? " Reading      (" : " Watching     (") + std::to_string(db_.countByStatus(media, WatchStatus::Watching)) + ")",
       icon::Completed  + " Completed    (" + std::to_string(db_.countByStatus(media, WatchStatus::Completed)) + ")",
       icon::OnHold     + " On-Hold      (" + std::to_string(db_.countByStatus(media, WatchStatus::OnHold)) + ")",
       icon::Dropped    + " Dropped      (" + std::to_string(db_.countByStatus(media, WatchStatus::Dropped)) + ")",
       icon::Plan       + " Planned      (" + std::to_string(db_.countByStatus(media, WatchStatus::PlanToWatch)) + ")",
-      "  Ratings",
+      "  RATINGS",
       renderStarMeter(10) + " (" + std::to_string(db_.countByScore(media, 10)) + ")",
       renderStarMeter(9)  + " (" + std::to_string(db_.countByScore(media, 9)) + ")",
       renderStarMeter(8)  + " (" + std::to_string(db_.countByScore(media, 8)) + ")",
@@ -296,27 +313,67 @@ void AppTui::run() {
       renderStarMeter(0)  + " (" + std::to_string(db_.countByScore(media, 0)) + ")"
     };
 
-    std::optional<WatchStatus> filterStatus = std::nullopt;
-    int scoreFilter = -1;
+    std::vector<Entry> pool;
+    for (const auto& e : db_.getEntries(media)) {
+      if (!multiFilterStatuses.empty() && multiFilterStatuses.find(e.status) == multiFilterStatuses.end()) continue;
+      if (!multiFilterScores.empty() && multiFilterScores.find(e.score) == multiFilterScores.end()) continue;
 
-    switch (sidebarSelected) {
-      case 1: filterStatus = WatchStatus::Watching; break;
-      case 2: filterStatus = WatchStatus::Completed; break;
-      case 3: filterStatus = WatchStatus::OnHold; break;
-      case 4: filterStatus = WatchStatus::Dropped; break;
-      case 5: filterStatus = WatchStatus::PlanToWatch; break;
-      case 7: scoreFilter = 10; break;
-      case 8: scoreFilter = 9; break;
-      case 9: scoreFilter = 8; break;
-      case 10: scoreFilter = 7; break;
-      case 11: scoreFilter = 6; break;
-      case 12: scoreFilter = 5; break;
-      case 13: scoreFilter = 0; break;
-      default: break;
+      if (multiFilterStatuses.empty() && multiFilterScores.empty()) {
+        if (sidebarSelected == 3 && e.status != WatchStatus::Watching) continue;
+        if (sidebarSelected == 4 && e.status != WatchStatus::Completed) continue;
+        if (sidebarSelected == 5 && e.status != WatchStatus::OnHold) continue;
+        if (sidebarSelected == 6 && e.status != WatchStatus::Dropped) continue;
+        if (sidebarSelected == 7 && e.status != WatchStatus::PlanToWatch) continue;
+        if (sidebarSelected == 9 && e.score != 10) continue;
+        if (sidebarSelected == 10 && e.score != 9) continue;
+        if (sidebarSelected == 11 && e.score != 8) continue;
+        if (sidebarSelected == 12 && e.score != 7) continue;
+        if (sidebarSelected == 13 && e.score != 6) continue;
+        if (sidebarSelected == 14 && e.score != 5) continue;
+        if (sidebarSelected == 15 && e.score != 0) continue;
+      }
+
+      if (!searchQuery.empty()) {
+        std::string tLower = e.title;
+        std::string qLower = searchQuery;
+        std::transform(tLower.begin(), tLower.end(), tLower.begin(), ::tolower);
+        std::transform(qLower.begin(), qLower.end(), qLower.begin(), ::tolower);
+        if (tLower.find(qLower) == std::string::npos) continue;
+      }
+
+      pool.push_back(e);
     }
 
-    displayedEntries = db_.filterEntries(media, filterStatus, scoreFilter, searchQuery, currentSort, reverseSort);
+    std::sort(pool.begin(), pool.end(), [currentSort, reverseSort](const Entry& a, const Entry& b) {
+      bool res = false;
+      switch (currentSort) {
+        case SortKey::Score:
+          if (a.score != b.score) res = a.score > b.score;
+          else res = a.title < b.title;
+          break;
+        case SortKey::Status:
+          if (a.status != b.status) res = static_cast<int>(a.status) < static_cast<int>(b.status);
+          else res = a.title < b.title;
+          break;
+        case SortKey::Title:
+          res = a.title < b.title;
+          break;
+        case SortKey::Progress:
+          if (a.progress != b.progress) res = a.progress > b.progress;
+          else res = a.title < b.title;
+          break;
+        case SortKey::Date:
+          if (a.startDate != b.startDate) res = a.startDate > b.startDate;
+          else res = a.title < b.title;
+          break;
+        case SortKey::Id:
+          res = a.id < b.id;
+          break;
+      }
+      return reverseSort ? !res : res;
+    });
 
+    displayedEntries = std::move(pool);
     catalogIndexLabels.clear();
     rowBoxes.assign(displayedEntries.size(), Box{});
     sidebarBoxes.assign(sidebarLabels.size(), Box{});
@@ -332,7 +389,8 @@ void AppTui::run() {
   refreshViews();
 
   auto openRemoteSearchModal = [&]() {
-    currentTier = ActiveTier::RemoteSearchModal;
+    isOnlineModalOpen = true;
+    appMode = AppMode::Sch;
     remoteSearchQuery = searchQuery;
     remoteResults.clear();
     remoteResultLabels.clear();
@@ -363,175 +421,307 @@ void AppTui::run() {
     }
   };
 
-  MenuOption sidebarOpt;
-  sidebarOpt.on_change = [&]() {
-    refreshViews();
+  // Progression & Lifecycle Date Automation
+  auto mutateProgress = [&](Entry& e, int dir) {
+    Entry before = e;
+    int oldProg = e.progress;
+    int newProg = std::max(0, e.progress + dir);
+
+    auto now = std::chrono::system_clock::now();
+    auto inTimeT = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ssDate;
+    ssDate << std::put_time(std::localtime(&inTimeT), "%Y-%m-%d");
+    std::string todayStr = ssDate.str();
+
+    if (dir > 0) {
+      if (oldProg == 0 && newProg >= 1) {
+        if (e.startDate.empty() || e.startDate == "0000-00-00") {
+          e.startDate = todayStr;
+        }
+      }
+      if (e.status == WatchStatus::PlanToWatch || e.status == WatchStatus::OnHold || e.status == WatchStatus::Dropped) {
+        e.status = WatchStatus::Watching;
+      }
+      e.progress = newProg;
+      if (e.totalUnits > 0 && e.progress >= e.totalUnits) {
+        e.progress = e.totalUnits;
+        e.status = WatchStatus::Completed;
+        if (e.finishDate.empty() || e.finishDate == "0000-00-00") {
+          e.finishDate = todayStr;
+        }
+      }
+    } else if (dir < 0) {
+      if (e.totalUnits > 0 && oldProg >= e.totalUnits && newProg < e.totalUnits) {
+        e.status = WatchStatus::Watching;
+        e.finishDate = "0000-00-00";
+      }
+      e.progress = newProg;
+    }
+
+    e.updatedAt = todayStr;
+    recordAction(HistoryAction::Mutate, e.type, before, e);
+    db_.updateEntry(e);
+    db_.logActivity({getFormattedTimestamp(), e.type, e.title, e.status, e.progress, e.totalUnits, e.score});
+    db_.saveAll();
+    statusMessage = "Progress: " + std::to_string(e.progress) + "/" + (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?");
   };
-  sidebarOpt.entries_option.transform = [&](const EntryState& state) {
-    int idx = -1;
-    for (size_t i = 0; i < sidebarLabels.size(); ++i) {
-      if (sidebarLabels[i] == state.label) {
-        idx = static_cast<int>(i);
-        break;
+
+  auto mutateStatus = [&](Entry& e, int dir) {
+    Entry before = e;
+    if (dir > 0) {
+      switch (e.status) {
+        case WatchStatus::Watching:    e.status = WatchStatus::Completed; break;
+        case WatchStatus::Completed:   e.status = WatchStatus::OnHold; break;
+        case WatchStatus::OnHold:      e.status = WatchStatus::Dropped; break;
+        case WatchStatus::Dropped:     e.status = WatchStatus::PlanToWatch; break;
+        case WatchStatus::PlanToWatch: e.status = WatchStatus::Watching; break;
+      }
+    } else {
+      switch (e.status) {
+        case WatchStatus::Watching:    e.status = WatchStatus::PlanToWatch; break;
+        case WatchStatus::Completed:   e.status = WatchStatus::Watching; break;
+        case WatchStatus::OnHold:      e.status = WatchStatus::Completed; break;
+        case WatchStatus::Dropped:     e.status = WatchStatus::OnHold; break;
+        case WatchStatus::PlanToWatch: e.status = WatchStatus::Dropped; break;
       }
     }
+    recordAction(HistoryAction::Mutate, e.type, before, e);
+    db_.updateEntry(e);
+    db_.logActivity({getFormattedTimestamp(), e.type, e.title, e.status, e.progress, e.totalUnits, e.score});
+    db_.saveAll();
+    statusMessage = "Status: " + statusToString(e.status, e.type);
+  };
 
-    if (idx == 6 || state.label == "  Ratings") {
-      return text("  RATINGS") | bold | color(theme::Overlay0);
-    }
-    bool focused = state.focused && (currentTier == ActiveTier::Sidebar);
-    Element el;
-    if (focused) {
-      el = hbox({
-        text("▌ ") | color(theme::Mauve) | bold,
-        text(state.label) | bold | color(theme::Text)
-      }) | bgcolor(theme::Surface0) | focus;
-    } else if (state.active) {
-      el = hbox({
-        text("▎ ") | color(theme::Mauve),
-        text(state.label) | bold | color(theme::Text)
-      }) | bgcolor(theme::Surface0);
+  auto mutateRating = [&](Entry& e, int dir) {
+    Entry before = e;
+    e.score = std::clamp(e.score + dir, 0, 10);
+    recordAction(HistoryAction::Mutate, e.type, before, e);
+    db_.updateEntry(e);
+    db_.logActivity({getFormattedTimestamp(), e.type, e.title, e.status, e.progress, e.totalUnits, e.score});
+    db_.saveAll();
+    statusMessage = "Rating: " + renderStarMeter(e.score);
+  };
+
+  auto toggleColumnSort = [&](SortKey targetKey, const std::string& name) {
+    if (currentSort == targetKey) {
+      reverseSort = !reverseSort;
     } else {
-      el = hbox({
-        text("  "),
-        text(state.label) | color(theme::Text)
-      });
+      currentSort = targetKey;
+      if (targetKey == SortKey::Score || targetKey == SortKey::Progress || targetKey == SortKey::Date) {
+        reverseSort = true;
+      } else {
+        reverseSort = false;
+      }
+    }
+    refreshViews();
+    bool asc = isSortAscending(currentSort, reverseSort);
+    statusMessage = "Sort: " + name + (asc ? " (Increasing ▲)" : " (Decreasing ▼)");
+  };
+
+  // Background Non-Blocking Sync Pipeline
+  auto triggerAsyncSync = [&]() {
+    if (syncIsRunning.load()) {
+      statusMessage = "Sync already active in background...";
+      return;
+    }
+    syncIsRunning.store(true);
+    statusMessage = "Reconciling ongoing titles with MyAnimeList...";
+
+    std::thread([&, screenPtr]() {
+      std::string outMsg;
+      MetadataSync::syncOngoing(db_, outMsg);
+      syncIsRunning.store(false);
+      statusMessage = outMsg;
+      screenPtr->PostEvent(Event::Custom);
+    }).detach();
+  };
+
+  auto dispatchCommand = [&](const std::string& cmdLine) {
+    if (cmdLine.empty()) return;
+    std::stringstream ss(cmdLine);
+    std::string verb;
+    ss >> verb;
+
+    if (verb == "theme") {
+      std::string themeName;
+      ss >> themeName;
+      if (themeName.empty()) {
+        statusMessage = "Current theme: " + config_.theme;
+        return;
+      }
+      if (ThemeRegistry::hasTheme(themeName)) {
+        config_.theme = themeName;
+        ThemeRegistry::setActive(themeName);
+        config_.save(Database::getConfigDir() / "config.toml");
+        statusMessage = "Applied theme: " + themeName;
+      } else {
+        statusMessage = "Unknown theme: " + themeName;
+      }
+    } else if (verb == "q" || verb == "quit") {
+      db_.saveAll();
+      screen.ExitLoopClosure()();
+    } else if (verb == "w" || verb == "write") {
+      db_.saveAll();
+      statusMessage = "Saved watchlists to disk.";
+    } else if (verb == "wq") {
+      db_.saveAll();
+      screen.ExitLoopClosure()();
+    } else if (verb == "backup") {
+      db_.createBackupSnapshot();
+      statusMessage = "Created snapshot backup.";
+    } else if (verb == "sync") {
+      triggerAsyncSync();
+    } else {
+      statusMessage = "Command executed: " + verb;
+    }
+  };
+
+  MenuOption sidebarOpt;
+  sidebarOpt.on_change = [&]() { refreshViews(); };
+  sidebarOpt.entries_option.transform = [&](const EntryState& state) {
+    const auto& theme = ThemeRegistry::active();
+    int idx = -1;
+    for (size_t i = 0; i < sidebarLabels.size(); ++i) {
+      if (sidebarLabels[i] == state.label) { idx = static_cast<int>(i); break; }
     }
 
-    if (idx >= 0 && idx < static_cast<int>(sidebarBoxes.size())) {
-      el = el | reflect(sidebarBoxes[idx]);
+    if (idx == 0 || state.label == "  LIBRARY") {
+      return text("  LIBRARY") | bold | color(theme.overlay0);
     }
+    if (idx == 2 || state.label == "  STATUS") {
+      return text("  STATUS") | bold | color(theme.overlay0);
+    }
+    if (idx == 8 || state.label == "  RATINGS") {
+      return text("  RATINGS") | bold | color(theme.overlay0);
+    }
+
+    bool inMulti = false;
+    if (idx == 3 && multiFilterStatuses.count(WatchStatus::Watching)) inMulti = true;
+    else if (idx == 4 && multiFilterStatuses.count(WatchStatus::Completed)) inMulti = true;
+    else if (idx == 5 && multiFilterStatuses.count(WatchStatus::OnHold)) inMulti = true;
+    else if (idx == 6 && multiFilterStatuses.count(WatchStatus::Dropped)) inMulti = true;
+    else if (idx == 7 && multiFilterStatuses.count(WatchStatus::PlanToWatch)) inMulti = true;
+    else if (idx >= 9 && idx <= 14 && multiFilterScores.count(19 - idx)) inMulti = true;
+    else if (idx == 15 && multiFilterScores.count(0)) inMulti = true;
+
+    // Inactive rows render clean whitespace: no empty checkbox clutter
+    std::string prefix = "   ";
+    if (inMulti) {
+      prefix = icon::CheckMulti + " ";
+    } else if (multiFilterStatuses.empty() && multiFilterScores.empty() && idx == sidebarSelected) {
+      prefix = icon::CheckSingle + " ";
+    }
+
+    bool focused = state.focused && (focusedCard == FocusedCard::Sidebar);
+
+    Element el = hbox({
+      text(prefix) | color(theme.green) | bold,
+      text(state.label) | (inMulti || (idx == sidebarSelected) ? bold : nothing) | color(theme.text)
+    });
+
+    if (focused) el = el | bgcolor(theme.surface0) | focus;
+    else if (state.active) el = el | bgcolor(theme.surface0);
+
     return el;
   };
   auto sidebarMenu = Menu(&sidebarLabels, &sidebarSelected, sidebarOpt);
 
   InputOption searchOpt;
-  searchOpt.transform = [](InputState state) {
+  searchOpt.transform = [&](InputState state) {
+    const auto& theme = ThemeRegistry::active();
     Element el = state.element;
-    if (state.is_placeholder) {
-      el = el | color(theme::Overlay0);
-    } else {
-      el = el | color(theme::Text);
-    }
-    if (state.focused) {
-      el = el | color(theme::Peach);
-    }
+    if (state.is_placeholder) el = el | color(theme.overlay0);
+    else el = el | color(theme.text);
+    if (state.focused) el = el | color(theme.peach);
     return el;
   };
-  auto searchInput = Input(&searchQuery, "Click or press '/' to search title...", searchOpt);
-  auto remoteSearchInput = Input(&remoteSearchQuery, "Type title and press [ret]...", searchOpt);
+  auto searchInput = Input(&searchQuery, "Press '/' to search...", searchOpt);
+  auto remoteSearchInput = Input(&remoteSearchQuery, "Search title and press [ret]...", searchOpt);
 
   MenuOption catalogOpt;
   catalogOpt.entries_option.transform = [&](const EntryState& state) {
+    const auto& theme = ThemeRegistry::active();
     int idx = 0;
-    try {
-      idx = std::stoi(state.label);
-    } catch (...) {
-      return text("");
-    }
-    if (idx < 0 || idx >= static_cast<int>(displayedEntries.size())) {
-      return text("");
-    }
+    try { idx = std::stoi(state.label); } catch (...) { return text(""); }
+    if (idx < 0 || idx >= static_cast<int>(displayedEntries.size())) return text("");
     const auto& e = displayedEntries[idx];
-    bool isRowActive = (idx == catalogSelected) && (currentTier == ActiveTier::Catalog || currentTier == ActiveTier::CellEdit);
 
-    size_t titleGlyphs = 0;
-    for (size_t i = 0; i < e.title.size(); ) {
-      unsigned char c = static_cast<unsigned char>(e.title[i]);
-      if ((c & 0x80) == 0) i += 1;
-      else if ((c & 0xE0) == 0xC0) i += 2;
-      else if ((c & 0xF0) == 0xE0) i += 3;
-      else i += 4;
-      titleGlyphs++;
-    }
+    bool isRowActive = (idx == catalogSelected) && (focusedCard == FocusedCard::Catalog || focusedCard == FocusedCard::Details || appMode == AppMode::Edt);
+    bool isSelected = visualSelectedIds.count(e.id) > 0;
 
-    std::string displayTitle = e.title;
-    if (idx == catalogSelected && titleGlyphs > 26) {
-      auto now = std::chrono::steady_clock::now();
-      if (e.id != marqueeEntryId) {
-        marqueeEntryId = e.id;
-        marqueeStartTime = now;
-      }
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - marqueeStartTime).count();
-      if (elapsed > 800) {
-        size_t offset = static_cast<size_t>((elapsed - 800) / 160);
-        displayTitle = clipTitle(e.title + "    ──    " + e.title, 26, offset);
+    size_t maxChars = 28;
+    std::string displayTitle = clipTitle(e.title, maxChars, 0);
+
+    // Multi-select marked checkbox 󰄸 / Single-select marked 󰄲
+    std::string marker;
+    ftxui::Color markerColor = theme.green;
+    if (isSelected) {
+      if (visualSelectedIds.size() > 1) {
+        marker = icon::CheckMulti + " ";
       } else {
-        displayTitle = clipTitle(e.title, 26, 0);
+        marker = icon::CheckSingle + " ";
       }
+    } else if (isRowActive) {
+      marker = "▌ ";
+      markerColor = theme.mauve;
     } else {
-      displayTitle = clipTitle(e.title, 26, 0);
+      marker = "  ";
     }
 
-    auto titleElement = hbox({
-      text(" " + typeToIcon(e.type) + " "),
-      highlightMatches(displayTitle, searchQuery, isRowActive)
-    }) | flex;
+    auto markerEl = text(marker) | bold | color(markerColor);
 
-    auto statusStyle = (currentTier == ActiveTier::CellEdit && isRowActive && activeCellField == EditField::Status)
-      ? (bold | color(theme::Crust) | bgcolor(statusToColor(e.status)))
-      : (color(statusToColor(e.status)));
-
-    auto ratingStyle = (currentTier == ActiveTier::CellEdit && isRowActive && activeCellField == EditField::Rating)
-      ? (bold | color(theme::Crust) | bgcolor(theme::Yellow))
-      : (color(theme::Yellow));
-
-    auto progressStyle = (currentTier == ActiveTier::CellEdit && isRowActive && activeCellField == EditField::Progress)
-      ? (bold | color(theme::Crust) | bgcolor(theme::Lavender))
-      : (color(theme::Lavender));
+    // Uncluttered Status: bare icon + text without heavy capsule background
+    auto statusElement = hbox({
+      text(statusToIcon(e.status) + " ") | color(statusToColor(e.status)),
+      text(statusToString(e.status, e.type)) | color(statusToColor(e.status))
+    });
 
     auto row = hbox({
-      text(isRowActive ? "▌ " : "  ") | color(theme::Mauve) | bold,
-      text(" " + formatSimpleDate(e.startDate)) | size(WIDTH, EQUAL, 10) | color(theme::Subtext),
+      markerEl,
+      text(" " + formatSimpleDate(e.startDate)) | size(WIDTH, EQUAL, 10) | color(theme.subtext),
       text(" "),
-      titleElement,
+      hbox({ text(" " + typeToIcon(e.type) + " "), highlightMatches(displayTitle, searchQuery, isRowActive, theme) }) | flex,
       text(" "),
-      text(" " + statusToIcon(e.status) + " " + statusToString(e.status, e.type)) | size(WIDTH, EQUAL, 14) | statusStyle,
+      statusElement | size(WIDTH, EQUAL, 14),
       text(" "),
-      text(" " + renderStarMeter(e.score)) | size(WIDTH, EQUAL, 12) | ratingStyle,
+      text(" " + renderStarMeter(e.score)) | size(WIDTH, EQUAL, 12) | color(theme.yellow),
       text(" "),
-      text(" " + icon::Gauge + " " + std::to_string(e.progress) + "/" + (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?")) | size(WIDTH, EQUAL, 12) | progressStyle,
+      text(" " + icon::Gauge + " " + std::to_string(e.progress) + "/" + (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?")) | size(WIDTH, EQUAL, 12) | color(theme.lavender),
       text(" ")
     });
 
-    if (isRowActive) {
-      row = row | bgcolor(theme::Surface0) | focus;
-    }
+    if (isRowActive) row = row | bgcolor(theme.surface0) | focus;
+    else if (isSelected) row = row | bgcolor(theme.surface0);
 
-    if (idx >= 0 && idx < static_cast<int>(rowBoxes.size())) {
-      row = row | reflect(rowBoxes[idx]);
-    }
     return row;
   };
 
   MenuOption remoteMenuOpt;
   remoteMenuOpt.entries_option.transform = [&](const EntryState& state) {
+    const auto& theme = ThemeRegistry::active();
     int idx = 0;
     try { idx = std::stoi(state.label); } catch (...) { return text(""); }
     if (idx < 0 || idx >= static_cast<int>(remoteResults.size())) return text("");
     const auto& r = remoteResults[idx];
     bool active = (idx == remoteSelected);
 
-    std::string displayTitle = r.title;
-    if (displayTitle.size() > 34) {
-      displayTitle = displayTitle.substr(0, 31) + "...";
-    }
+    std::string displayTitle = clipTitle(r.title, 34, 0);
 
     auto row = hbox({
-      text(active ? "▌ " : "  ") | color(theme::Mauve) | bold,
-      text("[" + std::to_string(idx + 1) + "] ") | size(WIDTH, EQUAL, 5) | color(theme::Peach) | bold,
-      text(displayTitle) | size(WIDTH, EQUAL, 34) | color(theme::Text) | (active ? bold : nothing),
+      text(active ? "▌ " : "  ") | color(theme.mauve) | bold,
+      text("[" + std::to_string(idx + 1) + "] ") | size(WIDTH, EQUAL, 5) | color(theme.peach) | bold,
+      text(displayTitle) | size(WIDTH, EQUAL, 34) | color(theme.text) | (active ? bold : nothing),
       text(" "),
-      text(r.year.empty() ? " -  " : r.year) | size(WIDTH, EQUAL, 6) | color(theme::Subtext),
+      text(r.year.empty() ? " -  " : r.year) | size(WIDTH, EQUAL, 6) | color(theme.subtext),
       text(" "),
-      text(r.totalUnits > 0 ? (std::to_string(r.totalUnits) + " eps") : "ongoing") | size(WIDTH, EQUAL, 9) | color(theme::Subtext),
+      text(r.totalUnits > 0 ? (std::to_string(r.totalUnits) + " eps") : "ongoing") | size(WIDTH, EQUAL, 9) | color(theme.subtext),
       text(" "),
-      text("★ " + (r.score > 0.0 ? std::to_string(r.score).substr(0, 4) : " -  ")) | size(WIDTH, EQUAL, 8) | color(theme::Yellow),
+      text("★ " + (r.score > 0.0 ? std::to_string(r.score).substr(0, 4) : " -  ")) | size(WIDTH, EQUAL, 8) | color(theme.yellow),
       text(" "),
-      text("MAL " + std::to_string(r.malId)) | size(WIDTH, EQUAL, 10) | color(theme::Overlay0)
+      text("MAL " + std::to_string(r.malId)) | size(WIDTH, EQUAL, 10) | color(theme.overlay0)
     });
 
-    if (active) row = row | bgcolor(theme::Surface0) | focus;
+    if (active) row = row | bgcolor(theme.surface0) | focus;
     if (idx >= 0 && idx < static_cast<int>(modalResultBoxes.size())) {
       row = row | reflect(modalResultBoxes[idx]);
     }
@@ -543,145 +733,50 @@ void AppTui::run() {
   auto inspectorTitleInput = Input(&inspectorTitleBuffer, "Title...");
   auto inspectorNotesInput = Input(&inspectorNotesBuffer, "Write notes here...");
 
-  auto catalogContainer = Container::Vertical({
-    searchInput,
-    catalogMenu
-  });
-
-  auto inspectorContainer = Container::Vertical({
-    inspectorTitleInput,
-    inspectorNotesInput
-  });
-
-  auto modalContainer = Container::Vertical({
-    remoteSearchInput,
-    remoteMenu
-  });
+  auto inspectorContainer = Container::Vertical({ inspectorTitleInput, inspectorNotesInput });
+  auto modalContainer = Container::Vertical({ remoteSearchInput, remoteMenu });
 
   auto mainContainer = Container::Horizontal({
     sidebarMenu,
-    catalogContainer,
+    catalogMenu,
     inspectorContainer,
     modalContainer
   });
 
-  auto mutateEditField = [&](Entry& e, int dir) {
-    Entry before = e;
-    if (activeCellField == EditField::Rating) {
-      e.score = std::clamp(e.score + dir, 0, 10);
-      statusMessage = "Rating: " + renderStarMeter(e.score);
-    } else if (activeCellField == EditField::Progress) {
-      e.progress = std::max(0, e.progress + dir);
-      if (e.totalUnits > 0 && e.progress >= e.totalUnits) {
-        e.progress = e.totalUnits;
-        e.status = WatchStatus::Completed;
-      }
-      statusMessage = "Progress: " + std::to_string(e.progress) + " units";
-    } else if (activeCellField == EditField::Status) {
-      switch (e.status) {
-        case WatchStatus::Watching:    e.status = (dir > 0) ? WatchStatus::Completed : WatchStatus::PlanToWatch; break;
-        case WatchStatus::Completed:   e.status = (dir > 0) ? WatchStatus::OnHold : WatchStatus::Watching; break;
-        case WatchStatus::OnHold:      e.status = (dir > 0) ? WatchStatus::Dropped : WatchStatus::Completed; break;
-        case WatchStatus::Dropped:     e.status = (dir > 0) ? WatchStatus::PlanToWatch : WatchStatus::OnHold; break;
-        case WatchStatus::PlanToWatch: e.status = (dir > 0) ? WatchStatus::Watching : WatchStatus::Dropped; break;
-      }
-      statusMessage = "Status: " + statusToString(e.status, e.type);
-    }
-    recordAction(HistoryAction::Mutate, e.type, before, e);
-    db_.updateEntry(e);
-    db_.saveAll();
-
-    if (catalogSelected >= 0 && catalogSelected < static_cast<int>(displayedEntries.size())) {
-      displayedEntries[catalogSelected] = e;
-    }
-  };
-
-  auto executeCommand = [&](const std::string& cmdLine) {
-    if (cmdLine.empty()) return;
-    std::stringstream ss(cmdLine);
-    std::string verb;
-    ss >> verb;
-
-    if (verb == "q" || verb == "quit") {
-      db_.saveAll();
-      screen.ExitLoopClosure()();
-    } else if (verb == "w" || verb == "write") {
-      db_.saveAll();
-      statusMessage = "Saved watchlists to disk.";
-    } else if (verb == "wq") {
-      db_.saveAll();
-      screen.ExitLoopClosure()();
-    } else if (verb == "new" || verb == "add" || verb == "search" || verb == "online") {
-      std::string q;
-      std::getline(ss, q);
-      q.erase(0, q.find_first_not_of(" \t"));
-      openRemoteSearchModal();
-      remoteSearchQuery = q;
-      remoteSearchInput->TakeFocus();
-      if (!remoteSearchQuery.empty()) executeRemoteSearch();
-    } else if (verb == "undo" || verb == "u") {
-      performUndo();
-      refreshViews();
-    } else if (verb == "redo") {
-      performRedo();
-      refreshViews();
-    } else if (verb == "open" || verb == "mal") {
-      if (!displayedEntries.empty()) openInBrowser(displayedEntries[catalogSelected]);
-    } else if (verb == "sort") {
-      std::string key, order;
-      ss >> key >> order;
-      if (key == "date" || key == "chrono") currentSort = SortKey::Date;
-      else if (key == "title") currentSort = SortKey::Title;
-      else if (key == "status") currentSort = SortKey::Status;
-      else if (key == "score" || key == "rating") currentSort = SortKey::Score;
-      else if (key == "progress") currentSort = SortKey::Progress;
-      else if (key == "id" || key == "mal") currentSort = SortKey::Id;
-
-      if (!order.empty()) reverseSort = (order == "desc" || order == "reverse");
-      refreshViews();
-      statusMessage = "Sorted by: " + key;
-    } else if (verb == "backup") {
-      db_.createBackupSnapshot();
-      statusMessage = "Backup created in ~/.config/catalist/backups/";
-    } else if (verb == "sync") {
-      statusMessage = "Syncing metadata...";
-      std::string msg;
-      MetadataSync::syncOngoing(db_, msg);
-      refreshViews();
-      statusMessage = msg;
-    } else {
-      statusMessage = "Unknown command: '" + verb + "'";
-    }
-  };
-
   auto globalHandler = CatchEvent(mainContainer, [&](Event event) {
-    if (event == Event::Custom) {
-      return true;
-    }
+    if (event == Event::Custom) return true;
+    if (!config_.mouse && event.is_mouse()) return true;
 
-    if (!config_.mouse && event.is_mouse()) {
-      return true;
-    }
-
-    if (currentTier == ActiveTier::RemoteSearchModal) {
-      if (event == Event::Escape) {
-        currentTier = ActiveTier::Catalog;
-        catalogMenu->TakeFocus();
-        statusMessage = "Closed online search.";
+    // TYPING ISOLATION GUARDS
+    if (commandPalette_.isOpen()) {
+      if (event == Event::Escape) { commandPalette_.close(); appMode = AppMode::Nor; return true; }
+      if (event == Event::Return) {
+        commandPalette_.execute([&](const std::string& cmd) { dispatchCommand(cmd); appMode = AppMode::Nor; });
         return true;
       }
+      if (event == Event::Tab) { commandPalette_.handleEvent("", false, false, true, false, false); return true; }
+      if (event == Event::Backspace) { commandPalette_.handleEvent("", true, false, false, false, false); return true; }
+      if (event == Event::ArrowUp) { commandPalette_.handleEvent("", false, false, false, true, false); return true; }
+      if (event == Event::ArrowDown) { commandPalette_.handleEvent("", false, false, false, false, true); return true; }
+      if (event.is_character()) { commandPalette_.handleEvent(event.character(), false, false, false, false, false); return true; }
+      return true;
+    }
+
+    if (isOnlineModalOpen) {
+      if (event == Event::Escape) { isOnlineModalOpen = false; appMode = AppMode::Nor; catalogMenu->TakeFocus(); return true; }
       if (event == Event::Tab) {
         if (remoteSearchInput->Focused()) remoteMenu->TakeFocus();
         else remoteSearchInput->TakeFocus();
         return true;
       }
-      if (event == Event::Return) {
-        if (remoteSearchInput->Focused()) {
-          executeRemoteSearch();
-          remoteMenu->TakeFocus();
-          return true;
-        }
-        if (remoteMenu->Focused() && !remoteResults.empty() && remoteSelected >= 0 && remoteSelected < static_cast<int>(remoteResults.size())) {
+      if (remoteSearchInput->Focused()) {
+        if (event == Event::Return) { executeRemoteSearch(); remoteMenu->TakeFocus(); return true; }
+        if (event == Event::ArrowDown) { remoteMenu->TakeFocus(); return true; }
+        remoteSearchInput->OnEvent(event);
+        return true;
+      }
+      if (remoteMenu->Focused()) {
+        if (event == Event::Return && !remoteResults.empty() && remoteSelected >= 0 && remoteSelected < static_cast<int>(remoteResults.size())) {
           const auto& sel = remoteResults[remoteSelected];
           Entry e;
           e.id = sel.malId;
@@ -699,319 +794,40 @@ void AppTui::run() {
           refreshViews();
 
           for (size_t i = 0; i < displayedEntries.size(); ++i) {
-            if (displayedEntries[i].id == e.id) {
-              catalogSelected = static_cast<int>(i);
-              break;
-            }
+            if (displayedEntries[i].id == e.id) { catalogSelected = static_cast<int>(i); break; }
           }
-
-          currentTier = ActiveTier::Catalog;
+          isOnlineModalOpen = false;
+          appMode = AppMode::Nor;
           catalogMenu->TakeFocus();
           statusMessage = "Added '" + e.title + "' [MAL ID " + std::to_string(e.malId) + "]!";
           return true;
         }
-      }
-
-      if (event.is_mouse()) {
-        auto mouse = event.mouse();
-        if (mouse.button == Mouse::Left && mouse.motion == Mouse::Pressed) {
-          for (size_t i = 0; i < remoteResults.size() && i < modalResultBoxes.size(); ++i) {
-            if (boxContains(modalResultBoxes[i], mouse.x, mouse.y)) {
-              remoteSelected = static_cast<int>(i);
-              const auto& sel = remoteResults[i];
-              Entry e;
-              e.id = sel.malId;
-              e.malId = sel.malId;
-              e.type = sel.type;
-              e.title = sel.title;
-              e.status = WatchStatus::Watching;
-              e.score = 0;
-              e.progress = 0;
-              e.totalUnits = sel.totalUnits;
-              e.startDate = sel.year.empty() ? "0000-00-00" : (sel.year + "-01-01");
-              db_.addEntry(e);
-              recordAction(HistoryAction::Add, e.type, Entry{}, e);
-              db_.saveAll();
-              refreshViews();
-
-              for (size_t j = 0; j < displayedEntries.size(); ++j) {
-                if (displayedEntries[j].id == e.id) {
-                  catalogSelected = static_cast<int>(j);
-                  break;
-                }
-              }
-
-              currentTier = ActiveTier::Catalog;
-              catalogMenu->TakeFocus();
-              statusMessage = "Added '" + e.title + "' [MAL ID " + std::to_string(e.malId) + "]!";
-              return true;
-            }
-          }
+        if (event == Event::ArrowUp || event == Event::Character('k')) {
+          if (remoteSelected > 0) remoteSelected--;
+          else remoteSearchInput->TakeFocus();
+          return true;
         }
-      }
-
-      if (remoteSearchInput->Focused()) {
-        remoteSearchInput->OnEvent(event);
-        return true;
-      }
-      if (remoteMenu->Focused()) {
-        if (event == Event::Character('j') || event == Event::ArrowDown) {
+        if (event == Event::ArrowDown || event == Event::Character('j')) {
           if (!remoteResults.empty() && remoteSelected < static_cast<int>(remoteResults.size()) - 1) remoteSelected++;
           return true;
         }
-        if (event == Event::Character('k') || event == Event::ArrowUp) {
-          if (remoteSelected > 0) remoteSelected--;
-          return true;
-        }
-        return true;
       }
       return true;
     }
 
-    if (event.is_mouse()) {
-      auto mouse = event.mouse();
-      int mx = mouse.x;
-      int my = mouse.y;
-
-      if (mouse.button == Mouse::WheelUp) {
-        if (boxContains(sidebarCardBox, mx, my)) {
-          if (sidebarSelected > 0) {
-            sidebarSelected--;
-            if (sidebarSelected == 6) sidebarSelected = 5;
-            refreshViews();
-          }
-          return true;
-        }
-        if (catalogSelected > 0) {
-          catalogSelected = std::max(0, catalogSelected - 1);
-          marqueeEntryId = displayedEntries[catalogSelected].id;
-          marqueeStartTime = std::chrono::steady_clock::now();
-        }
-        return true;
-      }
-      if (mouse.button == Mouse::WheelDown) {
-        if (boxContains(sidebarCardBox, mx, my)) {
-          if (sidebarSelected < static_cast<int>(sidebarLabels.size()) - 1) {
-            sidebarSelected++;
-            if (sidebarSelected == 6) sidebarSelected = 7;
-            refreshViews();
-          }
-          return true;
-        }
-        if (!displayedEntries.empty() && catalogSelected < static_cast<int>(displayedEntries.size()) - 1) {
-          catalogSelected = std::min(static_cast<int>(displayedEntries.size()) - 1, catalogSelected + 1);
-          marqueeEntryId = displayedEntries[catalogSelected].id;
-          marqueeStartTime = std::chrono::steady_clock::now();
-        }
-        return true;
-      }
-
-      if (mouse.button == Mouse::Left && mouse.motion == Mouse::Pressed) {
-        if (boxContains(tabAnimeBox, mx, my)) {
-          currentTab = ViewTab::Anime;
-          catalogSelected = 0;
-          refreshViews();
-          return true;
-        }
-        if (boxContains(tabMangaBox, mx, my)) {
-          currentTab = ViewTab::Manga;
-          catalogSelected = 0;
-          refreshViews();
-          return true;
-        }
-        if (boxContains(tabOverviewBox, mx, my)) {
-          currentTab = ViewTab::Overview;
-          refreshViews();
-          return true;
-        }
-
-        if (boxContains(newEntryBtnBox, mx, my)) {
-          openRemoteSearchModal();
-          remoteSearchInput->TakeFocus();
-          return true;
-        }
-        if (boxContains(searchBarBox, mx, my)) {
-          searchInput->TakeFocus();
-          currentTier = ActiveTier::Search;
-          statusMessage = "Type search query...";
-          return true;
-        }
-
-        if (boxContains(headerDateBox, mx, my)) {
-          if (currentSort == SortKey::Date) reverseSort = !reverseSort;
-          else { currentSort = SortKey::Date; reverseSort = false; }
-          refreshViews();
-          statusMessage = "Sorted by Date" + getSortArrow(SortKey::Date, reverseSort);
-          return true;
-        }
-        if (boxContains(headerTitleBox, mx, my)) {
-          if (currentSort == SortKey::Title) reverseSort = !reverseSort;
-          else { currentSort = SortKey::Title; reverseSort = false; }
-          refreshViews();
-          statusMessage = "Sorted by Title" + getSortArrow(SortKey::Title, reverseSort);
-          return true;
-        }
-        if (boxContains(headerStatusBox, mx, my)) {
-          if (currentSort == SortKey::Status) reverseSort = !reverseSort;
-          else { currentSort = SortKey::Status; reverseSort = false; }
-          refreshViews();
-          statusMessage = "Sorted by Status" + getSortArrow(SortKey::Status, reverseSort);
-          return true;
-        }
-        if (boxContains(headerRatingBox, mx, my)) {
-          if (currentSort == SortKey::Score) reverseSort = !reverseSort;
-          else { currentSort = SortKey::Score; reverseSort = false; }
-          refreshViews();
-          statusMessage = "Sorted by Rating" + getSortArrow(SortKey::Score, reverseSort);
-          return true;
-        }
-        if (boxContains(headerProgressBox, mx, my)) {
-          if (currentSort == SortKey::Progress) reverseSort = !reverseSort;
-          else { currentSort = SortKey::Progress; reverseSort = false; }
-          refreshViews();
-          statusMessage = "Sorted by Progress" + getSortArrow(SortKey::Progress, reverseSort);
-          return true;
-        }
-
-        for (size_t i = 0; i < sidebarLabels.size() && i < sidebarBoxes.size(); ++i) {
-          if (boxContains(sidebarBoxes[i], mx, my)) {
-            if (i == 6) return true;
-            sidebarSelected = static_cast<int>(i);
-            refreshViews();
-            catalogMenu->TakeFocus();
-            currentTier = ActiveTier::Catalog;
-            statusMessage = "Filtered by: " + sidebarLabels[i];
-            return true;
-          }
-        }
-
-        if (!displayedEntries.empty() && catalogSelected >= 0 && catalogSelected < static_cast<int>(displayedEntries.size())) {
-          auto& e = displayedEntries[catalogSelected];
-
-          if (boxContains(detailsDeleteBox, mx, my)) {
-            pendingDeleteId = e.id;
-            statusMessage = "Delete '" + e.title + "'? Confirm [y/N]";
-            return true;
-          }
-          if (boxContains(detailsProgressMinusBox, mx, my)) {
-            mutateEditField(e, -1);
-            return true;
-          }
-          if (boxContains(detailsProgressPlusBox, mx, my)) {
-            mutateEditField(e, 1);
-            return true;
-          }
-          if (boxContains(detailsProgressGaugeBox, mx, my) && e.totalUnits > 0) {
-            int gw = detailsProgressGaugeBox.x_max - detailsProgressGaugeBox.x_min;
-            if (gw > 0) {
-              float ratio = std::clamp(static_cast<float>(mx - detailsProgressGaugeBox.x_min) / gw, 0.0f, 1.0f);
-              Entry before = e;
-              e.progress = static_cast<int>(std::round(ratio * e.totalUnits));
-              if (e.progress >= e.totalUnits) e.status = WatchStatus::Completed;
-              recordAction(HistoryAction::Mutate, e.type, before, e);
-              db_.updateEntry(e);
-              db_.saveAll();
-              displayedEntries[catalogSelected] = e;
-              statusMessage = "Progress set to " + std::to_string(e.progress);
-              return true;
-            }
-          }
-          if (boxContains(detailsRatingBox, mx, my)) {
-            int relX = mx - detailsRatingBox.x_min - 9;
-            int clickedScore = std::clamp((relX / 2 + 1) * 2, 0, 10);
-            if (relX <= 0) clickedScore = 0;
-            Entry before = e;
-            e.score = clickedScore;
-            recordAction(HistoryAction::Mutate, e.type, before, e);
-            db_.updateEntry(e);
-            db_.saveAll();
-            displayedEntries[catalogSelected] = e;
-            statusMessage = "Rating set to " + std::to_string(e.score) + "/10";
-            return true;
-          }
-          if (boxContains(detailsStatusBox, mx, my)) {
-            activeCellField = EditField::Status;
-            mutateEditField(e, 1);
-            return true;
-          }
-          if (boxContains(detailsTitleBox, mx, my) || boxContains(detailsNotesBox, mx, my)) {
-            inspectorTitleBuffer = e.title;
-            inspectorNotesBuffer = e.notes;
-            if (boxContains(detailsTitleBox, mx, my)) {
-              inspectorTitleInput->TakeFocus();
-            } else {
-              inspectorNotesInput->TakeFocus();
-            }
-            currentTier = ActiveTier::Inspector;
-            statusMessage = "Editing details. [ret] to commit.";
-            return true;
-          }
-          if (boxContains(detailsIdBox, mx, my) || boxContains(detailsMalIdBox, mx, my)) {
-            copyToClipboard(std::to_string(e.malId > 0 ? e.malId : e.id));
-            return true;
-          }
-          if (boxContains(detailsStartBox, mx, my)) {
-            copyToClipboard(e.startDate);
-            return true;
-          }
-          if (boxContains(detailsFinishBox, mx, my)) {
-            copyToClipboard(e.finishDate);
-            return true;
-          }
-          if (boxContains(detailCardBox, mx, my)) {
-            copyToClipboard(e.title);
-            return true;
-          }
-        }
-      }
-
-      if (mouse.button == Mouse::None && currentTier == ActiveTier::Catalog) {
-        for (int i = 0; i < static_cast<int>(displayedEntries.size()) && i < static_cast<int>(rowBoxes.size()); ++i) {
-          if (boxContains(rowBoxes[i], mx, my)) {
-            if (catalogSelected != i) {
-              catalogSelected = i;
-              marqueeEntryId = displayedEntries[i].id;
-              marqueeStartTime = std::chrono::steady_clock::now();
-            }
-            break;
-          }
-        }
-      }
-    }
-
-    if (pendingDeleteId > 0) {
-      if (event == Event::Character('y') || event == Event::Character('Y')) {
-        MediaType media = (currentTab == ViewTab::Manga) ? MediaType::Manga : MediaType::Anime;
-        auto optEntry = db_.getById(media, pendingDeleteId);
-        if (optEntry.has_value()) {
-          recordAction(HistoryAction::Delete, media, optEntry.value(), Entry{});
-        }
-        db_.removeEntry(media, pendingDeleteId);
-        pendingDeleteId = 0;
-        db_.saveAll();
-        refreshViews();
-        statusMessage = "Record deleted. Press 'u' to undo.";
-        return true;
-      } else {
-        pendingDeleteId = 0;
-        statusMessage = "Deletion canceled.";
-        return true;
-      }
-    }
-
-    if (currentTier == ActiveTier::Search || searchInput->Focused()) {
+    if (appMode == AppMode::Sch) {
       if (event == Event::Escape) {
         searchQuery = "";
         refreshViews();
         catalogMenu->TakeFocus();
-        currentTier = ActiveTier::Catalog;
+        appMode = AppMode::Nor;
         statusMessage = "Search cleared.";
         return true;
       }
       if (event == Event::Return || event == Event::ArrowDown) {
         refreshViews();
         catalogMenu->TakeFocus();
-        currentTier = ActiveTier::Catalog;
+        appMode = AppMode::Nor;
         statusMessage = searchQuery.empty() ? "Filter cleared." : ("Filtered: '" + searchQuery + "' (" + std::to_string(displayedEntries.size()) + " matches)");
         return true;
       }
@@ -1020,459 +836,902 @@ void AppTui::run() {
       return true;
     }
 
-    if (commandModeActive) {
-      if (event == Event::Escape) {
-        commandModeActive = false;
-        commandBuffer = "";
-        statusMessage = "Command canceled.";
-        return true;
-      }
-      if (event == Event::Return) {
-        commandModeActive = false;
-        executeCommand(commandBuffer);
-        commandBuffer = "";
-        return true;
-      }
-      if (event == Event::Backspace) {
-        if (!commandBuffer.empty()) commandBuffer.pop_back();
-        return true;
-      }
-      if (event.is_character()) {
-        commandBuffer += event.character();
-        return true;
-      }
-      return true;
-    }
-
-    if (event == Event::Special("\x1a") || event == Event::Character('u')) {
-      if (currentTier == ActiveTier::Catalog) {
-        performUndo();
-        refreshViews();
-        return true;
-      }
-    }
-    if (event == Event::Special("\x19") || event == Event::Special("\x12")) {
-      if (currentTier == ActiveTier::Catalog) {
-        performRedo();
-        refreshViews();
-        return true;
-      }
-    }
-
-    if (currentTier == ActiveTier::Inspector) {
-      if (event == Event::Tab || (event == Event::Return && inspectorTitleInput->Focused())) {
-        inspectorNotesInput->TakeFocus();
-        return true;
-      }
-      if (event == Event::Escape || (event == Event::Return && inspectorNotesInput->Focused())) {
-        if (!displayedEntries.empty()) {
+    if (isInspectorEditingNotes || isInspectorEditingTitle) {
+      if (event == Event::Escape || event == Event::Return) {
+        if (!displayedEntries.empty() && catalogSelected >= 0 && catalogSelected < static_cast<int>(displayedEntries.size())) {
           auto& e = displayedEntries[catalogSelected];
           Entry before = e;
-          if (!inspectorTitleBuffer.empty()) e.title = inspectorTitleBuffer;
-          e.notes = inspectorNotesBuffer;
+          if (isInspectorEditingTitle && !inspectorTitleBuffer.empty()) e.title = inspectorTitleBuffer;
+          if (isInspectorEditingNotes) e.notes = inspectorNotesBuffer;
           recordAction(HistoryAction::Mutate, e.type, before, e);
           db_.updateEntry(e);
           db_.saveAll();
+          displayedEntries[catalogSelected] = e;
         }
-        catalogMenu->TakeFocus();
-        currentTier = ActiveTier::Catalog;
-        refreshViews();
-        statusMessage = "Details saved.";
+        isInspectorEditingNotes = false;
+        isInspectorEditingTitle = false;
+        appMode = AppMode::Nor;
+        statusMessage = "Saved text changes.";
         return true;
       }
-      if (inspectorTitleInput->Focused()) {
-        inspectorTitleInput->OnEvent(event);
-      } else {
-        inspectorNotesInput->OnEvent(event);
-      }
+      if (isInspectorEditingTitle) inspectorTitleInput->OnEvent(event);
+      else inspectorNotesInput->OnEvent(event);
       return true;
     }
 
-    if (currentTier == ActiveTier::CellEdit) {
-      if (!displayedEntries.empty()) {
-        auto& e = displayedEntries[catalogSelected];
-        if (event == Event::Character('h') || event == Event::ArrowLeft) {
-          switch (activeCellField) {
-            case EditField::Status:   activeCellField = EditField::Progress; break;
-            case EditField::Rating:   activeCellField = EditField::Status; break;
-            case EditField::Progress: activeCellField = EditField::Rating; break;
-          }
-          return true;
-        }
-        if (event == Event::Character('l') || event == Event::ArrowRight) {
-          switch (activeCellField) {
-            case EditField::Status:   activeCellField = EditField::Rating; break;
-            case EditField::Rating:   activeCellField = EditField::Progress; break;
-            case EditField::Progress: activeCellField = EditField::Status; break;
-          }
-          return true;
-        }
-        if (event == Event::Character('j') || event == Event::ArrowDown || event == Event::Character('-')) {
-          mutateEditField(e, -1);
-          return true;
-        }
-        if (event == Event::Character('k') || event == Event::ArrowUp || event == Event::Character('+') || event == Event::Character('=')) {
-          mutateEditField(e, 1);
-          return true;
-        }
-        if (event == Event::Return) {
-          inspectorTitleBuffer = e.title;
-          inspectorNotesBuffer = e.notes;
-          inspectorTitleInput->TakeFocus();
-          currentTier = ActiveTier::Inspector;
-          statusMessage = "Editing title/notes. [ret] to save.";
-          return true;
-        }
-        if (event == Event::Escape || event == Event::Backspace) {
-          currentTier = ActiveTier::Catalog;
-          refreshViews();
-          statusMessage = "Saved changes.";
-          return true;
-        }
-      }
-      return false;
+    // TOP-LEVEL TAB TRAVERSAL
+    if (event == Event::Tab) {
+      int next = (static_cast<int>(currentTab) + 1) % 6;
+      currentTab = static_cast<ViewTab>(next);
+      refreshViews();
+      return true;
+    }
+    if (event == Event::TabReverse || event == Event::Special("\033[Z") || event == Event::Special("\x1b[Z")) {
+      int prev = (static_cast<int>(currentTab) + 5) % 6;
+      currentTab = static_cast<ViewTab>(prev);
+      refreshViews();
+      return true;
     }
 
-    if (currentTier == ActiveTier::Catalog || currentTier == ActiveTier::Sidebar) {
+    // Numeric switches
+    if (event == Event::Character('0')) { currentTab = ViewTab::About; return true; }
+    if (event == Event::Character('1')) { currentTab = ViewTab::Anime; catalogSelected = 0; refreshViews(); return true; }
+    if (event == Event::Character('2')) { currentTab = ViewTab::Manga; catalogSelected = 0; refreshViews(); return true; }
+    if (event == Event::Character('3')) { currentTab = ViewTab::Overview; return true; }
+    if (event == Event::Character('4')) { currentTab = ViewTab::Sync; return true; }
+    if (event == Event::Character('5')) { currentTab = ViewTab::Settings; return true; }
+
+    // GLOBAL COMMAND PALETTE TRIGGER
+    if (event == Event::Character(':')) {
+      appMode = AppMode::Cmd;
+      commandPalette_.open();
+      return true;
+    }
+
+    // INTERACTIVE CONTROLS FOR SYNC TAB (2 PANELS)
+    if (currentTab == ViewTab::Sync) {
+      if (event == Event::Character('h') || event == Event::ArrowLeft) {
+        syncActivePanel = 0;
+        return true;
+      }
+      if (event == Event::Character('l') || event == Event::ArrowRight) {
+        syncActivePanel = 1;
+        return true;
+      }
+      if (event == Event::Character('j') || event == Event::ArrowDown) {
+        if (syncActivePanel == 0) {
+          if (syncActionCursor < 2) syncActionCursor++;
+        } else {
+          syncBackupCursor++;
+        }
+        return true;
+      }
+      if (event == Event::Character('k') || event == Event::ArrowUp) {
+        if (syncActivePanel == 0) {
+          if (syncActionCursor > 0) syncActionCursor--;
+        } else {
+          if (syncBackupCursor > 0) syncBackupCursor--;
+        }
+        return true;
+      }
+      if (event == Event::Return) {
+        if (syncActivePanel == 0) {
+          if (syncActionCursor == 0) {
+            triggerAsyncSync();
+          } else if (syncActionCursor == 1) {
+            db_.createBackupSnapshot();
+            statusMessage = "Created snapshot backup.";
+          } else if (syncActionCursor == 2) {
+            commandPalette_.open("import ");
+          }
+        }
+        return true;
+      }
       if (event == Event::Character('q')) {
         db_.saveAll();
         screen.ExitLoopClosure()();
         return true;
       }
+      return false;
+    }
 
-      if (event == Event::Character(':')) {
-        commandModeActive = true;
-        commandBuffer = "";
+    // INTERACTIVE CONTROLS FOR SETTINGS TAB (2 PANELS)
+    if (currentTab == ViewTab::Settings) {
+      auto themes = ThemeRegistry::getAvailableThemes();
+      if (event == Event::Character('h') || event == Event::ArrowLeft) {
+        settingsActivePanel = 0;
         return true;
       }
-
-      if (currentTier == ActiveTier::Catalog) {
-        if (event == Event::Character('c')) {
-          if (currentSort == SortKey::Date) reverseSort = !reverseSort;
-          else { currentSort = SortKey::Date; reverseSort = false; }
-          refreshViews();
-          statusMessage = "Sort: Date" + getSortArrow(SortKey::Date, reverseSort);
-          return true;
+      if (event == Event::Character('l') || event == Event::ArrowRight) {
+        settingsActivePanel = 1;
+        return true;
+      }
+      if (event == Event::Character('j') || event == Event::ArrowDown) {
+        if (settingsActivePanel == 0) {
+          if (settingsThemeCursor < static_cast<int>(themes.size()) - 1) settingsThemeCursor++;
+        } else {
+          if (settingsPrefCursor < 3) settingsPrefCursor++;
         }
-        if (event == Event::Character('t')) {
-          if (currentSort == SortKey::Title) reverseSort = !reverseSort;
-          else { currentSort = SortKey::Title; reverseSort = false; }
-          refreshViews();
-          statusMessage = "Sort: Title" + getSortArrow(SortKey::Title, reverseSort);
-          return true;
+        return true;
+      }
+      if (event == Event::Character('k') || event == Event::ArrowUp) {
+        if (settingsActivePanel == 0) {
+          if (settingsThemeCursor > 0) settingsThemeCursor--;
+        } else {
+          if (settingsPrefCursor > 0) settingsPrefCursor--;
         }
-        if (event == Event::Character('s')) {
-          if (currentSort == SortKey::Status) reverseSort = !reverseSort;
-          else { currentSort = SortKey::Status; reverseSort = false; }
-          refreshViews();
-          statusMessage = "Sort: Status" + getSortArrow(SortKey::Status, reverseSort);
-          return true;
-        }
-        if (event == Event::Character('r')) {
-          if (currentSort == SortKey::Score) reverseSort = !reverseSort;
-          else { currentSort = SortKey::Score; reverseSort = false; }
-          refreshViews();
-          statusMessage = "Sort: Rating" + getSortArrow(SortKey::Score, reverseSort);
-          return true;
-        }
-        if (event == Event::Character('p')) {
-          if (currentSort == SortKey::Progress) reverseSort = !reverseSort;
-          else { currentSort = SortKey::Progress; reverseSort = false; }
-          refreshViews();
-          statusMessage = "Sort: Progress" + getSortArrow(SortKey::Progress, reverseSort);
-          return true;
-        }
-
-        // 'n' and 'a' trigger Online Search & Add modal
-        if (event == Event::Character('n') || event == Event::Character('a')) {
-          openRemoteSearchModal();
-          remoteSearchInput->TakeFocus();
-          return true;
-        }
-
-        if (event == Event::Character('d') && !displayedEntries.empty()) {
-          pendingDeleteId = displayedEntries[catalogSelected].id;
-          statusMessage = "Delete '" + displayedEntries[catalogSelected].title + "'? Confirm [y/N]";
-          return true;
-        }
-
-        if (event == Event::Character('y') || event == Event::Character('Y')) {
-          if (!displayedEntries.empty()) {
-            copyToClipboard(displayedEntries[catalogSelected].title);
+        return true;
+      }
+      if (event == Event::Return || event == Event::Character(' ')) {
+        if (settingsActivePanel == 0) {
+          std::string th = themes[settingsThemeCursor];
+          config_.theme = th;
+          ThemeRegistry::setActive(th);
+          config_.save(Database::getConfigDir() / "config.toml");
+          statusMessage = "Applied theme: " + th;
+        } else {
+          if (settingsPrefCursor == 0) {
+            config_.mouse = !config_.mouse;
+            statusMessage = config_.mouse ? "Mouse enabled." : "Mouse disabled.";
+          } else if (settingsPrefCursor == 1) {
+            if (config_.defaultMedia == "anime") config_.defaultMedia = "manga";
+            else if (config_.defaultMedia == "manga") config_.defaultMedia = "overview";
+            else config_.defaultMedia = "anime";
+            statusMessage = "Default view: " + config_.defaultMedia;
+          } else if (settingsPrefCursor == 2) {
+            if (config_.defaultSort == "score") config_.defaultSort = "title";
+            else if (config_.defaultSort == "title") config_.defaultSort = "date";
+            else if (config_.defaultSort == "date") config_.defaultSort = "progress";
+            else config_.defaultSort = "score";
+            statusMessage = "Default sort: " + config_.defaultSort;
+          } else if (settingsPrefCursor == 3) {
+            config_.reverseSort = !config_.reverseSort;
+            statusMessage = config_.reverseSort ? "Sort: Descending (▲)" : "Sort: Ascending (▼)";
           }
-          return true;
+          config_.save(Database::getConfigDir() / "config.toml");
         }
+        return true;
       }
+      if (event == Event::Character('q')) {
+        db_.saveAll();
+        screen.ExitLoopClosure()();
+        return true;
+      }
+      return false;
+    }
 
-      if (event == Event::Character('/') || event == Event::Special("\x06")) {
-        searchInput->TakeFocus();
-        currentTier = ActiveTier::Search;
-        statusMessage = "Search title... [ret] Apply  [Esc] Clear";
+    // ABOUT & OVERVIEW TABS: Scoped strictly, no background list navigation
+    if (currentTab == ViewTab::About || currentTab == ViewTab::Overview) {
+      if (event == Event::Character('q')) {
+        db_.saveAll();
+        screen.ExitLoopClosure()();
+        return true;
+      }
+      return false;
+    }
+
+    // =========================================================================
+    // CATALOG & DETAILS INTERACTION (Anime / Manga Tabs Only)
+    // =========================================================================
+
+    // FAST FIELD CYCLING (SHIFT + S, SHIFT + R, SHIFT + P)
+    if (event == Event::Character('S')) {
+      if (!visualSelectedIds.empty()) {
+        for (auto id : visualSelectedIds) {
+          auto opt = db_.getById((currentTab == ViewTab::Manga ? MediaType::Manga : MediaType::Anime), id);
+          if (opt) { auto e = opt.value(); mutateStatus(e, 1); }
+        }
+        refreshViews();
+        statusMessage = "Batch cycled status for " + std::to_string(visualSelectedIds.size()) + " entries.";
+      } else if (!displayedEntries.empty()) {
+        auto& e = displayedEntries[catalogSelected];
+        mutateStatus(e, 1);
+      }
+      return true;
+    }
+
+    if (event == Event::Character('R')) {
+      if (!visualSelectedIds.empty()) {
+        for (auto id : visualSelectedIds) {
+          auto opt = db_.getById((currentTab == ViewTab::Manga ? MediaType::Manga : MediaType::Anime), id);
+          if (opt) { auto e = opt.value(); mutateRating(e, 1); }
+        }
+        refreshViews();
+        statusMessage = "Batch bumped rating for " + std::to_string(visualSelectedIds.size()) + " entries.";
+      } else if (!displayedEntries.empty()) {
+        auto& e = displayedEntries[catalogSelected];
+        mutateRating(e, 1);
+      }
+      return true;
+    }
+
+    if (event == Event::Character('P') || event == Event::Character('+') || event == Event::Character('=')) {
+      if (!visualSelectedIds.empty()) {
+        for (auto id : visualSelectedIds) {
+          auto opt = db_.getById((currentTab == ViewTab::Manga ? MediaType::Manga : MediaType::Anime), id);
+          if (opt) { auto e = opt.value(); mutateProgress(e, 1); }
+        }
+        refreshViews();
+        statusMessage = "Batch incremented progress for " + std::to_string(visualSelectedIds.size()) + " entries.";
+      } else if (!displayedEntries.empty()) {
+        auto& e = displayedEntries[catalogSelected];
+        mutateProgress(e, 1);
+      }
+      return true;
+    }
+
+    if (event == Event::Character('-')) {
+      if (!visualSelectedIds.empty()) {
+        for (auto id : visualSelectedIds) {
+          auto opt = db_.getById((currentTab == ViewTab::Manga ? MediaType::Manga : MediaType::Anime), id);
+          if (opt) { auto e = opt.value(); mutateProgress(e, -1); }
+        }
+        refreshViews();
+        statusMessage = "Batch decremented progress for " + std::to_string(visualSelectedIds.size()) + " entries.";
+      } else if (!displayedEntries.empty()) {
+        auto& e = displayedEntries[catalogSelected];
+        mutateProgress(e, -1);
+      }
+      return true;
+    }
+
+    // COLUMN SORT TOGGLES (c, t, s, r, p)
+    if (focusedCard != FocusedCard::Details) {
+      if (event == Event::Character('c')) { toggleColumnSort(SortKey::Date, "Date"); return true; }
+      if (event == Event::Character('t')) { toggleColumnSort(SortKey::Title, "Title"); return true; }
+      if (event == Event::Character('s')) { toggleColumnSort(SortKey::Status, "Status"); return true; }
+      if (event == Event::Character('r')) { toggleColumnSort(SortKey::Score, "Rating"); return true; }
+      if (event == Event::Character('p')) { toggleColumnSort(SortKey::Progress, "Progress"); return true; }
+    }
+
+    // SPATIAL CARD NAVIGATION: h and l move across columns
+    if (focusedCard == FocusedCard::Catalog) {
+      if (event == Event::Character('h') || event == Event::ArrowLeft) {
+        focusedCard = FocusedCard::Sidebar;
+        sidebarMenu->TakeFocus();
+        return true;
+      }
+      if (event == Event::Character('l') || event == Event::ArrowRight) {
+        focusedCard = FocusedCard::Details;
         return true;
       }
 
-      if (event == Event::Character('o') && !displayedEntries.empty()) {
+      // SPACE exclusively toggles visual selection
+      if (event == Event::Character(' ') || event == Event::Character('v')) {
+        if (!displayedEntries.empty()) {
+          int id = displayedEntries[catalogSelected].id;
+          if (visualSelectedIds.count(id)) visualSelectedIds.erase(id);
+          else visualSelectedIds.insert(id);
+          appMode = visualSelectedIds.empty() ? AppMode::Nor : AppMode::Vis;
+        }
+        return true;
+      }
+
+      // Both 'e' AND 'Return' focus Details card
+      if (event == Event::Return || event == Event::Character('e')) {
+        focusedCard = FocusedCard::Details;
+        statusMessage = "Details focused: j/k selects field, h/l adjusts, e/ret edits notes.";
+        return true;
+      }
+
+      // List movement strictly within Catalog
+      if (event == Event::Character('j') || event == Event::ArrowDown) {
+        if (!displayedEntries.empty() && catalogSelected < static_cast<int>(displayedEntries.size()) - 1) {
+          catalogSelected++;
+        }
+        return true;
+      }
+      if (event == Event::Character('k') || event == Event::ArrowUp) {
+        if (catalogSelected > 0) catalogSelected--;
+        return true;
+      }
+      if (event == Event::Character('g')) { catalogSelected = 0; return true; }
+      if (event == Event::Character('G')) {
+        if (!displayedEntries.empty()) catalogSelected = static_cast<int>(displayedEntries.size()) - 1;
+        return true;
+      }
+    } else if (focusedCard == FocusedCard::Sidebar) {
+      if (event == Event::Character('l') || event == Event::ArrowRight) {
+        focusedCard = FocusedCard::Catalog;
+        catalogMenu->TakeFocus();
+        return true;
+      }
+
+      if (event == Event::Character('j') || event == Event::ArrowDown) {
+        if (sidebarSelected < static_cast<int>(sidebarLabels.size()) - 1) {
+          sidebarSelected++;
+          if (sidebarSelected == 0 || sidebarSelected == 2 || sidebarSelected == 8) sidebarSelected++;
+          refreshViews();
+        }
+        return true;
+      }
+      if (event == Event::Character('k') || event == Event::ArrowUp) {
+        if (sidebarSelected > 1) {
+          sidebarSelected--;
+          if (sidebarSelected == 0 || sidebarSelected == 2 || sidebarSelected == 8) sidebarSelected--;
+          refreshViews();
+        }
+        return true;
+      }
+
+      // Space toggles multi-filter criteria
+      if (event == Event::Character(' ')) {
+        if (sidebarSelected == 3) {
+          if (multiFilterStatuses.count(WatchStatus::Watching)) multiFilterStatuses.erase(WatchStatus::Watching);
+          else multiFilterStatuses.insert(WatchStatus::Watching);
+        } else if (sidebarSelected == 4) {
+          if (multiFilterStatuses.count(WatchStatus::Completed)) multiFilterStatuses.erase(WatchStatus::Completed);
+          else multiFilterStatuses.insert(WatchStatus::Completed);
+        } else if (sidebarSelected == 5) {
+          if (multiFilterStatuses.count(WatchStatus::OnHold)) multiFilterStatuses.erase(WatchStatus::OnHold);
+          else multiFilterStatuses.insert(WatchStatus::OnHold);
+        } else if (sidebarSelected == 6) {
+          if (multiFilterStatuses.count(WatchStatus::Dropped)) multiFilterStatuses.erase(WatchStatus::Dropped);
+          else multiFilterStatuses.insert(WatchStatus::Dropped);
+        } else if (sidebarSelected == 7) {
+          if (multiFilterStatuses.count(WatchStatus::PlanToWatch)) multiFilterStatuses.erase(WatchStatus::PlanToWatch);
+          else multiFilterStatuses.insert(WatchStatus::PlanToWatch);
+        } else if (sidebarSelected >= 9 && sidebarSelected <= 14) {
+          int score = 19 - sidebarSelected;
+          if (multiFilterScores.count(score)) multiFilterScores.erase(score);
+          else multiFilterScores.insert(score);
+        } else if (sidebarSelected == 15) {
+          if (multiFilterScores.count(0)) multiFilterScores.erase(0);
+          else multiFilterScores.insert(0);
+        }
+        refreshViews();
+        return true;
+      }
+      if (event == Event::Return) {
+        multiFilterStatuses.clear();
+        multiFilterScores.clear();
+        refreshViews();
+        focusedCard = FocusedCard::Catalog;
+        catalogMenu->TakeFocus();
+        return true;
+      }
+    } else if (focusedCard == FocusedCard::Details) {
+      if (event == Event::Escape) {
+        focusedCard = FocusedCard::Catalog;
+        appMode = AppMode::Nor;
+        return true;
+      }
+
+      if (event == Event::Character('j') || event == Event::ArrowDown) {
+        if (detailsCursorIndex < 4) detailsCursorIndex++;
+        return true;
+      }
+      if (event == Event::Character('k') || event == Event::ArrowUp) {
+        if (detailsCursorIndex > 0) detailsCursorIndex--;
+        return true;
+      }
+
+      if (!displayedEntries.empty()) {
+        auto& e = displayedEntries[catalogSelected];
+        if (event == Event::Character('h') || event == Event::ArrowLeft) {
+          if (detailsCursorIndex == 0) mutateStatus(e, -1);
+          else if (detailsCursorIndex == 1) mutateRating(e, -1);
+          else if (detailsCursorIndex == 2) mutateProgress(e, -1);
+          return true;
+        }
+        if (event == Event::Character('l') || event == Event::ArrowRight) {
+          if (detailsCursorIndex == 0) mutateStatus(e, 1);
+          else if (detailsCursorIndex == 1) mutateRating(e, 1);
+          else if (detailsCursorIndex == 2) mutateProgress(e, 1);
+          return true;
+        }
+        if (event == Event::Return || event == Event::Character('e')) {
+          if (detailsCursorIndex == 3) {
+            inspectorTitleBuffer = e.title;
+            isInspectorEditingTitle = true;
+            inspectorTitleInput->TakeFocus();
+            statusMessage = "Editing title. Press [ret] or [Esc] to commit.";
+            return true;
+          }
+          if (detailsCursorIndex == 4) {
+            inspectorNotesBuffer = e.notes;
+            isInspectorEditingNotes = true;
+            inspectorNotesInput->TakeFocus();
+            statusMessage = "Editing notes. Press [ret] or [Esc] to commit.";
+            return true;
+          }
+        }
+      }
+    }
+
+    if (event == Event::Character('/')) {
+      appMode = AppMode::Sch;
+      searchInput->TakeFocus();
+      statusMessage = "Search title... [ret] Apply  [Esc] Clear";
+      return true;
+    }
+
+    if (event == Event::Character('a')) {
+      openRemoteSearchModal();
+      remoteSearchInput->TakeFocus();
+      return true;
+    }
+
+    if (event == Event::Character('d')) {
+      if (!visualSelectedIds.empty()) {
+        for (auto id : visualSelectedIds) {
+          db_.removeEntry((currentTab == ViewTab::Manga ? MediaType::Manga : MediaType::Anime), id);
+        }
+        visualSelectedIds.clear();
+        appMode = AppMode::Nor;
+        db_.saveAll();
+        refreshViews();
+        statusMessage = "Deleted selected entries.";
+      } else if (!displayedEntries.empty() && catalogSelected >= 0 && catalogSelected < static_cast<int>(displayedEntries.size())) {
+        pendingDeleteId = displayedEntries[catalogSelected].id;
+        statusMessage = "Delete '" + displayedEntries[catalogSelected].title + "'? Confirm [y/N]";
+      }
+      return true;
+    }
+
+    if (event == Event::Character('u')) { performUndo(); refreshViews(); return true; }
+    if (event == Event::Character('U') || event == Event::Special("\x12")) { performRedo(); refreshViews(); return true; }
+
+    if (event == Event::Character('o')) {
+      if (!displayedEntries.empty() && catalogSelected >= 0 && catalogSelected < static_cast<int>(displayedEntries.size())) {
         openInBrowser(displayedEntries[catalogSelected]);
-        return true;
       }
+      return true;
+    }
 
-      if (event == Event::Tab) {
-        if (currentTab == ViewTab::Anime) currentTab = ViewTab::Manga;
-        else if (currentTab == ViewTab::Manga) currentTab = ViewTab::Overview;
-        else currentTab = ViewTab::Anime;
-        catalogSelected = 0;
-        refreshViews();
-        return true;
+    if (event == Event::Character('y')) {
+      if (!displayedEntries.empty() && catalogSelected >= 0 && catalogSelected < static_cast<int>(displayedEntries.size())) {
+        copyToClipboard(displayedEntries[catalogSelected].title);
       }
-      if (event == Event::Character('[') || event == Event::Character(']')) {
-        currentTab = (currentTab == ViewTab::Anime) ? ViewTab::Manga : ViewTab::Anime;
-        catalogSelected = 0;
-        refreshViews();
-        return true;
-      }
-      if (event == Event::Character('1')) { currentTab = ViewTab::Anime; catalogSelected = 0; refreshViews(); return true; }
-      if (event == Event::Character('2')) { currentTab = ViewTab::Manga; catalogSelected = 0; refreshViews(); return true; }
-      if (event == Event::Character('3')) { currentTab = ViewTab::Overview; return true; }
+      return true;
+    }
 
-      if (currentTier == ActiveTier::Sidebar) {
-        if (event == Event::Return) {
-          catalogMenu->TakeFocus();
-          currentTier = ActiveTier::Catalog;
-          statusMessage = "Catalog view. [ret] to Edit.";
-          return true;
-        }
-      } else if (currentTier == ActiveTier::Catalog) {
-        if (event == Event::Escape || event == Event::Backspace) {
-          sidebarMenu->TakeFocus();
-          currentTier = ActiveTier::Sidebar;
-          statusMessage = "Categories menu. [ret] to Browse.";
-          return true;
-        }
-        if (event == Event::Return && !displayedEntries.empty()) {
-          currentTier = ActiveTier::CellEdit;
-          activeCellField = EditField::Progress;
-          statusMessage = "Editing row. [h/l] Column  [j/k] Value  [ret] Notes  [Esc] Done";
-          return true;
-        }
-
-        if (event == Event::Character('j') || event == Event::ArrowDown) {
-          if (!displayedEntries.empty() && catalogSelected < static_cast<int>(displayedEntries.size()) - 1) {
-            catalogSelected++;
-            marqueeEntryId = displayedEntries[catalogSelected].id;
-            marqueeStartTime = std::chrono::steady_clock::now();
-          }
-          return true;
-        }
-        if (event == Event::Character('k') || event == Event::ArrowUp) {
-          if (catalogSelected > 0) {
-            catalogSelected--;
-            marqueeEntryId = displayedEntries[catalogSelected].id;
-            marqueeStartTime = std::chrono::steady_clock::now();
-          }
-          return true;
-        }
-        if (event == Event::Character('g')) { catalogSelected = 0; return true; }
-        if (event == Event::Character('G')) {
-          if (!displayedEntries.empty()) catalogSelected = static_cast<int>(displayedEntries.size()) - 1;
-          return true;
-        }
-      }
+    if (event == Event::Character('q')) {
+      db_.saveAll();
+      screen.ExitLoopClosure()();
+      return true;
     }
 
     return false;
   });
 
-  auto renderOverview = [&]() {
-    size_t aWatch = db_.countByStatus(MediaType::Anime, WatchStatus::Watching);
-    size_t aComp  = db_.countByStatus(MediaType::Anime, WatchStatus::Completed);
-    size_t aHold  = db_.countByStatus(MediaType::Anime, WatchStatus::OnHold);
-    size_t aDrop  = db_.countByStatus(MediaType::Anime, WatchStatus::Dropped);
-    size_t aPlan  = db_.countByStatus(MediaType::Anime, WatchStatus::PlanToWatch);
-    size_t aTotal = db_.getEntries(MediaType::Anime).size();
+  auto buildOverviewStatisticsSection = [&]() {
+    const auto& theme = ThemeRegistry::active();
 
-    size_t mRead  = db_.countByStatus(MediaType::Manga, WatchStatus::Watching);
-    size_t mComp  = db_.countByStatus(MediaType::Manga, WatchStatus::Completed);
-    size_t mHold  = db_.countByStatus(MediaType::Manga, WatchStatus::OnHold);
-    size_t mDrop  = db_.countByStatus(MediaType::Manga, WatchStatus::Dropped);
-    size_t mPlan  = db_.countByStatus(MediaType::Manga, WatchStatus::PlanToWatch);
-    size_t mTotal = db_.getEntries(MediaType::Manga).size();
+    auto makeStatSection = [&](MediaType type, const std::string& title, ftxui::Color accentColor) {
+      size_t cWatch = db_.countByStatus(type, WatchStatus::Watching);
+      size_t cComp  = db_.countByStatus(type, WatchStatus::Completed);
+      size_t cHold  = db_.countByStatus(type, WatchStatus::OnHold);
+      size_t cDrop  = db_.countByStatus(type, WatchStatus::Dropped);
+      size_t cPlan  = db_.countByStatus(type, WatchStatus::PlanToWatch);
+      size_t cTotal = db_.getEntries(type).size();
 
-    auto makeBar = [](size_t c1, size_t c2, size_t c3, size_t c4, size_t c5, size_t tot) {
-      if (tot == 0) return text("Empty dataset.") | dim;
-      int width = 74;
-      int w1 = std::max(1, static_cast<int>((c1 * width) / tot));
-      int w2 = std::max(1, static_cast<int>((c2 * width) / tot));
-      int w3 = (c3 > 0) ? std::max(1, static_cast<int>((c3 * width) / tot)) : 0;
-      int w4 = (c4 > 0) ? std::max(1, static_cast<int>((c4 * width) / tot)) : 0;
-      int w5 = std::max(0, width - (w1 + w2 + w3 + w4));
+      double days = db_.daysSpent(type);
+      double mean = db_.averageScore(type);
+
+      int width = 46;
+      Elements barElements;
+      if (cTotal == 0) {
+        barElements.push_back(text(std::string(width, ' ')) | bgcolor(theme.surface0));
+      } else {
+        int wWatch = static_cast<int>((cWatch * width) / cTotal);
+        int wComp  = static_cast<int>((cComp * width) / cTotal);
+        int wHold  = static_cast<int>((cHold * width) / cTotal);
+        int wDrop  = static_cast<int>((cDrop * width) / cTotal);
+        if (cWatch > 0 && wWatch == 0) wWatch = 1;
+        if (cComp > 0 && wComp == 0) wComp = 1;
+        if (cHold > 0 && wHold == 0) wHold = 1;
+        if (cDrop > 0 && wDrop == 0) wDrop = 1;
+        int wSum = wWatch + wComp + wHold + wDrop;
+        int wPlan = std::max(0, width - wSum);
+
+        if (wWatch > 0) barElements.push_back(text(std::string(wWatch, ' ')) | bgcolor(theme.green));
+        if (wComp > 0)  barElements.push_back(text(std::string(wComp, ' ')) | bgcolor(theme.blue));
+        if (wHold > 0)  barElements.push_back(text(std::string(wHold, ' ')) | bgcolor(theme.yellow));
+        if (wDrop > 0)  barElements.push_back(text(std::string(wDrop, ' ')) | bgcolor(theme.red));
+        if (wPlan > 0)  barElements.push_back(text(std::string(wPlan, ' ')) | bgcolor(theme.overlay0));
+      }
+
+      std::stringstream ssMean;
+      ssMean << std::fixed << std::setprecision(2) << mean;
+
+      auto statsPane = vbox({
+        hbox({
+          text(title) | bold | color(accentColor),
+          filler(),
+          text("All " + title) | color(theme.blue)
+        }),
+        text(""),
+        hbox({
+          text("Days: ") | color(theme.subtext),
+          text(formatDays(days)) | bold | color(theme.text),
+          filler(),
+          text("Mean Score: ") | color(theme.subtext),
+          text(ssMean.str()) | bold | color(theme.text)
+        }),
+        text(""),
+        hbox(std::move(barElements)),
+        text(""),
+        hbox({
+          vbox({
+            hbox({ text("● ") | color(theme.green), text(type == MediaType::Anime ? "Watching" : "Reading") | color(theme.blue), filler(), text(formatCommas(cWatch)) | color(theme.text) }),
+            hbox({ text("● ") | color(theme.blue), text("Completed") | color(theme.blue), filler(), text(formatCommas(cComp)) | color(theme.text) }),
+            hbox({ text("● ") | color(theme.yellow), text("On-Hold") | color(theme.blue), filler(), text(formatCommas(cHold)) | color(theme.text) }),
+            hbox({ text("● ") | color(theme.red), text("Dropped") | color(theme.blue), filler(), text(formatCommas(cDrop)) | color(theme.text) }),
+            hbox({ text("● ") | color(theme.overlay0), text(type == MediaType::Anime ? "Plan to Watch" : "Plan to Read") | color(theme.blue), filler(), text(formatCommas(cPlan)) | color(theme.text) })
+          }) | size(WIDTH, EQUAL, 23),
+          text("   "),
+          vbox({
+            hbox({ text("Total Entries") | color(theme.subtext), filler(), text(formatCommas(cTotal)) | color(theme.text) }),
+            hbox({ text(type == MediaType::Anime ? "Rewatched" : "Reread") | color(theme.subtext), filler(), text(formatCommas(db_.totalRewatched(type))) | color(theme.text) }),
+            hbox({ text(type == MediaType::Anime ? "Episodes" : "Chapters") | color(theme.subtext), filler(), text(formatCommas(db_.totalProgress(type))) | color(theme.text) }),
+            (type == MediaType::Manga
+              ? hbox({ text("Volumes") | color(theme.subtext), filler(), text(formatCommas(db_.totalVolumes(MediaType::Manga))) | color(theme.text) })
+              : text(""))
+          }) | size(WIDTH, EQUAL, 20)
+        })
+      }) | size(WIDTH, EQUAL, 48);
+
+      auto recentList = db_.getRecentActivity(type, 3);
+      Elements recentBoxes;
+      recentBoxes.push_back(hbox({
+        text(type == MediaType::Anime ? "Last Anime Updates" : "Last Manga Updates") | bold | color(theme.text),
+        filler(),
+        text(type == MediaType::Anime ? "Anime History" : "Manga History") | color(theme.blue)
+      }));
+      recentBoxes.push_back(text(""));
+
+      if (recentList.empty()) {
+        recentBoxes.push_back(text(" No recent history logged.") | color(theme.subtext));
+      } else {
+        for (const auto& act : recentList) {
+          float rRatio = (act.totalUnits > 0) ? std::clamp(static_cast<float>(act.progress) / act.totalUnits, 0.0f, 1.0f) : 0.0f;
+          int gWidth = 14;
+          int filled = static_cast<int>(std::round(rRatio * gWidth));
+
+          auto miniBar = hbox({
+            text(std::string(filled, ' ')) | bgcolor(act.status == WatchStatus::Completed ? theme.blue : theme.green),
+            text(std::string(std::max(0, gWidth - filled), ' ')) | bgcolor(theme.surface1)
+          });
+
+          std::string subline = statusToString(act.status, act.type) + " " + std::to_string(act.progress) + "/" + (act.totalUnits > 0 ? std::to_string(act.totalUnits) : "?") + " · Scored " + (act.score > 0 ? std::to_string(act.score) : "-");
+
+          recentBoxes.push_back(vbox({
+            text(clipTitle(act.title, 42)) | bold | color(theme.blue),
+            hbox({
+              miniBar,
+              filler(),
+              text(act.timestamp) | color(theme.overlay0)
+            }),
+            text(subline) | color(theme.subtext),
+            text("")
+          }));
+        }
+      }
+
+      auto updatesPane = vbox(std::move(recentBoxes)) | size(WIDTH, EQUAL, 46);
 
       return hbox({
-        text(std::string(w1, ' ')) | bgcolor(theme::Green),
-        text(std::string(w2, ' ')) | bgcolor(theme::Blue),
-        (w3 > 0 ? text(std::string(w3, ' ')) | bgcolor(theme::Yellow) : text("")),
-        (w4 > 0 ? text(std::string(w4, ' ')) | bgcolor(theme::Red) : text("")),
-        (w5 > 0 ? text(std::string(w5, ' ')) | bgcolor(theme::Overlay0) : text(""))
+        statsPane,
+        text("    "),
+        separator() | color(theme.surface0),
+        text("    "),
+        updatesPane
       });
     };
 
-    std::stringstream aDays, mDays;
-    aDays << std::fixed << std::setprecision(1) << db_.daysSpent(MediaType::Anime);
-    mDays << std::fixed << std::setprecision(1) << db_.daysSpent(MediaType::Manga);
+    return vbox({
+      text("Statistics") | bold | color(theme.text),
+      separator() | color(theme.surface0),
+      text(""),
+      makeStatSection(MediaType::Anime, "Anime Stats", theme.lavender),
+      text(""),
+      separator() | color(theme.surface0),
+      text(""),
+      makeStatSection(MediaType::Manga, "Manga Stats", theme.peach),
+      filler()
+    }) | size(WIDTH, EQUAL, 102) | center | flex;
+  };
 
-    int aMeanScore = static_cast<int>(std::round(db_.averageScore(MediaType::Anime)));
-    int mMeanScore = static_cast<int>(std::round(db_.averageScore(MediaType::Manga)));
+  // Layman-Accessible Unified About Section
+  auto buildAboutSection = [&]() {
+    const auto& theme = ThemeRegistry::active();
+
+    auto aboutContent = vbox({
+      text(""),
+      hbox({
+        text(" 󰄛 ") | bold | color(theme.mauve),
+        text("Catalist v0.2.0") | bold | color(theme.text),
+        filler(),
+        text("Minimalist Terminal Media Tracker") | color(theme.subtext)
+      }),
+      text(""),
+      separator() | color(theme.surface0),
+      text(""),
+      text(" Catalist is a keyboard-driven watchlist manager for your terminal.") | color(theme.text),
+      text(" Log watched episodes and read chapters, rate your favorite series,") | color(theme.text),
+      text(" and organize your anime and manga libraries with zero clutter.") | color(theme.text),
+      text(""),
+      hbox({
+        vbox({
+          text(" Local & Private Library") | bold | color(theme.peach),
+          text(""),
+          text("  • Total Anime Stored : " + std::to_string(db_.getEntries(MediaType::Anime).size())),
+          text("  • Total Manga Stored : " + std::to_string(db_.getEntries(MediaType::Manga).size())),
+          text("  • Database Location  : ~/.config/catalist/"),
+          text("  • Data Sovereignty   : 100% offline CSV storage, no accounts needed.") | color(theme.green)
+        }) | flex,
+        text("   "),
+        separator() | color(theme.surface0),
+        text("   "),
+        vbox({
+          text(" Online Discovery & Upstream") | bold | color(theme.lavender),
+          text(""),
+          text("  • Press [a] to search MyAnimeList & AniList interactively."),
+          text("  • Automatically fetches episode totals and descriptions."),
+          text("  • Reconcile ongoing series totals anytime in the Sync tab."),
+          text("  • Create snapshot backups on demand with one keystroke.")
+        }) | flex
+      }),
+      text(""),
+      separator() | color(theme.surface0),
+      text(""),
+      hbox({
+        text(" Navigation: ") | bold | color(theme.overlay0),
+        text("Press [Tab] or [Shift+Tab] to cycle workspaces  │  Press [:] for Command Palette") | color(theme.subtext),
+        filler()
+      })
+    });
 
     return vbox({
-      text(" " + icon::Stats + " Statistics Overview ") | bold | color(theme::Mauve),
-      text(""),
-      vbox({
+      aboutContent | border | color(theme.surface0) | size(WIDTH, EQUAL, 88)
+    }) | center | flex;
+  };
+
+  // Interactive Sync Section
+  auto buildSyncSection = [&]() {
+    const auto& theme = ThemeRegistry::active();
+
+    auto bDir = Database::getConfigDir() / "backups";
+    std::vector<std::string> backupFiles;
+    if (std::filesystem::exists(bDir)) {
+      for (const auto& entry : std::filesystem::directory_iterator(bDir)) {
+        if (entry.is_regular_file()) {
+          backupFiles.push_back(entry.path().filename().string());
+        }
+      }
+    }
+    std::sort(backupFiles.rbegin(), backupFiles.rend());
+
+    Elements backupElements;
+    if (backupFiles.empty()) {
+      backupElements.push_back(text("  No snapshots found in backups/.") | color(theme.subtext));
+    } else {
+      for (size_t i = 0; i < backupFiles.size() && i < 8; ++i) {
+        bool selected = (syncActivePanel == 1 && syncBackupCursor == static_cast<int>(i));
+        backupElements.push_back(
+          hbox({
+            text(selected ? " ▌ " : "   ") | color(theme.mauve) | bold,
+            text(backupFiles[i]) | (selected ? bold : nothing) | color(selected ? theme.peach : theme.text)
+          })
+        );
+      }
+    }
+
+    auto makeActionBtn = [&](int idx, const std::string& iconStr, const std::string& name, const std::string& desc) {
+      bool active = (syncActivePanel == 0 && syncActionCursor == idx);
+      return vbox({
         hbox({
-          text(" Anime Stats") | bold | color(theme::Lavender),
-          filler(),
-          text("Days: " + aDays.str() + "  │  Mean: ") | color(theme::Subtext),
-          text(renderStarMeter(aMeanScore)) | color(theme::Yellow),
-          text(" ")
+          text(active ? " ▌ " : "   ") | color(theme.mauve) | bold,
+          text(iconStr + " " + name) | (active ? bold : nothing) | color(active ? theme.peach : theme.text)
         }),
-        text(""),
-        makeBar(aWatch, aComp, aHold, aDrop, aPlan, aTotal),
-        text(""),
-        hbox({
-          vbox({
-            hbox({ text(" • Watching      : ") | color(theme::Green), text(std::to_string(aWatch)) | bold | color(theme::Text) }),
-            hbox({ text(" • Completed     : ") | color(theme::Blue), text(std::to_string(aComp)) | bold | color(theme::Text) }),
-            hbox({ text(" • On-Hold       : ") | color(theme::Yellow), text(std::to_string(aHold)) | bold | color(theme::Text) }),
-            hbox({ text(" • Dropped       : ") | color(theme::Red), text(std::to_string(aDrop)) | bold | color(theme::Text) }),
-            hbox({ text(" • Plan to Watch : ") | color(theme::Overlay0), text(std::to_string(aPlan)) | bold | color(theme::Text) })
-          }) | flex,
-          text("  "),
-          vbox({
-            hbox({ text(" Total Entries   : ") | color(theme::Subtext), text(std::to_string(aTotal)) | bold | color(theme::Text) }),
-            hbox({ text(" Rewatched       : ") | color(theme::Subtext), text(std::to_string(db_.totalRewatched(MediaType::Anime))) | bold | color(theme::Text) }),
-            hbox({ text(" Episodes Logged : ") | color(theme::Lavender), text(std::to_string(db_.totalProgress(MediaType::Anime))) | bold | color(theme::Text) })
-          }) | flex
-        })
-      }) | border | color(theme::Surface0),
+        text("     " + desc) | color(theme.subtext),
+        text("")
+      });
+    };
+
+    auto syncStatusText = syncIsRunning.load() ? "● Sync active in background..." : "● Upstream idle and ready.";
+    auto syncStatusColor = syncIsRunning.load() ? theme.yellow : theme.green;
+
+    auto panelActions = vbox({
+      text(" Upstream Operations") | bold | color(theme.lavender),
       text(""),
-      vbox({
+      text(" Status: " + std::string(syncStatusText)) | bold | color(syncStatusColor),
+      text(""),
+      makeActionBtn(0, "󰓦", "Reconcile Ongoing Titles", "Fetches finished totals for ongoing anime from MAL."),
+      makeActionBtn(1, "󰆓", "Create Snapshot Backup", "Generates an instant timestamped CSV backup replica."),
+      makeActionBtn(2, "󰈞", "Ingest MyAnimeList Archive", "Import an exported official myanimelist.xml file."),
+      filler(),
+      text(" Press [ret] to trigger selected action.") | color(theme.overlay0)
+    }) | border | color(syncActivePanel == 0 ? theme.mauve : theme.surface0)
+       | size(WIDTH, EQUAL, 44);
+
+    auto panelBackups = vbox({
+      text(" Snapshot Backups Repository") | bold | color(theme.peach),
+      text(""),
+      text(" Location: ~/.config/catalist/backups/") | color(theme.subtext),
+      text(""),
+      vbox(std::move(backupElements)) | vscroll_indicator | frame | flex,
+      text(""),
+      text(" Press [h/l] to switch panels  │  [j/k] to navigate.") | color(theme.overlay0)
+    }) | border | color(syncActivePanel == 1 ? theme.mauve : theme.surface0)
+       | flex;
+
+    return vbox({
+      text(""),
+      hbox({ panelActions, text(" "), panelBackups }) | size(WIDTH, EQUAL, 92) | center | flex,
+      text("")
+    }) | center | flex;
+  };
+
+  // Interactive Settings Section
+  auto buildSettingsSection = [&]() {
+    const auto& theme = ThemeRegistry::active();
+    auto themes = ThemeRegistry::getAvailableThemes();
+
+    Elements themeElements;
+    for (size_t i = 0; i < themes.size(); ++i) {
+      bool active = (config_.theme == themes[i]);
+      bool cursorOnThis = (settingsActivePanel == 0 && settingsThemeCursor == static_cast<int>(i));
+
+      std::string marker = active ? (icon::CheckSingle + " ") : (icon::CheckBlank + " ");
+      themeElements.push_back(
         hbox({
-          text(" Manga Stats") | bold | color(theme::Peach),
-          filler(),
-          text("Days: " + mDays.str() + "  │  Mean: ") | color(theme::Subtext),
-          text(renderStarMeter(mMeanScore)) | color(theme::Yellow),
-          text(" ")
-        }),
-        text(""),
-        makeBar(mRead, mComp, mHold, mDrop, mPlan, mTotal),
-        text(""),
-        hbox({
-          vbox({
-            hbox({ text(" • Reading       : ") | color(theme::Green), text(std::to_string(mRead)) | bold | color(theme::Text) }),
-            hbox({ text(" • Completed     : ") | color(theme::Blue), text(std::to_string(mComp)) | bold | color(theme::Text) }),
-            hbox({ text(" • On-Hold       : ") | color(theme::Yellow), text(std::to_string(mHold)) | bold | color(theme::Text) }),
-            hbox({ text(" • Dropped       : ") | color(theme::Red), text(std::to_string(mDrop)) | bold | color(theme::Text) }),
-            hbox({ text(" • Plan to Read  : ") | color(theme::Overlay0), text(std::to_string(mPlan)) | bold | color(theme::Text) })
-          }) | flex,
-          text("  "),
-          vbox({
-            hbox({ text(" Total Entries   : ") | color(theme::Subtext), text(std::to_string(mTotal)) | bold | color(theme::Text) }),
-            hbox({ text(" Reread          : ") | color(theme::Subtext), text(std::to_string(db_.totalRewatched(MediaType::Manga))) | bold | color(theme::Text) }),
-            hbox({ text(" Chapters Logged : ") | color(theme::Lavender), text(std::to_string(db_.totalProgress(MediaType::Manga))) | bold | color(theme::Text) }),
-            hbox({ text(" Volumes Logged  : ") | color(theme::Peach), text(std::to_string(db_.totalVolumes(MediaType::Manga))) | bold | color(theme::Text) })
-          }) | flex
+          text(cursorOnThis ? " ▌ " : "   ") | color(theme.mauve) | bold,
+          text(marker) | color(active ? theme.green : theme.overlay0) | bold,
+          text(themes[i]) | (active ? bold : nothing) | color(cursorOnThis ? theme.peach : (active ? theme.mauve : theme.text))
         })
-      }) | border | color(theme::Surface0)
-    }) | flex;
+      );
+    }
+
+    auto makePrefRow = [&](int idx, const std::string& name, const std::string& val) {
+      bool active = (settingsActivePanel == 1 && settingsPrefCursor == idx);
+      return hbox({
+        text(active ? " ▌ " : "   ") | color(theme.mauve) | bold,
+        text(name) | size(WIDTH, EQUAL, 22) | (active ? bold : nothing) | color(active ? theme.peach : theme.text),
+        text(" " + val) | color(theme.lavender) | bold
+      });
+    };
+
+    auto panelThemes = vbox({
+      text(" Visual Theme Palette") | bold | color(theme.mauve),
+      text(""),
+      vbox(std::move(themeElements)) | vscroll_indicator | frame | flex,
+      text(""),
+      text(" Press [ret] to apply selected theme.") | color(theme.overlay0)
+    }) | border | color(settingsActivePanel == 0 ? theme.mauve : theme.surface0)
+       | size(WIDTH, EQUAL, 38);
+
+    auto panelPrefs = vbox({
+      text(" Runtime Preferences") | bold | color(theme.peach),
+      text(""),
+      makePrefRow(0, "Mouse Support:", config_.mouse ? (icon::CheckSingle + " Enabled") : (icon::CheckBlank + " Disabled")),
+      text(""),
+      makePrefRow(1, "Default View:", config_.defaultMedia),
+      text(""),
+      makePrefRow(2, "Default Sort:", config_.defaultSort),
+      text(""),
+      makePrefRow(3, "Invert Sort:", config_.reverseSort ? (icon::CheckSingle + " Descending (▲)") : (icon::CheckBlank + " Ascending (▼)")),
+      text(""),
+      text(" Press [ret] or [spc] to cycle options.") | color(theme.overlay0),
+      text(""),
+      separator() | color(theme.surface0),
+      text(""),
+      text(" Configuration Store:") | bold | color(theme.lavender),
+      text(" ~/.config/catalist/config.toml") | color(theme.subtext),
+      text(" Parameters follow ASD-STE100 Simplified Technical English.") | color(theme.overlay0),
+      filler()
+    }) | border | color(settingsActivePanel == 1 ? theme.mauve : theme.surface0)
+       | flex;
+
+    return vbox({
+      text(""),
+      hbox({ panelThemes, text(" "), panelPrefs }) | size(WIDTH, EQUAL, 92) | center | flex,
+      text("")
+    }) | center | flex;
   };
 
   auto mainRenderer = Renderer(globalHandler, [&]() {
-    MediaType media = (currentTab == ViewTab::Manga) ? MediaType::Manga : MediaType::Anime;
-
+    const auto& theme = ThemeRegistry::active();
     size_t aCount = db_.getEntries(MediaType::Anime).size();
     size_t mCount = db_.getEntries(MediaType::Manga).size();
 
-    Element animeTab = (currentTab == ViewTab::Anime)
-      ? (text(" " + icon::Anime + " Anime (" + std::to_string(aCount) + ") ") | bold | color(theme::Mauve) | bgcolor(theme::Surface0))
-      : (text(" " + icon::Anime + " Anime (" + std::to_string(aCount) + ") ") | color(theme::Subtext));
-    animeTab = animeTab | reflect(tabAnimeBox);
+    auto makeTabItem = [&](ViewTab t, const std::string& iconStr, const std::string& title, Box& box, const std::string& countStr = "") {
+      bool active = (currentTab == t);
+      std::string label = " " + iconStr + " " + title;
+      if (!countStr.empty()) label += " (" + countStr + ")";
+      label += " ";
 
-    Element mangaTab = (currentTab == ViewTab::Manga)
-      ? (text(" " + icon::Manga + " Manga (" + std::to_string(mCount) + ") ") | bold | color(theme::Mauve) | bgcolor(theme::Surface0))
-      : (text(" " + icon::Manga + " Manga (" + std::to_string(mCount) + ") ") | color(theme::Subtext));
-    mangaTab = mangaTab | reflect(tabMangaBox);
-
-    Element overviewTab = (currentTab == ViewTab::Overview)
-      ? (text(" " + icon::Stats + " Overview ") | bold | color(theme::Mauve) | bgcolor(theme::Surface0))
-      : (text(" " + icon::Stats + " Overview ") | color(theme::Subtext));
-    overviewTab = overviewTab | reflect(tabOverviewBox);
+      Element el;
+      if (active) {
+        el = text(label) | bold | color(theme.mauve);
+      } else {
+        el = text(label) | color(theme.subtext);
+      }
+      return el | reflect(box);
+    };
 
     auto topCard = hbox({
-      text(" " + icon::AppLogo + " Catalist ") | bold | color(theme::Mauve),
-      text("  "),
-      animeTab,
-      text(" "),
-      mangaTab,
-      text(" "),
-      overviewTab,
+      makeTabItem(ViewTab::About, icon::AppLogo, "Catalist", tabAboutBox),
+      text("│") | color(theme.surface0),
+      makeTabItem(ViewTab::Anime, icon::Anime, "Anime", tabAnimeBox, std::to_string(aCount)),
+      text("│") | color(theme.surface0),
+      makeTabItem(ViewTab::Manga, icon::Manga, "Manga", tabMangaBox, std::to_string(mCount)),
+      text("│") | color(theme.surface0),
+      makeTabItem(ViewTab::Overview, icon::Stats, "Overview", tabOverviewBox),
+      text("│") | color(theme.surface0),
+      makeTabItem(ViewTab::Sync, icon::Sync, "Sync", tabSyncBox),
+      text("│") | color(theme.surface0),
+      makeTabItem(ViewTab::Settings, "󰒓", "Settings", tabSettingsBox),
       filler(),
-      text("v0.2.0 ") | color(theme::Overlay0)
-    }) | border | color(theme::Surface0)
+      text("v0.2.0 ") | color(theme.overlay0)
+    }) | border | color(theme.surface0)
        | size(HEIGHT, EQUAL, 3);
 
     Element contentPane;
 
     if (currentTab == ViewTab::Overview) {
-      contentPane = renderOverview();
+      contentPane = buildOverviewStatisticsSection();
+    } else if (currentTab == ViewTab::About) {
+      contentPane = buildAboutSection();
+    } else if (currentTab == ViewTab::Sync) {
+      contentPane = buildSyncSection();
+    } else if (currentTab == ViewTab::Settings) {
+      contentPane = buildSettingsSection();
     } else {
-      Element details = text("No record selected.") | color(theme::Subtext);
+      Element details = text("No record selected.") | color(theme.subtext);
       if (!displayedEntries.empty() && catalogSelected >= 0 && catalogSelected < static_cast<int>(displayedEntries.size())) {
         const auto& e = displayedEntries[catalogSelected];
         float ratio = (e.totalUnits > 0) ? std::clamp(static_cast<float>(e.progress) / e.totalUnits, 0.0f, 1.0f) : 0.0f;
-        auto gaugeColor = (ratio >= 1.0f || e.status == WatchStatus::Completed) ? theme::Green : theme::Blue;
+        auto gaugeColor = (ratio >= 1.0f || e.status == WatchStatus::Completed) ? theme.green : theme.blue;
+
+        bool onDetails = (focusedCard == FocusedCard::Details);
+
+        auto fieldRow = [&](int idx, const std::string& label, Element content) {
+          bool active = onDetails && (detailsCursorIndex == idx);
+          std::string prefix = active ? "▌ " : "  ";
+          return hbox({
+            text(prefix) | color(theme.mauve) | bold,
+            text(label) | size(WIDTH, EQUAL, 12) | (active ? bold : nothing) | color(active ? theme.peach : theme.subtext),
+            content | flex
+          });
+        };
+
+        auto typePill = makePill(typeToIcon(e.type) + " " + typeToString(e.type), theme.crust, typeToColor(e.type));
+        auto statusPill = makePill(statusToIcon(e.status) + " " + statusToString(e.status, e.type), theme.crust, statusToColor(e.status));
 
         details = vbox({
-          (currentTier == ActiveTier::Inspector)
-            ? vbox({
-                text(" Title:") | bold | color(theme::Mauve),
-                inspectorTitleInput->Render() | border | color(theme::Peach),
-                text("")
-              })
-            : vbox({
-                text(" " + e.title) | bold | color(theme::Mauve) | reflect(detailsTitleBox),
-                text("")
-              }),
+          fieldRow(3, "Title:", isInspectorEditingTitle
+            ? (inspectorTitleInput->Render() | border | color(theme.peach))
+            : (text(e.title) | bold | color(theme.mauve))),
+          text(""),
           hbox({
-            text(" " + typeToIcon(e.type) + " " + typeToString(e.type) + " ") | bgcolor(theme::Surface0) | color(typeToColor(e.type)) | bold,
-            text(" "),
-            text(" " + statusToIcon(e.status) + " " + statusToString(e.status, e.type) + " ") | bgcolor(theme::Surface0) | color(statusToColor(e.status)) | bold | reflect(detailsStatusBox),
+            text("  Type:       ") | color(theme.subtext),
+            typePill,
             filler(),
-            text("[Delete] ") | bold | color(theme::Red) | reflect(detailsDeleteBox),
-            text("ID #" + std::to_string(e.id) + " ") | color(theme::Subtext) | reflect(detailsIdBox)
+            text("ID #" + std::to_string(e.id) + " ") | color(theme.subtext)
           }),
           text(""),
-          hbox({
-            text(" Rating: ") | bold | color(theme::Subtext),
-            text(renderStarMeter(e.score)) | color(theme::Yellow)
-          }) | reflect(detailsRatingBox),
+          fieldRow(0, "Status:", statusPill),
           text(""),
-          hbox({
-            text(" " + icon::Gauge + " Progress: ") | color(theme::Lavender) | bold,
-            text("[-] ") | bold | color(theme::Red) | reflect(detailsProgressMinusBox),
-            text(std::to_string(e.progress) + " / " + (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?") + " ") | color(theme::Text),
-            text("[+]") | bold | color(theme::Green) | reflect(detailsProgressPlusBox),
-            filler(),
-            text(e.totalUnits > 0 ? std::to_string(static_cast<int>(ratio * 100)) + "% " : "Ongoing ") | color(theme::Subtext)
-          }),
+          fieldRow(1, "Rating:", hbox({ text(renderStarMeter(e.score)) | color(theme.yellow), text(" (" + std::to_string(e.score) + "/10)") | color(theme.text) })),
           text(""),
-          gauge(ratio) | color(gaugeColor) | reflect(detailsProgressGaugeBox),
+          fieldRow(2, "Progress:", vbox({
+            hbox({
+              text(std::to_string(e.progress) + " / " + (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?") + " units") | color(theme.text),
+              filler(),
+              text(e.totalUnits > 0 ? std::to_string(static_cast<int>(ratio * 100)) + "% " : "Ongoing ") | color(theme.subtext)
+            }),
+            gauge(ratio) | color(gaugeColor)
+          })),
           text(""),
-          hbox({ text(" Source MAL ID : ") | color(theme::Subtext), text(e.malId > 0 ? std::to_string(e.malId) : "Local") | color(theme::Text) }) | reflect(detailsMalIdBox),
-          hbox({ text(" Start Date    : ") | color(theme::Subtext), text(e.startDate.empty() || e.startDate == "0000-00-00" ? "Not set" : e.startDate) | color(theme::Text) }) | reflect(detailsStartBox),
-          hbox({ text(" Finish Date   : ") | color(theme::Subtext), text(e.finishDate.empty() || e.finishDate == "0000-00-00" ? "Not set" : e.finishDate) | color(theme::Text) }) | reflect(detailsFinishBox),
+          hbox({ text("  Source MAL: ") | color(theme.subtext), text(e.malId > 0 ? std::to_string(e.malId) : "Local") | color(theme.text) }),
+          hbox({ text("  Dates:      ") | color(theme.subtext), text((e.startDate.empty() ? "-" : e.startDate) + " -> " + (e.finishDate.empty() ? "-" : e.finishDate)) | color(theme.text) }),
           text(""),
-          text(" Notes:") | bold | color(theme::Mauve),
-          (currentTier == ActiveTier::Inspector)
-            ? (inspectorNotesInput->Render() | border | color(theme::Peach))
-            : (text(e.notes.empty() ? " (empty - click or ret to edit)" : " " + e.notes) | color(theme::Subtext) | reflect(detailsNotesBox)),
+          fieldRow(4, "Notes:", text("")),
+          (isInspectorEditingNotes
+            ? (inspectorNotesInput->Render() | border | color(theme.peach))
+            : (text(e.notes.empty() ? "  (empty - press e or ret)" : "  " + e.notes) | color(theme.subtext))),
           filler()
         });
       }
@@ -1480,26 +1739,21 @@ void AppTui::run() {
       auto makeHeaderCell = [&](const std::string& name, SortKey key, int width, Box& box, bool isFlex = false) {
         bool active = (currentSort == key);
         std::string label = " " + name;
-        if (active) {
-          label += getSortArrow(key, reverseSort);
-        }
+        if (active) label += getSortArrow(key, reverseSort);
         Element cell = text(label);
         if (isFlex) cell = cell | flex;
         else cell = cell | size(WIDTH, EQUAL, width);
 
-        if (active) {
-          cell = cell | bold | color(theme::Mauve) | underlined;
-        } else {
-          cell = cell | bold | color(theme::Subtext);
-        }
+        if (active) cell = cell | bold | color(theme.mauve) | underlined;
+        else cell = cell | bold | color(theme.subtext);
         return cell | reflect(box);
       };
 
       auto headerRibbon = hbox({
-        text("  ") | size(WIDTH, EQUAL, 2),
+        text("   ") | size(WIDTH, EQUAL, 3),
         makeHeaderCell("Date", SortKey::Date, 10, headerDateBox),
         text(" "),
-        makeHeaderCell("Title", SortKey::Title, 26, headerTitleBox, true),
+        makeHeaderCell("Title", SortKey::Title, 28, headerTitleBox, true),
         text(" "),
         makeHeaderCell("Status", SortKey::Status, 14, headerStatusBox),
         text(" "),
@@ -1510,22 +1764,19 @@ void AppTui::run() {
       });
 
       auto sidebarCard = vbox({
-        text("  Categories") | bold | color(theme::Lavender),
+        text("  Categories") | bold | color(theme.lavender),
         text(""),
         sidebarMenu->Render() | vscroll_indicator | frame | flex
-      }) | border | color(currentTier == ActiveTier::Sidebar ? theme::Mauve : theme::Surface0)
-         | size(WIDTH, EQUAL, 28)
-         | reflect(sidebarCardBox);
+      }) | border | color(focusedCard == FocusedCard::Sidebar ? theme.mauve : theme.surface0)
+         | size(WIDTH, EQUAL, 28);
 
+      // Cleaned Search Card without redundant Add Button
       auto searchCard = hbox({
-        text(" " + icon::Search + " ") | color(theme::Peach),
+        text(" " + icon::Search + " ") | color(theme.peach),
         searchInput->Render() | flex,
-        text(" "),
-        text("[+ New]") | bold | color(theme::Green) | reflect(newEntryBtnBox),
-        text(" "),
-        text(searchQuery.empty() ? "All entries " : ("Filter: '" + searchQuery + "' ")) | color(theme::Subtext),
+        text(searchQuery.empty() ? "All entries " : ("Filter: '" + searchQuery + "' ")) | color(theme.subtext),
         text(" ")
-      }) | border | color((currentTier == ActiveTier::Search || searchInput->Focused()) ? theme::Peach : theme::Surface0)
+      }) | border | color(appMode == AppMode::Sch ? theme.peach : theme.surface0)
          | size(HEIGHT, EQUAL, 3)
          | reflect(searchBarBox);
 
@@ -1533,128 +1784,155 @@ void AppTui::run() {
         headerRibbon,
         text(""),
         displayedEntries.empty()
-          ? (text(" No matching entries found.") | color(theme::Subtext) | center | flex)
+          ? (text(" No matching entries found.") | color(theme.subtext) | center | flex)
           : (catalogMenu->Render() | vscroll_indicator | frame | flex)
-      }) | border | color((currentTier == ActiveTier::Catalog || currentTier == ActiveTier::CellEdit) ? theme::Mauve : theme::Surface0)
-         | flex
-         | reflect(catalogCardBox);
+      }) | border | color(focusedCard == FocusedCard::Catalog ? theme.mauve : theme.surface0)
+         | flex;
 
       auto detailCard = vbox({
-        text("  Details") | bold | color(theme::Lavender),
+        text("  Details") | bold | color(theme.lavender),
         text(""),
         details | flex
-      }) | border | color(currentTier == ActiveTier::Inspector ? theme::Mauve : theme::Surface0)
-         | size(WIDTH, EQUAL, 42)
-         | reflect(detailCardBox);
+      }) | border | color(focusedCard == FocusedCard::Details ? theme.mauve : theme.surface0)
+         | size(WIDTH, EQUAL, 42);
 
-      auto catalogColumn = vbox({
-        searchCard,
-        catalogCard | flex
-      }) | flex;
-
-      auto termSize = Terminal::Size();
-      if (termSize.dimx < 110) {
-        if (currentTier == ActiveTier::Sidebar) contentPane = sidebarCard | flex;
-        else if (currentTier == ActiveTier::Inspector) contentPane = detailCard | flex;
-        else contentPane = catalogColumn | flex;
-      } else {
-        contentPane = hbox({
-          sidebarCard,
-          catalogColumn,
-          detailCard
-        });
-      }
+      contentPane = hbox({
+        sidebarCard,
+        vbox({ searchCard, catalogCard | flex }) | flex,
+        detailCard
+      });
     }
 
-    Element modalBadge = text(" BROWSE ") | bold | color(theme::Crust) | bgcolor(theme::Mauve);
-    if (commandModeActive) {
-      modalBadge = text(" COMMAND ") | bold | color(theme::Crust) | bgcolor(theme::Yellow);
-    } else if (currentTier == ActiveTier::RemoteSearchModal) {
-      modalBadge = text(" ONLINE SEARCH ") | bold | color(theme::Crust) | bgcolor(theme::Peach);
-    } else if (currentTier == ActiveTier::Search) {
-      modalBadge = text(" SEARCH ") | bold | color(theme::Crust) | bgcolor(theme::Peach);
-    } else if (currentTier == ActiveTier::Sidebar) {
-      modalBadge = text(" CATEGORIES ") | bold | color(theme::Crust) | bgcolor(theme::Lavender);
-    } else if (currentTier == ActiveTier::CellEdit) {
-      std::string fieldStr = "STATUS";
-      if (activeCellField == EditField::Rating) fieldStr = "RATING";
-      else if (activeCellField == EditField::Progress) fieldStr = "PROGRESS";
-      modalBadge = text(" EDIT " + fieldStr + " ") | bold | color(theme::Crust) | bgcolor(theme::Green);
-    } else if (currentTier == ActiveTier::Inspector) {
-      modalBadge = text(" NOTES ") | bold | color(theme::Crust) | bgcolor(theme::Peach);
+    // Mode Pill: icon + 3-letter mode strictly
+    Element modeBadge;
+    if (appMode == AppMode::Cmd) {
+      modeBadge = makePill("󰘳 CMD", theme.crust, theme.mauve);
+    } else if (appMode == AppMode::Sch) {
+      modeBadge = makePill(" SCH", theme.crust, theme.peach);
+    } else if (appMode == AppMode::Edt) {
+      modeBadge = makePill("󰏫 EDT", theme.crust, theme.yellow);
+    } else if (appMode == AppMode::Vis) {
+      modeBadge = makePill("󰒅 VIS", theme.crust, theme.lavender);
+    } else {
+      modeBadge = makePill("󰄛 NOR", theme.crust, theme.green);
     }
 
-    std::string hint = "c/t/s/r/p Sort  │  n New  │  d Delete  │  ret Edit  │  y Copy Name  │  / Search  │  q Quit";
-    if (commandModeActive) {
-      hint = "";
-    } else if (currentTier == ActiveTier::RemoteSearchModal) {
-      hint = "ret Add/Search  │  Tab Switch Card  │  j/k Select  │  Esc Close";
-    } else if (currentTier == ActiveTier::Search) {
-      hint = "Type query  │  ret/Down Filter  │  Esc Clear & Back";
-    } else if (currentTier == ActiveTier::Sidebar) {
-      hint = "j/k Move  │  ret Open  │  Esc Back";
-    } else if (currentTier == ActiveTier::CellEdit) {
-      hint = "h/l Field  │  j/k Change  │  ret Notes  │  Esc Done";
-    } else if (currentTier == ActiveTier::Inspector) {
-      hint = "Type field  │  ret Save  │  Esc Back";
+    auto hintItem = [&](const std::string& key, const std::string& desc) {
+      return hbox({
+        text(key) | bold | color(theme.text),
+        text(" " + desc) | color(theme.subtext)
+      });
+    };
+
+    Elements hints;
+    if (appMode == AppMode::Nor || appMode == AppMode::Vis) {
+      hints = {
+        hintItem("Tab", "tabs"),
+        text("  "),
+        hintItem("h/l", "panes"),
+        text("  "),
+        hintItem("e/ret", "edit"),
+        text("  "),
+        hintItem("c/t/s/r/p", "sort"),
+        text("  "),
+        hintItem("S/R/P", "cycle"),
+        text("  "),
+        hintItem("+/-", "ep"),
+        text("  "),
+        hintItem("spc", "select"),
+        text("  "),
+        hintItem("a", "add"),
+        text("  "),
+        hintItem("d", "del"),
+        text("  "),
+        hintItem("/", "find"),
+        text("  "),
+        hintItem(":", "cmd")
+      };
+    } else if (appMode == AppMode::Edt) {
+      hints = {
+        hintItem("j/k", "field"),
+        text("  "),
+        hintItem("h/l", "adjust"),
+        text("  "),
+        hintItem("ret", "edit"),
+        text("  "),
+        hintItem("Esc", "done")
+      };
+    } else if (appMode == AppMode::Sch) {
+      hints = {
+        hintItem("ret", "apply"),
+        text("  "),
+        hintItem("Esc", "clear")
+      };
     }
 
-    auto bottomCard = hbox({
-      modalBadge,
-      text(" │ ") | color(theme::Surface0),
-      commandModeActive
-        ? (hbox({ text(":" + commandBuffer) | bold | color(theme::Yellow) }))
-        : (hbox({ text(hint) | color(theme::Subtext) })),
+    Element selectionTelemetry = text("");
+    if (!visualSelectedIds.empty()) {
+      selectionTelemetry = hbox({
+        text(" (" + std::to_string(visualSelectedIds.size()) + " selected) ") | bold | color(theme.green),
+        text("│ ") | color(theme.surface1)
+      });
+    }
+
+    // Compression Protection: Truncate status text dynamically so it never squishes hints
+    int termWidth = Terminal::Size().dimx;
+    int hintsWidth = 76;
+    int maxStatusLen = std::max(12, termWidth - hintsWidth - 18);
+    std::string safeStatusMessage = statusMessage;
+    if (static_cast<int>(safeStatusMessage.size()) > maxStatusLen) {
+      safeStatusMessage = safeStatusMessage.substr(0, std::max(0, maxStatusLen - 3)) + "...";
+    }
+
+    auto bottomRibbon = hbox({
+      text(" "),
+      modeBadge,
+      text(" │ ") | color(theme.surface1),
+      selectionTelemetry,
+      hbox(std::move(hints)),
       filler(),
-      text(statusMessage) | color(theme::Yellow),
+      text(safeStatusMessage) | color(theme.yellow),
       text(" ")
-    }) | border | color(theme::Surface0)
+    }) | border | color(theme.surface0)
        | size(HEIGHT, EQUAL, 3);
 
     auto baseUi = vbox({
       topCard,
       contentPane | flex,
-      bottomCard
+      bottomRibbon
     });
 
-    if (currentTier == ActiveTier::RemoteSearchModal) {
-      Element resultsList = text(" Type query above and press [ret] to query MyAnimeList.") | color(theme::Subtext) | center | flex;
+    if (commandPalette_.isOpen()) {
+      return dbox({
+        baseUi,
+        commandPalette_.render(theme)
+      });
+    }
+
+    if (isOnlineModalOpen) {
+      Element resultsList = text(" Type query above and press [ret] to query MyAnimeList.") | color(theme.subtext) | center | flex;
       if (remoteLoading) {
-        resultsList = text(" Querying AniList / MyAnimeList...") | bold | color(theme::Yellow) | center | flex;
+        resultsList = text(" Querying AniList / MyAnimeList...") | bold | color(theme.yellow) | center | flex;
       } else if (!remoteResults.empty()) {
         resultsList = remoteMenu->Render() | vscroll_indicator | frame | flex;
       } else if (!remoteStatusMsg.empty()) {
-        resultsList = text(" " + remoteStatusMsg) | color(theme::Red) | center | flex;
+        resultsList = text(" " + remoteStatusMsg) | color(theme.red) | center | flex;
       }
-
-      auto modalSearchCard = hbox({
-        text(" " + icon::Search + " ") | color(theme::Peach),
-        remoteSearchInput->Render() | flex,
-        text(" ")
-      }) | border | color(remoteSearchInput->Focused() ? theme::Peach : theme::Surface0)
-         | size(HEIGHT, EQUAL, 3);
-
-      auto modalPickerCard = vbox({
-        resultsList
-      }) | border | color(remoteMenu->Focused() ? theme::Mauve : theme::Surface0)
-         | size(HEIGHT, EQUAL, 14);
 
       auto modalWindow = vbox({
         hbox({
-          text("  󰖟 Online Search & Add ") | bold | color(theme::Mauve),
+          text("  󰖟 Online Search & Add ") | bold | color(theme.mauve),
           filler(),
-          text(" [Esc] Close ") | color(theme::Subtext)
+          text(" [Esc] Close ") | color(theme.subtext)
         }),
         text(""),
-        modalSearchCard,
+        remoteSearchInput->Render() | border | color(remoteSearchInput->Focused() ? theme.peach : theme.surface0),
         text(""),
-        modalPickerCard,
+        vbox({ resultsList }) | border | color(remoteMenu->Focused() ? theme.mauve : theme.surface0) | size(HEIGHT, EQUAL, 14),
         text(""),
-        hbox({
-          text(" [ret] Add/Search  │  [Tab] Switch Card  │  [j/k] Select  │  [Esc] Dismiss ") | color(theme::Subtext),
-          filler()
-        })
-      }) | border | color(theme::Mauve)
+        text(" [ret] Add/Search  │  [Tab] Switch Input/Results  │  [j/k] Select  │  [Esc] Close ") | color(theme.subtext)
+      }) | border | color(theme.mauve)
+         | bgcolor(theme.base)
          | size(WIDTH, EQUAL, 86)
          | clear_under
          | center;
@@ -1672,7 +1950,7 @@ void AppTui::run() {
   std::thread tickerThread([&]() {
     while (appRunning.load()) {
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      screen.PostEvent(Event::Custom);
+      screenPtr->PostEvent(Event::Custom);
     }
   });
 

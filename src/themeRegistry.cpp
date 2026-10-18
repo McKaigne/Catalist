@@ -1,0 +1,363 @@
+#include "catalist/themeRegistry.hpp"
+#include <algorithm>
+#include <unordered_map>
+
+namespace catalist {
+
+ftxui::Color ThemeRegistry::hexToColor(const std::string& hex) {
+  std::string clean = hex;
+  if (!clean.empty() && clean[0] == '#') {
+    clean = clean.substr(1);
+  }
+  if (clean.size() != 6) {
+    return ftxui::Color::RGB(0xcd, 0xd6, 0xf4);
+  }
+  try {
+    int r = std::stoi(clean.substr(0, 2), nullptr, 16);
+    int g = std::stoi(clean.substr(2, 2), nullptr, 16);
+    int b = std::stoi(clean.substr(4, 2), nullptr, 16);
+    return ftxui::Color::RGB(r, g, b);
+  } catch (...) {
+    return ftxui::Color::RGB(0xcd, 0xd6, 0xf4);
+  }
+}
+
+static ThemePalette makeCatppuccinMocha() {
+  return {
+    "catppuccin-mocha",
+    ftxui::Color::RGB(0x1e, 0x1e, 0x2e), // base
+    ftxui::Color::RGB(0x18, 0x18, 0x25), // mantle
+    ftxui::Color::RGB(0x11, 0x11, 0x1b), // crust
+    ftxui::Color::RGB(0x31, 0x32, 0x44), // surface0
+    ftxui::Color::RGB(0x45, 0x47, 0x5a), // surface1
+    ftxui::Color::RGB(0x58, 0x5b, 0x70), // surface2
+    ftxui::Color::RGB(0xcd, 0xd6, 0xf4), // text
+    ftxui::Color::RGB(0xa6, 0xad, 0xc8), // subtext
+    ftxui::Color::RGB(0x6c, 0x70, 0x86), // overlay0
+    ftxui::Color::RGB(0xcb, 0xa6, 0xf7), // mauve
+    ftxui::Color::RGB(0xb4, 0xbe, 0xfe), // lavender
+    ftxui::Color::RGB(0x89, 0xb4, 0xfa), // blue
+    ftxui::Color::RGB(0xa6, 0xe3, 0xa1), // green
+    ftxui::Color::RGB(0xf9, 0xe2, 0xaf), // yellow
+    ftxui::Color::RGB(0xfa, 0xb3, 0x87), // peach
+    ftxui::Color::RGB(0xf3, 0x8b, 0xa8)  // red
+  };
+}
+
+static ThemePalette makeDark() {
+  return {
+    "dark",
+    ftxui::Color::RGB(0x12, 0x12, 0x12),
+    ftxui::Color::RGB(0x1a, 0x1a, 0x1a),
+    ftxui::Color::RGB(0x0d, 0x0d, 0x0d),
+    ftxui::Color::RGB(0x24, 0x24, 0x24),
+    ftxui::Color::RGB(0x2e, 0x2e, 0x2e),
+    ftxui::Color::RGB(0x3d, 0x3d, 0x3d),
+    ftxui::Color::RGB(0xe0, 0xe0, 0xe0),
+    ftxui::Color::RGB(0xa0, 0xa0, 0xa0),
+    ftxui::Color::RGB(0x70, 0x70, 0x70),
+    ftxui::Color::RGB(0xbb, 0x86, 0xfc),
+    ftxui::Color::RGB(0x98, 0x5e, 0xff),
+    ftxui::Color::RGB(0x03, 0xda, 0xc6),
+    ftxui::Color::RGB(0x57, 0xbb, 0x8a),
+    ftxui::Color::RGB(0xfb, 0xbc, 0x04),
+    ftxui::Color::RGB(0xff, 0x8a, 0x65),
+    ftxui::Color::RGB(0xcf, 0x66, 0x79)
+  };
+}
+
+static ThemePalette makeLight() {
+  return {
+    "light",
+    ftxui::Color::RGB(0xfa, 0xfa, 0xfa),
+    ftxui::Color::RGB(0xf0, 0xf0, 0xf0),
+    ftxui::Color::RGB(0xe4, 0xe4, 0xe4),
+    ftxui::Color::RGB(0xe0, 0xe0, 0xe0),
+    ftxui::Color::RGB(0xd4, 0xd4, 0xd4),
+    ftxui::Color::RGB(0xc0, 0xc0, 0xc0),
+    ftxui::Color::RGB(0x21, 0x21, 0x21),
+    ftxui::Color::RGB(0x61, 0x61, 0x61),
+    ftxui::Color::RGB(0x9e, 0x9e, 0x9e),
+    ftxui::Color::RGB(0x62, 0x00, 0xee),
+    ftxui::Color::RGB(0x37, 0x00, 0xb3),
+    ftxui::Color::RGB(0x19, 0x76, 0xd2),
+    ftxui::Color::RGB(0x38, 0x8e, 0x3c),
+    ftxui::Color::RGB(0xf5, 0x7c, 0x00),
+    ftxui::Color::RGB(0xe6, 0x4a, 0x19),
+    ftxui::Color::RGB(0xd3, 0x2f, 0x2f)
+  };
+}
+
+static ThemePalette makeTokyoNight() {
+  return {
+    "tokyo-night",
+    ftxui::Color::RGB(0x1a, 0x1b, 0x26),
+    ftxui::Color::RGB(0x16, 0x16, 0x1e),
+    ftxui::Color::RGB(0x0f, 0x0f, 0x14),
+    ftxui::Color::RGB(0x24, 0x28, 0x3b),
+    ftxui::Color::RGB(0x2f, 0x35, 0x49),
+    ftxui::Color::RGB(0x41, 0x48, 0x68),
+    ftxui::Color::RGB(0xc0, 0xca, 0xf5),
+    ftxui::Color::RGB(0x9a, 0xa5, 0xce),
+    ftxui::Color::RGB(0x56, 0x5f, 0x89),
+    ftxui::Color::RGB(0xbb, 0x9a, 0xf7),
+    ftxui::Color::RGB(0x7a, 0xa2, 0xf7),
+    ftxui::Color::RGB(0x7d, 0xcf, 0xff),
+    ftxui::Color::RGB(0x9e, 0xce, 0x6a),
+    ftxui::Color::RGB(0xe0, 0xaf, 0x68),
+    ftxui::Color::RGB(0xff, 0x9e, 0x64),
+    ftxui::Color::RGB(0xf7, 0x76, 0x8e)
+  };
+}
+
+static ThemePalette makeKanagawa() {
+  return {
+    "kanagawa",
+    ftxui::Color::RGB(0x1f, 0x1f, 0x28),
+    ftxui::Color::RGB(0x16, 0x16, 0x1d),
+    ftxui::Color::RGB(0x0d, 0x0d, 0x11),
+    ftxui::Color::RGB(0x2a, 0x2a, 0x37),
+    ftxui::Color::RGB(0x36, 0x36, 0x46),
+    ftxui::Color::RGB(0x54, 0x54, 0x6d),
+    ftxui::Color::RGB(0xdc, 0xd7, 0xba),
+    ftxui::Color::RGB(0xc8, 0xc0, 0x93),
+    ftxui::Color::RGB(0x72, 0x71, 0x69),
+    ftxui::Color::RGB(0x95, 0x7f, 0xb8),
+    ftxui::Color::RGB(0x7e, 0x9c, 0xd8),
+    ftxui::Color::RGB(0x7f, 0xb4, 0xca),
+    ftxui::Color::RGB(0x76, 0x94, 0x6a),
+    ftxui::Color::RGB(0xc0, 0xa3, 0x6e),
+    ftxui::Color::RGB(0xff, 0xa0, 0x66),
+    ftxui::Color::RGB(0xc3, 0x40, 0x43)
+  };
+}
+
+static ThemePalette makeGruvbox() {
+  return {
+    "gruvbox",
+    ftxui::Color::RGB(0x28, 0x28, 0x28),
+    ftxui::Color::RGB(0x1d, 0x20, 0x21),
+    ftxui::Color::RGB(0x14, 0x16, 0x17),
+    ftxui::Color::RGB(0x3c, 0x38, 0x36),
+    ftxui::Color::RGB(0x50, 0x49, 0x45),
+    ftxui::Color::RGB(0x66, 0x5c, 0x54),
+    ftxui::Color::RGB(0xeb, 0xdb, 0xb2),
+    ftxui::Color::RGB(0xd5, 0xc4, 0xa1),
+    ftxui::Color::RGB(0x92, 0x83, 0x74),
+    ftxui::Color::RGB(0xd3, 0x86, 0x9b),
+    ftxui::Color::RGB(0xb1, 0x62, 0x86),
+    ftxui::Color::RGB(0x83, 0xa5, 0x98),
+    ftxui::Color::RGB(0xb8, 0xbb, 0x26),
+    ftxui::Color::RGB(0xfa, 0xbd, 0x2f),
+    ftxui::Color::RGB(0xfe, 0x80, 0x19),
+    ftxui::Color::RGB(0xfb, 0x49, 0x34)
+  };
+}
+
+static ThemePalette makeNord() {
+  return {
+    "nord",
+    ftxui::Color::RGB(0x2e, 0x34, 0x40),
+    ftxui::Color::RGB(0x24, 0x29, 0x33),
+    ftxui::Color::RGB(0x1e, 0x22, 0x2a),
+    ftxui::Color::RGB(0x3b, 0x42, 0x52),
+    ftxui::Color::RGB(0x43, 0x4c, 0x5e),
+    ftxui::Color::RGB(0x4c, 0x56, 0x6a),
+    ftxui::Color::RGB(0xec, 0xef, 0xf4),
+    ftxui::Color::RGB(0xe5, 0xe9, 0xf0),
+    ftxui::Color::RGB(0xd8, 0xde, 0xe9),
+    ftxui::Color::RGB(0xb4, 0x8e, 0xad),
+    ftxui::Color::RGB(0x88, 0xc0, 0xd0),
+    ftxui::Color::RGB(0x81, 0xa1, 0xc1),
+    ftxui::Color::RGB(0xa3, 0xbe, 0x8c),
+    ftxui::Color::RGB(0xeb, 0xcb, 0x8b),
+    ftxui::Color::RGB(0xd0, 0x87, 0x70),
+    ftxui::Color::RGB(0xbf, 0x61, 0x6a)
+  };
+}
+
+static ThemePalette makeDracula() {
+  return {
+    "dracula",
+    ftxui::Color::RGB(0x28, 0x2a, 0x36),
+    ftxui::Color::RGB(0x21, 0x22, 0x2c),
+    ftxui::Color::RGB(0x19, 0x1a, 0x21),
+    ftxui::Color::RGB(0x44, 0x47, 0x5a),
+    ftxui::Color::RGB(0x62, 0x72, 0xa4),
+    ftxui::Color::RGB(0x79, 0x8b, 0xb4),
+    ftxui::Color::RGB(0xf8, 0xf8, 0xf2),
+    ftxui::Color::RGB(0xbf, 0xbf, 0xbf),
+    ftxui::Color::RGB(0x62, 0x72, 0xa4),
+    ftxui::Color::RGB(0xbd, 0x93, 0xf9),
+    ftxui::Color::RGB(0xca, 0xa9, 0xfa),
+    ftxui::Color::RGB(0x8b, 0xe9, 0xfd),
+    ftxui::Color::RGB(0x50, 0xfa, 0x7b),
+    ftxui::Color::RGB(0xf1, 0xfa, 0x8c),
+    ftxui::Color::RGB(0xff, 0xb8, 0x6c),
+    ftxui::Color::RGB(0xff, 0x55, 0x55)
+  };
+}
+
+static ThemePalette makeRosePine() {
+  return {
+    "rose-pine",
+    ftxui::Color::RGB(0x19, 0x17, 0x24),
+    ftxui::Color::RGB(0x1f, 0x1d, 0x2e),
+    ftxui::Color::RGB(0x14, 0x12, 0x1f),
+    ftxui::Color::RGB(0x26, 0x23, 0x3a),
+    ftxui::Color::RGB(0x40, 0x3d, 0x52),
+    ftxui::Color::RGB(0x52, 0x4f, 0x67),
+    ftxui::Color::RGB(0xe0, 0xde, 0xf4),
+    ftxui::Color::RGB(0x90, 0x8c, 0xaa),
+    ftxui::Color::RGB(0x6e, 0x6a, 0x86),
+    ftxui::Color::RGB(0xc4, 0xa7, 0xe7),
+    ftxui::Color::RGB(0x9c, 0xcf, 0xd8),
+    ftxui::Color::RGB(0x31, 0x74, 0x8f),
+    ftxui::Color::RGB(0x9c, 0xcf, 0xd8),
+    ftxui::Color::RGB(0xf6, 0xc1, 0x77),
+    ftxui::Color::RGB(0xea, 0x9a, 0x97),
+    ftxui::Color::RGB(0xeb, 0x6f, 0x92)
+  };
+}
+
+static ThemePalette makeAyu() {
+  return {
+    "ayu",
+    ftxui::Color::RGB(0x0f, 0x14, 0x19),
+    ftxui::Color::RGB(0x0a, 0x0e, 0x13),
+    ftxui::Color::RGB(0x05, 0x08, 0x0c),
+    ftxui::Color::RGB(0x1a, 0x20, 0x27),
+    ftxui::Color::RGB(0x24, 0x2b, 0x35),
+    ftxui::Color::RGB(0x34, 0x3f, 0x4c),
+    ftxui::Color::RGB(0xe6, 0xe1, 0xcf),
+    ftxui::Color::RGB(0xbf, 0xba, 0xb0),
+    ftxui::Color::RGB(0x70, 0x7a, 0x8c),
+    ftxui::Color::RGB(0xd4, 0xbf, 0xff),
+    ftxui::Color::RGB(0x59, 0xc2, 0xff),
+    ftxui::Color::RGB(0x39, 0xba, 0xe6),
+    ftxui::Color::RGB(0xaa, 0xd9, 0x4c),
+    ftxui::Color::RGB(0xff, 0xb4, 0x54),
+    ftxui::Color::RGB(0xff, 0x8f, 0x40),
+    ftxui::Color::RGB(0xf0, 0x71, 0x78)
+  };
+}
+
+static ThemePalette makeSolarizedDark() {
+  return {
+    "solarized-dark",
+    ftxui::Color::RGB(0x00, 0x2b, 0x36),
+    ftxui::Color::RGB(0x00, 0x21, 0x2b),
+    ftxui::Color::RGB(0x00, 0x17, 0x1f),
+    ftxui::Color::RGB(0x07, 0x36, 0x42),
+    ftxui::Color::RGB(0x58, 0x6e, 0x75),
+    ftxui::Color::RGB(0x65, 0x7b, 0x83),
+    ftxui::Color::RGB(0x83, 0x94, 0x96),
+    ftxui::Color::RGB(0x93, 0xa1, 0xa1),
+    ftxui::Color::RGB(0x58, 0x6e, 0x75),
+    ftxui::Color::RGB(0x6c, 0x71, 0xc4),
+    ftxui::Color::RGB(0x26, 0x8b, 0xd2),
+    ftxui::Color::RGB(0x2a, 0xa1, 0x98),
+    ftxui::Color::RGB(0x85, 0x99, 0x00),
+    ftxui::Color::RGB(0xb5, 0x89, 0x00),
+    ftxui::Color::RGB(0xcb, 0x4b, 0x16),
+    ftxui::Color::RGB(0xdc, 0x32, 0x2f)
+  };
+}
+
+static ThemePalette makeSolarizedLight() {
+  return {
+    "solarized-light",
+    ftxui::Color::RGB(0xfd, 0xf6, 0xe3),
+    ftxui::Color::RGB(0xee, 0xe8, 0xd5),
+    ftxui::Color::RGB(0xe0, 0xda, 0xc6),
+    ftxui::Color::RGB(0xee, 0xe8, 0xd5),
+    ftxui::Color::RGB(0x93, 0xa1, 0xa1),
+    ftxui::Color::RGB(0x83, 0x94, 0x96),
+    ftxui::Color::RGB(0x65, 0x7b, 0x83),
+    ftxui::Color::RGB(0x58, 0x6e, 0x75),
+    ftxui::Color::RGB(0x93, 0xa1, 0xa1),
+    ftxui::Color::RGB(0x6c, 0x71, 0xc4),
+    ftxui::Color::RGB(0x26, 0x8b, 0xd2),
+    ftxui::Color::RGB(0x2a, 0xa1, 0x98),
+    ftxui::Color::RGB(0x85, 0x99, 0x00),
+    ftxui::Color::RGB(0xb5, 0x89, 0x00),
+    ftxui::Color::RGB(0xcb, 0x4b, 0x16),
+    ftxui::Color::RGB(0xdc, 0x32, 0x2f)
+  };
+}
+
+ThemePalette ThemeRegistry::activePalette_ = makeCatppuccinMocha();
+ThemePalette ThemeRegistry::customPalette_ = makeCatppuccinMocha();
+
+const ThemePalette& ThemeRegistry::getTheme(const std::string& name) {
+  std::string lower = name;
+  std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+
+  static const std::unordered_map<std::string, ThemePalette> catalog = {
+    {"catppuccin", makeCatppuccinMocha()},
+    {"catppuccin-mocha", makeCatppuccinMocha()},
+    {"dark", makeDark()},
+    {"light", makeLight()},
+    {"tokyo-night", makeTokyoNight()},
+    {"kanagawa", makeKanagawa()},
+    {"gruvbox", makeGruvbox()},
+    {"nord", makeNord()},
+    {"dracula", makeDracula()},
+    {"rose-pine", makeRosePine()},
+    {"ayu", makeAyu()},
+    {"solarized-dark", makeSolarizedDark()},
+    {"solarized-light", makeSolarizedLight()}
+  };
+
+  if (lower == "custom") {
+    return customPalette_;
+  }
+
+  auto it = catalog.find(lower);
+  if (it != catalog.end()) {
+    return it->second;
+  }
+  return catalog.at("catppuccin-mocha");
+}
+
+bool ThemeRegistry::hasTheme(const std::string& name) {
+  std::string lower = name;
+  std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+  if (lower == "custom") return true;
+
+  auto themes = getAvailableThemes();
+  return std::find(themes.begin(), themes.end(), lower) != themes.end();
+}
+
+std::vector<std::string> ThemeRegistry::getAvailableThemes() {
+  return {
+    "catppuccin-mocha",
+    "dark",
+    "light",
+    "tokyo-night",
+    "kanagawa",
+    "gruvbox",
+    "nord",
+    "dracula",
+    "rose-pine",
+    "ayu",
+    "solarized-dark",
+    "solarized-light",
+    "custom"
+  };
+}
+
+void ThemeRegistry::setCustomPalette(const ThemePalette& palette) {
+  customPalette_ = palette;
+  customPalette_.name = "custom";
+}
+
+const ThemePalette& ThemeRegistry::active() {
+  return activePalette_;
+}
+
+void ThemeRegistry::setActive(const std::string& name) {
+  activePalette_ = getTheme(name);
+}
+
+} // namespace catalist

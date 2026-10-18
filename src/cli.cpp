@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <iomanip>
 #include <cstdlib>
+#include <random>
+#include <chrono>
 
 #if defined(_WIN32)
 #include <io.h>
@@ -176,28 +178,36 @@ std::string CliDispatcher::formatJsonEntries(const std::vector<Entry>& entries) 
 
 void CliDispatcher::printUsage() {
   std::cout << "Usage: catalist [command] [options]\n\n"
-            << "Commands:\n"
-            << "  ls                   List watchlist entries (table, plain, or JSON)\n"
+            << "Query Commands:\n"
+            << "  ls                   List watchlist entries (table, plain, CSV, or JSON)\n"
             << "  show <id|title|->    Show detailed information for an entry\n"
             << "  count                Count matching entries\n"
+            << "  random               Pick a random entry matching filters\n\n"
+            << "Mutation Commands:\n"
+            << "  add <title> [flags]  Add a new anime or manga entry\n"
+            << "  set <id|title|->     Update fields on existing records (supports pipeline input)\n"
+            << "  rm <id|title|->      Remove entries (-y to skip confirmation)\n\n"
+            << "Data Commands:\n"
             << "  import <file.xml>    Ingest MyAnimeList XML export\n"
             << "  --version, -v        Display version info\n"
             << "  --help, -h           Show this message\n\n"
-            << "Listing & Filtering Flags (ls, count):\n"
-            << "  --type <anime|manga> Filter by media type\n"
-            << "  --status <status>    Filter: watching, reading, completed, on-hold, dropped, planned\n"
-            << "  --rating <spec>      Filter rating: exact (9), relational ('>=9', '<=7'), or range ('6..8')\n"
-            << "  --unrated            Filter entries without a score (score = 0)\n"
-            << "  --year <YYYY>        Filter by start year\n"
-            << "  --search <query>     Filter by title substring match\n"
-            << "  --sort <field>       Sort by: date, title, status, rating, progress (default: rating)\n"
-            << "  --reverse            Invert sort order\n"
-            << "  --limit <N>          Limit output to first N records\n\n"
-            << "Output Formatting Flags:\n"
-            << "  --plain              Print bare titles, one per line\n"
-            << "  --ids                Print bare IDs, one per line\n"
-            << "  --csv                Output RFC 4180 CSV\n"
-            << "  --json               Output structured JSON\n";
+            << "Listing & Filtering Flags:\n"
+            << "  -t, --type <anime|manga>  Filter media type\n"
+            << "  -s, --status <status>     Filter: watching, reading, completed, on-hold, dropped, planned\n"
+            << "  -r, --rating <spec>       Filter rating: 9, '>=9', '<=7', '6..8', 'unrated'\n"
+            << "  --unrated                 Filter entries where rating == 0\n"
+            << "  -y, --year <YYYY>         Filter by start year\n"
+            << "  -q, --search <query>      Filter by title substring match\n"
+            << "  --sort <field>            Sort: date, title, status, rating, progress\n"
+            << "  -R, --reverse             Invert sort direction\n"
+            << "  -l, --limit <N>           Limit output to first N records\n\n"
+            << "Progress & Stepping Flags (set):\n"
+            << "  -p, --progress <val>      Set absolute, or step: add [N], a [N], sub [N], s [N], +N, -N\n\n"
+            << "Formatting Flags:\n"
+            << "  --plain                   Print bare titles, one per line\n"
+            << "  --ids                     Print bare IDs, one per line\n"
+            << "  --csv                     Output RFC 4180 CSV\n"
+            << "  --json                    Output structured JSON\n";
 }
 
 int CliDispatcher::dispatch(int argc, char* argv[], Database& db, AppConfig& config) {
@@ -222,6 +232,10 @@ int CliDispatcher::dispatch(int argc, char* argv[], Database& db, AppConfig& con
   if (command == "ls") return executeLs(args, db, config);
   if (command == "count") return executeCount(args, db);
   if (command == "show") return executeShow(args, db);
+  if (command == "add") return executeAdd(args, db);
+  if (command == "set") return executeSet(args, db);
+  if (command == "rm") return executeRm(args, db);
+  if (command == "random") return executeRandom(args, db);
   if (command == "import") return executeImport(args, db);
 
   emitError("usage", "unknown command '" + command + "'. Run 'catalist --help' for usage.", false);
@@ -244,35 +258,35 @@ static bool parseCommonFilters(const std::vector<std::string>& args,
       opts.format = OutputFormat::Ids;
     } else if (arg == "--csv") {
       opts.format = OutputFormat::Csv;
-    } else if (arg == "--reverse") {
+    } else if (arg == "--reverse" || arg == "-R") {
       opts.reverseSort = true;
     } else if (arg == "--unrated") {
       opts.unratedOnly = true;
       opts.minScore = 0;
       opts.maxScore = 0;
-    } else if (arg == "--type") {
+    } else if (arg == "--type" || arg == "-t") {
       if (++i >= args.size()) { err = "missing argument for '--type'"; return false; }
       std::string t = args[i];
       std::transform(t.begin(), t.end(), t.begin(), ::tolower);
-      if (t == "anime") opts.type = MediaType::Anime;
-      else if (t == "manga") opts.type = MediaType::Manga;
+      if (t == "anime" || t == "a") opts.type = MediaType::Anime;
+      else if (t == "manga" || t == "m") opts.type = MediaType::Manga;
       else { err = "invalid media type '" + args[i] + "'. Expected 'anime' or 'manga'."; return false; }
-    } else if (arg == "--status") {
+    } else if (arg == "--status" || arg == "-s") {
       if (++i >= args.size()) { err = "missing argument for '--status'"; return false; }
       opts.status = stringToStatus(args[i]);
-    } else if (arg == "--rating") {
+    } else if (arg == "--rating" || arg == "-r" || arg == "--score") {
       if (++i >= args.size()) { err = "missing argument for '--rating'"; return false; }
       if (!CliDispatcher::parseRatingSpec(args[i], opts.minScore, opts.maxScore, opts.unratedOnly)) {
         err = "invalid rating specification '" + args[i] + "'. Expected e.g. 9, '>=9', '<=7', '6..8', or 'unrated'.";
         return false;
       }
-    } else if (arg == "--year") {
+    } else if (arg == "--year" || arg == "-y") {
       if (++i >= args.size()) { err = "missing argument for '--year'"; return false; }
       opts.year = args[i];
-    } else if (arg == "--search") {
+    } else if (arg == "--search" || arg == "-q") {
       if (++i >= args.size()) { err = "missing argument for '--search'"; return false; }
       opts.search = args[i];
-    } else if (arg == "--limit") {
+    } else if (arg == "--limit" || arg == "-l") {
       if (++i >= args.size()) { err = "missing argument for '--limit'"; return false; }
       try {
         opts.limit = std::stoi(args[i]);
@@ -414,7 +428,6 @@ int CliDispatcher::executeLs(const std::vector<std::string>& args, Database& db,
     return 0;
   }
 
-  // Tabular output (interactive TTY or piped)
   bool tty = IS_TTY();
   bool color = shouldColor();
 
@@ -560,7 +573,6 @@ int CliDispatcher::executeShow(const std::vector<std::string>& args, Database& d
     const auto& q = queries[qIdx];
     std::optional<Entry> match;
 
-    // Check if integer ID
     bool isInt = !q.empty() && std::all_of(q.begin(), q.end(), ::isdigit);
     if (isInt) {
       int id = std::stoi(q);
@@ -571,7 +583,6 @@ int CliDispatcher::executeShow(const std::vector<std::string>& args, Database& d
     }
 
     if (!match.has_value()) {
-      // Search by title match
       std::string qLower = q;
       std::transform(qLower.begin(), qLower.end(), qLower.begin(), ::tolower);
 
@@ -620,6 +631,500 @@ int CliDispatcher::executeShow(const std::vector<std::string>& args, Database& d
   }
 
   return exitCode;
+}
+
+int CliDispatcher::executeAdd(const std::vector<std::string>& args, Database& db) {
+  if (args.empty()) {
+    emitError("usage", "usage: catalist add <title> [flags]", false);
+    return 2;
+  }
+
+  std::string title;
+  MediaType type = MediaType::Anime;
+  WatchStatus status = WatchStatus::Watching;
+  int score = 0;
+  int progress = 0;
+  int totalUnits = 0;
+  int volumes = 0;
+  std::string startDate;
+  std::string finishDate;
+  std::string notes;
+  bool jsonMode = false;
+
+  for (size_t i = 0; i < args.size(); ++i) {
+    const std::string& arg = args[i];
+
+    if (arg == "--json") {
+      jsonMode = true;
+    } else if (arg == "--type" || arg == "-t") {
+      if (++i >= args.size()) { emitError("usage", "missing argument for '--type'", jsonMode); return 2; }
+      std::string t = args[i];
+      std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+      if (t == "anime" || t == "a") type = MediaType::Anime;
+      else if (t == "manga" || t == "m") type = MediaType::Manga;
+      else { emitError("usage", "invalid type '" + args[i] + "'. Expected 'anime' or 'manga'.", jsonMode); return 2; }
+    } else if (arg == "--status" || arg == "-s") {
+      if (++i >= args.size()) { emitError("usage", "missing argument for '--status'", jsonMode); return 2; }
+      status = stringToStatus(args[i]);
+    } else if (arg == "--rating" || arg == "-r" || arg == "--score") {
+      if (++i >= args.size()) { emitError("usage", "missing argument for '--rating'", jsonMode); return 2; }
+      try { score = std::clamp(std::stoi(args[i]), 0, 10); }
+      catch (...) { emitError("usage", "invalid rating '" + args[i] + "'. Expected 0..10.", jsonMode); return 2; }
+    } else if (arg == "--progress" || arg == "-p") {
+      if (++i >= args.size()) { emitError("usage", "missing argument for '--progress'", jsonMode); return 2; }
+      try { progress = std::max(0, std::stoi(args[i])); }
+      catch (...) { emitError("usage", "invalid integer for '--progress': " + args[i], jsonMode); return 2; }
+    } else if (arg == "--episodes" || arg == "--chapters" || arg == "--total" || arg == "-e") {
+      if (++i >= args.size()) { emitError("usage", "missing argument for '--total'", jsonMode); return 2; }
+      try { totalUnits = std::max(0, std::stoi(args[i])); }
+      catch (...) { emitError("usage", "invalid integer for '--total': " + args[i], jsonMode); return 2; }
+    } else if (arg == "--volumes" || arg == "-v") {
+      if (++i >= args.size()) { emitError("usage", "missing argument for '--volumes'", jsonMode); return 2; }
+      try { volumes = std::max(0, std::stoi(args[i])); }
+      catch (...) { emitError("usage", "invalid integer for '--volumes': " + args[i], jsonMode); return 2; }
+    } else if (arg == "--start" || arg == "--started") {
+      if (++i >= args.size()) { emitError("usage", "missing date for '--start'", jsonMode); return 2; }
+      startDate = args[i];
+    } else if (arg == "--finish" || arg == "--finished") {
+      if (++i >= args.size()) { emitError("usage", "missing date for '--finish'", jsonMode); return 2; }
+      finishDate = args[i];
+    } else if (arg == "--notes" || arg == "-n") {
+      if (++i >= args.size()) { emitError("usage", "missing text for '--notes'", jsonMode); return 2; }
+      notes = args[i];
+    } else if (title.empty() && arg.rfind("-", 0) != 0) {
+      title = arg;
+    } else {
+      emitError("usage", "unknown option or unexpected argument: '" + arg + "'", jsonMode);
+      return 2;
+    }
+  }
+
+  if (title.empty()) {
+    emitError("usage", "missing title for 'catalist add <title> [flags]'.", jsonMode);
+    return 2;
+  }
+
+  if (startDate.empty()) {
+    auto now = std::chrono::system_clock::now();
+    auto inTimeT = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&inTimeT), "%Y-%m-%d");
+    startDate = ss.str();
+  }
+
+  Entry e;
+  e.type = type;
+  e.title = title;
+  e.status = status;
+  e.score = score;
+  e.progress = progress;
+  e.totalUnits = totalUnits;
+  e.volumes = volumes;
+  e.startDate = startDate;
+  e.finishDate = finishDate;
+  e.notes = notes;
+  e.updatedAt = startDate;
+
+  int assignedId = db.addEntry(e);
+  db.saveAll();
+
+  if (jsonMode) {
+    auto opt = db.getById(type, assignedId);
+    if (opt.has_value()) {
+      std::cout << formatJsonEntry(opt.value()) << "\n";
+    }
+  } else {
+    bool color = shouldColor();
+    std::cout << (color ? ansi::Green + ansi::Bold : "") << "Added "
+              << (type == MediaType::Anime ? "anime" : "manga")
+              << " '" << title << "' [ID " << assignedId << "]"
+              << (color ? ansi::Reset : "") << "\n";
+  }
+
+  return 0;
+}
+
+int CliDispatcher::executeSet(const std::vector<std::string>& args, Database& db) {
+  if (args.empty()) {
+    emitError("usage", "usage: catalist set <id|title|-> [flags]", false);
+    return 2;
+  }
+
+  std::string target;
+  bool jsonMode = false;
+  std::optional<int> setProgress;
+  int deltaProgress = 0;
+  bool hasDelta = false;
+  std::optional<int> setScore;
+  std::optional<WatchStatus> setStatus;
+  std::optional<int> setTotal;
+  std::optional<int> setVolumes;
+  std::optional<std::string> setStart;
+  std::optional<std::string> setFinish;
+  std::optional<std::string> setNotes;
+  std::optional<std::string> setTitle;
+
+  for (size_t i = 0; i < args.size(); ++i) {
+    const std::string& arg = args[i];
+
+    if (arg == "--json") {
+      jsonMode = true;
+    } else if (arg == "--progress" || arg == "-p") {
+      if (++i >= args.size()) { emitError("usage", "missing value for '--progress'", jsonMode); return 2; }
+      std::string val = args[i];
+      if (val == "add" || val == "a") {
+        int delta = 1;
+        if (i + 1 < args.size()) {
+          const std::string& next = args[i + 1];
+          if (!next.empty() && std::all_of(next.begin(), next.end(), ::isdigit)) {
+            delta = std::stoi(next);
+            ++i;
+          }
+        }
+        deltaProgress = delta;
+        hasDelta = true;
+      } else if (val == "sub" || val == "s" || val == "dec") {
+        int delta = 1;
+        if (i + 1 < args.size()) {
+          const std::string& next = args[i + 1];
+          if (!next.empty() && std::all_of(next.begin(), next.end(), ::isdigit)) {
+            delta = std::stoi(next);
+            ++i;
+          }
+        }
+        deltaProgress = -delta;
+        hasDelta = true;
+      } else if (val.front() == '+' || val.front() == '-') {
+        try {
+          deltaProgress = std::stoi(val);
+          hasDelta = true;
+        } catch (...) { emitError("usage", "invalid delta for '--progress': " + val, jsonMode); return 2; }
+      } else {
+        try {
+          setProgress = std::max(0, std::stoi(val));
+        } catch (...) { emitError("usage", "invalid integer for '--progress': " + val, jsonMode); return 2; }
+      }
+    } else if (arg == "--rating" || arg == "-r" || arg == "--score") {
+      if (++i >= args.size()) { emitError("usage", "missing argument for '--rating'", jsonMode); return 2; }
+      try { setScore = std::clamp(std::stoi(args[i]), 0, 10); }
+      catch (...) { emitError("usage", "invalid score for '--rating': " + args[i], jsonMode); return 2; }
+    } else if (arg == "--status" || arg == "-s") {
+      if (++i >= args.size()) { emitError("usage", "missing argument for '--status'", jsonMode); return 2; }
+      setStatus = stringToStatus(args[i]);
+    } else if (arg == "--episodes" || arg == "--chapters" || arg == "--total" || arg == "-e") {
+      if (++i >= args.size()) { emitError("usage", "missing argument for '--total'", jsonMode); return 2; }
+      try { setTotal = std::max(0, std::stoi(args[i])); }
+      catch (...) { emitError("usage", "invalid integer for '--total': " + args[i], jsonMode); return 2; }
+    } else if (arg == "--volumes" || arg == "-v") {
+      if (++i >= args.size()) { emitError("usage", "missing argument for '--volumes'", jsonMode); return 2; }
+      try { setVolumes = std::max(0, std::stoi(args[i])); }
+      catch (...) { emitError("usage", "invalid integer for '--volumes': " + args[i], jsonMode); return 2; }
+    } else if (arg == "--start" || arg == "--started") {
+      if (++i >= args.size()) { emitError("usage", "missing date for '--start'", jsonMode); return 2; }
+      setStart = args[i];
+    } else if (arg == "--finish" || arg == "--finished") {
+      if (++i >= args.size()) { emitError("usage", "missing date for '--finish'", jsonMode); return 2; }
+      setFinish = args[i];
+    } else if (arg == "--notes" || arg == "-n") {
+      if (++i >= args.size()) { emitError("usage", "missing text for '--notes'", jsonMode); return 2; }
+      setNotes = args[i];
+    } else if (arg == "--title") {
+      if (++i >= args.size()) { emitError("usage", "missing text for '--title'", jsonMode); return 2; }
+      setTitle = args[i];
+    } else if (target.empty() && arg.rfind("-", 0) != 0) {
+      target = arg;
+    } else if (target.empty() && arg == "-") {
+      target = "-";
+    } else {
+      emitError("usage", "unknown option or unexpected argument: '" + arg + "'", jsonMode);
+      return 2;
+    }
+  }
+
+  if (target.empty()) {
+    emitError("usage", "missing entry ID or title for 'catalist set <id|title|-> [flags]'.", jsonMode);
+    return 2;
+  }
+
+  std::vector<std::string> queries;
+  if (target == "-") {
+    std::string line;
+    while (std::getline(std::cin, line)) {
+      line.erase(0, line.find_first_not_of(" \t\r\n"));
+      line.erase(line.find_last_not_of(" \t\r\n") + 1);
+      if (!line.empty()) queries.push_back(line);
+    }
+  } else {
+    queries.push_back(target);
+  }
+
+  if (queries.empty()) {
+    emitError("input", "no target identifiers received from stdin.", jsonMode);
+    return 1;
+  }
+
+  int successCount = 0;
+  for (const auto& q : queries) {
+    std::optional<Entry> match;
+
+    bool isInt = !q.empty() && std::all_of(q.begin(), q.end(), ::isdigit);
+    if (isInt) {
+      int id = std::stoi(q);
+      match = db.getById(MediaType::Anime, id);
+      if (!match.has_value()) {
+        match = db.getById(MediaType::Manga, id);
+      }
+    }
+
+    if (!match.has_value()) {
+      std::string qLower = q;
+      std::transform(qLower.begin(), qLower.end(), qLower.begin(), ::tolower);
+
+      std::vector<Entry> candidates;
+      auto searchType = [&](MediaType t) {
+        for (const auto& e : db.getEntries(t)) {
+          std::string titleLower = e.title;
+          std::transform(titleLower.begin(), titleLower.end(), titleLower.begin(), ::tolower);
+          if (titleLower == qLower) {
+            candidates.clear();
+            candidates.push_back(e);
+            return true;
+          }
+          if (titleLower.find(qLower) != std::string::npos) {
+            candidates.push_back(e);
+          }
+        }
+        return false;
+      };
+
+      if (!searchType(MediaType::Anime)) {
+        searchType(MediaType::Manga);
+      }
+
+      if (candidates.size() == 1) {
+        match = candidates[0];
+      } else if (candidates.size() > 1) {
+        emitError("ambiguous", "ambiguous query '" + q + "'. Matches multiple entries.", jsonMode);
+        continue;
+      }
+    }
+
+    if (!match.has_value()) {
+      emitError("notFound", "entry not found matching '" + q + "'.", jsonMode);
+      continue;
+    }
+
+    auto e = match.value();
+
+    if (setProgress.has_value()) {
+      e.progress = setProgress.value();
+    } else if (hasDelta) {
+      e.progress = std::max(0, e.progress + deltaProgress);
+    }
+
+    if (e.totalUnits > 0 && e.progress >= e.totalUnits) {
+      e.progress = e.totalUnits;
+      e.status = WatchStatus::Completed;
+    }
+
+    if (setScore.has_value()) e.score = setScore.value();
+    if (setStatus.has_value()) e.status = setStatus.value();
+    if (setTotal.has_value()) e.totalUnits = setTotal.value();
+    if (setVolumes.has_value()) e.volumes = setVolumes.value();
+    if (setStart.has_value()) e.startDate = setStart.value();
+    if (setFinish.has_value()) e.finishDate = setFinish.value();
+    if (setNotes.has_value()) e.notes = setNotes.value();
+    if (setTitle.has_value()) e.title = setTitle.value();
+
+    auto now = std::chrono::system_clock::now();
+    auto inTimeT = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&inTimeT), "%Y-%m-%d");
+    e.updatedAt = ss.str();
+
+    db.updateEntry(e);
+    successCount++;
+
+    if (jsonMode) {
+      std::cout << formatJsonEntry(e) << "\n";
+    } else {
+      bool color = shouldColor();
+      std::cout << (color ? ansi::Green : "") << "Updated [" << e.id << "] '" << e.title << "': "
+                << "Progress " << e.progress << "/" << (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?") << ", "
+                << "Rating " << e.score << "/10, "
+                << "Status " << statusToString(e.status, e.type)
+                << (color ? ansi::Reset : "") << "\n";
+    }
+  }
+
+  if (successCount > 0) {
+    db.saveAll();
+    return 0;
+  }
+  return 1;
+}
+
+int CliDispatcher::executeRm(const std::vector<std::string>& args, Database& db) {
+  if (args.empty()) {
+    emitError("usage", "usage: catalist rm <id|title|-> [--yes]", false);
+    return 2;
+  }
+
+  std::string target;
+  bool forceYes = false;
+  bool jsonMode = false;
+
+  for (const auto& a : args) {
+    if (a == "--yes" || a == "-y") forceYes = true;
+    else if (a == "--json") jsonMode = true;
+    else if (target.empty()) target = a;
+  }
+
+  if (target.empty()) {
+    emitError("usage", "missing target identifier or title for 'catalist rm'.", jsonMode);
+    return 2;
+  }
+
+  std::vector<std::string> queries;
+  if (target == "-") {
+    std::string line;
+    while (std::getline(std::cin, line)) {
+      line.erase(0, line.find_first_not_of(" \t\r\n"));
+      line.erase(line.find_last_not_of(" \t\r\n") + 1);
+      if (!line.empty()) queries.push_back(line);
+    }
+  } else {
+    queries.push_back(target);
+  }
+
+  if (queries.empty()) {
+    emitError("input", "no targets received from stdin.", jsonMode);
+    return 1;
+  }
+
+  int deletedCount = 0;
+  for (const auto& q : queries) {
+    std::optional<Entry> match;
+
+    bool isInt = !q.empty() && std::all_of(q.begin(), q.end(), ::isdigit);
+    if (isInt) {
+      int id = std::stoi(q);
+      match = db.getById(MediaType::Anime, id);
+      if (!match.has_value()) {
+        match = db.getById(MediaType::Manga, id);
+      }
+    }
+
+    if (!match.has_value()) {
+      std::string qLower = q;
+      std::transform(qLower.begin(), qLower.end(), qLower.begin(), ::tolower);
+
+      std::vector<Entry> candidates;
+      auto searchType = [&](MediaType t) {
+        for (const auto& e : db.getEntries(t)) {
+          std::string titleLower = e.title;
+          std::transform(titleLower.begin(), titleLower.end(), titleLower.begin(), ::tolower);
+          if (titleLower == qLower) {
+            candidates.clear();
+            candidates.push_back(e);
+            return true;
+          }
+          if (titleLower.find(qLower) != std::string::npos) {
+            candidates.push_back(e);
+          }
+        }
+        return false;
+      };
+
+      if (!searchType(MediaType::Anime)) {
+        searchType(MediaType::Manga);
+      }
+
+      if (candidates.size() == 1) {
+        match = candidates[0];
+      } else if (candidates.size() > 1) {
+        emitError("ambiguous", "ambiguous query '" + q + "'. Matches multiple entries.", jsonMode);
+        continue;
+      }
+    }
+
+    if (!match.has_value()) {
+      emitError("notFound", "entry not found matching '" + q + "'.", jsonMode);
+      continue;
+    }
+
+    const auto& e = match.value();
+
+    if (!forceYes) {
+      if (!IS_TTY()) {
+        emitError("safety", "deletion of '" + e.title + "' requires '--yes' when running in non-interactive pipeline.", jsonMode);
+        return 1;
+      }
+      std::cout << "Delete '" << e.title << "' [ID " << e.id << "]? [y/N]: " << std::flush;
+      std::string resp;
+      if (!std::getline(std::cin, resp) || (resp != "y" && resp != "Y")) {
+        std::cout << "Canceled.\n";
+        continue;
+      }
+    }
+
+    db.removeEntry(e.type, e.id);
+    deletedCount++;
+
+    if (jsonMode) {
+      std::cout << "{\"deleted\":true,\"id\":" << e.id << ",\"title\":\"" << escapeJsonString(e.title) << "\"}\n";
+    } else {
+      bool color = shouldColor();
+      std::cout << (color ? ansi::Red : "") << "Deleted '" << e.title << "' [ID " << e.id << "]"
+                << (color ? ansi::Reset : "") << "\n";
+    }
+  }
+
+  if (deletedCount > 0) {
+    db.saveAll();
+    return 0;
+  }
+  return 1;
+}
+
+int CliDispatcher::executeRandom(const std::vector<std::string>& args, Database& db) {
+  CliFilterOptions opts;
+  bool jsonMode = false;
+  std::string err;
+
+  if (!parseCommonFilters(args, opts, jsonMode, err)) {
+    emitError("usage", err, jsonMode);
+    return 2;
+  }
+
+  auto entries = collectAndFilterEntries(db, opts);
+  if (entries.empty()) {
+    emitError("notFound", "no entries match the specified filters.", jsonMode);
+    return 1;
+  }
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<size_t> dist(0, entries.size() - 1);
+  const auto& picked = entries[dist(gen)];
+
+  if (opts.format == OutputFormat::Plain) {
+    std::cout << picked.title << "\n";
+    return 0;
+  }
+
+  if (opts.format == OutputFormat::Ids) {
+    std::cout << picked.id << "\n";
+    return 0;
+  }
+
+  if (opts.format == OutputFormat::Json) {
+    std::cout << formatJsonEntry(picked) << "\n";
+    return 0;
+  }
+
+  printSingleDetail(picked, false);
+  return 0;
 }
 
 int CliDispatcher::executeImport(const std::vector<std::string>& args, Database& db) {

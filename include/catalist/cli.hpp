@@ -40,10 +40,13 @@ public:
   static std::string formatJsonEntries(const std::vector<Entry>& entries);
   static void printUsage();
 
-private:
   static int executeLs(const std::vector<std::string>& args, Database& db, const AppConfig& config);
   static int executeCount(const std::vector<std::string>& args, Database& db);
   static int executeShow(const std::vector<std::string>& args, Database& db);
+  static int executeAdd(const std::vector<std::string>& args, Database& db);
+  static int executeSet(const std::vector<std::string>& args, Database& db);
+  static int executeRm(const std::vector<std::string>& args, Database& db);
+  static int executeRandom(const std::vector<std::string>& args, Database& db);
   static int executeImport(const std::vector<std::string>& args, Database& db);
 };
 

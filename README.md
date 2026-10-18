@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/McKaigne/Catalist/actions/workflows/ci.yml/badge.svg)](https://github.com/McKaigne/Catalist/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/3815eb46-3ea2-4688-a36e-7f1b062ca178" />
 
 A fast, local terminal watchlist and manager for Anime and Manga built in C++17 with [FTXUI](https://github.com/ArthurSonzogni/FTXUI). Everything runs offline from local CSV files you own.
@@ -108,23 +109,54 @@ The `:sync` command is an **optional, opt-in metadata reconciliation tool** that
 ---
 
 <details>
-<summary><b>Planned Architecture (CLI Mode & Self-Hosted Server)</b></summary>
-
-### CLI Mode Specifications
+<summary><b>CLI Mode & Pipeline Usage (ls, count, show, add, set, rm, random)</b></summary>
 
 When arguments are passed, `catalist` operates headlessly for shell scripting and Nushell pipelines:
 
 ```bash
+# Query & Discovery
 catalist ls --type anime --status watching --sort rating
 catalist ls --rating ">=9" --plain | fzf
 catalist count --status completed
-catalist add "Frieren" --type anime --episodes 28
-catalist set 131 --progress +1
-catalist export json > backup.json
+catalist show "Frieren"
+catalist random --status planned --plain | cowsay
+
+# Quick Mutations
+catalist add "Dungeon Meshi" -t anime -e 24 -p 10 -r 9
+catalist set "Dungeon Meshi" -p a 2           # progress add 2
+catalist set "Dungeon Meshi" -p sub 1         # progress sub 1
+catalist set "Dungeon Meshi" -r 10 -s completed
+catalist rm "Dungeon Meshi" -y                # remove with -y bypass
+
+# Batch Pipeline Mutations (accepts stdin via -)
+catalist ls --rating ">=9" --ids | catalist set - -n "Peak fiction"
+catalist ls --status dropped --ids | catalist rm - -y
 ```
 
-- Pipe detection (`isatty`): Drops ANSI styling and headers when piped (`| cowsay`, `| jq`).
-- Structured errors on `stderr` when `--json` is specified.
+### CLI Flag Reference
+
+| Flag | Shorthand | Description |
+| :--- | :--- | :--- |
+| `-t, --type <anime|manga>` | `-t` | Media type filter or assignment |
+| `-s, --status <status>` | `-s` | `watching`, `reading`, `completed`, `on-hold`, `dropped`, `planned` |
+| `-r, --rating <spec>` | `-r` | Filter: `9`, `'>=9'`, `'<=7'`, `'6..8'`, `'unrated'`. Set: `0..10` |
+| `-p, --progress <val>` | `-p` | Set absolute, or step: `add [N]`, `a [N]`, `sub [N]`, `s [N]`, `+N`, `-N` |
+| `-e, --total <N>` | `-e` | Total units (episodes / chapters) |
+| `-v, --volumes <N>` | `-v` | Total volumes read |
+| `-y, --year <YYYY>` | `-y` | Start year filter |
+| `-q, --search <query>` | `-q` | Title substring filter |
+| `--sort <field>` | | Sort: `date`, `title`, `status`, `rating`, `progress` |
+| `-R, --reverse` | `-R` | Invert sort order |
+| `-l, --limit <N>` | `-l` | Limit output to first N entries |
+| `--plain`, `--ids` | | Machine outputs: bare titles or bare IDs |
+| `--csv`, `--json` | | Structured serialization formats |
+
+</details>
+
+---
+
+<details>
+<summary><b>Planned Architecture (Self-Hosted Server)</b></summary>
 
 ### Self-Hosted Server Mode
 
@@ -143,12 +175,13 @@ catalist --server home ls --rating ">=9"
 ```
 src/main.cpp          Entry point and argument dispatcher
 src/tui.cpp           Interactive dashboard, floating cards, mouse engine, key handling
+src/cli.cpp           CLI query and mutation engine, stepping parser, JSON serializer
 src/database.cpp      CRUD operations, RFC 4180 multiline CSV engine, filtering
 src/entry.cpp         Data models, formatting, Nerd Font icons, star meter
 src/malParser.cpp     MAL XML import engine with CDATA extraction
 src/sync.cpp          Opt-in Jikan API upstream metadata sync
 src/config.cpp        Configuration loader and serializer
-tests/testMain.cpp    Headless verification suite (CSV, XML, sorting)
+tests/testMain.cpp    Headless verification suite (CSV, XML, sorting, CLI mutations)
 flake.nix             Nix development environment and flake derivation
 CMakeLists.txt        Build configuration with offline fallback and test targets
 ```
@@ -167,12 +200,12 @@ CMakeLists.txt        Build configuration with offline fallback and test targets
 - [x] RFC 4180 multiline CSV persistence engine
 - [x] MAL XML ingestion engine with CDATA extraction
 - [x] Headless verification test suite and GitHub Actions CI
-- [ ] Numbered screen tabs `4` to `8` (dedicated Browse, Editor, Sources)
-- [ ] CLI `ls` with filters (type, status, rating, year, tag) and sorting
-- [ ] CLI quick edits: `add`, `set`, `rm`, progress stepping
-- [ ] Piping in and out: `--json`, `--csv`, `--ids`, stdin with `-`
-- [ ] `export` and `import` for JSON and CSV
-- [ ] `stats`, `count`, and `random`
+- [x] CLI `ls` with filters (type, status, rating, year, tag), sorting, and output formats
+- [x] CLI mutations (`add`, `set` with `add`/`sub` stepping, `rm`, `random`)
+- [x] Pipeline support (`--plain`, `--ids`, `--json`, `--csv`, stdin `-`)
+- [ ] Dedicated screen tabs `4` to `8` in TUI
+- [ ] CLI export/import for standalone JSON/CSV dumps
+- [ ] CLI analytics summary (`catalist stats`)
 - [ ] Shell completion (Bash, Zsh, Fish)
 - [ ] Polymorphic backend abstraction
 - [ ] Self-hosted server daemon (`catalist serve`) with token authentication

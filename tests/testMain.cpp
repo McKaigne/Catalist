@@ -127,7 +127,6 @@ void testCliParsers() {
   TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("7..9", minS, maxS, unrated) && minS == 7 && maxS == 9);
   TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("unrated", minS, maxS, unrated) && unrated && minS == 0);
 
-  // Test JSON serialization of an Entry
   catalist::Entry e;
   e.id = 42;
   e.title = "Odd Taxi";
@@ -140,6 +139,58 @@ void testCliParsers() {
   std::cout << "[PASS] CLI argument and formatting tests passed." << std::endl;
 }
 
+void testCliMutations() {
+  std::cout << "[RUN ] Testing CLI mutations (add, set with stepping, rm)..." << std::endl;
+  catalist::Database db;
+
+  // 1. Add entry via CLI dispatcher
+  std::vector<std::string> addArgs = {
+    "Dungeon Meshi", "-t", "anime", "-s", "watching", "-e", "24", "-p", "10", "-r", "9"
+  };
+  TEST_ASSERT(catalist::CliDispatcher::executeAdd(addArgs, db) == 0);
+
+  auto entries = db.filterEntries(catalist::MediaType::Anime, std::nullopt, -1, "Dungeon Meshi", catalist::SortKey::Title, false);
+  TEST_ASSERT(entries.size() == 1);
+  int id = entries[0].id;
+  TEST_ASSERT(entries[0].progress == 10);
+  TEST_ASSERT(entries[0].totalUnits == 24);
+  TEST_ASSERT(entries[0].score == 9);
+
+  // 2. Set with stepping: -p a 2 (add 2)
+  std::vector<std::string> setStepArgs = {
+    std::to_string(id), "-p", "a", "2"
+  };
+  TEST_ASSERT(catalist::CliDispatcher::executeSet(setStepArgs, db) == 0);
+  auto eOpt = db.getById(catalist::MediaType::Anime, id);
+  TEST_ASSERT(eOpt.has_value() && eOpt->progress == 12);
+
+  // 3. Set with stepping: -p sub 2 (subtract 2)
+  std::vector<std::string> setSubArgs = {
+    std::to_string(id), "-p", "sub", "2"
+  };
+  TEST_ASSERT(catalist::CliDispatcher::executeSet(setSubArgs, db) == 0);
+  eOpt = db.getById(catalist::MediaType::Anime, id);
+  TEST_ASSERT(eOpt.has_value() && eOpt->progress == 10);
+
+  // 4. Set to max progress -> auto complete
+  std::vector<std::string> setMaxArgs = {
+    std::to_string(id), "-p", "24"
+  };
+  TEST_ASSERT(catalist::CliDispatcher::executeSet(setMaxArgs, db) == 0);
+  eOpt = db.getById(catalist::MediaType::Anime, id);
+  TEST_ASSERT(eOpt.has_value() && eOpt->progress == 24 && eOpt->status == catalist::WatchStatus::Completed);
+
+  // 5. Remove entry: rm <id> -y
+  std::vector<std::string> rmArgs = {
+    std::to_string(id), "-y"
+  };
+  TEST_ASSERT(catalist::CliDispatcher::executeRm(rmArgs, db) == 0);
+  eOpt = db.getById(catalist::MediaType::Anime, id);
+  TEST_ASSERT(!eOpt.has_value());
+
+  std::cout << "[PASS] CLI mutations and progress stepping tests passed." << std::endl;
+}
+
 int main() {
   std::cout << "========================================" << std::endl;
   std::cout << "   Catalist Headless Verification Suite  " << std::endl;
@@ -149,9 +200,10 @@ int main() {
   testMalXmlIngestion();
   testSortAndFilter();
   testCliParsers();
+  testCliMutations();
 
   std::cout << "========================================" << std::endl;
-  std::cout << "   All automated tests passed (4/4)     " << std::endl;
+  std::cout << "   All automated tests passed (5/5)     " << std::endl;
   std::cout << "========================================" << std::endl;
   return 0;
 }

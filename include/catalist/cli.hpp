@@ -52,6 +52,8 @@ public:
   static int executeExport(const std::vector<std::string>& args, const Database& db);
   static int executeImport(const std::vector<std::string>& args, Database& db);
   static int executeSearch(const std::vector<std::string>& args, Database& db);
+  static int executeConfig(const std::vector<std::string>& args, AppConfig& config);
+  static int executeCompletion(const std::vector<std::string>& args);
 };
 
 } // namespace catalist

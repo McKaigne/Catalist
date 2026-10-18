@@ -57,10 +57,10 @@ The interface uses a decoupled, floating-card layout in Catppuccin Mocha with an
 | `j` `k` / Wheel | Browse | Move up/down with automatic viewport frame tracking |
 | `gg` `G` | Browse | Jump to top/bottom of catalog |
 | `c` `t` `s` `r` `p` | Browse | Sort by Date, Title, Status, Rating, or Progress (tap again to reverse) |
-| `n` `a` | Browse | **New Entry:** Instant zero-prompt creation defaulting to active media |
+| `n` `a` | Browse | **New Entry:** Opens interactive online search modal to find and add titles |
 | `d` | Browse | **Delete:** Prompts `[y/N]` confirmation (undoable with `u`) |
 | `ret` | Browse | **Edit Row:** Enters in-place cell edit mode |
-| `y` | Browse | **Copy Title:** Copies selected title to system clipboard |
+| `y` | Browse | **Copy Name:** Copies selected title to system clipboard |
 | `/` | Browse | **Search:** Live case-insensitive search with yellow substring highlighting |
 | `o` | Browse | Open entry on MyAnimeList in default browser |
 | `u` / `Ctrl+Z` | Browse | Undo last mutation or deletion |
@@ -85,7 +85,7 @@ The interface uses a decoupled, floating-card layout in Catppuccin Mocha with an
 
 ## Mouse Support
 
-- **Tabs & Search:** Click tabs to switch media profiles; click search to filter; click `[+ New]` to create a record.
+- **Tabs & Search:** Click tabs to switch media profiles; click search to filter; click `[+ New]` to open the search modal.
 - **Header Ribbon:** Click column headers (`Date`, `Title`, `Status`, `Rating`, `Progress`) to sort; active column displays directional arrows (`▲`/`▼`) with underline styling.
 - **Row Hover & Wheel:** Hovering auto-highlights rows; titles exceeding width scroll smoothly; mouse wheel scrolls catalog without snapping to pointer.
 - **Interactive Detail Card:**
@@ -104,12 +104,12 @@ The interface uses a decoupled, floating-card layout in Catppuccin Mocha with an
 
 Catalist is **100% offline-first**. All records live locally in `~/.config/catalist/{anime,manga}.csv`. No accounts, telemetry, or network daemons exist.
 
-The `:sync` command is an **optional, opt-in metadata reconciliation tool** that queries the public Jikan (MAL) API over HTTPS strictly on-demand to fetch total episode counts for ongoing series without credentials.
+The `:sync` command and online search feature query public endpoints (AniList GraphQL / Jikan API) over HTTPS strictly on-demand without credentials.
 
 ---
 
 <details>
-<summary><b>CLI Mode & Pipeline Usage (ls, count, show, add, set, rm, random, stats, export)</b></summary>
+<summary><b>CLI Mode & Pipeline Usage (ls, count, show, add, set, rm, random, search, stats, export, config, completion)</b></summary>
 
 When arguments are passed, `catalist` operates headlessly for shell scripting and Nushell pipelines:
 
@@ -120,6 +120,10 @@ catalist ls --rating ">=9" --plain | fzf
 catalist count --status completed
 catalist show "Frieren"
 catalist random --status planned --plain | cowsay
+
+# Online Search (yay-style interactive resolution)
+catalist search "frieren" --limit 5
+catalist search "dungeon meshi" --plain
 
 # Quick Mutations
 catalist add "Dungeon Meshi" -t anime -e 24 -p 10 -r 9
@@ -137,6 +141,11 @@ catalist stats
 catalist stats --type anime --json
 catalist export json > backup.json
 catalist export csv > backup.csv
+
+# Configuration & Shell Completions
+catalist config list
+catalist config set default_media manga
+catalist completion zsh > ~/.zsh/completion/_catalist
 ```
 
 ### CLI Flag Reference
@@ -181,13 +190,14 @@ catalist --server home ls --rating ">=9"
 ```
 src/main.cpp          Entry point and argument dispatcher
 src/tui.cpp           Interactive dashboard, floating cards, mouse engine, key handling
-src/cli.cpp           CLI query/mutation engine, stepping parser, analytics, export
+src/cli.cpp           CLI query/mutation engine, completions, config, analytics, export
+src/remoteSearch.cpp  AniList GraphQL and Jikan API remote search engine
 src/database.cpp      CRUD operations, RFC 4180 multiline CSV engine, filtering
 src/entry.cpp         Data models, formatting, Nerd Font icons, star meter
 src/malParser.cpp     MAL XML import engine with CDATA extraction
 src/sync.cpp          Opt-in Jikan API upstream metadata sync
 src/config.cpp        Configuration loader and serializer
-tests/testMain.cpp    Headless verification suite (CSV, XML, sorting, CLI mutations, stats)
+tests/testMain.cpp    Headless verification suite (CSV, XML, sorting, mutations, stats)
 flake.nix             Nix development environment and flake derivation
 CMakeLists.txt        Build configuration with offline fallback and test targets
 ```
@@ -206,13 +216,15 @@ CMakeLists.txt        Build configuration with offline fallback and test targets
 - [x] RFC 4180 multiline CSV persistence engine
 - [x] MAL XML ingestion engine with CDATA extraction
 - [x] Headless verification test suite and GitHub Actions CI
-- [x] CLI `ls` with filters (type, status, rating, year, tag), sorting, and output formats
+- [x] CLI `ls` with filters, sorting, and output formats
 - [x] CLI mutations (`add`, `set` with `add`/`sub` stepping, `rm`, `random`)
 - [x] CLI telemetry analytics (`catalist stats`)
-- [x] CLI full database dumps (`catalist export <json|csv>`)
+- [x] CLI database export (`catalist export <json|csv>`)
+- [x] Online remote search engine with CLI (`catalist search`) and TUI modal dialog parity
+- [x] Shell completions (`catalist completion <bash|zsh|fish>`)
+- [x] Configuration manager CLI (`catalist config [list|get|set]`)
 - [x] Pipeline support (`--plain`, `--ids`, `--json`, `--csv`, stdin `-`)
 - [ ] Dedicated screen tabs `4` to `8` in TUI
-- [ ] Shell completion (Bash, Zsh, Fish)
 - [ ] Polymorphic backend abstraction
 - [ ] Self-hosted server daemon (`catalist serve`) with token authentication
 

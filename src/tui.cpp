@@ -146,7 +146,7 @@ void AppTui::run() {
 
   Box tabAnimeBox, tabMangaBox, tabOverviewBox;
   Box headerDateBox, headerTitleBox, headerStatusBox, headerRatingBox, headerProgressBox;
-  Box searchBarBox, newEntryBtnBox, onlineSearchBtnBox;
+  Box searchBarBox, newEntryBtnBox;
   Box sidebarCardBox, catalogCardBox, detailCardBox;
   std::vector<Box> rowBoxes;
   std::vector<Box> sidebarBoxes;
@@ -189,7 +189,7 @@ void AppTui::run() {
     while (b64.size() % 4) b64.push_back('=');
     std::cout << "\033]52;c;" << b64 << "\007" << std::flush;
 
-    statusMessage = "Copied: \"" + clipTitle(str, 24) + "\"";
+    statusMessage = "Copied name: \"" + clipTitle(str, 24) + "\"";
   };
 
   auto openInBrowser = [&](const Entry& e) {
@@ -331,44 +331,20 @@ void AppTui::run() {
 
   refreshViews();
 
-  auto createNewEntry = [&]() {
-    MediaType media = (currentTab == ViewTab::Manga) ? MediaType::Manga : MediaType::Anime;
-    Entry e;
-    e.type = media;
-    e.title = "New " + std::string(media == MediaType::Anime ? "Anime" : "Manga");
-    e.status = WatchStatus::Watching;
-    e.score = 0;
-    e.progress = 0;
-    e.totalUnits = 0;
-
-    auto now = std::chrono::system_clock::now();
-    auto inTimeT = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&inTimeT), "%Y-%m-%d");
-    e.startDate = ss.str();
-    e.updatedAt = ss.str();
-
-    int newId = db_.addEntry(e);
-    recordAction(HistoryAction::Add, media, Entry{}, e);
-    db_.saveAll();
-    refreshViews();
-
-    for (size_t i = 0; i < displayedEntries.size(); ++i) {
-      if (displayedEntries[i].id == newId) {
-        catalogSelected = static_cast<int>(i);
-        break;
-      }
-    }
-
-    currentTier = ActiveTier::CellEdit;
-    activeCellField = EditField::Progress;
-    statusMessage = "Created new entry. [h/l/j/k] to edit, [ret] for notes/title.";
+  auto openRemoteSearchModal = [&]() {
+    currentTier = ActiveTier::RemoteSearchModal;
+    remoteSearchQuery = searchQuery;
+    remoteResults.clear();
+    remoteResultLabels.clear();
+    remoteSelected = 0;
+    remoteStatusMsg = "";
+    remoteLoading = false;
   };
 
   auto executeRemoteSearch = [&]() {
     if (remoteSearchQuery.empty()) return;
     remoteLoading = true;
-    remoteStatusMsg = "Querying api.jikan.moe...";
+    remoteStatusMsg = "Querying AniList / MyAnimeList...";
     MediaType media = (currentTab == ViewTab::Manga) ? MediaType::Manga : MediaType::Anime;
     std::string err;
     remoteResults = RemoteSearchEngine::query(media, remoteSearchQuery, err, 10);
@@ -536,13 +512,23 @@ void AppTui::run() {
     const auto& r = remoteResults[idx];
     bool active = (idx == remoteSelected);
 
-    std::string unitStr = (r.totalUnits > 0 ? (std::to_string(r.totalUnits) + " eps") : "ongoing");
+    std::string displayTitle = r.title;
+    if (displayTitle.size() > 34) {
+      displayTitle = displayTitle.substr(0, 31) + "...";
+    }
+
     auto row = hbox({
-      text(active ? " ▌ " : "   ") | color(theme::Mauve) | bold,
-      text("[" + std::to_string(idx + 1) + "] ") | bold | color(theme::Peach),
-      text(r.title) | bold | color(theme::Text) | flex,
-      text("  " + (r.year.empty() ? "" : (r.year + " • ")) + unitStr + " • ★ " + std::to_string(r.score).substr(0, 4) + " ") | color(theme::Subtext),
-      text("[MAL " + std::to_string(r.malId) + "] ") | color(theme::Overlay0)
+      text(active ? "▌ " : "  ") | color(theme::Mauve) | bold,
+      text("[" + std::to_string(idx + 1) + "] ") | size(WIDTH, EQUAL, 5) | color(theme::Peach) | bold,
+      text(displayTitle) | size(WIDTH, EQUAL, 34) | color(theme::Text) | (active ? bold : nothing),
+      text(" "),
+      text(r.year.empty() ? " -  " : r.year) | size(WIDTH, EQUAL, 6) | color(theme::Subtext),
+      text(" "),
+      text(r.totalUnits > 0 ? (std::to_string(r.totalUnits) + " eps") : "ongoing") | size(WIDTH, EQUAL, 9) | color(theme::Subtext),
+      text(" "),
+      text("★ " + (r.score > 0.0 ? std::to_string(r.score).substr(0, 4) : " -  ")) | size(WIDTH, EQUAL, 8) | color(theme::Yellow),
+      text(" "),
+      text("MAL " + std::to_string(r.malId)) | size(WIDTH, EQUAL, 10) | color(theme::Overlay0)
     });
 
     if (active) row = row | bgcolor(theme::Surface0) | focus;
@@ -625,14 +611,13 @@ void AppTui::run() {
     } else if (verb == "wq") {
       db_.saveAll();
       screen.ExitLoopClosure()();
-    } else if (verb == "new" || verb == "add") {
-      createNewEntry();
-    } else if (verb == "search" || verb == "online") {
+    } else if (verb == "new" || verb == "add" || verb == "search" || verb == "online") {
       std::string q;
       std::getline(ss, q);
       q.erase(0, q.find_first_not_of(" \t"));
+      openRemoteSearchModal();
       remoteSearchQuery = q;
-      currentTier = ActiveTier::RemoteSearchModal;
+      remoteSearchInput->TakeFocus();
       if (!remoteSearchQuery.empty()) executeRemoteSearch();
     } else if (verb == "undo" || verb == "u") {
       performUndo();
@@ -712,6 +697,14 @@ void AppTui::run() {
           recordAction(HistoryAction::Add, e.type, Entry{}, e);
           db_.saveAll();
           refreshViews();
+
+          for (size_t i = 0; i < displayedEntries.size(); ++i) {
+            if (displayedEntries[i].id == e.id) {
+              catalogSelected = static_cast<int>(i);
+              break;
+            }
+          }
+
           currentTier = ActiveTier::Catalog;
           catalogMenu->TakeFocus();
           statusMessage = "Added '" + e.title + "' [MAL ID " + std::to_string(e.malId) + "]!";
@@ -740,6 +733,14 @@ void AppTui::run() {
               recordAction(HistoryAction::Add, e.type, Entry{}, e);
               db_.saveAll();
               refreshViews();
+
+              for (size_t j = 0; j < displayedEntries.size(); ++j) {
+                if (displayedEntries[j].id == e.id) {
+                  catalogSelected = static_cast<int>(j);
+                  break;
+                }
+              }
+
               currentTier = ActiveTier::Catalog;
               catalogMenu->TakeFocus();
               statusMessage = "Added '" + e.title + "' [MAL ID " + std::to_string(e.malId) + "]!";
@@ -824,15 +825,9 @@ void AppTui::run() {
           return true;
         }
 
-        if (boxContains(onlineSearchBtnBox, mx, my)) {
-          currentTier = ActiveTier::RemoteSearchModal;
-          remoteSearchQuery = searchQuery;
-          remoteSearchInput->TakeFocus();
-          if (!remoteSearchQuery.empty()) executeRemoteSearch();
-          return true;
-        }
         if (boxContains(newEntryBtnBox, mx, my)) {
-          createNewEntry();
+          openRemoteSearchModal();
+          remoteSearchInput->TakeFocus();
           return true;
         }
         if (boxContains(searchBarBox, mx, my)) {
@@ -1188,16 +1183,10 @@ void AppTui::run() {
           return true;
         }
 
+        // 'n' and 'a' trigger Online Search & Add modal
         if (event == Event::Character('n') || event == Event::Character('a')) {
-          createNewEntry();
-          return true;
-        }
-
-        if (event == Event::Character('S') || event == Event::Special("\x0f")) {
-          currentTier = ActiveTier::RemoteSearchModal;
-          remoteSearchQuery = searchQuery;
+          openRemoteSearchModal();
           remoteSearchInput->TakeFocus();
-          if (!remoteSearchQuery.empty()) executeRemoteSearch();
           return true;
         }
 
@@ -1534,8 +1523,6 @@ void AppTui::run() {
         text(" "),
         text("[+ New]") | bold | color(theme::Green) | reflect(newEntryBtnBox),
         text(" "),
-        text("[󰖟 Online]") | bold | color(theme::Blue) | reflect(onlineSearchBtnBox),
-        text(" "),
         text(searchQuery.empty() ? "All entries " : ("Filter: '" + searchQuery + "' ")) | color(theme::Subtext),
         text(" ")
       }) | border | color((currentTier == ActiveTier::Search || searchInput->Focused()) ? theme::Peach : theme::Surface0)
@@ -1583,7 +1570,7 @@ void AppTui::run() {
     if (commandModeActive) {
       modalBadge = text(" COMMAND ") | bold | color(theme::Crust) | bgcolor(theme::Yellow);
     } else if (currentTier == ActiveTier::RemoteSearchModal) {
-      modalBadge = text(" ONLINE SEARCH ") | bold | color(theme::Crust) | bgcolor(theme::Blue);
+      modalBadge = text(" ONLINE SEARCH ") | bold | color(theme::Crust) | bgcolor(theme::Peach);
     } else if (currentTier == ActiveTier::Search) {
       modalBadge = text(" SEARCH ") | bold | color(theme::Crust) | bgcolor(theme::Peach);
     } else if (currentTier == ActiveTier::Sidebar) {
@@ -1597,11 +1584,11 @@ void AppTui::run() {
       modalBadge = text(" NOTES ") | bold | color(theme::Crust) | bgcolor(theme::Peach);
     }
 
-    std::string hint = "c/t/s/r/p Sort  │  n New  │  S Online  │  d Delete  │  ret Edit  │  y Copy  │  / Search  │  q Quit";
+    std::string hint = "c/t/s/r/p Sort  │  n New  │  d Delete  │  ret Edit  │  y Copy Name  │  / Search  │  q Quit";
     if (commandModeActive) {
       hint = "";
     } else if (currentTier == ActiveTier::RemoteSearchModal) {
-      hint = "ret Add/Search  │  Tab Switch Field  │  j/k Select  │  Esc Close";
+      hint = "ret Add/Search  │  Tab Switch Card  │  j/k Select  │  Esc Close";
     } else if (currentTier == ActiveTier::Search) {
       hint = "Type query  │  ret/Down Filter  │  Esc Clear & Back";
     } else if (currentTier == ActiveTier::Sidebar) {
@@ -1614,7 +1601,7 @@ void AppTui::run() {
 
     auto bottomCard = hbox({
       modalBadge,
-      text(" "),
+      text(" │ ") | color(theme::Surface0),
       commandModeActive
         ? (hbox({ text(":" + commandBuffer) | bold | color(theme::Yellow) }))
         : (hbox({ text(hint) | color(theme::Subtext) })),
@@ -1631,39 +1618,44 @@ void AppTui::run() {
     });
 
     if (currentTier == ActiveTier::RemoteSearchModal) {
-      Element resultsList = text("  No search executed yet. Type query above and press [ret].") | color(theme::Subtext) | center;
+      Element resultsList = text(" Type query above and press [ret] to query MyAnimeList.") | color(theme::Subtext) | center | flex;
       if (remoteLoading) {
-        resultsList = text("  Querying api.jikan.moe...") | bold | color(theme::Yellow) | center;
+        resultsList = text(" Querying AniList / MyAnimeList...") | bold | color(theme::Yellow) | center | flex;
       } else if (!remoteResults.empty()) {
         resultsList = remoteMenu->Render() | vscroll_indicator | frame | flex;
       } else if (!remoteStatusMsg.empty()) {
-        resultsList = text("  " + remoteStatusMsg) | color(theme::Red) | center;
+        resultsList = text(" " + remoteStatusMsg) | color(theme::Red) | center | flex;
       }
+
+      auto modalSearchCard = hbox({
+        text(" " + icon::Search + " ") | color(theme::Peach),
+        remoteSearchInput->Render() | flex,
+        text(" ")
+      }) | border | color(remoteSearchInput->Focused() ? theme::Peach : theme::Surface0)
+         | size(HEIGHT, EQUAL, 3);
+
+      auto modalPickerCard = vbox({
+        resultsList
+      }) | border | color(remoteMenu->Focused() ? theme::Mauve : theme::Surface0)
+         | size(HEIGHT, EQUAL, 14);
 
       auto modalWindow = vbox({
         hbox({
-          text(" 󰖟 Online Search (MyAnimeList) ") | bold | color(theme::Mauve),
+          text("  󰖟 Online Search & Add ") | bold | color(theme::Mauve),
           filler(),
           text(" [Esc] Close ") | color(theme::Subtext)
         }),
-        separator() | color(theme::Surface0),
+        text(""),
+        modalSearchCard,
+        text(""),
+        modalPickerCard,
         text(""),
         hbox({
-          text(" Query: ") | bold | color(theme::Peach),
-          remoteSearchInput->Render() | border | color(theme::Surface0) | flex,
-          text(" ")
-        }),
-        text(""),
-        vbox({
-          resultsList
-        }) | border | color(theme::Surface0) | size(HEIGHT, EQUAL, 12),
-        text(""),
-        hbox({
-          text(" [ret] Search/Add  │  [Tab] Switch Input/List  │  [j/k] Navigate  │  [Esc] Dismiss ") | color(theme::Subtext),
+          text(" [ret] Add/Search  │  [Tab] Switch Card  │  [j/k] Select  │  [Esc] Dismiss ") | color(theme::Subtext),
           filler()
         })
       }) | border | color(theme::Mauve)
-         | size(WIDTH, EQUAL, 80)
+         | size(WIDTH, EQUAL, 86)
          | clear_under
          | center;
 

@@ -3,6 +3,7 @@
 #include "catalist/malParser.hpp"
 #include "catalist/cli.hpp"
 #include "catalist/remoteSearch.hpp"
+#include "catalist/config.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -207,6 +208,19 @@ void testCliAnalyticsAndExport() {
   std::cout << "[PASS] CLI analytics and export tests passed." << std::endl;
 }
 
+void testCliConfigAndCompletions() {
+  std::cout << "[RUN ] Testing CLI config and shell completion generators..." << std::endl;
+  catalist::AppConfig config;
+
+  TEST_ASSERT(catalist::CliDispatcher::executeConfig({"list"}, config) == 0);
+  TEST_ASSERT(catalist::CliDispatcher::executeConfig({"get", "theme"}, config) == 0);
+  TEST_ASSERT(catalist::CliDispatcher::executeCompletion({"bash"}) == 0);
+  TEST_ASSERT(catalist::CliDispatcher::executeCompletion({"zsh"}) == 0);
+  TEST_ASSERT(catalist::CliDispatcher::executeCompletion({"fish"}) == 0);
+
+  std::cout << "[PASS] CLI config and completion tests passed." << std::endl;
+}
+
 int main() {
   std::cout << "========================================" << std::endl;
   std::cout << "   Catalist Headless Verification Suite  " << std::endl;
@@ -218,9 +232,10 @@ int main() {
   testCliParsers();
   testCliMutations();
   testCliAnalyticsAndExport();
+  testCliConfigAndCompletions();
 
   std::cout << "========================================" << std::endl;
-  std::cout << "   All automated tests passed (6/6)     " << std::endl;
+  std::cout << "   All automated tests passed (7/7)     " << std::endl;
   std::cout << "========================================" << std::endl;
   return 0;
 }

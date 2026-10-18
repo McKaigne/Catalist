@@ -1,6 +1,7 @@
 #include "catalist/cli.hpp"
 #include "catalist/malParser.hpp"
 #include "catalist/theme.hpp"
+#include "catalist/remoteSearch.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -184,6 +185,7 @@ void CliDispatcher::printUsage() {
             << "  show <id|title|->    Show detailed information for an entry\n"
             << "  count                Count matching entries\n"
             << "  random               Pick a random entry matching filters\n"
+            << "  search <query>       Search MyAnimeList online (yay-style interactive add)\n"
             << "  stats                Display watch and read telemetry\n\n"
             << "Mutation Commands:\n"
             << "  add <title> [flags]  Add a new anime or manga entry\n"
@@ -242,6 +244,7 @@ int CliDispatcher::dispatch(int argc, char* argv[], Database& db, AppConfig& con
   if (command == "stats") return executeStats(args, db);
   if (command == "export") return executeExport(args, db);
   if (command == "import") return executeImport(args, db);
+  if (command == "search" || command == "find") return executeSearch(args, db);
 
   emitError("usage", "unknown command '" + command + "'. Run 'catalist --help' for usage.", false);
   return 2;
@@ -1315,6 +1318,156 @@ int CliDispatcher::executeImport(const std::vector<std::string>& args, Database&
   }
 
   std::cout << "Import complete. " << totalImported << " total records loaded.\n";
+  return 0;
+}
+
+int CliDispatcher::executeSearch(const std::vector<std::string>& args, Database& db) {
+  if (args.empty()) {
+    emitError("usage", "usage: catalist search <query> [--type <anime|manga>] [--limit <N>]", false);
+    return 2;
+  }
+
+  std::string queryStr;
+  MediaType type = MediaType::Anime;
+  size_t limit = 10;
+  OutputFormat format = OutputFormat::Table;
+  bool jsonMode = false;
+
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == "--json") {
+      format = OutputFormat::Json;
+      jsonMode = true;
+    } else if (args[i] == "--plain") {
+      format = OutputFormat::Plain;
+    } else if (args[i] == "--type" || args[i] == "-t") {
+      if (++i < args.size()) {
+        std::string t = args[i];
+        std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+        if (t == "anime" || t == "a") type = MediaType::Anime;
+        else if (t == "manga" || t == "m") type = MediaType::Manga;
+      }
+    } else if (args[i] == "--limit" || args[i] == "-l") {
+      if (++i < args.size()) {
+        try { limit = std::clamp(std::stoi(args[i]), 1, 25); } catch (...) {}
+      }
+    } else if (queryStr.empty() && args[i].rfind("-", 0) != 0) {
+      queryStr = args[i];
+    }
+  }
+
+  if (queryStr.empty()) {
+    emitError("usage", "missing search query for 'catalist search <query>'.", jsonMode);
+    return 2;
+  }
+
+  std::string err;
+  auto results = RemoteSearchEngine::query(type, queryStr, err, limit);
+
+  if (results.empty()) {
+    emitError("notFound", err.empty() ? ("no results found for '" + queryStr + "'.") : err, jsonMode);
+    return 1;
+  }
+
+  if (format == OutputFormat::Plain) {
+    for (const auto& r : results) std::cout << r.title << "\n";
+    return 0;
+  }
+
+  if (format == OutputFormat::Json) {
+    std::cout << "[\n";
+    for (size_t i = 0; i < results.size(); ++i) {
+      const auto& r = results[i];
+      std::cout << "  {"
+                << "\"malId\":" << r.malId << ","
+                << "\"title\":\"" << escapeJsonString(r.title) << "\","
+                << "\"type\":\"" << (r.type == MediaType::Anime ? "anime" : "manga") << "\","
+                << "\"episodes\":" << r.totalUnits << ","
+                << "\"year\":\"" << r.year << "\","
+                << "\"score\":" << r.score << "}"
+                << (i + 1 < results.size() ? "," : "") << "\n";
+    }
+    std::cout << "]\n";
+    return 0;
+  }
+
+  bool color = shouldColor();
+  std::cout << "\n";
+  if (color) std::cout << ansi::Bold << ansi::Mauve;
+  std::cout << "  #  " << std::left << std::setw(38) << "TITLE" << "  "
+            << std::setw(7) << "TYPE" << "  "
+            << std::setw(9) << "EPISODES" << "  "
+            << std::setw(6) << "YEAR" << "  "
+            << std::setw(6) << "SCORE" << "  "
+            << "MAL ID\n";
+  if (color) std::cout << ansi::Reset << ansi::Dim << ansi::Subtext;
+  std::cout << " --  " << std::string(38, '-') << "  "
+            << std::string(7, '-') << "  "
+            << std::string(9, '-') << "  "
+            << std::string(6, '-') << "  "
+            << std::string(6, '-') << "  "
+            << "------\n";
+  if (color) std::cout << ansi::Reset;
+
+  for (size_t i = 0; i < results.size(); ++i) {
+    const auto& r = results[i];
+    std::string tDisplay = r.title;
+    if (tDisplay.size() > 36) tDisplay = tDisplay.substr(0, 33) + "...";
+    std::string epStr = (r.totalUnits > 0 ? (std::to_string(r.totalUnits) + " eps") : "ongoing");
+
+    std::cout << " " << std::right << std::setw(2) << (i + 1) << "  "
+              << std::left << std::setw(38) << tDisplay << "  "
+              << std::setw(7) << (r.type == MediaType::Anime ? "anime" : "manga") << "  "
+              << std::setw(9) << epStr << "  "
+              << std::setw(6) << (r.year.empty() ? "-" : r.year) << "  "
+              << std::setw(6) << std::fixed << std::setprecision(2) << r.score << "  "
+              << r.malId << "\n";
+  }
+
+  if (!IS_TTY()) return 0;
+
+  std::cout << "\nSelect number to add [1-" << results.size() << ", or 'q' to quit]: " << std::flush;
+  std::string choice;
+  if (!std::getline(std::cin, choice) || choice == "q" || choice == "Q" || choice.empty()) {
+    std::cout << "Canceled.\n";
+    return 0;
+  }
+
+  int pick = 0;
+  try { pick = std::stoi(choice); } catch (...) { return 0; }
+  if (pick < 1 || pick > static_cast<int>(results.size())) {
+    std::cout << "Invalid selection.\n";
+    return 1;
+  }
+
+  const auto& selected = results[pick - 1];
+
+  std::cout << "Select status [1: Watching, 2: Completed, 3: Plan to Watch] (default: 1): " << std::flush;
+  std::string stChoice;
+  WatchStatus st = WatchStatus::Watching;
+  if (std::getline(std::cin, stChoice) && !stChoice.empty()) {
+    if (stChoice == "2") st = WatchStatus::Completed;
+    else if (stChoice == "3") st = WatchStatus::PlanToWatch;
+  }
+
+  Entry e;
+  e.id = selected.malId;
+  e.malId = selected.malId;
+  e.type = selected.type;
+  e.title = selected.title;
+  e.status = st;
+  e.score = 0;
+  e.progress = (st == WatchStatus::Completed) ? selected.totalUnits : 0;
+  e.totalUnits = selected.totalUnits;
+  e.startDate = selected.year.empty() ? "0000-00-00" : (selected.year + "-01-01");
+
+  db.addEntry(e);
+  db.saveAll();
+
+  if (color) std::cout << ansi::Green << ansi::Bold;
+  std::cout << "Added " << (e.type == MediaType::Anime ? "anime" : "manga")
+            << " '" << e.title << "' [MAL ID " << e.malId << "] to watchlist.\n";
+  if (color) std::cout << ansi::Reset;
+
   return 0;
 }
 

@@ -20,6 +20,7 @@ enum class SortKey {
 class Database {
 public:
   Database();
+  explicit Database(std::filesystem::path configDir);
 
   int addEntry(Entry entry);
   const std::vector<Entry>& getEntries(MediaType type) const;
@@ -44,7 +45,9 @@ public:
   double daysSpent(MediaType type) const;
   double completedPercentage(MediaType type) const;
 
+  static std::filesystem::path getDefaultConfigDir();
   static std::filesystem::path getConfigDir();
+  std::filesystem::path getConfigPath() const;
   std::filesystem::path getCsvPath(MediaType type) const;
   std::filesystem::path getBackupDir() const;
 
@@ -58,6 +61,7 @@ public:
   void seedDefaults();
 
 private:
+  std::filesystem::path configDir_;
   std::vector<Entry> animeEntries_;
   std::vector<Entry> mangaEntries_;
   int nextLocalId_ = 10001;

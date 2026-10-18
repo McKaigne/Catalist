@@ -2,6 +2,7 @@
 #include "catalist/theme.hpp"
 #include "catalist/malParser.hpp"
 #include "catalist/sync.hpp"
+#include "catalist/remoteSearch.hpp"
 
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/screen.hpp>
@@ -61,7 +62,6 @@ static std::string formatSimpleDate(const std::string& dateStr) {
   return padded;
 }
 
-// Case-insensitive substring match highlighter
 static Element highlightMatches(const std::string& textStr, const std::string& query, bool isRowActive) {
   if (query.empty()) {
     auto el = text(textStr) | color(theme::Text);
@@ -130,6 +130,13 @@ void AppTui::run() {
   int pendingDeleteId = 0;
   bool commandModeActive = false;
 
+  std::string remoteSearchQuery = "";
+  std::vector<RemoteSearchResult> remoteResults;
+  std::vector<std::string> remoteResultLabels;
+  int remoteSelected = 0;
+  bool remoteLoading = false;
+  std::string remoteStatusMsg = "";
+
   int marqueeEntryId = -1;
   auto marqueeStartTime = std::chrono::steady_clock::now();
 
@@ -137,15 +144,14 @@ void AppTui::run() {
   std::vector<std::string> catalogIndexLabels;
   std::vector<Entry> displayedEntries;
 
-  // Screen coordinate reflection boxes
   Box tabAnimeBox, tabMangaBox, tabOverviewBox;
   Box headerDateBox, headerTitleBox, headerStatusBox, headerRatingBox, headerProgressBox;
-  Box searchBarBox, newEntryBtnBox;
+  Box searchBarBox, newEntryBtnBox, onlineSearchBtnBox;
   Box sidebarCardBox, catalogCardBox, detailCardBox;
   std::vector<Box> rowBoxes;
   std::vector<Box> sidebarBoxes;
+  std::vector<Box> modalResultBoxes;
 
-  // Detail card interactive reflection boxes
   Box detailsTitleBox, detailsIdBox, detailsMalIdBox, detailsDeleteBox;
   Box detailsStatusBox, detailsRatingBox;
   Box detailsProgressMinusBox, detailsProgressPlusBox, detailsProgressGaugeBox;
@@ -161,18 +167,13 @@ void AppTui::run() {
     if (str.empty()) return;
 
     FILE* pipe = popen("wl-copy 2>/dev/null", "w");
-    if (!pipe) {
-      pipe = popen("xclip -selection clipboard 2>/dev/null", "w");
-    }
-    if (!pipe) {
-      pipe = popen("pbcopy 2>/dev/null", "w");
-    }
+    if (!pipe) pipe = popen("xclip -selection clipboard 2>/dev/null", "w");
+    if (!pipe) pipe = popen("pbcopy 2>/dev/null", "w");
     if (pipe) {
       fwrite(str.data(), 1, str.size(), pipe);
       pclose(pipe);
     }
 
-    // ANSI OSC 52 fallback for Wayland terminal emulators (Ghostty)
     static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::string b64 = "";
     int val = 0, valb = -6;
@@ -364,6 +365,28 @@ void AppTui::run() {
     statusMessage = "Created new entry. [h/l/j/k] to edit, [ret] for notes/title.";
   };
 
+  auto executeRemoteSearch = [&]() {
+    if (remoteSearchQuery.empty()) return;
+    remoteLoading = true;
+    remoteStatusMsg = "Querying api.jikan.moe...";
+    MediaType media = (currentTab == ViewTab::Manga) ? MediaType::Manga : MediaType::Anime;
+    std::string err;
+    remoteResults = RemoteSearchEngine::query(media, remoteSearchQuery, err, 10);
+    remoteLoading = false;
+
+    remoteResultLabels.clear();
+    modalResultBoxes.assign(remoteResults.size(), Box{});
+    for (size_t i = 0; i < remoteResults.size(); ++i) {
+      remoteResultLabels.push_back(std::to_string(i));
+    }
+    remoteSelected = 0;
+    if (remoteResults.empty()) {
+      remoteStatusMsg = err.empty() ? "No results found." : err;
+    } else {
+      remoteStatusMsg = std::to_string(remoteResults.size()) + " matches from MyAnimeList.";
+    }
+  };
+
   MenuOption sidebarOpt;
   sidebarOpt.on_change = [&]() {
     refreshViews();
@@ -420,6 +443,7 @@ void AppTui::run() {
     return el;
   };
   auto searchInput = Input(&searchQuery, "Click or press '/' to search title...", searchOpt);
+  auto remoteSearchInput = Input(&remoteSearchQuery, "Type title and press [ret]...", searchOpt);
 
   MenuOption catalogOpt;
   catalogOpt.entries_option.transform = [&](const EntryState& state) {
@@ -463,7 +487,6 @@ void AppTui::run() {
       displayTitle = clipTitle(e.title, 26, 0);
     }
 
-    // Dynamic case-insensitive substring highlighting in Title
     auto titleElement = hbox({
       text(" " + typeToIcon(e.type) + " "),
       highlightMatches(displayTitle, searchQuery, isRowActive)
@@ -496,7 +519,6 @@ void AppTui::run() {
     });
 
     if (isRowActive) {
-      // | focus tells FTXUI's frame to follow and scroll the active row
       row = row | bgcolor(theme::Surface0) | focus;
     }
 
@@ -506,7 +528,32 @@ void AppTui::run() {
     return row;
   };
 
+  MenuOption remoteMenuOpt;
+  remoteMenuOpt.entries_option.transform = [&](const EntryState& state) {
+    int idx = 0;
+    try { idx = std::stoi(state.label); } catch (...) { return text(""); }
+    if (idx < 0 || idx >= static_cast<int>(remoteResults.size())) return text("");
+    const auto& r = remoteResults[idx];
+    bool active = (idx == remoteSelected);
+
+    std::string unitStr = (r.totalUnits > 0 ? (std::to_string(r.totalUnits) + " eps") : "ongoing");
+    auto row = hbox({
+      text(active ? " ▌ " : "   ") | color(theme::Mauve) | bold,
+      text("[" + std::to_string(idx + 1) + "] ") | bold | color(theme::Peach),
+      text(r.title) | bold | color(theme::Text) | flex,
+      text("  " + (r.year.empty() ? "" : (r.year + " • ")) + unitStr + " • ★ " + std::to_string(r.score).substr(0, 4) + " ") | color(theme::Subtext),
+      text("[MAL " + std::to_string(r.malId) + "] ") | color(theme::Overlay0)
+    });
+
+    if (active) row = row | bgcolor(theme::Surface0) | focus;
+    if (idx >= 0 && idx < static_cast<int>(modalResultBoxes.size())) {
+      row = row | reflect(modalResultBoxes[idx]);
+    }
+    return row;
+  };
+
   auto catalogMenu = Menu(&catalogIndexLabels, &catalogSelected, catalogOpt);
+  auto remoteMenu = Menu(&remoteResultLabels, &remoteSelected, remoteMenuOpt);
   auto inspectorTitleInput = Input(&inspectorTitleBuffer, "Title...");
   auto inspectorNotesInput = Input(&inspectorNotesBuffer, "Write notes here...");
 
@@ -520,10 +567,16 @@ void AppTui::run() {
     inspectorNotesInput
   });
 
+  auto modalContainer = Container::Vertical({
+    remoteSearchInput,
+    remoteMenu
+  });
+
   auto mainContainer = Container::Horizontal({
     sidebarMenu,
     catalogContainer,
-    inspectorContainer
+    inspectorContainer,
+    modalContainer
   });
 
   auto mutateEditField = [&](Entry& e, int dir) {
@@ -574,6 +627,13 @@ void AppTui::run() {
       screen.ExitLoopClosure()();
     } else if (verb == "new" || verb == "add") {
       createNewEntry();
+    } else if (verb == "search" || verb == "online") {
+      std::string q;
+      std::getline(ss, q);
+      q.erase(0, q.find_first_not_of(" \t"));
+      remoteSearchQuery = q;
+      currentTier = ActiveTier::RemoteSearchModal;
+      if (!remoteSearchQuery.empty()) executeRemoteSearch();
     } else if (verb == "undo" || verb == "u") {
       performUndo();
       refreshViews();
@@ -618,13 +678,100 @@ void AppTui::run() {
       return true;
     }
 
-    // Comprehensive Mouse Event Interactivity
+    if (currentTier == ActiveTier::RemoteSearchModal) {
+      if (event == Event::Escape) {
+        currentTier = ActiveTier::Catalog;
+        catalogMenu->TakeFocus();
+        statusMessage = "Closed online search.";
+        return true;
+      }
+      if (event == Event::Tab) {
+        if (remoteSearchInput->Focused()) remoteMenu->TakeFocus();
+        else remoteSearchInput->TakeFocus();
+        return true;
+      }
+      if (event == Event::Return) {
+        if (remoteSearchInput->Focused()) {
+          executeRemoteSearch();
+          remoteMenu->TakeFocus();
+          return true;
+        }
+        if (remoteMenu->Focused() && !remoteResults.empty() && remoteSelected >= 0 && remoteSelected < static_cast<int>(remoteResults.size())) {
+          const auto& sel = remoteResults[remoteSelected];
+          Entry e;
+          e.id = sel.malId;
+          e.malId = sel.malId;
+          e.type = sel.type;
+          e.title = sel.title;
+          e.status = WatchStatus::Watching;
+          e.score = 0;
+          e.progress = 0;
+          e.totalUnits = sel.totalUnits;
+          e.startDate = sel.year.empty() ? "0000-00-00" : (sel.year + "-01-01");
+          db_.addEntry(e);
+          recordAction(HistoryAction::Add, e.type, Entry{}, e);
+          db_.saveAll();
+          refreshViews();
+          currentTier = ActiveTier::Catalog;
+          catalogMenu->TakeFocus();
+          statusMessage = "Added '" + e.title + "' [MAL ID " + std::to_string(e.malId) + "]!";
+          return true;
+        }
+      }
+
+      if (event.is_mouse()) {
+        auto mouse = event.mouse();
+        if (mouse.button == Mouse::Left && mouse.motion == Mouse::Pressed) {
+          for (size_t i = 0; i < remoteResults.size() && i < modalResultBoxes.size(); ++i) {
+            if (boxContains(modalResultBoxes[i], mouse.x, mouse.y)) {
+              remoteSelected = static_cast<int>(i);
+              const auto& sel = remoteResults[i];
+              Entry e;
+              e.id = sel.malId;
+              e.malId = sel.malId;
+              e.type = sel.type;
+              e.title = sel.title;
+              e.status = WatchStatus::Watching;
+              e.score = 0;
+              e.progress = 0;
+              e.totalUnits = sel.totalUnits;
+              e.startDate = sel.year.empty() ? "0000-00-00" : (sel.year + "-01-01");
+              db_.addEntry(e);
+              recordAction(HistoryAction::Add, e.type, Entry{}, e);
+              db_.saveAll();
+              refreshViews();
+              currentTier = ActiveTier::Catalog;
+              catalogMenu->TakeFocus();
+              statusMessage = "Added '" + e.title + "' [MAL ID " + std::to_string(e.malId) + "]!";
+              return true;
+            }
+          }
+        }
+      }
+
+      if (remoteSearchInput->Focused()) {
+        remoteSearchInput->OnEvent(event);
+        return true;
+      }
+      if (remoteMenu->Focused()) {
+        if (event == Event::Character('j') || event == Event::ArrowDown) {
+          if (!remoteResults.empty() && remoteSelected < static_cast<int>(remoteResults.size()) - 1) remoteSelected++;
+          return true;
+        }
+        if (event == Event::Character('k') || event == Event::ArrowUp) {
+          if (remoteSelected > 0) remoteSelected--;
+          return true;
+        }
+        return true;
+      }
+      return true;
+    }
+
     if (event.is_mouse()) {
       auto mouse = event.mouse();
       int mx = mouse.x;
       int my = mouse.y;
 
-      // Mouse Wheel Scrolling
       if (mouse.button == Mouse::WheelUp) {
         if (boxContains(sidebarCardBox, mx, my)) {
           if (sidebarSelected > 0) {
@@ -659,7 +806,6 @@ void AppTui::run() {
       }
 
       if (mouse.button == Mouse::Left && mouse.motion == Mouse::Pressed) {
-        // Tab switching
         if (boxContains(tabAnimeBox, mx, my)) {
           currentTab = ViewTab::Anime;
           catalogSelected = 0;
@@ -678,7 +824,13 @@ void AppTui::run() {
           return true;
         }
 
-        // Search card & [+ New] button
+        if (boxContains(onlineSearchBtnBox, mx, my)) {
+          currentTier = ActiveTier::RemoteSearchModal;
+          remoteSearchQuery = searchQuery;
+          remoteSearchInput->TakeFocus();
+          if (!remoteSearchQuery.empty()) executeRemoteSearch();
+          return true;
+        }
         if (boxContains(newEntryBtnBox, mx, my)) {
           createNewEntry();
           return true;
@@ -690,7 +842,6 @@ void AppTui::run() {
           return true;
         }
 
-        // Header column sort triggers (in chronological ribbon order)
         if (boxContains(headerDateBox, mx, my)) {
           if (currentSort == SortKey::Date) reverseSort = !reverseSort;
           else { currentSort = SortKey::Date; reverseSort = false; }
@@ -727,7 +878,6 @@ void AppTui::run() {
           return true;
         }
 
-        // Sidebar categories and star rating clicks
         for (size_t i = 0; i < sidebarLabels.size() && i < sidebarBoxes.size(); ++i) {
           if (boxContains(sidebarBoxes[i], mx, my)) {
             if (i == 6) return true;
@@ -740,18 +890,14 @@ void AppTui::run() {
           }
         }
 
-        // Interactive Detail Card Clicks
         if (!displayedEntries.empty() && catalogSelected >= 0 && catalogSelected < static_cast<int>(displayedEntries.size())) {
           auto& e = displayedEntries[catalogSelected];
 
-          // 1. Delete button
           if (boxContains(detailsDeleteBox, mx, my)) {
             pendingDeleteId = e.id;
             statusMessage = "Delete '" + e.title + "'? Confirm [y/N]";
             return true;
           }
-
-          // 2. Progress buttons [-] and [+]
           if (boxContains(detailsProgressMinusBox, mx, my)) {
             mutateEditField(e, -1);
             return true;
@@ -760,8 +906,6 @@ void AppTui::run() {
             mutateEditField(e, 1);
             return true;
           }
-
-          // 3. Direct scrub on progress gauge
           if (boxContains(detailsProgressGaugeBox, mx, my) && e.totalUnits > 0) {
             int gw = detailsProgressGaugeBox.x_max - detailsProgressGaugeBox.x_min;
             if (gw > 0) {
@@ -777,8 +921,6 @@ void AppTui::run() {
               return true;
             }
           }
-
-          // 4. Clickable Star Rating Cluster
           if (boxContains(detailsRatingBox, mx, my)) {
             int relX = mx - detailsRatingBox.x_min - 9;
             int clickedScore = std::clamp((relX / 2 + 1) * 2, 0, 10);
@@ -792,15 +934,11 @@ void AppTui::run() {
             statusMessage = "Rating set to " + std::to_string(e.score) + "/10";
             return true;
           }
-
-          // 5. Click Status Badge to cycle
           if (boxContains(detailsStatusBox, mx, my)) {
             activeCellField = EditField::Status;
             mutateEditField(e, 1);
             return true;
           }
-
-          // 6. Click Title or Notes field to edit in Inspector
           if (boxContains(detailsTitleBox, mx, my) || boxContains(detailsNotesBox, mx, my)) {
             inspectorTitleBuffer = e.title;
             inspectorNotesBuffer = e.notes;
@@ -813,8 +951,6 @@ void AppTui::run() {
             statusMessage = "Editing details. [ret] to commit.";
             return true;
           }
-
-          // 7. Copy on click for metadata fields
           if (boxContains(detailsIdBox, mx, my) || boxContains(detailsMalIdBox, mx, my)) {
             copyToClipboard(std::to_string(e.malId > 0 ? e.malId : e.id));
             return true;
@@ -827,8 +963,6 @@ void AppTui::run() {
             copyToClipboard(e.finishDate);
             return true;
           }
-
-          // 8. General click anywhere on detailCard copies title to clipboard
           if (boxContains(detailCardBox, mx, my)) {
             copyToClipboard(e.title);
             return true;
@@ -836,7 +970,6 @@ void AppTui::run() {
         }
       }
 
-      // Auto-highlight entry on hover (restricted strictly to mouse MOTION to avoid clobbering wheel)
       if (mouse.button == Mouse::None && currentTier == ActiveTier::Catalog) {
         for (int i = 0; i < static_cast<int>(displayedEntries.size()) && i < static_cast<int>(rowBoxes.size()); ++i) {
           if (boxContains(rowBoxes[i], mx, my)) {
@@ -871,7 +1004,6 @@ void AppTui::run() {
       }
     }
 
-    // SEARCH BAR ISOLATION: Highest priority, zero hotkey leakage
     if (currentTier == ActiveTier::Search || searchInput->Focused()) {
       if (event == Event::Escape) {
         searchQuery = "";
@@ -893,7 +1025,6 @@ void AppTui::run() {
       return true;
     }
 
-    // COMMAND Mode
     if (commandModeActive) {
       if (event == Event::Escape) {
         commandModeActive = false;
@@ -918,7 +1049,6 @@ void AppTui::run() {
       return true;
     }
 
-    // Undo / Redo
     if (event == Event::Special("\x1a") || event == Event::Character('u')) {
       if (currentTier == ActiveTier::Catalog) {
         performUndo();
@@ -934,7 +1064,6 @@ void AppTui::run() {
       }
     }
 
-    // Inspector Note & Title Editor
     if (currentTier == ActiveTier::Inspector) {
       if (event == Event::Tab || (event == Event::Return && inspectorTitleInput->Focused())) {
         inspectorNotesInput->TakeFocus();
@@ -964,7 +1093,6 @@ void AppTui::run() {
       return true;
     }
 
-    // Tier 3: Cell Edit Mode
     if (currentTier == ActiveTier::CellEdit) {
       if (!displayedEntries.empty()) {
         auto& e = displayedEntries[catalogSelected];
@@ -1010,7 +1138,6 @@ void AppTui::run() {
       return false;
     }
 
-    // Catalog & Sidebar Normal Navigation
     if (currentTier == ActiveTier::Catalog || currentTier == ActiveTier::Sidebar) {
       if (event == Event::Character('q')) {
         db_.saveAll();
@@ -1024,7 +1151,6 @@ void AppTui::run() {
         return true;
       }
 
-      // Catalog Sorting Hotkeys: Ordered chronologically as [c, t, s, r, p]
       if (currentTier == ActiveTier::Catalog) {
         if (event == Event::Character('c')) {
           if (currentSort == SortKey::Date) reverseSort = !reverseSort;
@@ -1062,20 +1188,25 @@ void AppTui::run() {
           return true;
         }
 
-        // Add / New Entry
         if (event == Event::Character('n') || event == Event::Character('a')) {
           createNewEntry();
           return true;
         }
 
-        // Delete Entry
+        if (event == Event::Character('S') || event == Event::Special("\x0f")) {
+          currentTier = ActiveTier::RemoteSearchModal;
+          remoteSearchQuery = searchQuery;
+          remoteSearchInput->TakeFocus();
+          if (!remoteSearchQuery.empty()) executeRemoteSearch();
+          return true;
+        }
+
         if (event == Event::Character('d') && !displayedEntries.empty()) {
           pendingDeleteId = displayedEntries[catalogSelected].id;
           statusMessage = "Delete '" + displayedEntries[catalogSelected].title + "'? Confirm [y/N]";
           return true;
         }
 
-        // QoL Clipboard Copying Binds
         if (event == Event::Character('y') || event == Event::Character('Y')) {
           if (!displayedEntries.empty()) {
             copyToClipboard(displayedEntries[catalogSelected].title);
@@ -1096,7 +1227,6 @@ void AppTui::run() {
         return true;
       }
 
-      // Tab Switching
       if (event == Event::Tab) {
         if (currentTab == ViewTab::Anime) currentTab = ViewTab::Manga;
         else if (currentTab == ViewTab::Manga) currentTab = ViewTab::Overview;
@@ -1115,7 +1245,6 @@ void AppTui::run() {
       if (event == Event::Character('2')) { currentTab = ViewTab::Manga; catalogSelected = 0; refreshViews(); return true; }
       if (event == Event::Character('3')) { currentTab = ViewTab::Overview; return true; }
 
-      // Drill-Down Controls
       if (currentTier == ActiveTier::Sidebar) {
         if (event == Event::Return) {
           catalogMenu->TakeFocus();
@@ -1137,7 +1266,6 @@ void AppTui::run() {
           return true;
         }
 
-        // Navigation Clamping & Smooth Scrolling
         if (event == Event::Character('j') || event == Event::ArrowDown) {
           if (!displayedEntries.empty() && catalogSelected < static_cast<int>(displayedEntries.size()) - 1) {
             catalogSelected++;
@@ -1406,6 +1534,8 @@ void AppTui::run() {
         text(" "),
         text("[+ New]") | bold | color(theme::Green) | reflect(newEntryBtnBox),
         text(" "),
+        text("[󰖟 Online]") | bold | color(theme::Blue) | reflect(onlineSearchBtnBox),
+        text(" "),
         text(searchQuery.empty() ? "All entries " : ("Filter: '" + searchQuery + "' ")) | color(theme::Subtext),
         text(" ")
       }) | border | color((currentTier == ActiveTier::Search || searchInput->Focused()) ? theme::Peach : theme::Surface0)
@@ -1452,6 +1582,8 @@ void AppTui::run() {
     Element modalBadge = text(" BROWSE ") | bold | color(theme::Crust) | bgcolor(theme::Mauve);
     if (commandModeActive) {
       modalBadge = text(" COMMAND ") | bold | color(theme::Crust) | bgcolor(theme::Yellow);
+    } else if (currentTier == ActiveTier::RemoteSearchModal) {
+      modalBadge = text(" ONLINE SEARCH ") | bold | color(theme::Crust) | bgcolor(theme::Blue);
     } else if (currentTier == ActiveTier::Search) {
       modalBadge = text(" SEARCH ") | bold | color(theme::Crust) | bgcolor(theme::Peach);
     } else if (currentTier == ActiveTier::Sidebar) {
@@ -1465,9 +1597,11 @@ void AppTui::run() {
       modalBadge = text(" NOTES ") | bold | color(theme::Crust) | bgcolor(theme::Peach);
     }
 
-    std::string hint = "c/t/s/r/p Sort  │  n New  │  d Delete  │  ret Edit  │  y Copy  │  / Search  │  q Quit";
+    std::string hint = "c/t/s/r/p Sort  │  n New  │  S Online  │  d Delete  │  ret Edit  │  y Copy  │  / Search  │  q Quit";
     if (commandModeActive) {
       hint = "";
+    } else if (currentTier == ActiveTier::RemoteSearchModal) {
+      hint = "ret Add/Search  │  Tab Switch Field  │  j/k Select  │  Esc Close";
     } else if (currentTier == ActiveTier::Search) {
       hint = "Type query  │  ret/Down Filter  │  Esc Clear & Back";
     } else if (currentTier == ActiveTier::Sidebar) {
@@ -1490,11 +1624,56 @@ void AppTui::run() {
     }) | border | color(theme::Surface0)
        | size(HEIGHT, EQUAL, 3);
 
-    return vbox({
+    auto baseUi = vbox({
       topCard,
       contentPane | flex,
       bottomCard
     });
+
+    if (currentTier == ActiveTier::RemoteSearchModal) {
+      Element resultsList = text("  No search executed yet. Type query above and press [ret].") | color(theme::Subtext) | center;
+      if (remoteLoading) {
+        resultsList = text("  Querying api.jikan.moe...") | bold | color(theme::Yellow) | center;
+      } else if (!remoteResults.empty()) {
+        resultsList = remoteMenu->Render() | vscroll_indicator | frame | flex;
+      } else if (!remoteStatusMsg.empty()) {
+        resultsList = text("  " + remoteStatusMsg) | color(theme::Red) | center;
+      }
+
+      auto modalWindow = vbox({
+        hbox({
+          text(" 󰖟 Online Search (MyAnimeList) ") | bold | color(theme::Mauve),
+          filler(),
+          text(" [Esc] Close ") | color(theme::Subtext)
+        }),
+        separator() | color(theme::Surface0),
+        text(""),
+        hbox({
+          text(" Query: ") | bold | color(theme::Peach),
+          remoteSearchInput->Render() | border | color(theme::Surface0) | flex,
+          text(" ")
+        }),
+        text(""),
+        vbox({
+          resultsList
+        }) | border | color(theme::Surface0) | size(HEIGHT, EQUAL, 12),
+        text(""),
+        hbox({
+          text(" [ret] Search/Add  │  [Tab] Switch Input/List  │  [j/k] Navigate  │  [Esc] Dismiss ") | color(theme::Subtext),
+          filler()
+        })
+      }) | border | color(theme::Mauve)
+         | size(WIDTH, EQUAL, 80)
+         | clear_under
+         | center;
+
+      return dbox({
+        baseUi,
+        modalWindow
+      });
+    }
+
+    return baseUi;
   });
 
   std::atomic<bool> appRunning{true};

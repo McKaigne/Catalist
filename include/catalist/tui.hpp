@@ -18,7 +18,8 @@ enum class ActiveTier {
   Catalog,
   CellEdit,
   Inspector,
-  Search
+  Search,
+  RemoteSearchModal
 };
 
 enum class EditField {

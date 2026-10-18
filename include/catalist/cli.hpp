@@ -2,6 +2,7 @@
 
 #include "catalist/database.hpp"
 #include "catalist/config.hpp"
+#include "catalist/remoteSearch.hpp"
 #include <string>
 #include <vector>
 #include <optional>
@@ -50,6 +51,7 @@ public:
   static int executeStats(const std::vector<std::string>& args, const Database& db);
   static int executeExport(const std::vector<std::string>& args, const Database& db);
   static int executeImport(const std::vector<std::string>& args, Database& db);
+  static int executeSearch(const std::vector<std::string>& args, Database& db);
 };
 
 } // namespace catalist

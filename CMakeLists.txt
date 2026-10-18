@@ -24,6 +24,7 @@ add_executable(catalist
   src/malParser.cpp
   src/sync.cpp
   src/cli.cpp
+  src/remoteSearch.cpp
   src/tui.cpp
   src/main.cpp
 )
@@ -45,6 +46,7 @@ add_executable(catalist_tests
   src/malParser.cpp
   src/sync.cpp
   src/cli.cpp
+  src/remoteSearch.cpp
 )
 
 target_link_libraries(catalist_tests PRIVATE

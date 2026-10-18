@@ -2,6 +2,7 @@
 #include "catalist/entry.hpp"
 #include "catalist/malParser.hpp"
 #include "catalist/cli.hpp"
+#include "catalist/remoteSearch.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -17,11 +18,17 @@
     } \
   } while (0)
 
+static std::filesystem::path getTestSandbox() {
+  auto p = std::filesystem::temp_directory_path() / "catalist_test_sandbox";
+  std::filesystem::create_directories(p);
+  return p;
+}
+
 void testCsvMultilineRoundTrip() {
   std::cout << "[RUN ] Testing RFC 4180 multiline CSV integrity..." << std::endl;
-  catalist::Database db;
+  catalist::Database db(getTestSandbox());
 
-  std::filesystem::path tempCsv = std::filesystem::temp_directory_path() / "catalist_test_multiline.csv";
+  std::filesystem::path tempCsv = getTestSandbox() / "test_multiline.csv";
 
   catalist::Entry original;
   original.id = 9901;
@@ -40,7 +47,7 @@ void testCsvMultilineRoundTrip() {
   bool saved = db.saveCsv(catalist::MediaType::Anime, tempCsv);
   TEST_ASSERT(saved);
 
-  catalist::Database reloadedDb;
+  catalist::Database reloadedDb(getTestSandbox());
   bool loaded = reloadedDb.loadCsv(catalist::MediaType::Anime, tempCsv);
   TEST_ASSERT(loaded);
 
@@ -61,7 +68,7 @@ void testCsvMultilineRoundTrip() {
 
 void testMalXmlIngestion() {
   std::cout << "[RUN ] Testing MAL XML ingestion with CDATA..." << std::endl;
-  std::filesystem::path tempXml = std::filesystem::temp_directory_path() / "catalist_test_mal.xml";
+  std::filesystem::path tempXml = getTestSandbox() / "test_mal.xml";
 
   std::ofstream xmlFile(tempXml);
   xmlFile << "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n"
@@ -80,7 +87,7 @@ void testMalXmlIngestion() {
           << "</myanimelist>\n";
   xmlFile.close();
 
-  catalist::Database db;
+  catalist::Database db(getTestSandbox());
   size_t imported = catalist::MalParser::importXml(tempXml.string(), db, true);
   TEST_ASSERT(imported == 1);
 
@@ -99,7 +106,7 @@ void testMalXmlIngestion() {
 
 void testSortAndFilter() {
   std::cout << "[RUN ] Testing Database sorting and filtering..." << std::endl;
-  catalist::Database db;
+  catalist::Database db(getTestSandbox());
   db.seedDefaults();
 
   auto byDate = db.filterEntries(catalist::MediaType::Anime, std::nullopt, -1, "", catalist::SortKey::Date, false);
@@ -141,7 +148,7 @@ void testCliParsers() {
 
 void testCliMutations() {
   std::cout << "[RUN ] Testing CLI mutations (add, set with stepping, rm)..." << std::endl;
-  catalist::Database db;
+  catalist::Database db(getTestSandbox());
 
   std::vector<std::string> addArgs = {
     "Dungeon Meshi", "-t", "anime", "-s", "watching", "-e", "24", "-p", "10", "-r", "9"
@@ -188,18 +195,13 @@ void testCliMutations() {
 
 void testCliAnalyticsAndExport() {
   std::cout << "[RUN ] Testing CLI analytics (stats) and export (json, csv)..." << std::endl;
-  catalist::Database db;
+  catalist::Database db(getTestSandbox());
   db.seedDefaults();
 
-  // Test stats JSON
   TEST_ASSERT(catalist::CliDispatcher::executeStats({"--json"}, db) == 0);
   TEST_ASSERT(catalist::CliDispatcher::executeStats({"--type", "anime", "--json"}, db) == 0);
-
-  // Test export JSON
   TEST_ASSERT(catalist::CliDispatcher::executeExport({"json"}, db) == 0);
   TEST_ASSERT(catalist::CliDispatcher::executeExport({"json", "--type", "anime"}, db) == 0);
-
-  // Test export CSV
   TEST_ASSERT(catalist::CliDispatcher::executeExport({"csv"}, db) == 0);
 
   std::cout << "[PASS] CLI analytics and export tests passed." << std::endl;

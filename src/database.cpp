@@ -8,7 +8,32 @@
 
 namespace catalist {
 
-Database::Database() = default;
+std::filesystem::path Database::getDefaultConfigDir() {
+  const char* custom = std::getenv("CATALIST_DATA_DIR");
+  if (custom && *custom) return std::filesystem::path(custom);
+
+  const char* xdg = std::getenv("XDG_CONFIG_HOME");
+  if (xdg && *xdg) return std::filesystem::path(xdg) / "catalist";
+
+  const char* home = std::getenv("HOME");
+  if (home && *home) return std::filesystem::path(home) / ".config" / "catalist";
+
+  const char* appdata = std::getenv("APPDATA");
+  if (appdata && *appdata) return std::filesystem::path(appdata) / "catalist";
+
+  return std::filesystem::path("./config");
+}
+
+std::filesystem::path Database::getConfigDir() {
+  return getDefaultConfigDir();
+}
+
+Database::Database() : configDir_(getDefaultConfigDir()) {}
+Database::Database(std::filesystem::path configDir) : configDir_(std::move(configDir)) {}
+
+std::filesystem::path Database::getConfigPath() const {
+  return configDir_;
+}
 
 std::vector<Entry>& Database::getList(MediaType type) {
   return (type == MediaType::Anime) ? animeEntries_ : mangaEntries_;
@@ -196,25 +221,12 @@ double Database::completedPercentage(MediaType type) const {
   return (static_cast<double>(countByStatus(type, WatchStatus::Completed)) / list.size()) * 100.0;
 }
 
-std::filesystem::path Database::getConfigDir() {
-  const char* xdg = std::getenv("XDG_CONFIG_HOME");
-  if (xdg && *xdg) return std::filesystem::path(xdg) / "catalist";
-
-  const char* home = std::getenv("HOME");
-  if (home && *home) return std::filesystem::path(home) / ".config" / "catalist";
-
-  const char* appdata = std::getenv("APPDATA");
-  if (appdata && *appdata) return std::filesystem::path(appdata) / "catalist";
-
-  return std::filesystem::path("./config");
-}
-
 std::filesystem::path Database::getCsvPath(MediaType type) const {
-  return getConfigDir() / (type == MediaType::Anime ? "anime.csv" : "manga.csv");
+  return configDir_ / (type == MediaType::Anime ? "anime.csv" : "manga.csv");
 }
 
 std::filesystem::path Database::getBackupDir() const {
-  return getConfigDir() / "backups";
+  return configDir_ / "backups";
 }
 
 void Database::createBackupSnapshot() {
@@ -289,7 +301,6 @@ void Database::autoHealIds() {
   }
 }
 
-// RFC 4180 Multiline CSV Loader
 bool Database::loadCsv(MediaType type, const std::filesystem::path& path) {
   std::ifstream file(path);
   if (!file.is_open()) return false;
@@ -398,7 +409,7 @@ bool Database::loadAll() {
 }
 
 bool Database::saveAll() const {
-  std::filesystem::create_directories(getConfigDir());
+  std::filesystem::create_directories(configDir_);
   bool a = saveCsv(MediaType::Anime, getCsvPath(MediaType::Anime));
   bool m = saveCsv(MediaType::Manga, getCsvPath(MediaType::Manga));
   return a && m;

@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) {
   config.load(configPath);
 
   if (!db.loadAll()) {
-    db.seedDefaults();
+    // db.seedDefaults();
     db.saveAll();
   }
 

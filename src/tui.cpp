@@ -19,6 +19,7 @@
 #include <atomic>
 #include <iostream>
 #include <set>
+#include <mutex>
 #include <filesystem>
 
 namespace catalist {
@@ -40,9 +41,7 @@ static std::string clipTitle(const std::string& str, size_t maxCodePoints, size_
     glyphs.push_back(str.substr(byteIdx, step));
     byteIdx += step;
   }
-
   if (glyphs.size() <= maxCodePoints) return str;
-
   std::string res = "";
   size_t start = offset % glyphs.size();
   for (size_t i = 0; i < maxCodePoints; ++i) {
@@ -84,7 +83,24 @@ static std::string getFormattedTimestamp() {
   return std::string(buf);
 }
 
-// Explicit UTF-8 byte constants for Powerline Extra rounded caps: U+E0B6 and U+E0B4
+struct PipeDeleter {
+  void operator()(FILE* f) const {
+    if (f) pclose(f);
+  }
+};
+
+static std::string runZenityFilePicker() {
+  std::array<char, 256> buffer;
+  std::string result;
+  std::unique_ptr<FILE, PipeDeleter> pipe(popen("zenity --file-selection --title=\"Select MyAnimeList XML Export\" --file-filter=\"*.xml\" 2>/dev/null", "r"));
+  if (!pipe) return "";
+  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+    result += buffer.data();
+  }
+  if (!result.empty() && result.back() == '\n') result.pop_back();
+  return result;
+}
+
 static Element makePill(const std::string& textStr, ftxui::Color fg, ftxui::Color bg, bool boldText = true) {
   static const std::string capLeft = "\xEE\x82\xB6";
   static const std::string capRight = "\xEE\x82\xB4";
@@ -103,7 +119,6 @@ static Element highlightMatches(const std::string& textStr, const std::string& q
     if (isRowActive) el = el | bold;
     return el;
   }
-
   std::string lowerText = textStr;
   std::string lowerQuery = query;
   std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(), ::tolower);
@@ -125,21 +140,16 @@ static Element highlightMatches(const std::string& textStr, const std::string& q
       if (isRowActive) nonMatch = nonMatch | bold;
       parts.push_back(nonMatch);
     }
-    auto matchEl = text(textStr.substr(pos, lowerQuery.size()))
-                   | bold
-                   | color(theme.crust)
-                   | bgcolor(theme.yellow);
+    auto matchEl = text(textStr.substr(pos, lowerQuery.size())) | bold | color(theme.crust) | bgcolor(theme.yellow);
     parts.push_back(matchEl);
     lastPos = pos + lowerQuery.size();
     pos = lowerText.find(lowerQuery, lastPos);
   }
-
   if (lastPos < textStr.size()) {
     auto post = text(textStr.substr(lastPos)) | color(theme.text);
     if (isRowActive) post = post | bold;
     parts.push_back(post);
   }
-
   return hbox(std::move(parts));
 }
 
@@ -166,7 +176,7 @@ AppTui::AppTui(Database& db, AppConfig& config)
 
 void AppTui::run() {
   auto screen = ScreenInteractive::Fullscreen();
-  auto* screenPtr = &screen; // Decoupled pointer to eliminate non-copyable lambda capture errors
+  auto* screenPtr = &screen; 
 
   AppMode appMode = AppMode::Nor;
   FocusedCard focusedCard = FocusedCard::Catalog;
@@ -175,12 +185,21 @@ void AppTui::run() {
   SortKey currentSort = SortKey::Score;
   bool reverseSort = config_.reverseSort;
 
-  // Interactive Panel Cursors for Sync & Settings
-  int syncActivePanel = 0;      // 0: Operations Panel, 1: Backups Repository
-  int syncActionCursor = 0;     // 0: Reconcile, 1: Create Snapshot, 2: Import XML
+  // Notification Pipeline
+  std::vector<std::string> notificationQueue;
+  std::mutex notifMutex;
+
+  auto pushNotification = [&](const std::string& msg) {
+    std::lock_guard<std::mutex> lock(notifMutex);
+    notificationQueue.push_back(msg);
+  };
+
+  int aboutActiveCard = 0;      // 0: Welcome, 1: Storage, 2: Online Sync
+  int syncActivePanel = 0;      
+  int syncActionCursor = 0;     
   int syncBackupCursor = 0;
 
-  int settingsActivePanel = 0;  // 0: Themes, 1: Preferences
+  int settingsActivePanel = 0;  
   int settingsThemeCursor = 0;
   int settingsPrefCursor = 0;
 
@@ -229,12 +248,12 @@ void AppTui::run() {
       fwrite(str.data(), 1, str.size(), pipe);
       pclose(pipe);
     }
-    statusMessage = "Copied: \"" + clipTitle(str, 24) + "\"";
+    pushNotification("Copied: \"" + clipTitle(str, 42) + "\"");
   };
 
   auto openInBrowser = [&](const Entry& e) {
     if (e.malId <= 0) {
-      statusMessage = "No online MAL ID associated with entry.";
+      pushNotification("Error: No online MAL ID associated with entry.");
       return;
     }
     std::string url = (e.type == MediaType::Anime)
@@ -261,7 +280,7 @@ void AppTui::run() {
 
   auto performUndo = [&]() {
     if (undoStack_.empty()) {
-      statusMessage = "Nothing to undo.";
+      pushNotification("Nothing left to undo.");
       return;
     }
     auto act = undoStack_.back();
@@ -272,12 +291,12 @@ void AppTui::run() {
     else if (act.type == HistoryAction::Delete) db_.addEntry(act.before);
     else if (act.type == HistoryAction::Add) db_.removeEntry(act.media, act.after.id);
     db_.saveAll();
-    statusMessage = "Action undone.";
+    pushNotification("Action undone successfully.");
   };
 
   auto performRedo = [&]() {
     if (redoStack_.empty()) {
-      statusMessage = "Nothing to redo.";
+      pushNotification("Nothing left to redo.");
       return;
     }
     auto act = redoStack_.back();
@@ -288,7 +307,7 @@ void AppTui::run() {
     else if (act.type == HistoryAction::Delete) db_.removeEntry(act.media, act.before.id);
     else if (act.type == HistoryAction::Add) db_.addEntry(act.after);
     db_.saveAll();
-    statusMessage = "Action redone.";
+    pushNotification("Action redone successfully.");
   };
 
   auto refreshViews = [&]() {
@@ -521,7 +540,7 @@ void AppTui::run() {
   // Background Non-Blocking Sync Pipeline
   auto triggerAsyncSync = [&]() {
     if (syncIsRunning.load()) {
-      statusMessage = "Sync already active in background...";
+      pushNotification("Sync already active in background...");
       return;
     }
     syncIsRunning.store(true);
@@ -531,7 +550,11 @@ void AppTui::run() {
       std::string outMsg;
       MetadataSync::syncOngoing(db_, outMsg);
       syncIsRunning.store(false);
-      statusMessage = outMsg;
+      
+      {
+        std::lock_guard<std::mutex> lock(notifMutex);
+        notificationQueue.push_back(outMsg);
+      }
       screenPtr->PostEvent(Event::Custom);
     }).detach();
   };
@@ -562,15 +585,22 @@ void AppTui::run() {
       screen.ExitLoopClosure()();
     } else if (verb == "w" || verb == "write") {
       db_.saveAll();
-      statusMessage = "Saved watchlists to disk.";
+      pushNotification("Saved watchlists to disk successfully.");
     } else if (verb == "wq") {
       db_.saveAll();
       screen.ExitLoopClosure()();
     } else if (verb == "backup") {
       db_.createBackupSnapshot();
-      statusMessage = "Created snapshot backup.";
+      pushNotification("Created snapshot backup in ~/.config/catalist/backups/.");
     } else if (verb == "sync") {
       triggerAsyncSync();
+    } else if (verb == "import") {
+      std::string path = runZenityFilePicker();
+      if (!path.empty()) {
+        size_t count = MalParser::importXml(path, db_, false);
+        pushNotification("Successfully ingested " + std::to_string(count) + " entries from XML backup.");
+        refreshViews();
+      }
     } else {
       statusMessage = "Command executed: " + verb;
     }
@@ -652,7 +682,7 @@ void AppTui::run() {
     size_t maxChars = 28;
     std::string displayTitle = clipTitle(e.title, maxChars, 0);
 
-    // Multi-select marked checkbox 󰄸 / Single-select marked 󰄲
+    // Multi-select icon 󰄸 for multiple, single select 󰄲 for one
     std::string marker;
     ftxui::Color markerColor = theme.green;
     if (isSelected) {
@@ -747,7 +777,20 @@ void AppTui::run() {
     if (event == Event::Custom) return true;
     if (!config_.mouse && event.is_mouse()) return true;
 
-    // TYPING ISOLATION GUARDS
+    // POPUP NOTIFICATION CAPTURE: Block UI until dismissed
+    bool hasNotif = false;
+    {
+      std::lock_guard<std::mutex> lock(notifMutex);
+      hasNotif = !notificationQueue.empty();
+    }
+    if (hasNotif) {
+      if (event == Event::Character(';') || event == Event::Escape || event == Event::Return) {
+        std::lock_guard<std::mutex> lock(notifMutex);
+        notificationQueue.erase(notificationQueue.begin());
+      }
+      return true; // Completely isolate input
+    }
+
     if (commandPalette_.isOpen()) {
       if (event == Event::Escape) { commandPalette_.close(); appMode = AppMode::Nor; return true; }
       if (event == Event::Return) {
@@ -799,7 +842,7 @@ void AppTui::run() {
           isOnlineModalOpen = false;
           appMode = AppMode::Nor;
           catalogMenu->TakeFocus();
-          statusMessage = "Added '" + e.title + "' [MAL ID " + std::to_string(e.malId) + "]!";
+          pushNotification("Successfully added '" + e.title + "'.");
           return true;
         }
         if (event == Event::ArrowUp || event == Event::Character('k')) {
@@ -873,7 +916,6 @@ void AppTui::run() {
       return true;
     }
 
-    // Numeric switches
     if (event == Event::Character('0')) { currentTab = ViewTab::About; return true; }
     if (event == Event::Character('1')) { currentTab = ViewTab::Anime; catalogSelected = 0; refreshViews(); return true; }
     if (event == Event::Character('2')) { currentTab = ViewTab::Manga; catalogSelected = 0; refreshViews(); return true; }
@@ -881,14 +923,25 @@ void AppTui::run() {
     if (event == Event::Character('4')) { currentTab = ViewTab::Sync; return true; }
     if (event == Event::Character('5')) { currentTab = ViewTab::Settings; return true; }
 
-    // GLOBAL COMMAND PALETTE TRIGGER
     if (event == Event::Character(':')) {
       appMode = AppMode::Cmd;
       commandPalette_.open();
       return true;
     }
 
-    // INTERACTIVE CONTROLS FOR SYNC TAB (2 PANELS)
+    // INTERACTIVE CONTROLS FOR ABOUT TAB
+    if (currentTab == ViewTab::About) {
+      if (event == Event::Character('h') || event == Event::ArrowLeft) {
+        if (aboutActiveCard > 0) aboutActiveCard--;
+        return true;
+      }
+      if (event == Event::Character('l') || event == Event::ArrowRight) {
+        if (aboutActiveCard < 2) aboutActiveCard++;
+        return true;
+      }
+    }
+
+    // INTERACTIVE CONTROLS FOR SYNC TAB
     if (currentTab == ViewTab::Sync) {
       if (event == Event::Character('h') || event == Event::ArrowLeft) {
         syncActivePanel = 0;
@@ -920,9 +973,14 @@ void AppTui::run() {
             triggerAsyncSync();
           } else if (syncActionCursor == 1) {
             db_.createBackupSnapshot();
-            statusMessage = "Created snapshot backup.";
+            pushNotification("Created snapshot backup in ~/.config/catalist/backups/.");
           } else if (syncActionCursor == 2) {
-            commandPalette_.open("import ");
+            std::string path = runZenityFilePicker();
+            if (!path.empty()) {
+              size_t count = MalParser::importXml(path, db_, false);
+              pushNotification("Successfully ingested " + std::to_string(count) + " entries from XML backup.");
+              refreshViews();
+            }
           }
         }
         return true;
@@ -935,7 +993,7 @@ void AppTui::run() {
       return false;
     }
 
-    // INTERACTIVE CONTROLS FOR SETTINGS TAB (2 PANELS)
+    // INTERACTIVE CONTROLS FOR SETTINGS TAB
     if (currentTab == ViewTab::Settings) {
       auto themes = ThemeRegistry::getAvailableThemes();
       if (event == Event::Character('h') || event == Event::ArrowLeft) {
@@ -950,7 +1008,7 @@ void AppTui::run() {
         if (settingsActivePanel == 0) {
           if (settingsThemeCursor < static_cast<int>(themes.size()) - 1) settingsThemeCursor++;
         } else {
-          if (settingsPrefCursor < 3) settingsPrefCursor++;
+          if (settingsPrefCursor < 4) settingsPrefCursor++;
         }
         return true;
       }
@@ -985,8 +1043,11 @@ void AppTui::run() {
             else config_.defaultSort = "score";
             statusMessage = "Default sort: " + config_.defaultSort;
           } else if (settingsPrefCursor == 3) {
-            config_.reverseSort = !config_.reverseSort;
-            statusMessage = config_.reverseSort ? "Sort: Descending (▲)" : "Sort: Ascending (▼)";
+            config_.reverseSort = false;
+            statusMessage = "Sort: Ascending";
+          } else if (settingsPrefCursor == 4) {
+            config_.reverseSort = true;
+            statusMessage = "Sort: Descending";
           }
           config_.save(Database::getConfigDir() / "config.toml");
         }
@@ -1000,7 +1061,6 @@ void AppTui::run() {
       return false;
     }
 
-    // ABOUT & OVERVIEW TABS: Scoped strictly, no background list navigation
     if (currentTab == ViewTab::About || currentTab == ViewTab::Overview) {
       if (event == Event::Character('q')) {
         db_.saveAll();
@@ -1010,11 +1070,7 @@ void AppTui::run() {
       return false;
     }
 
-    // =========================================================================
-    // CATALOG & DETAILS INTERACTION (Anime / Manga Tabs Only)
-    // =========================================================================
-
-    // FAST FIELD CYCLING (SHIFT + S, SHIFT + R, SHIFT + P)
+    // CATALOG & DETAILS ACTIONS
     if (event == Event::Character('S')) {
       if (!visualSelectedIds.empty()) {
         for (auto id : visualSelectedIds) {
@@ -1075,7 +1131,6 @@ void AppTui::run() {
       return true;
     }
 
-    // COLUMN SORT TOGGLES (c, t, s, r, p)
     if (focusedCard != FocusedCard::Details) {
       if (event == Event::Character('c')) { toggleColumnSort(SortKey::Date, "Date"); return true; }
       if (event == Event::Character('t')) { toggleColumnSort(SortKey::Title, "Title"); return true; }
@@ -1084,7 +1139,6 @@ void AppTui::run() {
       if (event == Event::Character('p')) { toggleColumnSort(SortKey::Progress, "Progress"); return true; }
     }
 
-    // SPATIAL CARD NAVIGATION: h and l move across columns
     if (focusedCard == FocusedCard::Catalog) {
       if (event == Event::Character('h') || event == Event::ArrowLeft) {
         focusedCard = FocusedCard::Sidebar;
@@ -1096,7 +1150,6 @@ void AppTui::run() {
         return true;
       }
 
-      // SPACE exclusively toggles visual selection
       if (event == Event::Character(' ') || event == Event::Character('v')) {
         if (!displayedEntries.empty()) {
           int id = displayedEntries[catalogSelected].id;
@@ -1107,14 +1160,12 @@ void AppTui::run() {
         return true;
       }
 
-      // Both 'e' AND 'Return' focus Details card
       if (event == Event::Return || event == Event::Character('e')) {
         focusedCard = FocusedCard::Details;
         statusMessage = "Details focused: j/k selects field, h/l adjusts, e/ret edits notes.";
         return true;
       }
 
-      // List movement strictly within Catalog
       if (event == Event::Character('j') || event == Event::ArrowDown) {
         if (!displayedEntries.empty() && catalogSelected < static_cast<int>(displayedEntries.size()) - 1) {
           catalogSelected++;
@@ -1154,7 +1205,6 @@ void AppTui::run() {
         return true;
       }
 
-      // Space toggles multi-filter criteria
       if (event == Event::Character(' ')) {
         if (sidebarSelected == 3) {
           if (multiFilterStatuses.count(WatchStatus::Watching)) multiFilterStatuses.erase(WatchStatus::Watching);
@@ -1261,7 +1311,7 @@ void AppTui::run() {
         appMode = AppMode::Nor;
         db_.saveAll();
         refreshViews();
-        statusMessage = "Deleted selected entries.";
+        pushNotification("Deleted selected entries.");
       } else if (!displayedEntries.empty() && catalogSelected >= 0 && catalogSelected < static_cast<int>(displayedEntries.size())) {
         pendingDeleteId = displayedEntries[catalogSelected].id;
         statusMessage = "Delete '" + displayedEntries[catalogSelected].title + "'? Confirm [y/N]";
@@ -1433,62 +1483,71 @@ void AppTui::run() {
     }) | size(WIDTH, EQUAL, 102) | center | flex;
   };
 
-  // Layman-Accessible Unified About Section
   auto buildAboutSection = [&]() {
     const auto& theme = ThemeRegistry::active();
 
-    auto aboutContent = vbox({
+    auto cardIntro = vbox({
+      text(" 󰄛 Welcome to Catalist") | bold | color(theme.mauve),
       text(""),
-      hbox({
-        text(" 󰄛 ") | bold | color(theme.mauve),
-        text("Catalist v0.2.0") | bold | color(theme.text),
-        filler(),
-        text("Minimalist Terminal Media Tracker") | color(theme.subtext)
-      }),
+      text(" Catalist is a fast, lightweight anime"),
+      text(" and manga tracker for your terminal."),
       text(""),
-      separator() | color(theme.surface0),
+      text(" Log watched episodes and read chapters,"),
+      text(" rate your favorite series, and browse"),
+      text(" your library with zero clutter or ads."),
       text(""),
-      text(" Catalist is a keyboard-driven watchlist manager for your terminal.") | color(theme.text),
-      text(" Log watched episodes and read chapters, rate your favorite series,") | color(theme.text),
-      text(" and organize your anime and manga libraries with zero clutter.") | color(theme.text),
+      text(" Version: v0.2.0") | color(theme.overlay0),
+      filler()
+    }) | border | color(aboutActiveCard == 0 ? theme.mauve : theme.surface0)
+       | size(WIDTH, EQUAL, 34);
+
+    auto cardStorage = vbox({
+      text(" 󰓹 Private & Local Storage") | bold | color(theme.peach),
       text(""),
-      hbox({
-        vbox({
-          text(" Local & Private Library") | bold | color(theme.peach),
-          text(""),
-          text("  • Total Anime Stored : " + std::to_string(db_.getEntries(MediaType::Anime).size())),
-          text("  • Total Manga Stored : " + std::to_string(db_.getEntries(MediaType::Manga).size())),
-          text("  • Database Location  : ~/.config/catalist/"),
-          text("  • Data Sovereignty   : 100% offline CSV storage, no accounts needed.") | color(theme.green)
-        }) | flex,
-        text("   "),
-        separator() | color(theme.surface0),
-        text("   "),
-        vbox({
-          text(" Online Discovery & Upstream") | bold | color(theme.lavender),
-          text(""),
-          text("  • Press [a] to search MyAnimeList & AniList interactively."),
-          text("  • Automatically fetches episode totals and descriptions."),
-          text("  • Reconcile ongoing series totals anytime in the Sync tab."),
-          text("  • Create snapshot backups on demand with one keystroke.")
-        }) | flex
-      }),
+      text(" Your watchlist is saved locally on"),
+      text(" your computer in simple CSV files."),
       text(""),
-      separator() | color(theme.surface0),
+      text("  • Total Anime : " + std::to_string(db_.getEntries(MediaType::Anime).size())),
+      text("  • Total Manga : " + std::to_string(db_.getEntries(MediaType::Manga).size())),
       text(""),
-      hbox({
-        text(" Navigation: ") | bold | color(theme.overlay0),
-        text("Press [Tab] or [Shift+Tab] to cycle workspaces  │  Press [:] for Command Palette") | color(theme.subtext),
-        filler()
-      })
-    });
+      text(" Location:"),
+      text(" ~/.config/catalist/") | color(theme.subtext),
+      text(""),
+      text(" No accounts or tracking required.") | color(theme.green),
+      filler()
+    }) | border | color(aboutActiveCard == 1 ? theme.mauve : theme.surface0)
+       | size(WIDTH, EQUAL, 36);
+
+    auto cardOnline = vbox({
+      text(" 󰖟 Online Discovery & Sync") | bold | color(theme.lavender),
+      text(""),
+      text(" Search online libraries instantly"),
+      text(" by pressing [a] from the catalog."),
+      text(""),
+      text(" Pull episode totals, synopsis, and"),
+      text(" scores directly from MyAnimeList"),
+      text(" and AniList without leaving the app."),
+      text(""),
+      text(" Reconcile ongoing series in Sync.") | color(theme.subtext),
+      filler()
+    }) | border | color(aboutActiveCard == 2 ? theme.mauve : theme.surface0)
+       | size(WIDTH, EQUAL, 34);
 
     return vbox({
-      aboutContent | border | color(theme.surface0) | size(WIDTH, EQUAL, 88)
+      text(""),
+      hbox({
+        cardIntro,
+        text(" "),
+        cardStorage,
+        text(" "),
+        cardOnline
+      }) | center | flex,
+      text(""),
+      text(" [h/l] Switch Card  │  [Tab] Next Tab ") | color(theme.overlay0) | center,
+      filler()
     }) | center | flex;
   };
 
-  // Interactive Sync Section
   auto buildSyncSection = [&]() {
     const auto& theme = ThemeRegistry::active();
 
@@ -1564,7 +1623,6 @@ void AppTui::run() {
     }) | center | flex;
   };
 
-  // Interactive Settings Section
   auto buildSettingsSection = [&]() {
     const auto& theme = ThemeRegistry::active();
     auto themes = ThemeRegistry::getAvailableThemes();
@@ -1611,7 +1669,8 @@ void AppTui::run() {
       text(""),
       makePrefRow(2, "Default Sort:", config_.defaultSort),
       text(""),
-      makePrefRow(3, "Invert Sort:", config_.reverseSort ? (icon::CheckSingle + " Descending (▲)") : (icon::CheckBlank + " Ascending (▼)")),
+      makePrefRow(3, "Sort Descending:", config_.reverseSort ? (icon::CheckSingle + " High to Low") : (icon::CheckBlank + " High to Low")),
+      makePrefRow(4, "Sort Ascending: ", !config_.reverseSort ? (icon::CheckSingle + " Low to High") : (icon::CheckBlank + " Low to High")),
       text(""),
       text(" Press [ret] or [spc] to cycle options.") | color(theme.overlay0),
       text(""),
@@ -1770,7 +1829,6 @@ void AppTui::run() {
       }) | border | color(focusedCard == FocusedCard::Sidebar ? theme.mauve : theme.surface0)
          | size(WIDTH, EQUAL, 28);
 
-      // Cleaned Search Card without redundant Add Button
       auto searchCard = hbox({
         text(" " + icon::Search + " ") | color(theme.peach),
         searchInput->Render() | flex,
@@ -1803,7 +1861,6 @@ void AppTui::run() {
       });
     }
 
-    // Mode Pill: icon + 3-letter mode strictly
     Element modeBadge;
     if (appMode == AppMode::Cmd) {
       modeBadge = makePill("󰘳 CMD", theme.crust, theme.mauve);
@@ -1875,7 +1932,7 @@ void AppTui::run() {
       });
     }
 
-    // Compression Protection: Truncate status text dynamically so it never squishes hints
+    // Dynamic compression protection
     int termWidth = Terminal::Size().dimx;
     int hintsWidth = 76;
     int maxStatusLen = std::max(12, termWidth - hintsWidth - 18);
@@ -1902,11 +1959,39 @@ void AppTui::run() {
       bottomRibbon
     });
 
+    // 1. Check for Active Popup Notification
+    bool hasNotif = false;
+    std::string activeNotif;
+    {
+      std::lock_guard<std::mutex> lock(notifMutex);
+      if (!notificationQueue.empty()) {
+        hasNotif = true;
+        activeNotif = notificationQueue.front();
+      }
+    }
+
+    if (hasNotif) {
+      auto popupWindow = vbox({
+        hbox({
+          text("  󰎟 Notification ") | bold | color(theme.mauve),
+          filler(),
+          text(" [;] Dismiss ") | color(theme.subtext)
+        }),
+        text(""),
+        text("  " + activeNotif) | color(theme.text) | center,
+        text(""),
+      }) | border | color(theme.mauve)
+         | bgcolor(theme.crust)
+         | size(WIDTH, EQUAL, std::max(40, static_cast<int>(activeNotif.size()) + 8))
+         | clear_under
+         | center;
+
+      return dbox({ baseUi, popupWindow });
+    }
+
+    // 2. Modals
     if (commandPalette_.isOpen()) {
-      return dbox({
-        baseUi,
-        commandPalette_.render(theme)
-      });
+      return dbox({ baseUi, commandPalette_.render(theme) });
     }
 
     if (isOnlineModalOpen) {
@@ -1937,10 +2022,7 @@ void AppTui::run() {
          | clear_under
          | center;
 
-      return dbox({
-        baseUi,
-        modalWindow
-      });
+      return dbox({ baseUi, modalWindow });
     }
 
     return baseUi;

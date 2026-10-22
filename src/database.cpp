@@ -383,7 +383,7 @@ bool Database::saveCsv(MediaType type, const std::filesystem::path& path) const 
   std::ofstream file(path);
   if (!file.is_open()) return false;
 
-  file << "#id,mal_id,anilist_id,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,dirty\n";
+  file << "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,dirty\n";
   for (const auto& e : getList(type)) {
     file << e.id << ","
          << e.malId << ","
@@ -485,25 +485,7 @@ bool Database::saveAll() const {
 }
 
 void Database::seedDefaults() {
-  addEntry({52991, 52991, 154587, "Sousou no Frieren", MediaType::Anime, WatchStatus::Completed, 10, 28, 28, 0, 0, 1, "2023-09-29", "2024-03-22", "Masterpiece adaptation.", "2026-10-17", false});
-  addEntry({49387, 49387, 136430, "Vinland Saga Season 2", MediaType::Anime, WatchStatus::Completed, 9, 24, 24, 0, 0, 0, "2023-01-10", "2023-06-20", "Farmland arc.", "2026-10-17", false});
-  addEntry({457, 457, 457, "Mushishi", MediaType::Anime, WatchStatus::Completed, 9, 26, 26, 0, 0, 0, "0000-00-00", "0000-00-00", "Atmospheric.", "2026-10-17", false});
-  addEntry({44265, 44265, 128547, "Odd Taxi", MediaType::Anime, WatchStatus::Completed, 8, 13, 13, 0, 0, 0, "2021-04-06", "2021-06-29", "Original screenplay.", "2026-10-17", false});
-
-  addEntry({2, 2, 30002, "Berserk", MediaType::Manga, WatchStatus::Watching, 10, 364, 0, 42, 0, 0, "0000-00-00", "0000-00-00", "Dark fantasy pinnacle.", "2026-10-17", false});
-  addEntry({116778, 116778, 105778, "Chainsaw Man", MediaType::Manga, WatchStatus::Watching, 9, 217, 0, 18, 0, 0, "0000-00-00", "0000-00-00", "Part 2 ongoing.", "2026-10-17", false});
-  addEntry({135496, 135496, 132049, "Dandadan", MediaType::Manga, WatchStatus::Watching, 9, 167, 0, 16, 0, 0, "0000-00-00", "0000-00-00", "Peak art.", "2026-10-17", false});
-  addEntry({126146, 126146, 117195, "[Oshi no Ko]", MediaType::Manga, WatchStatus::Completed, 8, 166, 166, 16, 16, 0, "0000-00-00", "2024-11-14", "Entertainment industry.", "2026-10-17", false});
-
-  if (historyRecords_.empty()) {
-    logActivity({"Oct 16, 6:08 PM", MediaType::Anime, "Kusuriya no Hitorigoto 3rd Season", WatchStatus::Watching, 3, 12, 0});
-    logActivity({"Oct 16, 6:08 PM", MediaType::Anime, "Kyouran Reijou Nia Liston: Byoujaku Reijou ni Tensei shita Kamigoroshi no Bujin no Karei Naru Musouroku", WatchStatus::Watching, 2, 25, 0});
-    logActivity({"Oct 09, 7:18 AM", MediaType::Anime, "Mushoku Tensei III: Isekai Ittara Honki Dasu", WatchStatus::Completed, 14, 14, 9});
-
-    logActivity({"Yesterday, 8:46 AM", MediaType::Manga, "Kimi no Koto ga Daidaidaidaidaisuki na 100-nin no Kanojo", WatchStatus::Watching, 257, 0, 10});
-    logActivity({"Oct 04, 8:04 PM", MediaType::Manga, "Damedol to Sekai ni Hitori dake no Fan", WatchStatus::Watching, 55, 0, 0});
-    logActivity({"Oct 03, 9:43 PM", MediaType::Manga, "Mikadono Sanshimai wa Angai, Choroi.", WatchStatus::Watching, 218, 0, 8});
-  }
+  // Purged dummy data instantiation. System now starts perfectly clean.
 }
 
 } // namespace catalist

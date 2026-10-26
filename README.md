@@ -1,232 +1,130 @@
 # Catalist
 
-[![CI](https://github.com/McKaigne/Catalist/actions/workflows/ci.yml/badge.svg)](https://github.com/McKaigne/Catalist/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+A fast, lightweight, and local-first anime and manga watchlist TUI built with **C++17** and **FTXUI**.
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/3815eb46-3ea2-4688-a36e-7f1b062ca178" />
-
-A fast, local terminal watchlist and manager for Anime and Manga built in C++17 with [FTXUI](https://github.com/ArthurSonzogni/FTXUI). Everything runs offline from local CSV files you own.
-
-> **Font Recommendation:** A [Nerd Font](https://www.nerdfonts.com/) (e.g., JetBrainsMono Nerd Font) is recommended to render media and status glyphs (`󰴙`, `󱥬`, `󰅙`, ``).
+Catalist keeps your watchlist saved on your computer in plaintext RFC 4180 CSV files. It supports modular metadata links across multiple providers (MyAnimeList, AniList, Kitsu), full KDL workspace configuration, and an integrated headless CLI for scripting.
 
 ---
 
-## Quick Start
+## Quickstart
 
-### Build & Run
+### 1. Running with Nix (Recommended)
 
+Catalist is packaged as a pure Flake with runtime dependencies (`curl`, `wl-clipboard`, `xclip`, `xdg-utils`) pre-wrapped.
+
+#### Run Directly (No Clone Required):
 ```bash
-# Via Nix (reproducible)
-nix run github:McKaigne/Catalist
+nix run github:<your-username>/catalist
+```
 
-# From source (CMake 3.20+, C++17 compiler)
-cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
+#### Clone and Run:
+```bash
+git clone <repo-url> && cd catalist && nix run
+```
+
+#### Updating an Existing Clone:
+```bash
+git pull && nix run
+```
+
+---
+
+### 2. Building with CMake
+
+#### Prerequisites:
+- C++17 compliant compiler (`gcc` >= 9 or `clang` >= 10)
+- `cmake` (>= 3.20)
+- `ninja` or `make`
+- Runtime utilities: `curl`, `wl-clipboard` (Wayland) or `xclip` (X11), `xdg-utils`
+
+#### Build and Run:
+```bash
+git clone <repo-url> && cd catalist
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
 ./build/catalist
 ```
 
-### Import from MyAnimeList
-
-Export your list from MyAnimeList (profile export page) as XML, then ingest it:
-
+#### Running Tests:
 ```bash
-./build/catalist import animeList.xml
-./build/catalist import mangaList.xml
-
-# Clean-slate import (replaces existing records in that category)
-./build/catalist import --clean animeList.xml
+ctest --test-dir build --output-on-failure
 ```
 
-Records are deduplicated on `malId`. Automated backups are archived to `~/.config/catalist/backups/`.
+---
+
+## Core Keybindings (TUI)
+
+### Navigation & Views
+| Key | Action |
+| :--- | :--- |
+| `j` / `k` | Move cursor down / up |
+| `h` / `l` | Move focus between Sidebar, Catalog, and Details panes |
+| `g` / `G` | Jump to top / bottom of catalog list |
+| `Tab` / `S-Tab` | Cycle through top tabs (Catalist, Anime, Manga, Overview, Sync, Settings) |
+| `1` / `2` / `3` | Direct switch to Anime / Manga / Overview tabs |
+
+### Editing & Progress
+| Key | Action |
+| :--- | :--- |
+| `+` / `-` | Increment / decrement watched episodes or read chapters |
+| `S` | Cycle status (`Watching` -> `Completed` -> `On-Hold` -> `Dropped` -> `Plan to Watch`) |
+| `R` | Bump user rating score (`0` through `10`) |
+| `e` / `Enter` | Edit entry notes / inspect details |
+| `d` | Delete selected entry (prompts confirmation) |
+| `u` / `U` | Undo / redo database mutations |
+
+### Discovery & Integrations
+| Key | Action |
+| :--- | :--- |
+| `/` | Enter search filter mode (exits back into catalog on `Enter` / `Esc`) |
+| `a` | Search online remote providers (AniList / MAL) and add entry |
+| `o` | Open active entry in default browser via resolved provider link |
+| `y` | Yank / copy active entry title to system clipboard |
+| `:` | Open Command Palette |
+| `q` | Save and quit |
+
+### Multi-Column Sorting
+Pressing a sort hotkey toggles sort order between ascending and descending:
+- `c` — Sort by start / completion Date
+- `t` — Sort by Title
+- `s` — Sort by Watch Status
+- `r` — Sort by Rating Score
+- `p` — Sort by Progress Count
 
 ---
 
-## The Terminal App
+## Command-Line Interface (CLI)
+
+Catalist includes a headless CLI for scripting, shell pipes, and data analysis:
 
 ```bash
-catalist
-```
+# Querying
+catalist ls --type anime --status watching
+catalist ls --rating ">=8" --sort rating --reverse
+catalist ls --plain                     # Output bare titles (useful for dmenu/fuzzel)
+catalist show "Frieren"                 # Inspect metadata
+catalist stats --json                   # Output telemetry JSON
 
-The interface uses a decoupled, floating-card layout in Catppuccin Mocha with an APA-style minimalist table (zero vertical lines or border T-junction artifacts).
+# Mutations
+catalist add "Dungeon Meshi" -t anime -s watching -p 12 -e 24 -r 9
+catalist set "Dungeon Meshi" -p +1      # Step episode progress
+catalist set "Dungeon Meshi" -r 10      # Update score
+catalist rm "Dungeon Meshi" -y          # Delete entry
 
-### Navigation & Keybindings
-
-| Key | Mode | Action |
-| :--- | :--- | :--- |
-| `1` `2` `3` | Global | Jump directly to **Anime** (`󰴙`), **Manga** (`󱥬`), or **Overview** (`󰄫`) |
-| `Tab` / `[` `]` | Global | Cycle media tabs |
-| `j` `k` / Wheel | Browse | Move up/down with automatic viewport frame tracking |
-| `gg` `G` | Browse | Jump to top/bottom of catalog |
-| `c` `t` `s` `r` `p` | Browse | Sort by Date, Title, Status, Rating, or Progress (tap again to reverse) |
-| `n` `a` | Browse | **New Entry:** Opens interactive online search modal to find and add titles |
-| `d` | Browse | **Delete:** Prompts `[y/N]` confirmation (undoable with `u`) |
-| `ret` | Browse | **Edit Row:** Enters in-place cell edit mode |
-| `y` | Browse | **Copy Name:** Copies selected title to system clipboard |
-| `/` | Browse | **Search:** Live case-insensitive search with yellow substring highlighting |
-| `o` | Browse | Open entry on MyAnimeList in default browser |
-| `u` / `Ctrl+Z` | Browse | Undo last mutation or deletion |
-| `Ctrl+R` / `Ctrl+Y` | Browse | Redo last undone action |
-| `Esc` / `Backspace` | Browse | Shift focus back to Categories sidebar |
-| `:` | Browse | Command mode (`:w`, `:q`, `:undo`, `:backup`, `:sync`) |
-| `q` | Browse | Save watchlists to disk and exit |
-
-### Cell Editing (`ret`)
-
-- `h` / `l`: Switch active cell between **Progress**, **Rating**, and **Status**.
-- `j` / `k` (or `+` / `-`): Adjust field value in place without layout eviction.
-- `ret`: Open Title and Notes editor in the Detail card.
-- `Esc` / `Backspace`: Commit changes and return to Browse.
-
-### Detail Card Editor
-
-- `Tab` / `Down`: Switch from Title to Notes.
-- `ret` (on Notes) / `Esc`: Save to disk and return to Browse.
-
----
-
-## Mouse Support
-
-- **Tabs & Search:** Click tabs to switch media profiles; click search to filter; click `[+ New]` to open the search modal.
-- **Header Ribbon:** Click column headers (`Date`, `Title`, `Status`, `Rating`, `Progress`) to sort; active column displays directional arrows (`▲`/`▼`) with underline styling.
-- **Row Hover & Wheel:** Hovering auto-highlights rows; titles exceeding width scroll smoothly; mouse wheel scrolls catalog without snapping to pointer.
-- **Interactive Detail Card:**
-  - Click `[-]` or `[+]` to step episodes/chapters.
-  - Click directly along the progress gauge to scrub progress percentage.
-  - Click across the 5-star cluster to set score (0 to 10).
-  - Click Status badge to cycle status.
-  - Click `[Delete]` to trigger deletion confirmation.
-  - Click Title or Notes to edit inline.
-  - Click metadata fields (or press `y`) to copy value to clipboard.
-- **Clipboard Waterfall:** `y` and click-to-copy use Wayland (`wl-copy`), X11 (`xclip`), macOS (`pbcopy`), and ANSI OSC 52 sequences (remote SSH / Ghostty).
-
----
-
-## Offline Authority & Upstream Sync
-
-Catalist is **100% offline-first**. All records live locally in `~/.config/catalist/{anime,manga}.csv`. No accounts, telemetry, or network daemons exist.
-
-The `:sync` command and online search feature query public endpoints (AniList GraphQL / Jikan API) over HTTPS strictly on-demand without credentials.
-
----
-
-<details>
-<summary><b>CLI Mode & Pipeline Usage (ls, count, show, add, set, rm, random, search, stats, export, config, completion)</b></summary>
-
-When arguments are passed, `catalist` operates headlessly for shell scripting and Nushell pipelines:
-
-```bash
-# Query & Discovery
-catalist ls --type anime --status watching --sort rating
-catalist ls --rating ">=9" --plain | fzf
-catalist count --status completed
-catalist show "Frieren"
-catalist random --status planned --plain | cowsay
-
-# Online Search (yay-style interactive resolution)
-catalist search "frieren" --limit 5
-catalist search "dungeon meshi" --plain
-
-# Quick Mutations
-catalist add "Dungeon Meshi" -t anime -e 24 -p 10 -r 9
-catalist set "Dungeon Meshi" -p a 2           # progress add 2
-catalist set "Dungeon Meshi" -p sub 1         # progress sub 1
-catalist set "Dungeon Meshi" -r 10 -s completed
-catalist rm "Dungeon Meshi" -y                # remove with -y bypass
-
-# Pipeline Mutations (accepts stdin via -)
-catalist ls --rating ">=9" --ids | catalist set - -n "Peak fiction"
-catalist ls --status dropped --ids | catalist rm - -y
-
-# Analytics & Data Interchange
-catalist stats
-catalist stats --type anime --json
+# Backup & Interop
 catalist export json > backup.json
 catalist export csv > backup.csv
-
-# Configuration & Shell Completions
-catalist config list
-catalist config set default_media manga
-catalist completion zsh > ~/.zsh/completion/_catalist
-```
-
-### CLI Flag Reference
-
-| Flag | Shorthand | Description |
-| :--- | :--- | :--- |
-| `-t, --type <anime\|manga>` | `-t` | Media type filter or assignment |
-| `-s, --status <status>` | `-s` | `watching`, `reading`, `completed`, `on-hold`, `dropped`, `planned` |
-| `-r, --rating <spec>` | `-r` | Filter: `9`, `'>=9'`, `'<=7'`, `'6..8'`, `'unrated'`. Set: `0..10` |
-| `-p, --progress <val>` | `-p` | Set absolute, or step: `add [N]`, `a [N]`, `sub [N]`, `s [N]`, `+N`, `-N` |
-| `-e, --total <N>` | `-e` | Total units (episodes / chapters) |
-| `-v, --volumes <N>` | `-v` | Total volumes read |
-| `-y, --year <YYYY>` | `-y` | Start year filter |
-| `-q, --search <query>` | `-q` | Title substring filter |
-| `--sort <field>` | | Sort: `date`, `title`, `status`, `rating`, `progress` |
-| `-R, --reverse` | `-R` | Invert sort order |
-| `-l, --limit <N>` | `-l` | Limit output to first N entries |
-| `--plain`, `--ids` | | Machine outputs: bare titles or bare IDs |
-| `--csv`, `--json` | | Structured serialization formats |
-
-</details>
-
----
-
-<details>
-<summary><b>Planned Architecture (Self-Hosted Server)</b></summary>
-
-### Self-Hosted Server Mode
-
-```bash
-catalist serve --data ~/catalist-data
-catalist connect https://list.example.com --name home
-catalist --server home ls --rating ">=9"
-```
-
-</details>
-
----
-
-## Project Layout
-
-```
-src/main.cpp          Entry point and argument dispatcher
-src/tui.cpp           Interactive dashboard, floating cards, mouse engine, key handling
-src/cli.cpp           CLI query/mutation engine, completions, config, analytics, export
-src/remoteSearch.cpp  AniList GraphQL and Jikan API remote search engine
-src/database.cpp      CRUD operations, RFC 4180 multiline CSV engine, filtering
-src/entry.cpp         Data models, formatting, Nerd Font icons, star meter
-src/malParser.cpp     MAL XML import engine with CDATA extraction
-src/sync.cpp          Opt-in Jikan API upstream metadata sync
-src/config.cpp        Configuration loader and serializer
-tests/testMain.cpp    Headless verification suite (CSV, XML, sorting, mutations, stats)
-flake.nix             Nix development environment and flake derivation
-CMakeLists.txt        Build configuration with offline fallback and test targets
+catalist import --clean myanimelist.xml  # Ingest MAL export with safe merging
 ```
 
 ---
 
-## Roadmap
+## Architecture & Data Safety
 
-- [x] C++17 foundation with FTXUI and Nix packaging
-- [x] Pinned offline CMake fallback resolution
-- [x] Decoupled card layout with minimal APA table (zero border T-junctions)
-- [x] Instant add (`n`/`a`), cell edit (`ret`), and delete (`d`)
-- [x] Clamped Vim motions, hover marquee, and deep mouse interaction
-- [x] Live search with case-insensitive yellow match highlighting
-- [x] Multi-tier clipboard engine (`wl-copy`, `xclip`, `pbcopy`, OSC 52)
-- [x] RFC 4180 multiline CSV persistence engine
-- [x] MAL XML ingestion engine with CDATA extraction
-- [x] Headless verification test suite and GitHub Actions CI
-- [x] CLI `ls` with filters, sorting, and output formats
-- [x] CLI mutations (`add`, `set` with `add`/`sub` stepping, `rm`, `random`)
-- [x] CLI telemetry analytics (`catalist stats`)
-- [x] CLI database export (`catalist export <json|csv>`)
-- [x] Online remote search engine with CLI (`catalist search`) and TUI modal dialog parity
-- [x] Shell completions (`catalist completion <bash|zsh|fish>`)
-- [x] Configuration manager CLI (`catalist config [list|get|set]`)
-- [x] Pipeline support (`--plain`, `--ids`, `--json`, `--csv`, stdin `-`)
-- [ ] Dedicated screen tabs `4` to `8` in TUI
-- [ ] Polymorphic backend abstraction
-- [ ] Self-hosted server daemon (`catalist serve`) with token authentication
+- **Local-First & Offline**: Your library is stored in `~/.config/catalist/anime.csv` and `manga.csv`. No background daemon or database setup required.
+- **Atomic File Operations**: All disk writes write to a `.tmp` file before an atomic `rename`, preventing database corruption during power cuts or unexpected exits.
+- **Tier 1 / Tier 2 Merge Hierarchy**: Re-importing MyAnimeList XML archives never overwrites local progress, scores, or notes. Upstream metadata updates refresh total episodes and provider IDs without clobbering user edits.
+- **KDL Workspace Configuration**: Declaratively customize theme, mouse support, default sorting, and layout via `~/.config/catalist/catalist.kdl`.
 
 ---
 

@@ -194,7 +194,7 @@ void CliDispatcher::printUsage() {
             << "Management & Setup:\n"
             << "  export <json|csv>    Dump entire database to stdout\n"
             << "  import <file.xml>    Ingest MyAnimeList XML export\n"
-            << "  config [list|get|set] Inspect or modify ~/.config/catalist/config.toml\n"
+            << "  config [list|get|set] Inspect or modify ~/.config/catalist/catalist.kdl\n"
             << "  completion <shell>   Generate shell completion script (bash, zsh, fish)\n"
             << "  --version, -v        Display version info\n"
             << "  --help, -h           Show this message\n\n"
@@ -355,34 +355,7 @@ static std::vector<Entry> collectAndFilterEntries(const Database& db, const CliF
     appendType(opts.type.value());
   }
 
-  std::sort(pool.begin(), pool.end(), [opts](const Entry& a, const Entry& b) {
-    bool res = false;
-    switch (opts.sortKey) {
-      case SortKey::Score:
-        if (a.score != b.score) res = a.score > b.score;
-        else res = a.title < b.title;
-        break;
-      case SortKey::Status:
-        if (a.status != b.status) res = static_cast<int>(a.status) < static_cast<int>(b.status);
-        else res = a.title < b.title;
-        break;
-      case SortKey::Title:
-        res = a.title < b.title;
-        break;
-      case SortKey::Progress:
-        if (a.progress != b.progress) res = a.progress > b.progress;
-        else res = a.title < b.title;
-        break;
-      case SortKey::Date:
-        if (a.startDate != b.startDate) res = a.startDate > b.startDate;
-        else res = a.title < b.title;
-        break;
-      case SortKey::Id:
-        res = a.id < b.id;
-        break;
-    }
-    return opts.reverseSort ? !res : res;
-  });
+  Database::sortEntries(pool, opts.sortKey, opts.reverseSort);
 
   if (opts.limit >= 0 && static_cast<size_t>(opts.limit) < pool.size()) {
     pool.resize(opts.limit);
@@ -1476,7 +1449,7 @@ int CliDispatcher::executeSearch(const std::vector<std::string>& args, Database&
 }
 
 int CliDispatcher::executeConfig(const std::vector<std::string>& args, AppConfig& config) {
-  auto configPath = Database::getConfigDir() / "config.toml";
+  auto configPath = Database::getConfigDir() / "catalist.kdl";
 
   if (args.empty() || args[0] == "list") {
     std::cout << "mouse = " << (config.mouse ? "true" : "false") << "\n"
@@ -1611,7 +1584,7 @@ _catalist() {
     'stats:Display analytics telemetry'
     'export:Dump database to stdout'
     'import:Ingest MyAnimeList XML export'
-    'config:Inspect or modify config.toml'
+    'config:Inspect or modify catalist.kdl'
     'completion:Generate shell autocompletions'
   )
 

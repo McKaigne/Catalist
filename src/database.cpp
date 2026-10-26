@@ -47,18 +47,62 @@ void Database::clear(MediaType type) {
   getList(type).clear();
 }
 
+void Database::sortEntries(std::vector<Entry>& v, SortKey key, bool reverse) {
+  auto less = [key](const Entry& a, const Entry& b) {
+    switch (key) {
+      case SortKey::Score:    return a.score != b.score ? a.score > b.score : a.title < b.title;
+      case SortKey::Progress: return a.progress != b.progress ? a.progress > b.progress : a.title < b.title;
+      case SortKey::Date:     return a.startDate != b.startDate ? a.startDate > b.startDate : a.title < b.title;
+      case SortKey::Status:   return a.status != b.status ? static_cast<int>(a.status) < static_cast<int>(b.status) : a.title < b.title;
+      case SortKey::Title:    return a.title < b.title;
+      case SortKey::Id:       return a.id < b.id;
+    }
+    return false;
+  };
+  std::sort(v.begin(), v.end(), [&](const Entry& a, const Entry& b) {
+    return reverse ? less(b, a) : less(a, b);
+  });
+}
+
 int Database::addEntry(Entry entry) {
-  if (entry.malId > 0) {
+  if (entry.malId > 0 && entry.id <= 0) {
     entry.id = entry.malId;
   } else if (entry.id <= 0) {
     entry.id = nextLocalId_++;
   }
 
+  if (entry.id >= nextLocalId_) {
+    nextLocalId_ = entry.id + 1;
+  }
+
   auto& list = getList(entry.type);
   for (auto& existing : list) {
-    if (existing.id == entry.id) {
-      existing = entry;
-      return entry.id;
+    bool idMatch = (existing.id == entry.id);
+    bool malMatch = (entry.malId > 0 && existing.malId == entry.malId);
+    bool remoteMatch = false;
+    std::string incMal = entry.getRemoteId("mal");
+    if (!incMal.empty() && existing.getRemoteId("mal") == incMal) {
+      remoteMatch = true;
+    }
+
+    if (idMatch || malMatch || remoteMatch) {
+      // Tier 2 (Upstream metadata)
+      if (entry.totalUnits > 0) existing.totalUnits = entry.totalUnits;
+      if (entry.totalVolumes > 0) existing.totalVolumes = entry.totalVolumes;
+      for (const auto& [prov, rId] : entry.remoteIds) {
+        existing.setRemoteId(prov, rId);
+      }
+      if (entry.malId > 0 && existing.malId <= 0) existing.malId = entry.malId;
+      if (entry.anilistId > 0 && existing.anilistId <= 0) existing.anilistId = entry.anilistId;
+
+      // Tier 1 (User Authority): Only backfill untouched local records
+      if (existing.notes.empty() && !entry.notes.empty()) existing.notes = entry.notes;
+      if (existing.score == 0 && entry.score > 0) existing.score = entry.score;
+      if (existing.progress == 0 && entry.progress > 0) existing.progress = entry.progress;
+      if (existing.startDate.empty() && !entry.startDate.empty()) existing.startDate = entry.startDate;
+      if (existing.finishDate.empty() && !entry.finishDate.empty()) existing.finishDate = entry.finishDate;
+
+      return existing.id;
     }
   }
 
@@ -72,7 +116,7 @@ const std::vector<Entry>& Database::getEntries(MediaType type) const {
 
 std::optional<Entry> Database::getById(MediaType type, int id) const {
   for (const auto& item : getList(type)) {
-    if (item.id == id) return item;
+    if (item.id == id || (item.malId > 0 && item.malId == id)) return item;
   }
   return std::nullopt;
 }
@@ -96,6 +140,22 @@ bool Database::removeEntry(MediaType type, int id) {
     return true;
   }
   return false;
+}
+
+bool Database::changeMediaType(MediaType currentType, int id) {
+  auto& srcList = getList(currentType);
+  MediaType targetType = (currentType == MediaType::Anime) ? MediaType::Manga : MediaType::Anime;
+  auto& dstList = getList(targetType);
+
+  auto it = std::find_if(srcList.begin(), srcList.end(), [id](const Entry& e) { return e.id == id; });
+  if (it == srcList.end()) return false;
+
+  Entry moved = *it;
+  moved.type = targetType;
+  srcList.erase(it);
+  dstList.push_back(moved);
+  saveAll();
+  return true;
 }
 
 std::vector<Entry> Database::filterEntries(MediaType type,
@@ -123,35 +183,7 @@ std::vector<Entry> Database::filterEntries(MediaType type,
     results.push_back(e);
   }
 
-  std::sort(results.begin(), results.end(), [sortKey, reverse](const Entry& a, const Entry& b) {
-    bool res = false;
-    switch (sortKey) {
-      case SortKey::Score:
-        if (a.score != b.score) res = a.score > b.score;
-        else res = a.title < b.title;
-        break;
-      case SortKey::Status:
-        if (a.status != b.status) res = static_cast<int>(a.status) < static_cast<int>(b.status);
-        else res = a.title < b.title;
-        break;
-      case SortKey::Title:
-        res = a.title < b.title;
-        break;
-      case SortKey::Progress:
-        if (a.progress != b.progress) res = a.progress > b.progress;
-        else res = a.title < b.title;
-        break;
-      case SortKey::Date:
-        if (a.startDate != b.startDate) res = a.startDate > b.startDate;
-        else res = a.title < b.title;
-        break;
-      case SortKey::Id:
-        res = a.id < b.id;
-        break;
-    }
-    return reverse ? !res : res;
-  });
-
+  sortEntries(results, sortKey, reverse);
   return results;
 }
 
@@ -289,19 +321,11 @@ static std::vector<std::string> parseCsvRecord(const std::string& record) {
 }
 
 void Database::autoHealIds() {
-  bool healed = false;
-  auto healList = [&](std::vector<Entry>& list) {
-    for (auto& e : list) {
-      if (e.malId > 0 && e.id != e.malId) {
-        e.id = e.malId;
-        healed = true;
-      }
-    }
-  };
-  healList(animeEntries_);
-  healList(mangaEntries_);
-  if (healed) {
-    saveAll();
+  for (const auto& e : animeEntries_) {
+    if (e.id >= nextLocalId_) nextLocalId_ = e.id + 1;
+  }
+  for (const auto& e : mangaEntries_) {
+    if (e.id >= nextLocalId_) nextLocalId_ = e.id + 1;
   }
 }
 
@@ -315,7 +339,6 @@ bool Database::loadCsv(MediaType type, const std::filesystem::path& path) {
   std::string line;
   std::string recordBuffer;
   bool insideQuotes = false;
-  bool needsHeal = false;
 
   while (std::getline(file, line)) {
     if (recordBuffer.empty() && (line.empty() || line[0] == '#')) continue;
@@ -347,9 +370,14 @@ bool Database::loadCsv(MediaType type, const std::filesystem::path& path) {
         try { e.anilistId = std::stoi(fields[2]); } catch (...) { e.anilistId = 0; }
       }
 
-      size_t offset = (fields.size() >= 16) ? 3 : 2;
+      size_t offset = 2;
+      if (fields.size() >= 4 && (fields[3] == "anime" || fields[3] == "manga")) {
+        offset = 4;
+      } else if (fields.size() >= 16) {
+        offset = 3;
+      }
 
-      e.title = unescapeCsv(fields[offset]);
+      e.title = fields[offset];
       e.status = stringToStatus(fields[offset + 1]);
       try { e.score = std::stoi(fields[offset + 2]); } catch (...) { e.score = 0; }
       try { e.progress = std::stoi(fields[offset + 3]); } catch (...) { e.progress = 0; }
@@ -358,36 +386,46 @@ bool Database::loadCsv(MediaType type, const std::filesystem::path& path) {
       if (fields.size() > offset + 5) { try { e.volumes = std::stoi(fields[offset + 5]); } catch (...) {} }
       if (fields.size() > offset + 6) { try { e.totalVolumes = std::stoi(fields[offset + 6]); } catch (...) {} }
       if (fields.size() > offset + 7) { try { e.rewatched = std::stoi(fields[offset + 7]); } catch (...) {} }
-      if (fields.size() > offset + 8) e.startDate = unescapeCsv(fields[offset + 8]);
-      if (fields.size() > offset + 9) e.finishDate = unescapeCsv(fields[offset + 9]);
-      if (fields.size() > offset + 10) e.notes = unescapeCsv(fields[offset + 10]);
-      if (fields.size() > offset + 11) e.updatedAt = unescapeCsv(fields[offset + 11]);
+      if (fields.size() > offset + 8) e.startDate = fields[offset + 8];
+      if (fields.size() > offset + 9) e.finishDate = fields[offset + 9];
+      if (fields.size() > offset + 10) e.notes = fields[offset + 10];
+      if (fields.size() > offset + 11) e.updatedAt = fields[offset + 11];
+      if (fields.size() > offset + 12) {
+        e.dirty = (fields[offset + 12] == "1" || fields[offset + 12] == "true");
+      }
+      if (fields.size() > offset + 13 && !fields[offset + 13].empty()) {
+        e.remoteIds = deserializeRemoteIds(fields[offset + 13]);
+      }
+      if (e.malId > 0 && e.remoteIds.find("mal") == e.remoteIds.end()) {
+        e.remoteIds["mal"] = std::to_string(e.malId);
+      }
+      if (e.anilistId > 0 && e.remoteIds.find("anilist") == e.remoteIds.end()) {
+        e.remoteIds["anilist"] = std::to_string(e.anilistId);
+      }
 
-      if (e.malId > 0 && e.id != e.malId) {
-        e.id = e.malId;
-        needsHeal = true;
+      if (e.id >= nextLocalId_) {
+        nextLocalId_ = e.id + 1;
       }
 
       list.push_back(e);
     }
   }
 
-  if (needsHeal) {
-    saveCsv(type, path);
-  }
-
   return true;
 }
 
 bool Database::saveCsv(MediaType type, const std::filesystem::path& path) const {
-  std::ofstream file(path);
+  std::filesystem::create_directories(path.parent_path());
+  auto tmpPath = path.string() + ".tmp";
+  std::ofstream file(tmpPath);
   if (!file.is_open()) return false;
 
-  file << "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,dirty\n";
+  file << "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,dirty,external_ids\n";
   for (const auto& e : getList(type)) {
     file << e.id << ","
          << e.malId << ","
          << e.anilistId << ","
+         << (e.type == MediaType::Anime ? "anime" : "manga") << ","
          << escapeCsv(e.title) << ","
          << escapeCsv(statusToString(e.status, e.type)) << ","
          << e.score << ","
@@ -400,9 +438,13 @@ bool Database::saveCsv(MediaType type, const std::filesystem::path& path) const 
          << escapeCsv(e.finishDate) << ","
          << escapeCsv(e.notes) << ","
          << escapeCsv(e.updatedAt) << ","
-         << (e.dirty ? "1" : "0") << "\n";
+         << (e.dirty ? "1" : "0") << ","
+         << escapeCsv(serializeRemoteIds(e.remoteIds)) << "\n";
   }
-  return true;
+  file.close();
+  std::error_code ec;
+  std::filesystem::rename(tmpPath, path, ec);
+  return !ec;
 }
 
 void Database::logActivity(const ActivityRecord& record) {
@@ -437,9 +479,9 @@ bool Database::loadHistory() {
     if (fields.size() < 7) continue;
 
     ActivityRecord r;
-    r.timestamp = unescapeCsv(fields[0]);
+    r.timestamp = fields[0];
     r.type = (fields[1] == "anime" ? MediaType::Anime : MediaType::Manga);
-    r.title = unescapeCsv(fields[2]);
+    r.title = fields[2];
     r.status = stringToStatus(fields[3]);
     try { r.progress = std::stoi(fields[4]); } catch (...) { r.progress = 0; }
     try { r.totalUnits = std::stoi(fields[5]); } catch (...) { r.totalUnits = 0; }
@@ -452,7 +494,8 @@ bool Database::loadHistory() {
 bool Database::saveHistory() const {
   std::filesystem::create_directories(configDir_);
   auto hPath = getHistoryPath();
-  std::ofstream file(hPath);
+  auto tmpPath = hPath.string() + ".tmp";
+  std::ofstream file(tmpPath);
   if (!file.is_open()) return false;
 
   file << "#timestamp,type,title,status,progress,total_units,score\n";
@@ -465,7 +508,10 @@ bool Database::saveHistory() const {
          << h.totalUnits << ","
          << h.score << "\n";
   }
-  return true;
+  file.close();
+  std::error_code ec;
+  std::filesystem::rename(tmpPath, hPath, ec);
+  return !ec;
 }
 
 bool Database::loadAll() {
@@ -485,7 +531,6 @@ bool Database::saveAll() const {
 }
 
 void Database::seedDefaults() {
-  // Purged dummy data instantiation. System now starts perfectly clean.
 }
 
 } // namespace catalist

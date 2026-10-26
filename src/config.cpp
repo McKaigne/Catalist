@@ -4,185 +4,171 @@
 
 namespace catalist {
 
-bool AppConfig::generateDefault(const std::filesystem::path& path) const {
+static const char* DEFAULT_KDL = R"kdl(// ==============================================================================
+// Catalist Workspace Specification (KDL 1.0)
+// ==============================================================================
+
+general {
+    theme "catppuccin-mocha"
+    mouse true
+    default-media "anime"
+    default-sort "score"
+    reverse-sort true
+}
+
+keybinds {
+    move-up "k"
+    move-down "j"
+    focus-left "h"
+    focus-right "l"
+    increment "+"
+    decrement "-"
+    cycle-status "Space"
+    add "a"
+    delete "d"
+    quit "q"
+}
+
+top-bar height=3 border=true {
+    tab "about"    label="Catalist"  icon="󰄛"
+    tab "anime"    label="Anime"     icon="󰴙"  show-count=true
+    tab "manga"    label="Manga"     icon="󱥬"  show-count=true
+    tab "overview" label="Overview"  icon="󰄫"
+    tab "sync"     label="Sync"      icon="󰓦"
+    tab "settings" label="Settings"  icon="󰒓"
+    spacer
+    text "v0.2.0" color="overlay0"
+}
+
+bottom-bar height=3 border=true {
+    mode-badge
+    separator color="surface1"
+    selection-counter
+    hints
+    spacer
+    status-message max-length=36 color="yellow"
+}
+
+card "details" width=42 border=true {
+    category "DETAILS" {
+        text "{title}" bold=true color="mauve" marquee=true
+        row {
+            pill "{type}" fg="crust" bg="{type_color}"
+            spacer
+            text "ID #{id}" color="subtext"
+        }
+        meta-row label="Source:" value="{source_display}"
+        meta-row label="Dates:" value="{dates_display}"
+    }
+
+    category "STATUS" {
+        field "status" label="Status:"
+    }
+
+    category "METRICS" {
+        field "rating" label="Rating:" style="stars"
+        field "progress" label="Progress:" style="gauge"
+    }
+
+    category "NOTES" {
+        field "notes" label="Notes:"
+    }
+}
+)kdl";
+
+bool AppConfig::generateDefault(const std::filesystem::path& path) {
   std::filesystem::create_directories(path.parent_path());
   std::ofstream file(path);
   if (!file.is_open()) return false;
+  file << DEFAULT_KDL;
+  file.close();
 
-  file << "# ==============================================================================\n"
-       << "# Catalist Configuration File\n"
-       << "#\n"
-       << "# This file uses Simplified Technical English (ASD-STE100).\n"
-       << "# All parameters in this default file are comments.\n"
-       << "# Remove the '#' character at the start of a line to activate a parameter.\n"
-       << "# ==============================================================================\n\n"
-       << "[general]\n"
-       << "# Set the visual color theme.\n"
-       << "# Approved values: \"catppuccin-mocha\", \"dark\", \"light\", \"tokyo-night\",\n"
-       << "# \"kanagawa\", \"gruvbox\", \"nord\", \"dracula\", \"rose-pine\", \"ayu\",\n"
-       << "# \"solarized-dark\", \"solarized-light\", \"custom\".\n"
-       << "# Default: \"catppuccin-mocha\"\n"
-       << "# theme = \"catppuccin-mocha\"\n\n"
-       << "# Enable mouse control in the terminal interface.\n"
-       << "# Default: true\n"
-       << "# mouse = true\n\n"
-       << "# Set the media view to show when the application starts.\n"
-       << "# Approved values: \"anime\", \"manga\", \"overview\".\n"
-       << "# Default: \"anime\"\n"
-       << "# defaultMedia = \"anime\"\n\n"
-       << "# Set the default sort column for the table.\n"
-       << "# Approved values: \"score\", \"title\", \"date\", \"progress\", \"status\", \"id\".\n"
-       << "# Default: \"score\"\n"
-       << "# defaultSort = \"score\"\n\n"
-       << "# Invert the sort direction.\n"
-       << "# Default: true\n"
-       << "# reverseSort = true\n\n"
-       << "[keybinds]\n"
-       << "# Navigation in list\n"
-       << "# moveUp = \"k\"\n"
-       << "# moveDown = \"j\"\n"
-       << "# jumpTop = \"g\"\n"
-       << "# jumpBottom = \"G\"\n\n"
-       << "# Card focus controls\n"
-       << "# focusLeft = \"h\"\n"
-       << "# focusRight = \"l\"\n"
-       << "# cyclePane = \"Tab\"\n\n"
-       << "# Record changes\n"
-       << "# increment = \"+\"\n"
-       << "# decrement = \"-\"\n"
-       << "# cycleStatus = \"Space\"\n\n"
-       << "# Column sorting (press key to toggle between ascending and descending)\n"
-       << "# sortDate = \"c\"\n"
-       << "# sortTitle = \"t\"\n"
-       << "# sortStatus = \"s\"\n"
-       << "# sortRating = \"r\"\n"
-       << "# sortProgress = \"p\"\n\n"
-       << "# Media views\n"
-       << "# tabAnime = \"1\"\n"
-       << "# tabManga = \"2\"\n"
-       << "# tabOverview = \"3\"\n\n"
-       << "# Actions\n"
-       << "# inspect = \"Enter\"\n"
-       << "# editNotes = \"e\"\n"
-       << "# rename = \"t\"\n"
-       << "# add = \"a\"\n"
-       << "# delete = \"d\"\n"
-       << "# search = \"/\"\n"
-       << "# openBrowser = \"o\"\n"
-       << "# yank = \"y\"\n"
-       << "# undo = \"u\"\n"
-       << "# redo = \"U\"\n"
-       << "# commandPalette = \":\"\n"
-       << "# help = \"?\"\n"
-       << "# quit = \"q\"\n\n"
-       << "[theme.custom]\n"
-       << "# Use hexadecimal color codes (#RRGGBB).\n"
-       << "# These parameters apply only when theme is set to \"custom\".\n"
-       << "# base = \"#1e1e2e\"\n"
-       << "# mantle = \"#181825\"\n"
-       << "# crust = \"#11111b\"\n"
-       << "# surface0 = \"#313244\"\n"
-       << "# surface1 = \"#45475a\"\n"
-       << "# surface2 = \"#585b70\"\n"
-       << "# text = \"#cdd6f4\"\n"
-       << "# subtext = \"#a6adc8\"\n"
-       << "# overlay0 = \"#6c7086\"\n"
-       << "# mauve = \"#cba6f7\"\n"
-       << "# lavender = \"#b4befe\"\n"
-       << "# blue = \"#89b4fa\"\n"
-       << "# green = \"#a6e3a1\"\n"
-       << "# yellow = \"#f9e2af\"\n"
-       << "# peach = \"#fab387\"\n"
-       << "# red = \"#f38ba8\"\n";
-
+  std::string err;
+  kdlDoc = kdl::Document::parse(DEFAULT_KDL, err);
   return true;
 }
 
 bool AppConfig::load(const std::filesystem::path& path) {
   if (!std::filesystem::exists(path)) {
-    generateDefault(path);
-    return false;
+    return generateDefault(path);
   }
 
   std::ifstream file(path);
   if (!file.is_open()) return false;
 
-  std::string line;
-  std::string section = "general";
+  std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  std::string err;
+  kdlDoc = kdl::Document::parse(content, err);
 
-  while (std::getline(file, line)) {
-    auto start = line.find_first_not_of(" \t\r\n");
-    if (start == std::string::npos) continue;
-    if (line[start] == '#') continue;
+  auto gen = kdlDoc.getNode("general");
+  if (gen.has_value()) {
+    theme = gen->getPropString("theme", theme);
+    mouse = gen->getPropBool("mouse", mouse);
+    defaultMedia = gen->getPropString("default-media", defaultMedia);
+    defaultSort = gen->getPropString("default-sort", defaultSort);
+    reverseSort = gen->getPropBool("reverse-sort", reverseSort);
 
-    if (line[start] == '[') {
-      auto end = line.find(']', start);
-      if (end != std::string::npos) {
-        section = line.substr(start + 1, end - start - 1);
-      }
-      continue;
-    }
-
-    auto eq = line.find('=', start);
-    if (eq == std::string::npos) continue;
-
-    std::string key = line.substr(start, eq - start);
-    std::string val = line.substr(eq + 1);
-
-    auto trim = [](std::string& s) {
-      s.erase(0, s.find_first_not_of(" \t\r\n\""));
-      s.erase(s.find_last_not_of(" \t\r\n\"") + 1);
-    };
-    trim(key);
-    trim(val);
-
-    if (section == "general") {
-      if (key == "mouse") mouse = (val == "true" || val == "1");
-      else if (key == "theme") theme = val;
-      else if (key == "default_media" || key == "defaultMedia") defaultMedia = val;
-      else if (key == "default_sort" || key == "defaultSort") defaultSort = val;
-      else if (key == "reverse_sort" || key == "reverseSort") reverseSort = (val == "true" || val == "1");
-    } else if (section == "keybinds") {
-      keybinds.setBinding(key, val);
-    } else if (section == "theme.custom") {
-      auto c = ThemeRegistry::hexToColor(val);
-      if (key == "base") customPalette.base = c;
-      else if (key == "mantle") customPalette.mantle = c;
-      else if (key == "crust") customPalette.crust = c;
-      else if (key == "surface0") customPalette.surface0 = c;
-      else if (key == "surface1") customPalette.surface1 = c;
-      else if (key == "surface2") customPalette.surface2 = c;
-      else if (key == "text") customPalette.text = c;
-      else if (key == "subtext") customPalette.subtext = c;
-      else if (key == "overlay0") customPalette.overlay0 = c;
-      else if (key == "mauve") customPalette.mauve = c;
-      else if (key == "lavender") customPalette.lavender = c;
-      else if (key == "blue") customPalette.blue = c;
-      else if (key == "green") customPalette.green = c;
-      else if (key == "yellow") customPalette.yellow = c;
-      else if (key == "peach") customPalette.peach = c;
-      else if (key == "red") customPalette.red = c;
+    for (const auto& child : gen->children) {
+      if (child.name == "theme") theme = child.getArgString(0, theme);
+      else if (child.name == "mouse") mouse = child.getArg(0).asBool(mouse);
+      else if (child.name == "default-media") defaultMedia = child.getArgString(0, defaultMedia);
+      else if (child.name == "default-sort") defaultSort = child.getArgString(0, defaultSort);
+      else if (child.name == "reverse-sort") reverseSort = child.getArg(0).asBool(reverseSort);
     }
   }
 
-  if (theme == "custom") {
-    ThemeRegistry::setCustomPalette(customPalette);
+  auto binds = kdlDoc.getNode("keybinds");
+  if (binds.has_value()) {
+    for (const auto& child : binds->children) {
+      keybinds.setBinding(child.name, child.getArgString(0));
+    }
+    for (const auto& [k, v] : binds->props) {
+      keybinds.setBinding(k, v.asString());
+    }
   }
+
   ThemeRegistry::setActive(theme);
   return true;
 }
 
 bool AppConfig::save(const std::filesystem::path& path) const {
+  kdl::Document doc = kdlDoc;
+  auto mk = [](const std::string& name, kdl::Value v) { kdl::Node n; n.name = name; n.args.push_back(v); return n; };
+  auto S = [](const std::string& s) { kdl::Value v; v.type = kdl::Value::Type::String; v.stringVal = s; return v; };
+  auto B = [](bool b) { kdl::Value v; v.type = kdl::Value::Type::Boolean; v.boolVal = b; return v; };
+
+  bool foundGeneral = false;
+  for (auto& n : doc.rootNodes) {
+    if (n.name == "general") {
+      n.children = {
+        mk("theme", S(theme)),
+        mk("mouse", B(mouse)),
+        mk("default-media", S(defaultMedia)),
+        mk("default-sort", S(defaultSort)),
+        mk("reverse-sort", B(reverseSort))
+      };
+      n.props.clear();
+      foundGeneral = true;
+      break;
+    }
+  }
+  if (!foundGeneral) {
+    kdl::Node gn;
+    gn.name = "general";
+    gn.children = {
+      mk("theme", S(theme)),
+      mk("mouse", B(mouse)),
+      mk("default-media", S(defaultMedia)),
+      mk("default-sort", S(defaultSort)),
+      mk("reverse-sort", B(reverseSort))
+    };
+    doc.rootNodes.insert(doc.rootNodes.begin(), gn);
+  }
+
+  std::filesystem::create_directories(path.parent_path());
   std::ofstream file(path);
   if (!file.is_open()) return false;
-
-  file << "# Catalist Configuration File\n"
-       << "[general]\n"
-       << "mouse = " << (mouse ? "true" : "false") << "\n"
-       << "theme = \"" << theme << "\"\n"
-       << "defaultMedia = \"" << defaultMedia << "\"\n"
-       << "defaultSort = \"" << defaultSort << "\"\n"
-       << "reverseSort = " << (reverseSort ? "true" : "false") << "\n";
+  file << doc.serialize();
   return true;
 }
 

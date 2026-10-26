@@ -1,20 +1,50 @@
 #include "catalist/malParser.hpp"
 #include <fstream>
-#include <regex>
+#include <string>
 
 namespace catalist {
 
-static std::string extractTag(const std::string& block, const std::string& tag) {
-  std::regex re("<" + tag + ">(.*?)</" + tag + ">");
-  std::smatch match;
-  if (std::regex_search(block, match, re)) {
-    std::string val = match[1].str();
-    if (val.rfind("<![CDATA[", 0) == 0 && val.size() >= 12 && val.substr(val.size() - 3) == "]]>") {
-      val = val.substr(9, val.size() - 12);
+static std::string decodeXmlEntities(std::string text) {
+  auto replaceAll = [&](const std::string& from, const std::string& to) {
+    size_t pos = 0;
+    while ((pos = text.find(from, pos)) != std::string::npos) {
+      text.replace(pos, from.length(), to);
+      pos += to.length();
     }
-    return val;
+  };
+  replaceAll("&amp;", "&");
+  replaceAll("&lt;", "<");
+  replaceAll("&gt;", ">");
+  replaceAll("&quot;", "\"");
+  replaceAll("&#039;", "'");
+  replaceAll("&apos;", "'");
+  return text;
+}
+
+static std::string extractTag(const std::string& block, const std::string& tag) {
+  std::string openTag = "<" + tag + ">";
+  std::string closeTag = "</" + tag + ">";
+  size_t start = block.find(openTag);
+  if (start == std::string::npos) return "";
+  start += openTag.length();
+  size_t end = block.find(closeTag, start);
+  if (end == std::string::npos) return "";
+
+  std::string val = block.substr(start, end - start);
+  size_t cdataStart = val.find("<![CDATA[");
+  if (cdataStart != std::string::npos) {
+    size_t cdataEnd = val.find("]]>", cdataStart + 9);
+    if (cdataEnd != std::string::npos) {
+      val = val.substr(cdataStart + 9, cdataEnd - (cdataStart + 9));
+    }
   }
-  return "";
+
+  size_t first = val.find_first_not_of(" \t\r\n");
+  if (first == std::string::npos) return "";
+  size_t last = val.find_last_not_of(" \t\r\n");
+  val = val.substr(first, last - first + 1);
+
+  return decodeXmlEntities(val);
 }
 
 size_t MalParser::importXml(const std::string& filepath, Database& db, bool clean) {
@@ -28,22 +58,26 @@ size_t MalParser::importXml(const std::string& filepath, Database& db, bool clea
 
   size_t imported = 0;
 
-  std::regex animeRe("<anime>([\\s\\S]*?)</anime>");
-  auto animeBegin = std::sregex_iterator(content.begin(), content.end(), animeRe);
-  auto animeEnd = std::sregex_iterator();
-
-  if (clean && animeBegin != animeEnd) {
+  if (clean && content.find("<anime>") != std::string::npos) {
     db.clear(MediaType::Anime);
   }
 
-  for (auto it = animeBegin; it != animeEnd; ++it) {
-    std::string block = it->str();
+  size_t aPos = 0;
+  while ((aPos = content.find("<anime>", aPos)) != std::string::npos) {
+    size_t aEnd = content.find("</anime>", aPos);
+    if (aEnd == std::string::npos) break;
+    std::string block = content.substr(aPos, aEnd - aPos + 8);
+    aPos = aEnd + 8;
+
     Entry e;
     e.type = MediaType::Anime;
 
     std::string idStr = extractTag(block, "series_animedb_id");
     try { e.malId = idStr.empty() ? 0 : std::stoi(idStr); } catch (...) { e.malId = 0; }
-    e.id = e.malId;
+    if (e.malId > 0) {
+      e.id = e.malId;
+      e.setRemoteId("mal", std::to_string(e.malId));
+    }
 
     e.title = extractTag(block, "series_title");
     if (e.title.empty()) continue;
@@ -71,22 +105,26 @@ size_t MalParser::importXml(const std::string& filepath, Database& db, bool clea
     imported++;
   }
 
-  std::regex mangaRe("<manga>([\\s\\S]*?)</manga>");
-  auto mangaBegin = std::sregex_iterator(content.begin(), content.end(), mangaRe);
-  auto mangaEnd = std::sregex_iterator();
-
-  if (clean && mangaBegin != mangaEnd) {
+  if (clean && content.find("<manga>") != std::string::npos) {
     db.clear(MediaType::Manga);
   }
 
-  for (auto it = mangaBegin; it != mangaEnd; ++it) {
-    std::string block = it->str();
+  size_t mPos = 0;
+  while ((mPos = content.find("<manga>", mPos)) != std::string::npos) {
+    size_t mEnd = content.find("</manga>", mPos);
+    if (mEnd == std::string::npos) break;
+    std::string block = content.substr(mPos, mEnd - mPos + 8);
+    mPos = mEnd + 8;
+
     Entry e;
     e.type = MediaType::Manga;
 
     std::string idStr = extractTag(block, "manga_mangadb_id");
     try { e.malId = idStr.empty() ? 0 : std::stoi(idStr); } catch (...) { e.malId = 0; }
-    e.id = e.malId;
+    if (e.malId > 0) {
+      e.id = e.malId;
+      e.setRemoteId("mal", std::to_string(e.malId));
+    }
 
     e.title = extractTag(block, "manga_title");
     if (e.title.empty()) continue;

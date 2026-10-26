@@ -2,6 +2,7 @@
 
 #include "catalist/theme.hpp"
 #include <string>
+#include <unordered_map>
 
 namespace catalist {
 
@@ -19,9 +20,9 @@ enum class WatchStatus {
 };
 
 struct Entry {
-  int id = 0;              // Canonical primary key (matches malId or local sequence)
-  int malId = 0;           // Official MyAnimeList database ID
-  int anilistId = 0;       // Reserved for AniList sync
+  int id = 0;              // Canonical primary key (local sequence)
+  int malId = 0;           // Official MyAnimeList database ID (legacy mirror)
+  int anilistId = 0;       // Official AniList database ID (legacy mirror)
   std::string title;
   MediaType type = MediaType::Anime;
   WatchStatus status = WatchStatus::Watching;
@@ -36,6 +37,12 @@ struct Entry {
   std::string notes;
   std::string updatedAt;
   bool dirty = false;
+
+  // Extensible provider map declared at the end to preserve aggregate initialization
+  std::unordered_map<std::string, std::string> remoteIds = {};
+
+  std::string getRemoteId(const std::string& provider) const;
+  void setRemoteId(const std::string& provider, const std::string& remoteId);
 };
 
 std::string statusToString(WatchStatus status, MediaType type = MediaType::Anime);
@@ -52,5 +59,7 @@ std::string renderStarMeter(int score);
 
 std::string escapeCsv(const std::string& field);
 std::string unescapeCsv(const std::string& field);
+std::string serializeRemoteIds(const std::unordered_map<std::string, std::string>& ids);
+std::unordered_map<std::string, std::string> deserializeRemoteIds(const std::string& s);
 
 } // namespace catalist

@@ -153,10 +153,8 @@ static std::vector<RemoteSearchResult> queryAniList(MediaType type, const std::s
     r.type = type;
 
     r.malId = static_cast<int>(extractJsonNumber(block, "idMal"));
-    if (r.malId <= 0) {
-      r.malId = static_cast<int>(extractJsonNumber(block, "id"));
-    }
-    if (r.malId <= 0) continue;
+    int alId = static_cast<int>(extractJsonNumber(block, "id"));
+    if (r.malId <= 0 && alId <= 0) continue;
 
     r.title = unescapeJsonString(extractJsonString(block, "romaji"));
     if (r.title.empty()) {

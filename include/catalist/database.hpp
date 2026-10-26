@@ -37,7 +37,9 @@ public:
   std::optional<Entry> getById(MediaType type, int id) const;
   bool updateEntry(const Entry& entry);
   bool removeEntry(MediaType type, int id);
+  bool changeMediaType(MediaType currentType, int id);
   void clear(MediaType type);
+  static void sortEntries(std::vector<Entry>& v, SortKey key, bool reverse);
 
   std::vector<Entry> filterEntries(MediaType type,
                                    std::optional<WatchStatus> status,

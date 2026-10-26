@@ -18,6 +18,7 @@ endif()
 include_directories(include)
 
 add_executable(catalist
+  src/kdl.cpp
   src/entry.cpp
   src/config.cpp
   src/database.cpp
@@ -29,6 +30,7 @@ add_executable(catalist
   src/keybindManager.cpp
   src/commandPalette.cpp
   src/tui.cpp
+  src/provider.cpp
   src/main.cpp
 )
 
@@ -43,6 +45,7 @@ install(TARGETS catalist DESTINATION bin)
 enable_testing()
 add_executable(catalist_tests
   tests/testMain.cpp
+  src/kdl.cpp
   src/entry.cpp
   src/config.cpp
   src/database.cpp
@@ -53,6 +56,7 @@ add_executable(catalist_tests
   src/themeRegistry.cpp
   src/keybindManager.cpp
   src/commandPalette.cpp
+  src/provider.cpp
 )
 
 target_link_libraries(catalist_tests PRIVATE

@@ -5,6 +5,7 @@
 #include <memory>
 #include <regex>
 #include <chrono>
+#include <thread>
 #include <random>
 #include <fstream>
 #include <sys/socket.h>
@@ -253,6 +254,7 @@ size_t MetadataSync::syncOngoing(Database& db, std::string& outMsg) {
     if (e.totalUnits == 0 && e.malId > 0) {
       std::string cmd = "curl -s -m 3 \"https://api.jikan.moe/v4/anime/" + std::to_string(e.malId) + "\" 2>/dev/null";
       std::string resp = execCommand(cmd);
+      std::this_thread::sleep_for(std::chrono::milliseconds(340));
       if (resp.empty()) continue;
 
       std::regex epRe(R"("episodes":\s*(\d+))");

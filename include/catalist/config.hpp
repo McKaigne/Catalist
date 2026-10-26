@@ -2,6 +2,7 @@
 
 #include "catalist/themeRegistry.hpp"
 #include "catalist/keybindManager.hpp"
+#include "catalist/kdl.hpp"
 #include <string>
 #include <filesystem>
 
@@ -16,10 +17,11 @@ struct AppConfig {
 
   KeybindManager keybinds;
   ThemePalette customPalette;
+  kdl::Document kdlDoc;
 
   bool load(const std::filesystem::path& path);
   bool save(const std::filesystem::path& path) const;
-  bool generateDefault(const std::filesystem::path& path) const;
+  bool generateDefault(const std::filesystem::path& path);
 };
 
 } // namespace catalist

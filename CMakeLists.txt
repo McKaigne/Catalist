@@ -17,7 +17,8 @@ endif()
 
 include_directories(include)
 
-add_executable(catalist
+set(CATALIST_SOURCES
+  src/core/date.cpp
   src/kdl.cpp
   src/entry.cpp
   src/config.cpp
@@ -29,8 +30,13 @@ add_executable(catalist
   src/themeRegistry.cpp
   src/keybindManager.cpp
   src/commandPalette.cpp
-  src/tui.cpp
   src/provider.cpp
+  src/platform/httpClient.cpp
+)
+
+add_executable(catalist
+  ${CATALIST_SOURCES}
+  src/tui.cpp
   src/main.cpp
 )
 
@@ -43,25 +49,14 @@ target_link_libraries(catalist PRIVATE
 install(TARGETS catalist DESTINATION bin)
 
 enable_testing()
-add_executable(catalist_tests
+add_executable(catalistTests
   tests/testMain.cpp
-  src/kdl.cpp
-  src/entry.cpp
-  src/config.cpp
-  src/database.cpp
-  src/malParser.cpp
-  src/sync.cpp
-  src/cli.cpp
-  src/remoteSearch.cpp
-  src/themeRegistry.cpp
-  src/keybindManager.cpp
-  src/commandPalette.cpp
-  src/provider.cpp
+  ${CATALIST_SOURCES}
 )
 
-target_link_libraries(catalist_tests PRIVATE
+target_link_libraries(catalistTests PRIVATE
   ftxui::screen
   ftxui::dom
 )
 
-add_test(NAME unit_tests COMMAND catalist_tests)
+add_test(NAME unitTests COMMAND catalistTests)

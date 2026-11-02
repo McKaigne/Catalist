@@ -1,6 +1,7 @@
 #pragma once
 
 #include "catalist/entry.hpp"
+#include "catalist/platform/httpClient.hpp"
 #include <string>
 #include <vector>
 #include <memory>
@@ -25,7 +26,7 @@ public:
   virtual ~IProvider() = default;
   virtual std::string getKey() const = 0;
   virtual std::string getDisplayName() const = 0;
-  virtual std::string getShortBadge() const = 0; // "MAL", "AL", "KT"
+  virtual std::string getShortBadge() const = 0;
   virtual ftxui::Color getBrandColor() const = 0;
   virtual std::string getWebUrl(MediaType type, const std::string& remoteId) const = 0;
   virtual std::vector<ProviderSearchResult> search(MediaType type, const std::string& query, size_t limit) = 0;
@@ -35,6 +36,9 @@ class ProviderRegistry {
 public:
   static ProviderRegistry& get();
 
+  ProviderRegistry();
+  explicit ProviderRegistry(std::shared_ptr<IHttpClient> client);
+
   void registerProvider(std::shared_ptr<IProvider> provider);
   std::shared_ptr<IProvider> getProvider(const std::string& key) const;
   std::vector<std::shared_ptr<IProvider>> getAllProviders() const;
@@ -42,7 +46,7 @@ public:
   std::string resolveUrl(const Entry& entry, const std::string& preferredProvider = "") const;
 
 private:
-  ProviderRegistry();
+  std::shared_ptr<IHttpClient> httpClient_;
   std::unordered_map<std::string, std::shared_ptr<IProvider>> providers_;
   std::vector<std::string> providerOrder_;
 };

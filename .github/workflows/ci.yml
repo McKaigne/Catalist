@@ -26,7 +26,7 @@ jobs:
         run: cmake --build build
 
       - name: Execute automated unit tests
-        run: ./build/catalist_tests
+        run: ./build/catalistTests
 
       - name: Verify CLI argument dispatcher
         run: ./build/catalist --version

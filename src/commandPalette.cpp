@@ -1,4 +1,5 @@
 #include "catalist/commandPalette.hpp"
+
 #include <algorithm>
 #include <sstream>
 
@@ -11,27 +12,27 @@ CommandPalette::CommandPalette() {
 }
 
 void CommandPalette::initCatalog() {
-  catalog_ = {
-    {"theme", "Switch color palette", "<catppuccin|dracula|nord|tokyo-night...>"},
-    {"sort", "Sort table by property", "<score|title|date|progress|status|id>"},
-    {"reverse", "Invert sort order", ""},
-    {"add", "Search MyAnimeList and add entry", "<title>"},
-    {"filter", "Filter catalog by title", "<query>"},
-    {"clear", "Clear active filter", ""},
-    {"note", "Set notes on active entry", "<text>"},
-    {"rename", "Rename active entry", "<new_title>"},
-    {"open", "Open active entry in browser", ""},
-    {"copy", "Copy active entry title to clipboard", ""},
-    {"sync", "Reconcile finished episode counts", ""},
-    {"backup", "Generate snapshot backup CSV", ""},
-    {"export", "Dump database to stdout", "<json|csv>"},
-    {"undo", "Undo last database mutation", ""},
-    {"redo", "Redo last undone mutation", ""},
-    {"write", "Save database to disk", ""},
-    {"quit", "Exit Catalist", ""},
-    {"wq", "Save and exit Catalist", ""},
-    {"help", "Toggle keybindings cheat-sheet", ""}
-  };
+  catalog_ = {{"theme", "Switch color palette",
+               "<catppuccin|dracula|nord|tokyo-night...>"},
+              {"sort", "Sort table by property",
+               "<score|title|date|progress|status|id>"},
+              {"reverse", "Invert sort order", ""},
+              {"add", "Search MyAnimeList and add entry", "<title>"},
+              {"filter", "Filter catalog by title", "<query>"},
+              {"clear", "Clear active filter", ""},
+              {"note", "Set notes on active entry", "<text>"},
+              {"rename", "Rename active entry", "<new_title>"},
+              {"open", "Open active entry in browser", ""},
+              {"copy", "Copy active entry title to clipboard", ""},
+              {"sync", "Reconcile finished episode counts", ""},
+              {"backup", "Generate snapshot backup CSV", ""},
+              {"export", "Dump database to stdout", "<json|csv>"},
+              {"undo", "Undo last database mutation", ""},
+              {"redo", "Redo last undone mutation", ""},
+              {"write", "Save database to disk", ""},
+              {"quit", "Exit Catalist", ""},
+              {"wq", "Save and exit Catalist", ""},
+              {"help", "Toggle keybindings cheat-sheet", ""}};
 }
 
 void CommandPalette::open(const std::string& initialPrefix) {
@@ -69,20 +70,27 @@ void CommandPalette::updateFilter() {
         filteredItems_.push_back({"theme " + th, "Set theme to " + th, ""});
       }
     }
-    selectedIndex_ = std::clamp(selectedIndex_, 0, std::max(0, static_cast<int>(filteredItems_.size()) - 1));
+    selectedIndex_ =
+        std::clamp(selectedIndex_, 0,
+                   std::max(0, static_cast<int>(filteredItems_.size()) - 1));
     return;
   }
 
   for (const auto& item : catalog_) {
-    if (q.empty() || item.command.find(verb) != std::string::npos || item.description.find(q) != std::string::npos) {
+    if (q.empty() || item.command.find(verb) != std::string::npos ||
+        item.description.find(q) != std::string::npos) {
       filteredItems_.push_back(item);
     }
   }
 
-  selectedIndex_ = std::clamp(selectedIndex_, 0, std::max(0, static_cast<int>(filteredItems_.size()) - 1));
+  selectedIndex_ =
+      std::clamp(selectedIndex_, 0,
+                 std::max(0, static_cast<int>(filteredItems_.size()) - 1));
 }
 
-void CommandPalette::handleEvent(const std::string& keyChar, bool isBack, bool isEnter, bool isTab, bool isUp, bool isDown) {
+void CommandPalette::handleEvent(const std::string& keyChar, bool isBack,
+                                 bool isEnter, bool isTab, bool isUp,
+                                 bool isDown) {
   (void)isEnter;
   if (isBack) {
     if (!query_.empty()) {
@@ -93,7 +101,8 @@ void CommandPalette::handleEvent(const std::string& keyChar, bool isBack, bool i
   }
 
   if (isTab) {
-    if (!filteredItems_.empty() && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(filteredItems_.size())) {
+    if (!filteredItems_.empty() && selectedIndex_ >= 0 &&
+        selectedIndex_ < static_cast<int>(filteredItems_.size())) {
       query_ = filteredItems_[selectedIndex_].command + " ";
       updateFilter();
     }
@@ -101,12 +110,14 @@ void CommandPalette::handleEvent(const std::string& keyChar, bool isBack, bool i
   }
 
   if (isUp) {
-    if (selectedIndex_ > 0) selectedIndex_--;
+    if (selectedIndex_ > 0)
+      selectedIndex_--;
     return;
   }
 
   if (isDown) {
-    if (selectedIndex_ < static_cast<int>(filteredItems_.size()) - 1) selectedIndex_++;
+    if (selectedIndex_ < static_cast<int>(filteredItems_.size()) - 1)
+      selectedIndex_++;
     return;
   }
 
@@ -116,9 +127,11 @@ void CommandPalette::handleEvent(const std::string& keyChar, bool isBack, bool i
   }
 }
 
-void CommandPalette::execute(const std::function<void(const std::string&)>& onExecute) {
+void CommandPalette::execute(
+    const std::function<void(const std::string&)>& onExecute) {
   std::string cmd = query_;
-  if (cmd.empty() && !filteredItems_.empty() && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(filteredItems_.size())) {
+  if (cmd.empty() && !filteredItems_.empty() && selectedIndex_ >= 0 &&
+      selectedIndex_ < static_cast<int>(filteredItems_.size())) {
     cmd = filteredItems_[selectedIndex_].command;
   }
   close();
@@ -134,12 +147,13 @@ Element CommandPalette::render(const ThemePalette& theme) {
     const auto& it = filteredItems_[i];
     bool active = (static_cast<int>(i) == selectedIndex_);
 
-    auto row = hbox({
-      text(active ? " ▌ " : "   ") | color(theme.mauve) | bold,
-      text(it.command) | bold | color(active ? theme.peach : theme.text) | size(WIDTH, EQUAL, 24),
-      text(" " + it.description) | color(theme.subtext) | flex,
-      text(it.argsHint.empty() ? "" : (" " + it.argsHint + " ")) | color(theme.overlay0)
-    });
+    auto row = hbox(
+        {text(active ? " ▌ " : "   ") | color(theme.mauve) | bold,
+         text(it.command) | bold | color(active ? theme.peach : theme.text) |
+             size(WIDTH, EQUAL, 24),
+         text(" " + it.description) | color(theme.subtext) | flex,
+         text(it.argsHint.empty() ? "" : (" " + it.argsHint + " ")) |
+             color(theme.overlay0)});
 
     if (active) {
       row = row | bgcolor(theme.surface0);
@@ -148,44 +162,30 @@ Element CommandPalette::render(const ThemePalette& theme) {
   }
 
   if (items.empty()) {
-    items.push_back(text(" No matching commands.") | color(theme.subtext) | center);
+    items.push_back(text(" No matching commands.") | color(theme.subtext) |
+                    center);
   }
 
-  auto inputBar = hbox({
-    text(" :") | bold | color(theme.peach),
-    text(query_) | color(theme.text) | bold,
-    text("█") | color(theme.mauve) | blink,
-    filler()
-  });
+  auto inputBar = hbox({text(" :") | bold | color(theme.peach),
+                        text(query_) | color(theme.text) | bold,
+                        text("█") | color(theme.mauve) | blink, filler()});
 
-  auto modalInputCard = vbox({
-    inputBar
-  }) | border | color(theme.peach)
-     | size(HEIGHT, EQUAL, 3);
+  auto modalInputCard =
+      vbox({inputBar}) | border | color(theme.peach) | size(HEIGHT, EQUAL, 3);
 
-  auto modalPickerCard = vbox({
-    vbox(std::move(items)) | vscroll_indicator | frame | flex
-  }) | border | color(theme.mauve)
-     | size(HEIGHT, EQUAL, 14);
+  auto modalPickerCard =
+      vbox({vbox(std::move(items)) | vscroll_indicator | frame | flex}) |
+      border | color(theme.mauve) | size(HEIGHT, EQUAL, 14);
 
-  return vbox({
-    hbox({
-      text("  󰌌 Command Palette ") | bold | color(theme.mauve),
-      filler(),
-      text(" [Esc] Close ") | color(theme.subtext)
-    }),
-    text(""),
-    modalInputCard,
-    text(""),
-    modalPickerCard,
-    text(""),
-    text(" [ret] Execute  │  [Tab] Complete  │  [↑/↓] Select  │  [Esc] Close ") | color(theme.subtext)
-  }) | border
-     | color(theme.mauve)
-     | bgcolor(theme.base)
-     | size(WIDTH, EQUAL, 86)
-     | clear_under
-     | center;
+  return vbox(
+             {hbox({text("  󰌌 Command Palette ") | bold | color(theme.mauve),
+                    filler(), text(" [Esc] Close ") | color(theme.subtext)}),
+              text(""), modalInputCard, text(""), modalPickerCard, text(""),
+              text(
+                  " [ret] Execute  │  [Tab] Complete  │  [↑/↓] Select  │  [Esc] Close ") |
+                  color(theme.subtext)}) |
+         border | color(theme.mauve) | bgcolor(theme.base) |
+         size(WIDTH, EQUAL, 86) | clear_under | center;
 }
 
-} // namespace catalist
+}  // namespace catalist

@@ -1,8 +1,9 @@
 #pragma once
 
-#include "catalist/entry.hpp"
 #include <string>
 #include <vector>
+
+#include "catalist/entry.hpp"
 
 namespace catalist {
 
@@ -20,8 +21,11 @@ struct RemoteSearchResult {
 
 class RemoteSearchEngine {
 public:
-  static std::vector<RemoteSearchResult> query(MediaType type, const std::string& searchQuery, std::string& outErr, size_t limit = 10);
+  static std::vector<RemoteSearchResult> query(MediaType type,
+                                               const std::string& searchQuery,
+                                               std::string& outErr,
+                                               size_t limit = 10);
   static std::string urlEncode(const std::string& value);
 };
 
-} // namespace catalist
+}  // namespace catalist

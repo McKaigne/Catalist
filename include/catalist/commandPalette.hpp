@@ -1,11 +1,12 @@
 #pragma once
 
-#include "catalist/themeRegistry.hpp"
-#include <ftxui/dom/elements.hpp>
 #include <ftxui/component/component.hpp>
+#include <ftxui/dom/elements.hpp>
+#include <functional>
 #include <string>
 #include <vector>
-#include <functional>
+
+#include "catalist/themeRegistry.hpp"
 
 namespace catalist {
 
@@ -23,7 +24,8 @@ public:
   void close();
   bool isOpen() const;
 
-  void handleEvent(const std::string& keyChar, bool isBack, bool isEnter, bool isTab, bool isUp, bool isDown);
+  void handleEvent(const std::string& keyChar, bool isBack, bool isEnter,
+                   bool isTab, bool isUp, bool isDown);
   void execute(const std::function<void(const std::string&)>& onExecute);
 
   ftxui::Element render(const ThemePalette& theme);
@@ -39,4 +41,4 @@ private:
   void initCatalog();
 };
 
-} // namespace catalist
+}  // namespace catalist

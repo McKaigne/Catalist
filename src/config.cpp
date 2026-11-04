@@ -1,10 +1,12 @@
 #include "catalist/config.hpp"
+
 #include <fstream>
 #include <sstream>
 
 namespace catalist {
 
-static const char* DEFAULT_KDL = R"kdl(// ==============================================================================
+static const char* DEFAULT_KDL =
+    R"kdl(// ==============================================================================
 // Catalist Workspace Specification (KDL 1.0)
 // ==============================================================================
 
@@ -79,7 +81,8 @@ card "details" width=42 border=true {
 bool AppConfig::generateDefault(const std::filesystem::path& path) {
   std::filesystem::create_directories(path.parent_path());
   std::ofstream file(path);
-  if (!file.is_open()) return false;
+  if (!file.is_open())
+    return false;
   file << DEFAULT_KDL;
   file.close();
 
@@ -94,9 +97,11 @@ bool AppConfig::load(const std::filesystem::path& path) {
   }
 
   std::ifstream file(path);
-  if (!file.is_open()) return false;
+  if (!file.is_open())
+    return false;
 
-  std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  std::string content((std::istreambuf_iterator<char>(file)),
+                      std::istreambuf_iterator<char>());
   std::string err;
   kdlDoc = kdl::Document::parse(content, err);
 
@@ -109,11 +114,16 @@ bool AppConfig::load(const std::filesystem::path& path) {
     reverseSort = gen->getPropBool("reverse-sort", reverseSort);
 
     for (const auto& child : gen->children) {
-      if (child.name == "theme") theme = child.getArgString(0, theme);
-      else if (child.name == "mouse") mouse = child.getArg(0).asBool(mouse);
-      else if (child.name == "default-media") defaultMedia = child.getArgString(0, defaultMedia);
-      else if (child.name == "default-sort") defaultSort = child.getArgString(0, defaultSort);
-      else if (child.name == "reverse-sort") reverseSort = child.getArg(0).asBool(reverseSort);
+      if (child.name == "theme")
+        theme = child.getArgString(0, theme);
+      else if (child.name == "mouse")
+        mouse = child.getArg(0).asBool(mouse);
+      else if (child.name == "default-media")
+        defaultMedia = child.getArgString(0, defaultMedia);
+      else if (child.name == "default-sort")
+        defaultSort = child.getArgString(0, defaultSort);
+      else if (child.name == "reverse-sort")
+        reverseSort = child.getArg(0).asBool(reverseSort);
     }
   }
 
@@ -133,20 +143,32 @@ bool AppConfig::load(const std::filesystem::path& path) {
 
 bool AppConfig::save(const std::filesystem::path& path) const {
   kdl::Document doc = kdlDoc;
-  auto mk = [](const std::string& name, kdl::Value v) { kdl::Node n; n.name = name; n.args.push_back(v); return n; };
-  auto S = [](const std::string& s) { kdl::Value v; v.type = kdl::Value::Type::String; v.stringVal = s; return v; };
-  auto B = [](bool b) { kdl::Value v; v.type = kdl::Value::Type::Boolean; v.boolVal = b; return v; };
+  auto mk = [](const std::string& name, kdl::Value v) {
+    kdl::Node n;
+    n.name = name;
+    n.args.push_back(v);
+    return n;
+  };
+  auto S = [](const std::string& s) {
+    kdl::Value v;
+    v.type = kdl::Value::Type::String;
+    v.stringVal = s;
+    return v;
+  };
+  auto B = [](bool b) {
+    kdl::Value v;
+    v.type = kdl::Value::Type::Boolean;
+    v.boolVal = b;
+    return v;
+  };
 
   bool foundGeneral = false;
   for (auto& n : doc.rootNodes) {
     if (n.name == "general") {
-      n.children = {
-        mk("theme", S(theme)),
-        mk("mouse", B(mouse)),
-        mk("default-media", S(defaultMedia)),
-        mk("default-sort", S(defaultSort)),
-        mk("reverse-sort", B(reverseSort))
-      };
+      n.children = {mk("theme", S(theme)), mk("mouse", B(mouse)),
+                    mk("default-media", S(defaultMedia)),
+                    mk("default-sort", S(defaultSort)),
+                    mk("reverse-sort", B(reverseSort))};
       n.props.clear();
       foundGeneral = true;
       break;
@@ -155,21 +177,19 @@ bool AppConfig::save(const std::filesystem::path& path) const {
   if (!foundGeneral) {
     kdl::Node gn;
     gn.name = "general";
-    gn.children = {
-      mk("theme", S(theme)),
-      mk("mouse", B(mouse)),
-      mk("default-media", S(defaultMedia)),
-      mk("default-sort", S(defaultSort)),
-      mk("reverse-sort", B(reverseSort))
-    };
+    gn.children = {mk("theme", S(theme)), mk("mouse", B(mouse)),
+                   mk("default-media", S(defaultMedia)),
+                   mk("default-sort", S(defaultSort)),
+                   mk("reverse-sort", B(reverseSort))};
     doc.rootNodes.insert(doc.rootNodes.begin(), gn);
   }
 
   std::filesystem::create_directories(path.parent_path());
   std::ofstream file(path);
-  if (!file.is_open()) return false;
+  if (!file.is_open())
+    return false;
   file << doc.serialize();
   return true;
 }
 
-} // namespace catalist
+}  // namespace catalist

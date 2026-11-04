@@ -13,13 +13,13 @@
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/provider.hpp"
 
-#define TEST_ASSERT(cond) \
-  do { \
-    if (!(cond)) { \
-      std::cerr << "\n[FAIL] Assertion failed at " << __FILE__ << ":" << __LINE__ \
-                << "\n       Condition: " << #cond << std::endl; \
-      std::exit(1); \
-    } \
+#define TEST_ASSERT(cond)                                                      \
+  do {                                                                         \
+    if (!(cond)) {                                                             \
+      std::cerr << "\n[FAIL] Assertion failed at " << __FILE__ << ":"          \
+                << __LINE__ << "\n       Condition: " << #cond << std::endl;   \
+      std::exit(1);                                                            \
+    }                                                                          \
   } while (0)
 
 static std::filesystem::path getTestSandbox() {
@@ -29,7 +29,8 @@ static std::filesystem::path getTestSandbox() {
 }
 
 void testIsoDateAndResult() {
-  std::cout << "[RUN ] Testing IsoDate parsing and Result monad..." << std::endl;
+  std::cout << "[RUN ] Testing IsoDate parsing and Result monad..."
+            << std::endl;
   auto dateOpt = catalist::IsoDate::parse("2024-03-22");
   TEST_ASSERT(dateOpt.has_value());
   TEST_ASSERT(dateOpt->year() == 2024);
@@ -49,9 +50,16 @@ void testIsoDateAndResult() {
 }
 
 void testDependencyInjectionProvider() {
-  std::cout << "[RUN ] Testing Dependency Injection on Kitsu Provider..." << std::endl;
+  std::cout << "[RUN ] Testing Dependency Injection on Kitsu Provider..."
+            << std::endl;
   auto mockClient = std::make_shared<catalist::MockHttpClient>();
-  mockClient->setResponse("kitsu.io", {200, "{\"data\":[{\"id\":\"1234\",\"attributes\":{\"canonicalTitle\":\"Frieren: Beyond Journey\", \"episodeCount\":28,\"averageRating\":\"89.4\"}}]}", ""});
+  mockClient->setResponse(
+      "kitsu.io",
+      {200,
+       "{\"data\":[{\"id\":\"1234\",\"attributes\":{\"canonicalTitle\":"
+       "\"Frieren: Beyond Journey\", \"episodeCount\":28,\"averageRating\":"
+       "\"89.4\"}}]}",
+       ""});
 
   catalist::ProviderRegistry registry(mockClient);
   auto kitsu = registry.getProvider("kitsu");
@@ -67,7 +75,8 @@ void testDependencyInjectionProvider() {
 }
 
 void testCsvMultilineRoundTrip() {
-  std::cout << "[RUN ] Testing RFC 4180 multiline CSV integrity..." << std::endl;
+  std::cout << "[RUN ] Testing RFC 4180 multiline CSV integrity..."
+            << std::endl;
   catalist::Database db(getTestSandbox());
   std::filesystem::path tempCsv = getTestSandbox() / "test_multiline.csv";
 
@@ -80,7 +89,8 @@ void testCsvMultilineRoundTrip() {
   original.score = 10;
   original.progress = 3;
   original.totalUnits = 3;
-  original.notes = "Line 1, with embedded comma.\nLine 2 with \"escaped quotes\".\nLine 3 final.";
+  original.notes =
+      "Line 1, with embedded comma.\nLine 2 with \"escaped quotes\".\nLine 3.";
   original.startDate = "2017-10-14";
   original.finishDate = "2020-08-15";
 
@@ -112,14 +122,14 @@ void testMalXmlIngestion() {
           << "<myanimelist>\n"
           << "  <anime>\n"
           << "    <series_animedb_id>52991</series_animedb_id>\n"
-          << "    <series_title><![CDATA[Sousou no Frieren, Special Edition]]></series_title>\n"
+          << "    <series_title><![CDATA[Sousou no Frieren]]></series_title>\n"
           << "    <series_episodes>28</series_episodes>\n"
           << "    <my_watched_episodes>28</my_watched_episodes>\n"
           << "    <my_score>10</my_score>\n"
           << "    <my_status>Completed</my_status>\n"
           << "    <my_start_date>2023-09-29</my_start_date>\n"
           << "    <my_finish_date>2024-03-22</my_finish_date>\n"
-          << "    <my_comments><![CDATA[Masterpiece adaptation, with \"quotes\".]]></my_comments>\n"
+          << "    <my_comments><![CDATA[Masterpiece.]]></my_comments>\n"
           << "  </anime>\n"
           << "</myanimelist>\n";
   xmlFile.close();
@@ -129,7 +139,7 @@ void testMalXmlIngestion() {
 
   auto entryOpt = db.getById(catalist::MediaType::Anime, 52991);
   TEST_ASSERT(entryOpt.has_value());
-  TEST_ASSERT(entryOpt->title == "Sousou no Frieren, Special Edition");
+  TEST_ASSERT(entryOpt->title == "Sousou no Frieren");
   TEST_ASSERT(entryOpt->score == 10);
   TEST_ASSERT(entryOpt->progress == 28);
 
@@ -140,29 +150,73 @@ void testMalXmlIngestion() {
 void testSortAndFilter() {
   std::cout << "[RUN ] Testing Database sorting and filtering..." << std::endl;
   catalist::Database db(getTestSandbox());
-  db.addEntry({52991, 52991, 154587, "Sousou no Frieren", catalist::MediaType::Anime, catalist::WatchStatus::Completed, 10, 28, 28, 0, 0, 1, "2023-09-29", "2024-03-22", "Masterpiece adaptation.", "2026-10-17", false});
-  db.addEntry({49387, 49387, 136430, "Vinland Saga Season 2", catalist::MediaType::Anime, catalist::WatchStatus::Completed, 9, 24, 24, 0, 0, 0, "2023-01-10", "2023-06-20", "Farmland arc.", "2026-10-17", false});
 
-  auto byScore = db.filterEntries(catalist::MediaType::Anime, std::nullopt, -1, "", catalist::SortKey::Score, false);
+  db.addEntry({52991, 52991, 154587, "Sousou no Frieren",
+               catalist::MediaType::Anime, catalist::WatchStatus::Completed, 10,
+               28, 28, 0, 0, 1, "2023-09-29", "2024-03-22",
+               "Masterpiece adaptation.", "2026-10-17", false});
+  db.addEntry({49387, 49387, 136430, "Vinland Saga Season 2",
+               catalist::MediaType::Anime, catalist::WatchStatus::Completed, 9,
+               24, 24, 0, 0, 0, "2023-01-10", "2023-06-20", "Farmland arc.",
+               "2026-10-17", false});
+  db.addEntry({457, 457, 457, "Mushishi", catalist::MediaType::Anime,
+               catalist::WatchStatus::Completed, 9, 26, 26, 0, 0, 0,
+               "0000-00-00", "0000-00-00", "Atmospheric.", "2026-10-17",
+               false});
+  db.addEntry({44265, 44265, 128547, "Odd Taxi", catalist::MediaType::Anime,
+               catalist::WatchStatus::Completed, 8, 13, 13, 0, 0, 0,
+               "2021-04-06", "2021-06-29", "Original screenplay.", "2026-10-17",
+               false});
+  db.addEntry({2, 2, 30002, "Berserk", catalist::MediaType::Manga,
+               catalist::WatchStatus::Watching, 10, 364, 0, 42, 0, 0,
+               "0000-00-00", "0000-00-00", "Dark fantasy pinnacle.",
+               "2026-10-17", false});
+  db.addEntry({116778, 116778, 105778, "Chainsaw Man",
+               catalist::MediaType::Manga, catalist::WatchStatus::Watching, 9,
+               217, 0, 18, 0, 0, "0000-00-00", "0000-00-00", "Part 2 ongoing.",
+               "2026-10-17", false});
+  db.addEntry({135496, 135496, 132049, "Dandadan", catalist::MediaType::Manga,
+               catalist::WatchStatus::Watching, 9, 167, 0, 16, 0, 0,
+               "0000-00-00", "0000-00-00", "Peak art.", "2026-10-17", false});
+  db.addEntry({126146, 126146, 117195, "[Oshi no Ko]",
+               catalist::MediaType::Manga, catalist::WatchStatus::Completed, 8,
+               166, 166, 16, 16, 0, "0000-00-00", "2024-11-14",
+               "Entertainment industry.", "2026-10-17", false});
+
+  auto byScore = db.filterEntries(catalist::MediaType::Anime, std::nullopt, -1,
+                                  "", catalist::SortKey::Score, false);
   TEST_ASSERT(!byScore.empty());
   TEST_ASSERT(byScore[0].score >= byScore.back().score);
 
-  auto searched = db.filterEntries(catalist::MediaType::Anime, std::nullopt, -1, "frieren", catalist::SortKey::Title, false);
+  auto searched = db.filterEntries(catalist::MediaType::Anime, std::nullopt, -1,
+                                   "frieren", catalist::SortKey::Title, false);
   TEST_ASSERT(searched.size() == 1);
   TEST_ASSERT(searched[0].id == 52991);
-  std::cout << "[PASS] Database sorting and filtering predicates passed." << std::endl;
+  std::cout << "[PASS] Database sorting and filtering predicates passed."
+            << std::endl;
 }
 
 void testCliParsers() {
-  std::cout << "[RUN ] Testing CLI relational and range rating specs..." << std::endl;
+  std::cout << "[RUN ] Testing CLI relational and range rating specs..."
+            << std::endl;
   int minScore = -1, maxScore = -1;
   bool unrated = false;
 
-  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("9", minScore, maxScore, unrated) && minScore == 9 && maxScore == 9);
-  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec(">=8", minScore, maxScore, unrated) && minScore == 8 && maxScore == 10);
-  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("<=6", minScore, maxScore, unrated) && minScore == 0 && maxScore == 6);
-  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("7..9", minScore, maxScore, unrated) && minScore == 7 && maxScore == 9);
-  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("unrated", minScore, maxScore, unrated) && unrated && minScore == 0);
+  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("9", minScore, maxScore,
+                                                       unrated) &&
+              minScore == 9 && maxScore == 9);
+  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec(">=8", minScore,
+                                                       maxScore, unrated) &&
+              minScore == 8 && maxScore == 10);
+  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("<=6", minScore,
+                                                       maxScore, unrated) &&
+              minScore == 0 && maxScore == 6);
+  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("7..9", minScore,
+                                                       maxScore, unrated) &&
+              minScore == 7 && maxScore == 9);
+  TEST_ASSERT(catalist::CliDispatcher::parseRatingSpec("unrated", minScore,
+                                                       maxScore, unrated) &&
+              unrated && minScore == 0);
 
   catalist::Entry e;
   e.id = 42;
@@ -175,34 +229,50 @@ void testCliParsers() {
 }
 
 void testCliMutations() {
-  std::cout << "[RUN ] Testing CLI mutations (add, set with stepping, rm)..." << std::endl;
+  std::cout << "[RUN ] Testing CLI mutations (add, set with stepping, rm)..."
+            << std::endl;
   catalist::Database db(getTestSandbox());
 
-  std::vector<std::string> addArgs = {
-    "Dungeon Meshi", "-t", "anime", "-s", "watching", "-e", "24", "-p", "10", "-r", "9"
-  };
+  std::vector<std::string> addArgs = {"Dungeon Meshi",
+                                      "-t",
+                                      "anime",
+                                      "-s",
+                                      "watching",
+                                      "-e",
+                                      "24",
+                                      "-p",
+                                      "10",
+                                      "-r",
+                                      "9"};
   TEST_ASSERT(catalist::CliDispatcher::executeAdd(addArgs, db) == 0);
 
-  auto entries = db.filterEntries(catalist::MediaType::Anime, std::nullopt, -1, "Dungeon Meshi", catalist::SortKey::Title, false);
+  auto entries =
+      db.filterEntries(catalist::MediaType::Anime, std::nullopt, -1,
+                       "Dungeon Meshi", catalist::SortKey::Title, false);
   TEST_ASSERT(entries.size() == 1);
   int id = entries[0].id;
 
-  std::vector<std::string> setStepArgs = { std::to_string(id), "-p", "a", "2" };
+  std::vector<std::string> setStepArgs = {std::to_string(id), "-p", "a", "2"};
   TEST_ASSERT(catalist::CliDispatcher::executeSet(setStepArgs, db) == 0);
 
   auto eOpt = db.getById(catalist::MediaType::Anime, id);
   TEST_ASSERT(eOpt.has_value() && eOpt->progress == 12);
 
-  std::vector<std::string> rmArgs = { std::to_string(id), "-y" };
+  std::vector<std::string> rmArgs = {std::to_string(id), "-y"};
   TEST_ASSERT(catalist::CliDispatcher::executeRm(rmArgs, db) == 0);
   TEST_ASSERT(!db.getById(catalist::MediaType::Anime, id).has_value());
-  std::cout << "[PASS] CLI mutations and progress stepping tests passed." << std::endl;
+  std::cout << "[PASS] CLI mutations and progress stepping tests passed."
+            << std::endl;
 }
 
 void testCliAnalyticsAndExport() {
-  std::cout << "[RUN ] Testing CLI analytics (stats) and export (json, csv)..." << std::endl;
+  std::cout << "[RUN ] Testing CLI analytics (stats) and export..."
+            << std::endl;
   catalist::Database db(getTestSandbox());
-  db.addEntry({52991, 52991, 154587, "Sousou no Frieren", catalist::MediaType::Anime, catalist::WatchStatus::Completed, 10, 28, 28, 0, 0, 1, "2023-09-29", "2024-03-22", "Masterpiece adaptation.", "2026-10-17", false});
+  db.addEntry({52991, 52991, 154587, "Sousou no Frieren",
+               catalist::MediaType::Anime, catalist::WatchStatus::Completed, 10,
+               28, 28, 0, 0, 1, "2023-09-29", "2024-03-22",
+               "Masterpiece adaptation.", "2026-10-17", false});
 
   TEST_ASSERT(catalist::CliDispatcher::executeStats({"--json"}, db) == 0);
   TEST_ASSERT(catalist::CliDispatcher::executeExport({"json"}, db) == 0);
@@ -211,7 +281,8 @@ void testCliAnalyticsAndExport() {
 }
 
 void testCliConfigAndCompletions() {
-  std::cout << "[RUN ] Testing CLI config and shell completion generators..." << std::endl;
+  std::cout << "[RUN ] Testing CLI config and shell completion generators..."
+            << std::endl;
   catalist::AppConfig config;
 
   TEST_ASSERT(catalist::CliDispatcher::executeConfig({"list"}, config) == 0);

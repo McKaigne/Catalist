@@ -1,4 +1,5 @@
 #include "catalist/platform/httpClient.hpp"
+
 #include <array>
 #include <cstdio>
 #include <sstream>
@@ -9,7 +10,8 @@ namespace {
 
 struct PipeDeleter {
   void operator()(FILE* fp) const {
-    if (fp) pclose(fp);
+    if (fp)
+      pclose(fp);
   }
 };
 
@@ -21,8 +23,8 @@ Result<HttpResponse> CurlHttpClient::execute(const HttpRequest& request) {
   }
 
   std::ostringstream cmd;
-  cmd << "curl -s -S -L -m " << (request.timeout.count() / 1000)
-      << " -X " << request.method;
+  cmd << "curl -s -S -L -m " << (request.timeout.count() / 1000) << " -X "
+      << request.method;
 
   for (const auto& [headerKey, headerVal] : request.headers) {
     cmd << " -H \"" << headerKey << ": " << headerVal << "\"";
@@ -51,7 +53,8 @@ Result<HttpResponse> CurlHttpClient::execute(const HttpRequest& request) {
 
   std::array<char, 512> buffer;
   std::string responseBody;
-  while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) != nullptr) {
+  while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) !=
+         nullptr) {
     responseBody += buffer.data();
   }
 
@@ -62,7 +65,8 @@ Result<HttpResponse> CurlHttpClient::execute(const HttpRequest& request) {
   return Result<HttpResponse>::success(response);
 }
 
-void MockHttpClient::setResponse(const std::string& urlPattern, const HttpResponse& response) {
+void MockHttpClient::setResponse(const std::string& urlPattern,
+                                 const HttpResponse& response) {
   responses_[urlPattern] = response;
 }
 
@@ -72,7 +76,8 @@ Result<HttpResponse> MockHttpClient::execute(const HttpRequest& request) {
       return Result<HttpResponse>::success(resp);
     }
   }
-  return Result<HttpResponse>::failure("MockHttpClient: No fixture for " + request.url);
+  return Result<HttpResponse>::failure("MockHttpClient: No fixture for " +
+                                       request.url);
 }
 
 }  // namespace catalist

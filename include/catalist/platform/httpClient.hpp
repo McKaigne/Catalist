@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+
 #include "catalist/core/result.hpp"
 
 namespace catalist {
@@ -27,24 +28,30 @@ struct HttpResponse {
 };
 
 class IHttpClient {
- public:
+public:
   virtual ~IHttpClient() = default;
-  [[nodiscard]] virtual Result<HttpResponse> execute(const HttpRequest& request) = 0;
-  [[nodiscard]] Result<HttpResponse> Execute(const HttpRequest& request) { return execute(request); }
+  [[nodiscard]] virtual Result<HttpResponse> execute(
+      const HttpRequest& request) = 0;
+  [[nodiscard]] Result<HttpResponse> Execute(const HttpRequest& request) {
+    return execute(request);
+  }
 };
 
 class CurlHttpClient : public IHttpClient {
- public:
+public:
   Result<HttpResponse> execute(const HttpRequest& request) override;
 };
 
 class MockHttpClient : public IHttpClient {
- public:
+public:
   void setResponse(const std::string& urlPattern, const HttpResponse& response);
-  void SetResponse(const std::string& urlPattern, const HttpResponse& response) { setResponse(urlPattern, response); }
+  void SetResponse(const std::string& urlPattern,
+                   const HttpResponse& response) {
+    setResponse(urlPattern, response);
+  }
   Result<HttpResponse> execute(const HttpRequest& request) override;
 
- private:
+private:
   std::unordered_map<std::string, HttpResponse> responses_;
 };
 

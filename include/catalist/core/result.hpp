@@ -8,9 +8,11 @@ namespace catalist {
 
 template <typename T>
 class Result {
- public:
+public:
   static Result success(T value) { return Result(std::move(value)); }
-  static Result failure(std::string error) { return Result(Error{std::move(error)}); }
+  static Result failure(std::string error) {
+    return Result(Error{std::move(error)});
+  }
 
   static Result Success(T value) { return success(std::move(value)); }
   static Result Failure(std::string error) { return failure(std::move(error)); }
@@ -24,11 +26,17 @@ class Result {
   [[nodiscard]] const T& Value() const { return value(); }
   [[nodiscard]] T& Value() { return value(); }
 
-  [[nodiscard]] const std::string& errorMessage() const { return std::get<Error>(storage_).message; }
-  [[nodiscard]] const std::string& ErrorMessage() const { return errorMessage(); }
+  [[nodiscard]] const std::string& errorMessage() const {
+    return std::get<Error>(storage_).message;
+  }
+  [[nodiscard]] const std::string& ErrorMessage() const {
+    return errorMessage();
+  }
 
- private:
-  struct Error { std::string message; };
+private:
+  struct Error {
+    std::string message;
+  };
   std::variant<T, Error> storage_;
 
   explicit Result(T val) : storage_(std::move(val)) {}

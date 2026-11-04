@@ -41,4 +41,4 @@ private:
   static ThemePalette customPalette_;
 };
 
-} // namespace catalist
+}  // namespace catalist

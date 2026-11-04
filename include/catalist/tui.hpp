@@ -1,45 +1,36 @@
 #pragma once
 
-#include "catalist/database.hpp"
-#include "catalist/config.hpp"
-#include "catalist/themeRegistry.hpp"
-#include "catalist/commandPalette.hpp"
+#include <set>
 #include <string>
 #include <vector>
-#include <set>
+
+#include "catalist/commandPalette.hpp"
+#include "catalist/config.hpp"
+#include "catalist/database.hpp"
+#include "catalist/themeRegistry.hpp"
 
 namespace catalist {
 
 enum class AppMode {
-  Nor, // Normal modeless browsing
-  Sch, // Active search / filter typing
-  Edt, // Inline column / field cell editing
-  Cmd, // Floating command palette modal
-  Vis  // Visual batch selection active
+  Nor,  // Normal modeless browsing
+  Sch,  // Active search / filter typing
+  Edt,  // Inline column / field cell editing
+  Cmd,  // Floating command palette modal
+  Vis   // Visual batch selection active
 };
 
-enum class EditField {
-  Status,
-  Rating,
-  Progress,
-  Title,
-  Notes
-};
+enum class EditField { Status, Rating, Progress, Title, Notes };
 
 enum class ViewTab {
-  About,    // 0: Catalist
-  Anime,    // 1: Anime
-  Manga,    // 2: Manga
-  Overview, // 3: MAL Statistics Replica
-  Sync,     // 4: Upstream Sync & Manual Backups
-  Settings  // 5: Settings & Appearance
+  About,     // 0: Catalist
+  Anime,     // 1: Anime
+  Manga,     // 2: Manga
+  Overview,  // 3: MAL Statistics Replica
+  Sync,      // 4: Upstream Sync & Manual Backups
+  Settings   // 5: Settings & Appearance
 };
 
-enum class FocusedCard {
-  Sidebar,
-  Catalog,
-  Details
-};
+enum class FocusedCard { Sidebar, Catalog, Details };
 
 struct HistoryAction {
   enum Type { Mutate, Delete, Add } type;
@@ -61,4 +52,4 @@ private:
   std::vector<HistoryAction> redoStack_;
 };
 
-} // namespace catalist
+}  // namespace catalist

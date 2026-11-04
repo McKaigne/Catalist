@@ -1,10 +1,11 @@
 #pragma once
 
-#include "catalist/themeRegistry.hpp"
-#include "catalist/keybindManager.hpp"
-#include "catalist/kdl.hpp"
-#include <string>
 #include <filesystem>
+#include <string>
+
+#include "catalist/kdl.hpp"
+#include "catalist/keybindManager.hpp"
+#include "catalist/themeRegistry.hpp"
 
 namespace catalist {
 
@@ -24,4 +25,4 @@ struct AppConfig {
   bool generateDefault(const std::filesystem::path& path);
 };
 
-} // namespace catalist
+}  // namespace catalist

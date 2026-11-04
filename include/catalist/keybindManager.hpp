@@ -53,4 +53,4 @@ private:
   void loadDefaults();
 };
 
-} // namespace catalist
+}  // namespace catalist

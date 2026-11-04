@@ -8,11 +8,13 @@
 namespace catalist {
 
 class IsoDate {
- public:
+public:
   static std::optional<IsoDate> parse(std::string_view dateStr);
   static IsoDate today();
 
-  static std::optional<IsoDate> Parse(std::string_view dateStr) { return parse(dateStr); }
+  static std::optional<IsoDate> Parse(std::string_view dateStr) {
+    return parse(dateStr);
+  }
   static IsoDate Today() { return today(); }
 
   [[nodiscard]] std::string toString() const;
@@ -33,15 +35,17 @@ class IsoDate {
   }
   bool operator!=(const IsoDate& other) const { return !(*this == other); }
   bool operator<(const IsoDate& other) const {
-    if (year_ != other.year_) return year_ < other.year_;
-    if (month_ != other.month_) return month_ < other.month_;
+    if (year_ != other.year_)
+      return year_ < other.year_;
+    if (month_ != other.month_)
+      return month_ < other.month_;
     return day_ < other.day_;
   }
   bool operator<=(const IsoDate& other) const { return !(other < *this); }
   bool operator>(const IsoDate& other) const { return other < *this; }
   bool operator>=(const IsoDate& other) const { return !(*this < other); }
 
- private:
+private:
   int year_ = 0;
   int month_ = 0;
   int day_ = 0;

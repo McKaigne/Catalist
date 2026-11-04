@@ -33,6 +33,7 @@
               ninja
               pkg-config
               makeWrapper
+              installShellFiles
             ];
 
             buildInputs = with pkgs; [
@@ -40,17 +41,38 @@
             ];
 
             postInstall = ''
+              if [ -f doc/catalist.1 ]; then
+                installManPage doc/catalist.1
+              fi
+              if [ -f completions/catalist.bash ]; then
+                installShellCompletion --bash completions/catalist.bash
+              fi
+              if [ -f completions/_catalist ]; then
+                installShellCompletion --zsh completions/_catalist
+              fi
+              if [ -f completions/catalist.fish ]; then
+                installShellCompletion --fish completions/catalist.fish
+              fi
+
               wrapProgram $out/bin/catalist \
-                --prefix PATH : ${pkgs.lib.makeBinPath (with pkgs; [
-                  curl
-                  wl-clipboard
-                  xclip
-                  xdg-utils
-                ])}
+                --prefix PATH : ${
+                  pkgs.lib.makeBinPath (
+                    with pkgs;
+                    [
+                      curl
+                      wl-clipboard
+                      xclip
+                      xdg-utils
+                    ]
+                  )
+                }
             '';
 
             meta = {
               description = "Anime and Manga Watchlist TUI";
+              homepage = "https://github.com/McKaigne/Catalist";
+              license = pkgs.lib.licenses.mit;
+              platforms = pkgs.lib.platforms.unix;
               mainProgram = "catalist";
             };
           };
@@ -76,6 +98,7 @@
               wl-clipboard
               xclip
               xdg-utils
+              clang-tools
             ];
           };
         }

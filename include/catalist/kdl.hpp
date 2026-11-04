@@ -1,9 +1,9 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <unordered_map>
 #include <optional>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace catalist::kdl {
 
@@ -26,13 +26,16 @@ struct Node {
   std::vector<Node> children;
 
   bool hasProp(const std::string& key) const;
-  Value getProp(const std::string& key, const Value& defaultVal = Value{}) const;
-  std::string getPropString(const std::string& key, const std::string& defaultVal = "") const;
+  Value getProp(const std::string& key,
+                const Value& defaultVal = Value{}) const;
+  std::string getPropString(const std::string& key,
+                            const std::string& defaultVal = "") const;
   int getPropInt(const std::string& key, int defaultVal = 0) const;
   bool getPropBool(const std::string& key, bool defaultVal = false) const;
 
   Value getArg(size_t index, const Value& defaultVal = Value{}) const;
-  std::string getArgString(size_t index, const std::string& defaultVal = "") const;
+  std::string getArgString(size_t index,
+                           const std::string& defaultVal = "") const;
 
   std::vector<Node> getChildren(const std::string& childName) const;
   std::optional<Node> getChild(const std::string& childName) const;
@@ -48,4 +51,4 @@ struct Document {
   std::string serialize(int indent = 0) const;
 };
 
-} // namespace catalist::kdl
+}  // namespace catalist::kdl

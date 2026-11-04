@@ -1,9 +1,10 @@
-#include "catalist/database.hpp"
-#include "catalist/config.hpp"
-#include "catalist/tui.hpp"
-#include "catalist/cli.hpp"
 #include <clocale>
 #include <csignal>
+
+#include "catalist/cli.hpp"
+#include "catalist/config.hpp"
+#include "catalist/database.hpp"
+#include "catalist/tui.hpp"
 
 int main(int argc, char* argv[]) {
   std::setlocale(LC_ALL, "");

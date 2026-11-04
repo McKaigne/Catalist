@@ -1,7 +1,8 @@
 #pragma once
 
-#include "catalist/database.hpp"
 #include <string>
+
+#include "catalist/database.hpp"
 
 namespace catalist {
 
@@ -18,7 +19,7 @@ public:
   bool isAuthenticated() const;
   bool authenticate(std::string& outMsg);
   void logout();
-  
+
   std::string getAccessToken();
   void load();
   void save();
@@ -26,7 +27,8 @@ public:
 private:
   MalAuth();
   MalCredentials creds_;
-  bool exchangeToken(const std::string& code, const std::string& verifier, std::string& outMsg);
+  bool exchangeToken(const std::string& code, const std::string& verifier,
+                     std::string& outMsg);
 };
 
 class MetadataSync {
@@ -34,4 +36,4 @@ public:
   static size_t syncOngoing(Database& db, std::string& outMsg);
 };
 
-} // namespace catalist
+}  // namespace catalist

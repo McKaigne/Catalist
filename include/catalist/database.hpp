@@ -1,21 +1,15 @@
 #pragma once
 
-#include "catalist/entry.hpp"
-#include <vector>
-#include <string>
-#include <optional>
 #include <filesystem>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "catalist/entry.hpp"
 
 namespace catalist {
 
-enum class SortKey {
-  Score,
-  Status,
-  Title,
-  Progress,
-  Date,
-  Id
-};
+enum class SortKey { Score, Status, Title, Progress, Date, Id };
 
 struct ActivityRecord {
   std::string timestamp;
@@ -43,10 +37,8 @@ public:
 
   std::vector<Entry> filterEntries(MediaType type,
                                    std::optional<WatchStatus> status,
-                                   int scoreFilter,
-                                   const std::string& query,
-                                   SortKey sortKey,
-                                   bool reverse) const;
+                                   int scoreFilter, const std::string& query,
+                                   SortKey sortKey, bool reverse) const;
 
   size_t countByStatus(MediaType type, WatchStatus status) const;
   size_t countByScore(MediaType type, int score) const;
@@ -70,7 +62,8 @@ public:
   bool saveCsv(MediaType type, const std::filesystem::path& path) const;
 
   void logActivity(const ActivityRecord& record);
-  std::vector<ActivityRecord> getRecentActivity(MediaType type, size_t limit = 3) const;
+  std::vector<ActivityRecord> getRecentActivity(MediaType type,
+                                                size_t limit = 3) const;
   bool loadHistory();
   bool saveHistory() const;
 
@@ -89,4 +82,4 @@ private:
   const std::vector<Entry>& getList(MediaType type) const;
 };
 
-} // namespace catalist
+}  // namespace catalist

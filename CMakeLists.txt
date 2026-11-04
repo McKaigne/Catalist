@@ -19,6 +19,7 @@ include_directories(include)
 
 set(CATALIST_SOURCES
   src/core/date.cpp
+  src/platform/httpClient.cpp
   src/kdl.cpp
   src/entry.cpp
   src/config.cpp
@@ -31,7 +32,6 @@ set(CATALIST_SOURCES
   src/keybindManager.cpp
   src/commandPalette.cpp
   src/provider.cpp
-  src/platform/httpClient.cpp
 )
 
 add_executable(catalist

@@ -1,4 +1,5 @@
 #include "catalist/core/date.hpp"
+
 #include <chrono>
 #include <iomanip>
 #include <sstream>
@@ -39,9 +40,8 @@ std::string IsoDate::toString() const {
     return "0000-00-00";
   }
   std::ostringstream ss;
-  ss << std::setfill(char(48)) << std::setw(4) << year_ << "-"
-     << std::setw(2) << month_ << "-"
-     << std::setw(2) << day_;
+  ss << std::setfill(char(48)) << std::setw(4) << year_ << "-" << std::setw(2)
+     << month_ << "-" << std::setw(2) << day_;
   return ss.str();
 }
 

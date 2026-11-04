@@ -1,0 +1,49 @@
+.TH CATALIST 1 "November 2026" "v0.2.0" "User Commands"
+.SH NAME
+catalist \- keyboard-driven anime and manga watchlist manager
+.SH SYNOPSIS
+.B catalist
+[\fIOPTIONS\fR]
+.br
+.B catalist
+\fICOMMAND\fR [\fIARGS...\fR]
+.SH DESCRIPTION
+.B catalist
+is a modal, local-first terminal interface and headless Unix CLI for tracking
+anime series and manga publications in RFC 4180 CSV files.
+.SH COMMANDS
+.TP
+.BR ls " [" \fIFLAGS\fR ]
+List catalog entries in table, plain title, CSV, or JSON streams.
+.TP
+.BR show " <" \fIID\fR | \fITITLE\fR | - >
+Display record details. Pass \fB-\fR to read IDs from stdin.
+.TP
+.BR count " [" \fIFLAGS\fR ]
+Emit integer count of matching entries.
+.TP
+.BR add " <" \fITITLE\fR "> [" \fIFLAGS\fR ]
+Append a new entry.
+.TP
+.BR set " <" \fIID\fR | \fITITLE\fR | - > [" \fIFLAGS\fR ]
+Update fields or step progress (\fB-p +1\fR).
+.TP
+.BR rm " <" \fIID\fR | \fITITLE\fR | - > [\fB-y\fR|\fB--yes\fR]
+Remove entries.
+.TP
+.BR stats " [" \fB--json\fR ]
+Display watch time, completion ratios, and telemetry.
+.TP
+.BR export " <" \fIjson\fR | \fIcsv\fR >
+Dump database to standard output.
+.TP
+.BR import " [" \fB--clean\fR "] <" \fIFILE.XML\fR "...>"
+Ingest MyAnimeList XML archives.
+.TP
+.BR config " [" \fIlist\fR | \fIget\fR | \fIset\fR ]
+Inspect or modify settings in \fBcatalist.kdl\fR.
+.TP
+.BR completion " <" \fIbash\fR | \fIzsh\fR | \fIfish\fR >
+Emit shell completion definitions.
+.SH AUTHORS
+McKaigne <https://github.com/McKaigne/Catalist>

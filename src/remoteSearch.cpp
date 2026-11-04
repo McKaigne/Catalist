@@ -11,6 +11,8 @@
 
 namespace catalist {
 
+namespace {
+
 struct PipeDeleter {
   void operator()(FILE* f) const {
     if (f)
@@ -18,7 +20,20 @@ struct PipeDeleter {
   }
 };
 
-static std::string execCommand(const std::string& cmd) {
+std::string escapeShellArg(std::string_view arg) {
+  std::string out = "'";
+  for (char c : arg) {
+    if (c == '\'') {
+      out += "'\\''";
+    } else {
+      out += c;
+    }
+  }
+  out += "'";
+  return out;
+}
+
+std::string execCommand(const std::string& cmd) {
   std::array<char, 256> buffer;
   std::string result;
   std::unique_ptr<FILE, PipeDeleter> pipe(popen(cmd.c_str(), "r"));
@@ -31,24 +46,7 @@ static std::string execCommand(const std::string& cmd) {
   return result;
 }
 
-std::string RemoteSearchEngine::urlEncode(const std::string& value) {
-  std::ostringstream escaped;
-  escaped.fill('0');
-  escaped << std::hex;
-
-  for (char c : value) {
-    if (isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' ||
-        c == '.' || c == '~') {
-      escaped << c;
-    } else {
-      escaped << '%' << std::setw(2)
-              << static_cast<int>(static_cast<unsigned char>(c));
-    }
-  }
-  return escaped.str();
-}
-
-static std::string unescapeJsonString(const std::string& str) {
+std::string unescapeJsonString(const std::string& str) {
   std::string res;
   for (size_t i = 0; i < str.size(); ++i) {
     if (str[i] == '\\' && i + 1 < str.size()) {
@@ -84,8 +82,8 @@ static std::string unescapeJsonString(const std::string& str) {
   return res;
 }
 
-static std::string extractJsonString(const std::string& block,
-                                     const std::string& key) {
+std::string extractJsonString(const std::string& block,
+                              const std::string& key) {
   std::string pattern = "\"" + key + "\":\"";
   size_t pos = block.find(pattern);
   if (pos == std::string::npos) {
@@ -104,8 +102,8 @@ static std::string extractJsonString(const std::string& block,
   return (end > start) ? block.substr(start, end - start) : "";
 }
 
-static double extractJsonNumber(const std::string& block,
-                                const std::string& key) {
+double extractJsonNumber(const std::string& block,
+                         const std::string& key) {
   std::string pattern = "\"" + key + "\":";
   size_t pos = block.find(pattern);
   if (pos == std::string::npos) {
@@ -131,13 +129,32 @@ static double extractJsonNumber(const std::string& block,
   return 0.0;
 }
 
+}  // namespace
+
+std::string RemoteSearchEngine::urlEncode(const std::string& value) {
+  std::ostringstream escaped;
+  escaped.fill('0');
+  escaped << std::hex;
+
+  for (char c : value) {
+    if (isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' ||
+        c == '.' || c == '~') {
+      escaped << c;
+    } else {
+      escaped << '%' << std::setw(2)
+              << static_cast<int>(static_cast<unsigned char>(c));
+    }
+  }
+  return escaped.str();
+}
+
 static std::vector<RemoteSearchResult> queryAniList(
     MediaType type, const std::string& searchQuery, size_t limit) {
   std::vector<RemoteSearchResult> results;
 
   std::filesystem::path tempPayload =
       std::filesystem::temp_directory_path() /
-      ("catalist_anilist_" + std::to_string(std::rand()) + ".json");
+      ("catalist_al_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".json");
   std::ofstream out(tempPayload);
   if (!out.is_open())
     return results;
@@ -145,7 +162,6 @@ static std::vector<RemoteSearchResult> queryAniList(
   std::string queryType = (type == MediaType::Anime) ? "ANIME" : "MANGA";
 
   out << "{\"query\":\"query($s:String,$t:MediaType){Page(perPage:" << limit
-
       << "){media(search:$s,type:$t){id idMal title{romaji english} episodes chapters status averageScore startDate{year}}}}\",\"variables\":{\"s\":\"";
   for (char c : searchQuery) {
     if (c == '"')
@@ -159,16 +175,26 @@ static std::vector<RemoteSearchResult> queryAniList(
   out.close();
 
   std::string cmd =
-      "curl -s -L -m 8 -X POST \"https://graphql.anilist.co\" -H \"Content-Type: application/json\" -H \"User-Agent: Mozilla/5.0\" -d @\"" +
-      tempPayload.string() + "\" 2>/dev/null";
+      "curl -s -L -m 8 -X POST \"https://graphql.anilist.co\" -H \"Content-Type: application/json\" -H \"User-Agent: Mozilla/5.0\" -d @" +
+      escapeShellArg(tempPayload.string()) + " 2>/dev/null";
   std::string json = execCommand(cmd);
-  std::filesystem::remove(tempPayload);
+  std::error_code ec;
+  std::filesystem::remove(tempPayload, ec);
 
-  if (json.empty() || json.find("\"media\":[") == std::string::npos) {
+  if (json.empty()) {
     return results;
   }
 
-  size_t cur = json.find("\"media\":[") + 9;
+  size_t mediaKeyPos = json.find("\"media\"");
+  if (mediaKeyPos == std::string::npos) {
+    return results;
+  }
+  size_t bracketPos = json.find('[', mediaKeyPos);
+  if (bracketPos == std::string::npos) {
+    return results;
+  }
+
+  size_t cur = bracketPos + 1;
   while (cur < json.size() && results.size() < limit) {
     size_t objStart = json.find('{', cur);
     if (objStart == std::string::npos)
@@ -240,14 +266,21 @@ static std::vector<RemoteSearchResult> queryJikanFallback(
                     "?q=" + RemoteSearchEngine::urlEncode(searchQuery) +
                     "&limit=" + std::to_string(limit);
   std::string cmd =
-      "curl -s -L -m 8 -A \"Mozilla/5.0 (Windows NT 10.0; Win64; x64)\" \"" +
-      url + "\" 2>/dev/null";
+      "curl -s -L -m 8 -A \"Mozilla/5.0 (Windows NT 10.0; Win64; x64)\" " +
+      escapeShellArg(url) + " 2>/dev/null";
 
   std::string json = execCommand(cmd);
-  if (json.empty() || json.find("\"data\":[") == std::string::npos)
+  if (json.empty())
     return results;
 
-  size_t cur = json.find("\"data\":[") + 8;
+  size_t dataKeyPos = json.find("\"data\"");
+  if (dataKeyPos == std::string::npos)
+    return results;
+  size_t bracketPos = json.find('[', dataKeyPos);
+  if (bracketPos == std::string::npos)
+    return results;
+
+  size_t cur = bracketPos + 1;
   while (cur < json.size() && results.size() < limit) {
     size_t objStart = json.find('{', cur);
     if (objStart == std::string::npos)

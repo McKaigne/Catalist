@@ -1,4 +1,5 @@
 #include "catalist/tui.hpp"
+#include "catalist/core/logger.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -536,6 +537,7 @@ void AppTui::run() {
   };
 
   auto mutateProgress = [&](Entry e, int dir) {
+    LOG_INFO("Mutating progress for ID " + std::to_string(e.id) + " (\"" + e.title + "\") dir=" + std::to_string(dir));
     Entry before = e;
     int newProg = std::max(0, e.progress + dir);
     std::string today = getTodayDateStr();
@@ -575,6 +577,7 @@ void AppTui::run() {
   };
 
   auto mutateStatus = [&](Entry e, int dir) {
+    LOG_INFO("Cycling status for ID " + std::to_string(e.id) + " (\"" + e.title + "\") dir=" + std::to_string(dir));
     Entry before = e;
     WatchStatus oldStatus = e.status;
     std::string today = getTodayDateStr();
@@ -652,6 +655,7 @@ void AppTui::run() {
   };
 
   auto mutateRating = [&](Entry e, int dir) {
+    LOG_INFO("Adjusting rating for ID " + std::to_string(e.id) + " (\"" + e.title + "\") dir=" + std::to_string(dir));
     Entry before = e;
     e.score = std::clamp(e.score + dir, 0, 10);
     e.updatedAt = getTodayDateStr();
@@ -665,6 +669,7 @@ void AppTui::run() {
   };
 
   auto toggleColumnSort = [&](SortKey targetKey, const std::string& name) {
+    LOG_INFO("Toggled sort column: " + name);
     if (currentSort == targetKey) {
       reverseSort = !reverseSort;
     } else {
@@ -704,6 +709,7 @@ void AppTui::run() {
   };
 
   auto dispatchCommand = [&](const std::string& cmdLine) {
+    LOG_INFO("Command Palette dispatch: " + cmdLine);
     if (cmdLine.empty())
       return;
     std::stringstream ss(cmdLine);
@@ -1285,7 +1291,7 @@ void AppTui::run() {
           aboutActiveCard++;
         return true;
       }
-      if (event == Event::Character('q')) {
+      if (event == Event::Character('q') || config_.keybinds.matches(KeyAction::Quit, event.character())) {
         db_.saveAll();
         screen.ExitLoopClosure()();
         return true;
@@ -1342,7 +1348,7 @@ void AppTui::run() {
         }
         return true;
       }
-      if (event == Event::Character('q')) {
+      if (event == Event::Character('q') || config_.keybinds.matches(KeyAction::Quit, event.character())) {
         db_.saveAll();
         screen.ExitLoopClosure()();
         return true;
@@ -1422,7 +1428,7 @@ void AppTui::run() {
         }
         return true;
       }
-      if (event == Event::Character('q')) {
+      if (event == Event::Character('q') || config_.keybinds.matches(KeyAction::Quit, event.character())) {
         db_.saveAll();
         screen.ExitLoopClosure()();
         return true;
@@ -1431,7 +1437,7 @@ void AppTui::run() {
     }
 
     if (currentTab == ViewTab::Overview) {
-      if (event == Event::Character('q')) {
+      if (event == Event::Character('q') || config_.keybinds.matches(KeyAction::Quit, event.character())) {
         db_.saveAll();
         screen.ExitLoopClosure()();
         return true;
@@ -1823,7 +1829,7 @@ void AppTui::run() {
       return true;
     }
 
-    if (event == Event::Character('q')) {
+    if (event == Event::Character('q') || config_.keybinds.matches(KeyAction::Quit, event.character())) {
       db_.saveAll();
       screen.ExitLoopClosure()();
       return true;
@@ -2554,18 +2560,11 @@ void AppTui::run() {
                 detailPane});
     }
 
-    Element modeBadge;
-    if (appMode == AppMode::Cmd) {
-      modeBadge = makePill("󰘳 CMD", theme.crust, theme.mauve);
-    } else if (appMode == AppMode::Sch) {
-      modeBadge = makePill(" SCH", theme.crust, theme.peach);
-    } else if (appMode == AppMode::Edt) {
-      modeBadge = makePill("󰏫 EDT", theme.crust, theme.yellow);
-    } else if (appMode == AppMode::Vis) {
-      modeBadge = makePill("󰒅 VIS", theme.crust, theme.lavender);
-    } else {
-      modeBadge = makePill("󰄛 NOR", theme.crust, theme.green);
-    }
+    bool isMalAuth = MalAuth::getInstance().isAuthenticated();
+    Element accountBadge =
+        isMalAuth
+            ? makePill(icon::Sync + " MAL: Connected", theme.crust, theme.green)
+            : makePill(icon::AppLogo + " Offline", theme.text, theme.surface2);
 
     auto hintItem = [&](const std::string& key, const std::string& desc) {
       return hbox({text(key) | bold | color(theme.text),
@@ -2608,7 +2607,7 @@ void AppTui::run() {
 
     int termWidth = Terminal::Size().dimx;
     int hintsWidth = 76;
-    int maxStatusLen = std::max(12, termWidth - hintsWidth - 18);
+    int maxStatusLen = std::max(16, termWidth - hintsWidth - 28);
     std::string safeStatusMessage = statusMessage;
     if (static_cast<int>(safeStatusMessage.size()) > maxStatusLen) {
       safeStatusMessage =
@@ -2616,9 +2615,10 @@ void AppTui::run() {
     }
 
     auto bottomRibbon =
-        hbox({text(" "), modeBadge, text(" │ ") | color(theme.surface1),
-              selectionTelemetry, hbox(std::move(hints)), filler(),
-              text(safeStatusMessage) | color(theme.yellow), text(" ")}) |
+        hbox({text(" "), accountBadge, text(" │ ") | color(theme.surface1),
+              selectionTelemetry,
+              text(safeStatusMessage) | color(theme.yellow), filler(),
+              hbox(std::move(hints)), text(" ")}) |
         border | color(theme.surface0) | size(HEIGHT, EQUAL, 3);
 
     auto baseUi = vbox({topCard, contentPane | flex, bottomRibbon});

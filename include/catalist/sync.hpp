@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CATALIST_SYNC_HPP_
+#define CATALIST_SYNC_HPP_
 
 #include <string>
 
@@ -13,7 +14,7 @@ struct MalCredentials {
 };
 
 class MalAuth {
-public:
+ public:
   static MalAuth& getInstance();
 
   bool isAuthenticated() const;
@@ -24,7 +25,7 @@ public:
   void load();
   void save();
 
-private:
+ private:
   MalAuth();
   MalCredentials creds_;
   bool exchangeToken(const std::string& code, const std::string& verifier,
@@ -32,8 +33,10 @@ private:
 };
 
 class MetadataSync {
-public:
+ public:
   static size_t syncOngoing(Database& db, std::string& outMsg);
 };
 
 }  // namespace catalist
+
+#endif  // CATALIST_SYNC_HPP_

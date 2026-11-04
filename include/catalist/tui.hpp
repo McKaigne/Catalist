@@ -1,13 +1,12 @@
 #pragma once
 
-#include <set>
-#include <string>
-#include <vector>
-
 #include "catalist/commandPalette.hpp"
 #include "catalist/config.hpp"
 #include "catalist/database.hpp"
 #include "catalist/themeRegistry.hpp"
+#include <set>
+#include <string>
+#include <vector>
 
 namespace catalist {
 
@@ -16,7 +15,7 @@ enum class AppMode {
   Sch,  // Active search / filter typing
   Edt,  // Inline column / field cell editing
   Cmd,  // Floating command palette modal
-  Vis   // Visual batch selection active
+  Vis   // Visual multi-selection mode
 };
 
 enum class EditField { Status, Rating, Progress, Title, Notes };
@@ -40,11 +39,11 @@ struct HistoryAction {
 };
 
 class AppTui {
-public:
+ public:
   AppTui(Database& db, AppConfig& config);
   void run();
 
-private:
+ private:
   Database& db_;
   AppConfig& config_;
   CommandPalette commandPalette_;

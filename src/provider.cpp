@@ -1,4 +1,5 @@
 #include "catalist/provider.hpp"
+#include "catalist/core/logger.hpp"
 
 #include <algorithm>
 #include <cctype>

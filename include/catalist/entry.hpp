@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CATALIST_ENTRY_HPP_
+#define CATALIST_ENTRY_HPP_
 
 #include <string>
 #include <unordered_map>
@@ -57,3 +58,5 @@ std::unordered_map<std::string, std::string> deserializeRemoteIds(
     const std::string& s);
 
 }  // namespace catalist
+
+#endif  // CATALIST_ENTRY_HPP_

@@ -43,12 +43,12 @@ top-bar height=3 border=true {
 }
 
 bottom-bar height=3 border=true {
-    mode-badge
+    account-badge
     separator color="surface1"
     selection-counter
-    hints
-    spacer
     status-message max-length=36 color="yellow"
+    spacer
+    hints
 }
 
 card "details" width=42 border=true {

@@ -19,6 +19,7 @@ include_directories(include)
 
 set(CATALIST_SOURCES
   src/core/date.cpp
+  src/core/logger.cpp
   src/platform/httpClient.cpp
   src/kdl.cpp
   src/entry.cpp

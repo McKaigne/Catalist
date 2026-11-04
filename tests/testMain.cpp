@@ -11,6 +11,7 @@
 #include "catalist/entry.hpp"
 #include "catalist/malParser.hpp"
 #include "catalist/platform/httpClient.hpp"
+#include "catalist/core/logger.hpp"
 #include "catalist/provider.hpp"
 
 #define TEST_ASSERT(cond)                                                      \
@@ -306,6 +307,17 @@ int main() {
   testCliMutations();
   testCliAnalyticsAndExport();
   testCliConfigAndCompletions();
+
+  std::cout << "[RUN ] Testing thread-safe file logging..." << std::endl;
+  auto testLog = getTestSandbox() / "test_catalist.log";
+  catalist::Logger::get().init(testLog);
+  LOG_INFO("Testing logger output line");
+  TEST_ASSERT(std::filesystem::exists(testLog));
+  std::ifstream lf(testLog);
+  std::string logLine;
+  std::getline(lf, logLine);
+  TEST_ASSERT(logLine.find("[INFO ] Testing logger output line") != std::string::npos);
+  std::cout << "[PASS] Logger tests passed." << std::endl;
 
   std::cout << "========================================" << std::endl;
   std::cout << "   All automated tests passed (9/9)     " << std::endl;

@@ -156,7 +156,7 @@ static std::string generateCodeVerifier() {
 
 static std::string waitForAuthCode() {
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (server_fd == 0)
+  if (server_fd < 0)
     return "";
 
   int opt = 1;

@@ -982,7 +982,7 @@ int CliDispatcher::executeSet(const std::vector<std::string>& args,
         }
         deltaProgress = -delta;
         hasDelta = true;
-      } else if (val.front() == '+' || val.front() == '-') {
+      } else if (!val.empty() && (val.front() == '+' || val.front() == '-')) {
         try {
           deltaProgress = std::stoi(val);
           hasDelta = true;

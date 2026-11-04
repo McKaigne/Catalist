@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CATALIST_COMMAND_PALETTE_HPP_
+#define CATALIST_COMMAND_PALETTE_HPP_
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -17,7 +18,7 @@ struct PaletteItem {
 };
 
 class CommandPalette {
-public:
+ public:
   CommandPalette();
 
   void open(const std::string& initialPrefix = "");
@@ -30,7 +31,7 @@ public:
 
   ftxui::Element render(const ThemePalette& theme);
 
-private:
+ private:
   bool isOpen_ = false;
   std::string query_;
   int selectedIndex_ = 0;
@@ -42,3 +43,5 @@ private:
 };
 
 }  // namespace catalist
+
+#endif  // CATALIST_COMMAND_PALETTE_HPP_

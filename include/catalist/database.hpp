@@ -1,6 +1,8 @@
-#pragma once
+#ifndef CATALIST_DATABASE_HPP_
+#define CATALIST_DATABASE_HPP_
 
 #include <filesystem>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -22,7 +24,7 @@ struct ActivityRecord {
 };
 
 class Database {
-public:
+ public:
   Database();
   explicit Database(std::filesystem::path configDir);
 
@@ -71,8 +73,9 @@ public:
   void autoHealIds();
   void seedDefaults();
 
-private:
+ private:
   std::filesystem::path configDir_;
+  mutable std::recursive_mutex mutex_;
   std::vector<Entry> animeEntries_;
   std::vector<Entry> mangaEntries_;
   std::vector<ActivityRecord> historyRecords_;
@@ -83,3 +86,5 @@ private:
 };
 
 }  // namespace catalist
+
+#endif  // CATALIST_DATABASE_HPP_

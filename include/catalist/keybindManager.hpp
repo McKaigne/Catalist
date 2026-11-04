@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CATALIST_KEYBIND_MANAGER_HPP_
+#define CATALIST_KEYBIND_MANAGER_HPP_
 
 #include <string>
 #include <unordered_map>
@@ -41,16 +42,18 @@ enum class KeyAction {
 };
 
 class KeybindManager {
-public:
+ public:
   KeybindManager();
 
   void setBinding(const std::string& actionName, const std::string& key);
   std::string getKey(KeyAction action) const;
   bool matches(KeyAction action, const std::string& key) const;
 
-private:
+ private:
   std::unordered_map<KeyAction, std::string> primaryBindings_;
   void loadDefaults();
 };
 
 }  // namespace catalist
+
+#endif  // CATALIST_KEYBIND_MANAGER_HPP_

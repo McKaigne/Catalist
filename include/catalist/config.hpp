@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CATALIST_CONFIG_HPP_
+#define CATALIST_CONFIG_HPP_
 
 #include <filesystem>
 #include <string>
@@ -26,3 +27,5 @@ struct AppConfig {
 };
 
 }  // namespace catalist
+
+#endif  // CATALIST_CONFIG_HPP_

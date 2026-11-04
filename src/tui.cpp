@@ -2564,7 +2564,7 @@ void AppTui::run() {
     Element accountBadge =
         isMalAuth
             ? makePill(icon::Sync + " MAL: Connected", theme.crust, theme.green)
-            : makePill(icon::AppLogo + " Offline", theme.text, theme.surface2);
+            : makePill(icon::Offline + " Offline", Color::Black, theme.surface2);
 
     auto hintItem = [&](const std::string& key, const std::string& desc) {
       return hbox({text(key) | bold | color(theme.text),

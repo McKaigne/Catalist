@@ -31,6 +31,7 @@ const std::string InProgress = "󰐌";  // Play circle
 const std::string Search = "";       // Search glass
 const std::string Stats = "󰄫";       // Dashboard / chart
 const std::string Sync = "󰓦";        // Sync arrows
+const std::string Offline = "";     // Offline icon
 
 const std::string Anime = "󰴙";  // Anime icon
 const std::string Manga = "󱥬";  // Manga icon

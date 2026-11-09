@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "catalist/entry.hpp"
+#include "catalist/model/entry.hpp"
 #include "catalist/platform/httpClient.hpp"
 
 namespace catalist {

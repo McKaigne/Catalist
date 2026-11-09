@@ -44,7 +44,7 @@ set(CATALIST_SOURCES
   src/platform/httpClient.cpp
   src/platform/processLauncher.cpp
   src/kdl.cpp
-  src/entry.cpp
+  src/model/entry.cpp
   src/config.cpp
   src/database.cpp
   src/malParser.cpp
@@ -52,7 +52,8 @@ set(CATALIST_SOURCES
   src/cli.cpp
   src/cli/resolveEntry.cpp
   src/remoteSearch.cpp
-  src/themeRegistry.cpp
+  src/tui/theme/statusStyle.cpp
+  src/tui/theme/themeRegistry.cpp
   src/keybindManager.cpp
   src/commandPalette.cpp
   src/provider.cpp

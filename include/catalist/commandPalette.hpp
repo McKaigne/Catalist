@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "catalist/themeRegistry.hpp"
+#include "catalist/tui/theme/themeRegistry.hpp"
 
 namespace catalist {
 

@@ -78,9 +78,6 @@ public:
   std::string getKey() const override { return "mal"; }
   std::string getDisplayName() const override { return "MyAnimeList"; }
   std::string getShortBadge() const override { return "MAL"; }
-  ftxui::Color getBrandColor() const override {
-    return ftxui::Color::RGB(46, 81, 162);
-  }
 
   std::string getWebUrl(mediaType type,
                         const std::string& remoteId) const override {
@@ -109,9 +106,6 @@ public:
   std::string getKey() const override { return "anilist"; }
   std::string getDisplayName() const override { return "AniList"; }
   std::string getShortBadge() const override { return "AL"; }
-  ftxui::Color getBrandColor() const override {
-    return ftxui::Color::RGB(2, 169, 255);
-  }
 
   std::string getWebUrl(mediaType type,
                         const std::string& remoteId) const override {
@@ -140,9 +134,6 @@ public:
   std::string getKey() const override { return "kitsu"; }
   std::string getDisplayName() const override { return "Kitsu"; }
   std::string getShortBadge() const override { return "KT"; }
-  ftxui::Color getBrandColor() const override {
-    return ftxui::Color::RGB(224, 80, 43);
-  }
 
   std::string getWebUrl(mediaType type,
                         const std::string& remoteId) const override {

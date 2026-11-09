@@ -1,4 +1,4 @@
-#include "catalist/themeRegistry.hpp"
+#include "catalist/tui/theme/themeRegistry.hpp"
 
 #include <algorithm>
 #include <unordered_map>

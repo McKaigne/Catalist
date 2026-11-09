@@ -4,7 +4,6 @@
 #include <string>
 #include <unordered_map>
 
-#include "catalist/theme.hpp"
 
 namespace catalist {
 
@@ -39,16 +38,10 @@ struct entry {
 
 std::string statusToString(watchStatus status,
                            mediaType type = mediaType::kAnime);
-std::string statusToIcon(watchStatus status);
-ftxui::Color statusToColor(watchStatus status);
 watchStatus stringToStatus(const std::string& str);
 
 std::string typeToString(mediaType type);
-std::string typeToIcon(mediaType type);
-ftxui::Color typeToColor(mediaType type);
 mediaType stringToType(const std::string& str);
-
-std::string renderStarMeter(int score);
 
 std::string escapeCsv(const std::string& field);
 std::string unescapeCsv(const std::string& field);

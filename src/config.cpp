@@ -183,7 +183,6 @@ bool appConfig::load(const std::filesystem::path& path) {
     }
   }
 
-  themeRegistry::setActive(theme);
   return true;
 }
 

@@ -6,7 +6,6 @@
 
 #include "catalist/kdl.hpp"
 #include "catalist/keybindManager.hpp"
-#include "catalist/themeRegistry.hpp"
 
 namespace catalist {
 
@@ -18,7 +17,6 @@ struct appConfig {
   bool reverseSort = true;
 
   keybindManager keybinds;
-  themePalette customPalette;
   kdl::document kdlDoc;
 
   bool load(const std::filesystem::path& path);

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "catalist/entry.hpp"
+#include "catalist/model/entry.hpp"
 
 using catalist::watchStatus;
 using catalist::stringToStatus;

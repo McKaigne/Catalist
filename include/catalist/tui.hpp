@@ -8,7 +8,7 @@
 #include "catalist/platform/processLauncher.hpp"
 #include "catalist/provider.hpp"
 #include "catalist/sync.hpp"
-#include "catalist/themeRegistry.hpp"
+#include "catalist/tui/theme/themeRegistry.hpp"
 #include <set>
 #include <string>
 #include <vector>

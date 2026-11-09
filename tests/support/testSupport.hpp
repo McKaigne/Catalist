@@ -8,7 +8,7 @@
 #include <unordered_map>
 
 #include "catalist/core/clock.hpp"
-#include "catalist/entry.hpp"
+#include "catalist/model/entry.hpp"
 
 namespace catalist::test {
 

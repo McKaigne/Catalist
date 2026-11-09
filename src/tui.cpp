@@ -1,4 +1,6 @@
 #include "catalist/core/version.hpp"
+#include "catalist/tui/theme/palettes.hpp"
+#include "catalist/tui/theme/statusStyle.hpp"
 #include "catalist/tui.hpp"
 #include "catalist/core/logger.hpp"
 
@@ -242,6 +244,7 @@ appTui::appTui(database& db, appConfig& config, tuiServices services)
     : db_(db), config_(config), services_(services) {}
 
 void appTui::run() {
+  themeRegistry::setActive(config_.theme);
   auto screen = ScreenInteractive::Fullscreen();
   auto* screenPtr = &screen;
 

@@ -1,12 +1,11 @@
 #pragma once
 
-#include <ftxui/screen/color.hpp>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "catalist/entry.hpp"
+#include "catalist/model/entry.hpp"
 #include "catalist/platform/httpClient.hpp"
 
 namespace catalist {
@@ -28,7 +27,6 @@ public:
   virtual std::string getKey() const = 0;
   virtual std::string getDisplayName() const = 0;
   virtual std::string getShortBadge() const = 0;
-  virtual ftxui::Color getBrandColor() const = 0;
   virtual std::string getWebUrl(mediaType type,
                                 const std::string& remoteId) const = 0;
   virtual std::vector<providerSearchResult> search(mediaType type,

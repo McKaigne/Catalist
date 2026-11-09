@@ -13,7 +13,6 @@
 #include "catalist/core/version.hpp"
 #include "catalist/malParser.hpp"
 #include "catalist/remoteSearch.hpp"
-#include "catalist/theme.hpp"
 
 #if defined(_WIN32)
 #include <io.h>

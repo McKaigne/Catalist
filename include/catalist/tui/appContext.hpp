@@ -1,9 +1,6 @@
 #ifndef CATALIST_TUI_APP_CONTEXT_HPP_
 #define CATALIST_TUI_APP_CONTEXT_HPP_
 
-#include <functional>
-#include <string>
-
 #include "catalist/config/config.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/model/undoStack.hpp"
@@ -32,8 +29,6 @@ struct appContext {
   providerRegistry& providers;
   malAuth& auth;
   jobRunner& jobs;
-  // Switches the shell to another tab by id (e.g. Catalog 'a' -> Search).
-  std::function<void(const std::string& tabId)> openTab;
 };
 
 void saveConfig(appContext& ctx);

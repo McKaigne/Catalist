@@ -4,17 +4,16 @@
 
 #include "catalist/tui/app.hpp"
 #include "catalist/tui/tabRegistry.hpp"
-#include "catalist/tui/tabs/historyTab.hpp"
-#include "catalist/tui/tabs/libraryTab.hpp"
+#include "catalist/tui/tabs/settingsTab.hpp"
 #include "catalist/tui/tabs/statsTab.hpp"
 
 namespace {
 
-catalist::tabRegistry threeTabs() {
+catalist::tabRegistry twoTabs() {
   catalist::tabRegistry registry;
   registry.add(std::make_unique<catalist::statsTab>());
-  registry.add(std::make_unique<catalist::libraryTab>());
-  registry.add(std::make_unique<catalist::historyTab>());
+  registry.add(std::make_unique<catalist::settingsTab>(
+      std::vector<std::string>{"stats", "settings"}));
   return registry;
 }
 
@@ -33,23 +32,22 @@ std::vector<std::string> ids(const std::vector<catalist::iTab*>& tabs) {
 }  // namespace
 
 TEST_CASE("tui tabRegistry orders tabs by the top-bar node") {
-  auto registry = threeTabs();
-  auto config = parsed("top-bar {\n tab \"history\"\n tab \"nope\"\n tab \"stats\"\n"
-                       " tab \"history\"\n}\n");
+  auto registry = twoTabs();
+  auto config = parsed("top-bar {\n tab \"settings\"\n tab \"nope\"\n tab \"stats\"\n"
+                       " tab \"settings\"\n}\n");
   CHECK(ids(registry.ordered(config)) ==
-        std::vector<std::string>{"history", "stats"});
+        std::vector<std::string>{"settings", "stats"});
 }
 
 TEST_CASE("tui tabRegistry falls back to registration order") {
-  auto registry = threeTabs();
+  auto registry = twoTabs();
   CHECK(ids(registry.ordered(parsed(""))) ==
-        std::vector<std::string>{"stats", "library", "history"});
-  CHECK(registry.find("library") != nullptr);
+        std::vector<std::string>{"stats", "settings"});
+  CHECK(registry.find("settings") != nullptr);
   CHECK(registry.find("about") == nullptr);
 }
 
 TEST_CASE("tui built in tab ids match the documented order") {
   CHECK(catalist::builtInTabIds() ==
-        std::vector<std::string>{"anime", "manga", "queue", "search", "library",
-                                 "history", "stats", "settings", "help"});
+        std::vector<std::string>{"anime", "manga", "stats", "settings"});
 }

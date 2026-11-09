@@ -46,7 +46,6 @@ add_library(catalistCore STATIC
   src/model/activity.cpp
   src/model/entry.cpp
   src/model/entryOps.cpp
-  src/model/queueOrder.cpp
   src/model/undoStack.cpp
   src/net/malAuth.cpp
   src/net/metadataSync.cpp
@@ -100,11 +99,6 @@ add_library(catalistTui STATIC
   src/tui/tab.cpp
   src/tui/tabRegistry.cpp
   src/tui/tabs/catalogTab.cpp
-  src/tui/tabs/helpTab.cpp
-  src/tui/tabs/historyTab.cpp
-  src/tui/tabs/libraryTab.cpp
-  src/tui/tabs/queueTab.cpp
-  src/tui/tabs/searchTab.cpp
   src/tui/tabs/settingsTab.cpp
   src/tui/tabs/statsTab.cpp
   src/tui/theme/statusStyle.cpp
@@ -166,7 +160,6 @@ add_executable(catalistTests
   tests/malAuthTest.cpp
   tests/malParserTest.cpp
   tests/providerTest.cpp
-  tests/queueOrderTest.cpp
   tests/remoteSearchTest.cpp
   tests/resolveEntryTest.cpp
   tests/resultTest.cpp
@@ -198,13 +191,9 @@ add_executable(catalistTuiTests
   tests/testMain.cpp
   tests/support/sampleLibrary.cpp
   tests/support/testSupport.cpp
+  tests/tui/actionsTest.cpp
   tests/tui/catalogTabTest.cpp
   tests/tui/commandPaletteTest.cpp
-  tests/tui/helpTabTest.cpp
-  tests/tui/historyTabTest.cpp
-  tests/tui/libraryTabTest.cpp
-  tests/tui/queueTabTest.cpp
-  tests/tui/searchTabTest.cpp
   tests/tui/settingsTabTest.cpp
   tests/tui/statsTabTest.cpp
   tests/tui/tabRegistryTest.cpp

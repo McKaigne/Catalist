@@ -41,7 +41,6 @@ struct tuiHarness {
   noAuthServer authServer;
   malAuth auth;
   jobRunner jobs;
-  std::vector<std::string> openedTabs;
   appContext ctx;
 };
 

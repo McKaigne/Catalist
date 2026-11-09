@@ -12,7 +12,7 @@ using ftxui::Event;
 namespace {
 
 catalist::settingsTab makeSettings() {
-  return catalist::settingsTab({"anime", "manga", "queue"});
+  return catalist::settingsTab({"anime", "manga", "stats", "settings"});
 }
 
 }  // namespace
@@ -67,7 +67,7 @@ TEST_CASE("tui settings data panel backs up and restores after confirmation") {
 
   harness.db.addEntry(catalist::test::makeEntry().id(2).title("Later"));
   REQUIRE(harness.db.saveAll());
-  for (int step = 0; step < 5; ++step)
+  for (int step = 0; step < 6; ++step)
     REQUIRE(harness.press(tab, Event::Character('j')));
   REQUIRE(harness.press(tab, Event::Return));
   CHECK(tab.capturesInput());
@@ -76,7 +76,7 @@ TEST_CASE("tui settings data panel backs up and restores after confirmation") {
   CHECK(harness.db.getEntries(catalist::mediaType::kAnime).size() == 1);
 }
 
-TEST_CASE("tui settings data panel exports and starts a MAL login job") {
+TEST_CASE("tui settings data panel exports and lists the MAL rows") {
   catalist::test::tuiHarness harness;
   auto tab = makeSettings();
   REQUIRE(harness.press(tab, Event::Character('l')));
@@ -85,7 +85,19 @@ TEST_CASE("tui settings data panel exports and starts a MAL login job") {
   REQUIRE(harness.press(tab, Event::Character('j')));
   REQUIRE(harness.press(tab, Event::Return));
   CHECK(harness.fs.exists("/data/exports/anime_20261020_120000.csv"));
-  REQUIRE(harness.press(tab, Event::Character('j')));
+  auto shown = harness.screen(tab);
+  CHECK(shown.find("Sync ongoing titles with MyAnimeList") != std::string::npos);
+  CHECK(shown.find("Log in to MyAnimeList") != std::string::npos);
+}
+
+TEST_CASE("tui settings data panel starts the metadata sync job") {
+  catalist::test::tuiHarness harness;
+  auto tab = makeSettings();
+  REQUIRE(harness.press(tab, Event::Character('l')));
+  REQUIRE(harness.press(tab, Event::Character('l')));
+  for (int step = 0; step < 3; ++step)
+    REQUIRE(harness.press(tab, Event::Character('j')));
   REQUIRE(harness.press(tab, Event::Return));
-  CHECK(harness.screen(tab).find("Log in to MyAnimeList") != std::string::npos);
+  CHECK(harness.notices.status() ==
+        "Reconciling ongoing titles with MyAnimeList...");
 }

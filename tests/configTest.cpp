@@ -133,34 +133,47 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig upgrades a pre 0.3 top bar to the n
     if (child.name == "tab")
       ids.push_back(child.getArgString(0));
   }
-  CHECK(ids == std::vector<std::string>{"anime", "manga", "queue", "search",
-                                        "library", "history", "stats",
-                                        "settings", "help"});
-  CHECK(topBar->children[9].name == "spacer");
-  CHECK(topBar->children[10].name == "version");
+  CHECK(ids == std::vector<std::string>{"anime", "manga", "stats", "settings"});
+  CHECK(topBar->children[4].name == "spacer");
+  CHECK(topBar->children[5].name == "version");
   CHECK(topBar->getPropInt("height") == 3);
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "appConfig keeps a top bar that already uses current tab ids") {
   auto configPath = tempDir() / "catalist.kdl";
   writeTextFile(configPath,
-                "top-bar {\n    tab \"manga\"\n    tab \"queue\"\n}\n");
+                "top-bar {\n    tab \"manga\"\n    tab \"stats\"\n}\n");
   appConfig config;
   REQUIRE(config.load(fileSystem(), configPath));
   CHECK(config.kdlDoc.getNode("top-bar")->children.size() == 2);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "appConfig replaces the tabs removed after 0.3.0") {
+  auto configPath = tempDir() / "catalist.kdl";
+  writeTextFile(configPath, "top-bar {\n    tab \"anime\"\n    tab \"queue\"\n"
+                            "    tab \"help\"\n    spacer\n}\n");
+  appConfig config;
+  REQUIRE(config.load(fileSystem(), configPath));
+  auto topBar = config.kdlDoc.getNode("top-bar");
+  REQUIRE(topBar.has_value());
+  std::vector<std::string> names;
+  for (const auto& child : topBar->children)
+    names.push_back(child.name == "tab" ? child.getArgString(0) : child.name);
+  CHECK(names == std::vector<std::string>{"anime", "manga", "stats", "settings",
+                                          "spacer"});
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "appConfig startup tab and welcome flag round trip") {
   auto configPath = tempDir() / "catalist.kdl";
   appConfig original;
   CHECK_FALSE(original.startupTab.has_value());
-  original.startupTab = "queue";
+  original.startupTab = "stats";
   original.welcomeShown = true;
   REQUIRE(original.save(fileSystem(), configPath));
 
   appConfig reloaded;
   REQUIRE(reloaded.load(fileSystem(), configPath));
-  CHECK(reloaded.startupTab == "queue");
+  CHECK(reloaded.startupTab == "stats");
   CHECK(reloaded.welcomeShown);
 }
 

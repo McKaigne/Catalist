@@ -286,7 +286,7 @@ std::vector<hint> catalogTab::hints() const {
             {"Esc", "catalog"}};
   return {{"Tab", "tabs"},       {"h/l", "panes"},  {"e/ret", "edit"},
           {"c/t/s/r/p", "sort"}, {"S/R/P", "cycle"}, {"+/-", "ep"},
-          {"spc", "select"},     {"a", "add"},       {"d", "del"},
+          {"spc", "select"},     {"d", "del"},
           {"/", "find"},         {":", "cmd"}};
 }
 
@@ -562,10 +562,6 @@ bool catalogTab::handleEntryCommands(const Event& event, appContext& ctx) {
   const auto& keybinds = ctx.config.keybinds;
   if (keys::isBound(event, keybinds, keyAction::kSearchFilter)) {
     startSearch(ctx);
-    return true;
-  }
-  if (keys::isBound(event, keybinds, keyAction::kAddEntry)) {
-    ctx.openTab("search");
     return true;
   }
   if (keys::isBound(event, keybinds, keyAction::kDeleteEntry)) {

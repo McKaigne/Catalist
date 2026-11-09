@@ -14,11 +14,9 @@ tuiHarness::tuiHarness()
       providers(http),
       auth(fs, *http, launcher, authServer, clock, "/data/mal_auth.json"),
       jobs(notices, [] {}),
-      ctx{db,       config, undo,      notices,   launcher,
-          clock,    fs,     *http,     providers, auth,
-          jobs,     [this](const std::string& tabId) {
-            openedTabs.push_back(tabId);
-          }} {
+      ctx{db,    config, undo,  notices,   launcher,
+          clock, fs,     *http, providers, auth,
+          jobs} {
   themeRegistry::setActive(config.theme);
 }
 

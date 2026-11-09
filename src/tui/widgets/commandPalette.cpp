@@ -32,9 +32,8 @@ void commandPalette::initCatalog() {
               {"write", "Save database to disk", ""},
               {"quit", "Exit Catalist", ""},
               {"wq", "Save and exit Catalist", ""},
-              {"help", "Open the keyboard reference", ""},
               {"about", "Show version and data location", ""},
-              {"tab", "Jump to a tab", "<anime|manga|queue|search|...>"},
+              {"tab", "Jump to a tab", "<anime|manga|stats|settings>"},
               {"import", "Import a MyAnimeList XML export", ""}};
 }
 

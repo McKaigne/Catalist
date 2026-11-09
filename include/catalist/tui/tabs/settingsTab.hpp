@@ -10,7 +10,7 @@
 namespace catalist {
 
 // Themes (previewed live while the cursor moves), runtime preferences, and
-// data management: backups, import, export and the MAL account.
+// data management: backups, import, export, MAL sync and the MAL account.
 class settingsTab : public iTab {
 public:
   explicit settingsTab(std::vector<std::string> tabIds);

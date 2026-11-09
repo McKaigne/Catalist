@@ -22,6 +22,8 @@ void startBackgroundSync(appContext& ctx);
 void startMalLogin(appContext& ctx);
 void restoreBackup(appContext& ctx, const std::string& snapshotName);
 void exportCatalog(appContext& ctx);
+// Version, catalogue sizes and data directory on one line, for :about.
+[[nodiscard]] std::string aboutLine(appContext& ctx);
 
 }  // namespace catalist
 

@@ -15,8 +15,9 @@ using namespace ftxui;
 namespace {
 
 constexpr int kPreferenceRows = 5;
-// Data panel rows before the backup list: backup, import, export, account.
-constexpr int kDataActions = 4;
+// Data panel rows before the backup list: backup, import, export, sync,
+// account.
+constexpr int kDataActions = 5;
 
 const std::vector<std::string>& mediaCycle() {
   static const std::vector<std::string> cycle = {"anime", "manga"};
@@ -143,6 +144,8 @@ void settingsTab::runDataAction(appContext& ctx) {
   } else if (dataCursor_ == 2) {
     exportCatalog(ctx);
   } else if (dataCursor_ == 3) {
+    startBackgroundSync(ctx);
+  } else if (dataCursor_ == 4) {
     if (ctx.auth.isAuthenticated()) {
       ctx.auth.logout();
       ctx.notices.setStatus("Logged out of MyAnimeList.");
@@ -277,7 +280,8 @@ Element settingsTab::renderData(appContext& ctx) const {
   Elements rows = {row(0, "󰆓 Create backup snapshot"),
                    row(1, "󰈞 Import MyAnimeList XML"),
                    row(2, "󰈝 Export catalogue as CSV"),
-                   row(3, loggedIn ? "󰍃 Log out of MyAnimeList"
+                   row(3, icon::kSync + " Sync ongoing titles with MyAnimeList"),
+                   row(4, loggedIn ? "󰍃 Log out of MyAnimeList"
                                    : "󰍂 Log in to MyAnimeList"),
                    text(""),
                    text("   Backups (newest first)") | bold | color(theme.lavender)};

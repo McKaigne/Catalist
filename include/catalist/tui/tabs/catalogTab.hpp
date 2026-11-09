@@ -29,7 +29,7 @@ struct sidebarRow {
 };
 
 // The anime or manga catalogue: sidebar filters, searchable table, details
-// card and visual (batch) selection. Adding goes through the Search tab.
+// card and visual (batch) selection.
 class catalogTab : public iTab {
 public:
   catalogTab(mediaType media, const appConfig& config);

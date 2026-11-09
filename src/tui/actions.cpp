@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "catalist/core/version.hpp"
 #include "catalist/model/activity.hpp"
 #include "catalist/net/metadataSync.hpp"
 #include "catalist/storage/backup.hpp"
@@ -126,6 +127,14 @@ void exportCatalog(appContext& ctx) {
   }
   ctx.notices.push("Exported " + std::to_string(written.size()) +
                    " CSV files to " + written.front().parent_path().string());
+}
+
+std::string aboutLine(appContext& ctx) {
+  return std::string("Catalist v") + kVersionString + " · " +
+         std::to_string(ctx.db.getEntries(mediaType::kAnime).size()) +
+         " anime · " +
+         std::to_string(ctx.db.getEntries(mediaType::kManga).size()) +
+         " manga · data in " + ctx.db.getConfigPath().string();
 }
 
 }  // namespace catalist

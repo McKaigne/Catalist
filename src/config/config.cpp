@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <set>
 #include <sstream>
 
 namespace catalist {
@@ -82,17 +83,15 @@ kdl::node tabNode(const std::string& id, const std::string& label,
 std::vector<kdl::node> defaultTabNodes() {
   return {tabNode("anime", "Anime", "󰴙", true),
           tabNode("manga", "Manga", "󱥬", true),
-          tabNode("queue", "Queue", "󰐌", false),
-          tabNode("search", "Search", "", false),
-          tabNode("library", "Library", "󰓹", false),
-          tabNode("history", "History", "󰄉", false),
           tabNode("stats", "Stats", "󰄫", false),
-          tabNode("settings", "Settings", "󰒓", false),
-          tabNode("help", "Help", "󰋖", false)};
+          tabNode("settings", "Settings", "󰒓", false)};
 }
 
 bool isLegacyTabId(const std::string& id) {
-  return id == "about" || id == "overview" || id == "sync";
+  static const std::set<std::string> removed = {
+      "about", "overview", "sync",    "queue",
+      "search", "library", "history", "help"};
+  return removed.count(id) > 0;
 }
 
 bool listsLegacyTabs(const kdl::node& topBar) {
@@ -103,8 +102,8 @@ bool listsLegacyTabs(const kdl::node& topBar) {
                      });
 }
 
-// Top bars from before 0.3.0 list the removed about/overview/sync tabs; they
-// get the new tab set while keeping their spacer, text and version items.
+// Top bars written by older versions list tabs that no longer exist; they
+// get the current tab set while keeping their spacer, text and version items.
 void upgradeLegacyTopBar(kdl::document& doc) {
   for (auto& root : doc.rootNodes) {
     if (root.name != "top-bar" || !listsLegacyTabs(root))
@@ -183,13 +182,8 @@ keybinds {
 top-bar height=3 border=true {
     tab "anime"    label="Anime"    icon="󰴙"  show-count=true
     tab "manga"    label="Manga"    icon="󱥬"  show-count=true
-    tab "queue"    label="Queue"    icon="󰐌"
-    tab "search"   label="Search"   icon=""
-    tab "library"  label="Library"  icon="󰓹"
-    tab "history"  label="History"  icon="󰄉"
     tab "stats"    label="Stats"    icon="󰄫"
     tab "settings" label="Settings" icon="󰒓"
-    tab "help"     label="Help"     icon="󰋖"
     spacer
     version color="overlay0"
 }

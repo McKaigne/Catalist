@@ -93,11 +93,6 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog visual selection batches status c
   CHECK(notices.status() == "Batch cycled status for 2 entries.");
 }
 
-TEST_CASE_FIXTURE(catalogFixture, "tui catalog add opens the search tab") {
-  REQUIRE(press(tab, Event::Character('a')));
-  CHECK(openedTabs == std::vector<std::string>{"search"});
-}
-
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog sort keys toggle direction") {
   REQUIRE(press(tab, Event::Character('t')));
   CHECK(notices.status() == "Sort: Title (Increasing ▲)");

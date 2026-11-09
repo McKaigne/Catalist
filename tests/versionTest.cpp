@@ -51,7 +51,10 @@ TEST_CASE_FIXTURE(catalist::test::tempDirFixture, "cli --version prints kVersion
   char program[] = "catalist";
   char flag[] = "--version";
   char* argv[] = {program, flag};
-  CHECK(catalist::cliDispatcher::dispatch(2, argv, db, config) == 0);
+  auto clock = catalist::test::makeTestClock();
+  catalist::mockHttpClient http;
+  catalist::cliServices services{clock, http};
+  CHECK(catalist::cliDispatcher::dispatch(2, argv, db, config, services) == 0);
   CHECK(out.text() ==
         std::string("Catalist v") + catalist::kVersionString + " (C++17 / FTXUI)\n");
 }

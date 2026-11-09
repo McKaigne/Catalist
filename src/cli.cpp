@@ -8,6 +8,7 @@
 #include <random>
 #include <sstream>
 
+#include "catalist/core/jsonLite.hpp"
 #include "catalist/core/version.hpp"
 #include "catalist/malParser.hpp"
 #include "catalist/remoteSearch.hpp"
@@ -41,42 +42,7 @@ static bool shouldColor() {
   return IS_TTY() && (std::getenv("NO_COLOR") == nullptr);
 }
 
-static std::string escapeJsonString(const std::string& str) {
-  std::ostringstream ss;
-  for (char c : str) {
-    switch (c) {
-      case '"':
-        ss << "\\\"";
-        break;
-      case '\\':
-        ss << "\\\\";
-        break;
-      case '\b':
-        ss << "\\b";
-        break;
-      case '\f':
-        ss << "\\f";
-        break;
-      case '\n':
-        ss << "\\n";
-        break;
-      case '\r':
-        ss << "\\r";
-        break;
-      case '\t':
-        ss << "\\t";
-        break;
-      default:
-        if ('\x00' <= c && c <= '\x1f') {
-          ss << "\\u" << std::hex << std::setw(4) << std::setfill('0')
-             << static_cast<int>(c);
-        } else {
-          ss << c;
-        }
-    }
-  }
-  return ss.str();
-}
+using jsonLite::escapeJsonString;
 
 static void emitError(const std::string& code, const std::string& message,
                       bool jsonMode) {
@@ -253,7 +219,7 @@ void cliDispatcher::printUsage() {
 }
 
 int cliDispatcher::dispatch(int argc, char* argv[], database& db,
-                            appConfig& config) {
+                            appConfig& config, const cliServices& services) {
   if (argc <= 1)
     return 0;
 
@@ -280,9 +246,9 @@ int cliDispatcher::dispatch(int argc, char* argv[], database& db,
   if (command == "show")
     return executeShow(args, db);
   if (command == "add")
-    return executeAdd(args, db);
+    return executeAdd(args, db, services.clock);
   if (command == "set")
-    return executeSet(args, db);
+    return executeSet(args, db, services.clock);
   if (command == "rm")
     return executeRm(args, db);
   if (command == "random")
@@ -294,7 +260,7 @@ int cliDispatcher::dispatch(int argc, char* argv[], database& db,
   if (command == "import")
     return executeImport(args, db);
   if (command == "search" || command == "find")
-    return executeSearch(args, db);
+    return executeSearch(args, db, services.http);
   if (command == "config")
     return executeConfig(args, config);
   if (command == "completion")
@@ -758,7 +724,7 @@ int cliDispatcher::executeShow(const std::vector<std::string>& args,
 }
 
 int cliDispatcher::executeAdd(const std::vector<std::string>& args,
-                              database& db) {
+                              database& db, const iClock& clock) {
   if (args.empty()) {
     emitError("usage", "usage: catalist add <title> [flags]", false);
     return 2;
@@ -887,13 +853,8 @@ int cliDispatcher::executeAdd(const std::vector<std::string>& args,
     return 2;
   }
 
-  if (startDate.empty()) {
-    auto now = std::chrono::system_clock::now();
-    auto inTimeT = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&inTimeT), "%Y-%m-%d");
-    startDate = ss.str();
-  }
+  if (startDate.empty())
+    startDate = localDate(clock).toString();
 
   entry e;
   e.type = type;
@@ -928,7 +889,7 @@ int cliDispatcher::executeAdd(const std::vector<std::string>& args,
 }
 
 int cliDispatcher::executeSet(const std::vector<std::string>& args,
-                              database& db) {
+                              database& db, const iClock& clock) {
   if (args.empty()) {
     emitError("usage", "usage: catalist set <id|title|-> [flags]", false);
     return 2;
@@ -1189,11 +1150,7 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
     if (setTitle.has_value())
       e.title = setTitle.value();
 
-    auto now = std::chrono::system_clock::now();
-    auto inTimeT = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&inTimeT), "%Y-%m-%d");
-    e.updatedAt = ss.str();
+    e.updatedAt = localDate(clock).toString();
 
     db.updateEntry(e);
     successCount++;
@@ -1615,7 +1572,7 @@ int cliDispatcher::executeImport(const std::vector<std::string>& args,
 }
 
 int cliDispatcher::executeSearch(const std::vector<std::string>& args,
-                                 database& db) {
+                                 database& db, iHttpClient& http) {
   if (args.empty()) {
     emitError(
         "usage",
@@ -1664,7 +1621,7 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
   }
 
   std::string err;
-  auto results = remoteSearchEngine::query(type, queryStr, err, limit);
+  auto results = remoteSearchEngine(http).query(type, queryStr, err, limit);
 
   if (results.empty()) {
     emitError("notFound",

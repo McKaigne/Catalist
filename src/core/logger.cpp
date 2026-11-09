@@ -20,22 +20,20 @@ const char* levelToString(logLevel level) {
   return "INFO ";
 }
 
-std::string getFormattedTimestamp() {
-  auto now = std::chrono::system_clock::now();
-  auto inTime = std::chrono::system_clock::to_time_t(now);
-  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-      now.time_since_epoch()) % 1000;
+// Messages logged before init() (or without a clock) still get a timestamp
+// from the real clock rather than being dropped.
+const iClock& fallbackClock() {
+  static const realClock clock;
+  return clock;
+}
 
-  std::tm tmBuf{};
-#if defined(_WIN32)
-  localtime_s(&tmBuf, &inTime);
-#else
-  localtime_r(&inTime, &tmBuf);
-#endif
-
+std::string formatTimestamp(const iClock& clock) {
+  auto sinceEpoch = clock.now().time_since_epoch();
+  auto millis =
+      std::chrono::duration_cast<std::chrono::milliseconds>(sinceEpoch) % 1000;
   std::ostringstream ss;
-  ss << std::put_time(&tmBuf, "%Y-%m-%d %H:%M:%S") << "."
-     << std::setfill(char(48)) << std::setw(3) << ms.count();
+  ss << formatLocalTime(clock, "%Y-%m-%d %H:%M:%S") << "."
+     << std::setfill('0') << std::setw(3) << millis.count();
   return ss.str();
 }
 
@@ -56,8 +54,9 @@ logger::~logger() {
   }
 }
 
-void logger::init(const std::filesystem::path& logPath) {
+void logger::init(const std::filesystem::path& logPath, const iClock& clock) {
   std::lock_guard<std::mutex> lock(mutex_);
+  clock_ = &clock;
   if (logFile_.is_open()) {
     logFile_.flush();
     logFile_.close();
@@ -89,7 +88,8 @@ void logger::log(logLevel level, std::string_view message) {
   ensureOpen();
   if (!logFile_.is_open()) return;
 
-  logFile_ << "[" << getFormattedTimestamp() << "] ["
+  const iClock& clock = clock_ ? *clock_ : fallbackClock();
+  logFile_ << "[" << formatTimestamp(clock) << "] ["
            << levelToString(level) << "] "
            << message << "\n";
   logFile_.flush();

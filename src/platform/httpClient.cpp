@@ -1,5 +1,7 @@
 #include "catalist/platform/httpClient.hpp"
 
+#include "catalist/core/shell.hpp"
+
 #include <array>
 #include <chrono>
 #include <cstdio>
@@ -18,19 +20,6 @@ struct pipeDeleter {
   }
 };
 
-std::string escapeShellArg(std::string_view arg) {
-  std::string out = "'";
-  for (char c : arg) {
-    if (c == '\'') {
-      out += "'\\''";
-    } else {
-      out += c;
-    }
-  }
-  out += "'";
-  return out;
-}
-
 }  // namespace
 
 result<httpResponse> curlHttpClient::execute(const httpRequest& request) {
@@ -40,10 +29,10 @@ result<httpResponse> curlHttpClient::execute(const httpRequest& request) {
 
   std::ostringstream cmd;
   cmd << "curl -s -S -L -m " << (request.timeout.count() / 1000) << " -X "
-      << escapeShellArg(request.method);
+      << shell::escapeShellArg(request.method);
 
   for (const auto& [headerKey, headerVal] : request.headers) {
-    cmd << " -H " << escapeShellArg(headerKey + ": " + headerVal);
+    cmd << " -H " << shell::escapeShellArg(headerKey + ": " + headerVal);
   }
 
   std::filesystem::path tempBodyFile;
@@ -55,12 +44,12 @@ result<httpResponse> curlHttpClient::execute(const httpRequest& request) {
     if (ofs.is_open()) {
       ofs.write(request.body.data(), static_cast<std::streamsize>(request.body.size()));
       ofs.close();
-      cmd << " --data-binary @" << escapeShellArg(tempBodyFile.string());
+      cmd << " --data-binary @" << shell::escapeShellArg(tempBodyFile.string());
     }
   }
 
   cmd << " -w \"\\nCATALIST_HTTP_STATUS:%{http_code}\" "
-      << escapeShellArg(request.url) << " 2>/dev/null";
+      << shell::escapeShellArg(request.url) << " 2>/dev/null";
 
   std::unique_ptr<FILE, pipeDeleter> pipe(popen(cmd.str().c_str(), "r"));
   if (!tempBodyFile.empty()) {

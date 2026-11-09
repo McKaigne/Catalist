@@ -38,9 +38,6 @@ public:
 
 class providerRegistry {
 public:
-  static providerRegistry& get();
-
-  providerRegistry();
   explicit providerRegistry(std::shared_ptr<iHttpClient> client);
 
   void registerProvider(std::shared_ptr<iProvider> provider);

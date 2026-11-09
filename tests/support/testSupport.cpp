@@ -64,6 +64,10 @@ entryBuilder makeEntry() {
   return entryBuilder{};
 }
 
+fixedClock makeTestClock() {
+  return fixedClock(iClock::timePoint(std::chrono::seconds(1792497600)));
+}
+
 std::filesystem::path fixturePath(const std::string& relativePath) {
   return std::filesystem::path(CATALIST_FIXTURE_DIR) / relativePath;
 }

@@ -107,6 +107,7 @@ add_executable(catalistTests
   tests/loggerTest.cpp
   tests/malParserTest.cpp
   tests/providerTest.cpp
+  tests/remoteSearchTest.cpp
   tests/resultTest.cpp
   tests/shellTest.cpp
   tests/versionTest.cpp

@@ -4,68 +4,64 @@
 #include <algorithm>
 #include <cctype>
 
+#include "catalist/core/jsonLite.hpp"
 #include "catalist/remoteSearch.hpp"
 
 namespace catalist {
 
 namespace {
 
-std::string extractJsonString(const std::string& block,
-                              const std::string& key) {
-  std::string pattern = "\"" + key + "\":\"";
-  size_t pos = block.find(pattern);
-  if (pos == std::string::npos) {
-    pattern = "\"" + key + "\": \"";
-    pos = block.find(pattern);
-    if (pos == std::string::npos)
-      return "";
+using jsonLite::extractJsonNumber;
+using jsonLite::extractJsonString;
+
+std::vector<providerSearchResult> searchViaEngine(
+    iHttpClient& http, const std::string& providerKey, mediaType type,
+    const std::string& query, size_t limit, bool requireMalId) {
+  std::string err;
+  auto rawResults = remoteSearchEngine(http).query(type, query, err, limit);
+  std::vector<providerSearchResult> results;
+  for (const auto& raw : rawResults) {
+    if (requireMalId && raw.malId <= 0)
+      continue;
+    results.push_back({providerKey, std::to_string(raw.malId), raw.title,
+                       raw.type, raw.totalUnits, raw.score, raw.year,
+                       raw.synopsis});
   }
-  size_t start = pos + pattern.size();
-  size_t end = start;
-  while (end < block.size()) {
-    if (block[end] == char(34) && (end == 0 || block[end - 1] != char(92)))
-      break;
-    end++;
-  }
-  return (end > start) ? block.substr(start, end - start) : "";
+  return results;
 }
 
-double extractJsonNumber(const std::string& block, const std::string& key) {
-  std::string pattern = "\"" + key + "\":";
-  size_t pos = block.find(pattern);
-  if (pos == std::string::npos) {
-    pattern = "\"" + key + "\": ";
-    pos = block.find(pattern);
-    if (pos == std::string::npos)
-      return 0.0;
-  }
-  size_t start = pos + pattern.size();
-  while (start < block.size() &&
-         (block[start] == char(32) || block[start] == char(9) ||
-          block[start] == char(34))) {
-    start++;
-  }
-  if (start < block.size() && block[start] == char(110))
-    return 0.0;
-  size_t end = start;
-  while (end < block.size() &&
-         (std::isdigit(static_cast<unsigned char>(block[end])) ||
-          block[end] == char(46))) {
-    end++;
-  }
-  if (end > start) {
-    try {
-      return std::stod(block.substr(start, end - start));
-    } catch (...) {
-    }
-  }
-  return 0.0;
+std::optional<providerSearchResult> parseKitsuItem(const std::string& block,
+                                                   mediaType type) {
+  std::string id = extractJsonString(block, "id").value_or("");
+  if (id.empty())
+    return std::nullopt;
+  std::string title = extractJsonString(block, "canonicalTitle").value_or("");
+  if (title.empty())
+    title = extractJsonString(block, "en_jp").value_or("");
+  if (title.empty())
+    return std::nullopt;
+
+  providerSearchResult item;
+  item.providerKey = "kitsu";
+  item.remoteId = id;
+  item.title = title;
+  item.type = type;
+  const char* unitKey =
+      type == mediaType::kAnime ? "episodeCount" : "chapterCount";
+  item.totalUnits =
+      static_cast<int>(extractJsonNumber(block, unitKey).value_or(0.0));
+  double rating = extractJsonNumber(block, "averageRating").value_or(0.0);
+  item.score = rating > 0.0 ? rating / 10.0 : 0.0;
+  return item;
 }
 
 }  // namespace
 
 class malProvider : public iProvider {
 public:
+  explicit malProvider(std::shared_ptr<iHttpClient> client)
+      : client_(std::move(client)) {}
+
   std::string getKey() const override { return "mal"; }
   std::string getDisplayName() const override { return "MyAnimeList"; }
   std::string getShortBadge() const override { return "MAL"; }
@@ -85,21 +81,18 @@ public:
   std::vector<providerSearchResult> search(mediaType type,
                                            const std::string& query,
                                            size_t limit) override {
-    std::string err;
-    auto rawResults = remoteSearchEngine::query(type, query, err, limit);
-    std::vector<providerSearchResult> results;
-    for (const auto& r : rawResults) {
-      if (r.malId > 0) {
-        results.push_back({getKey(), std::to_string(r.malId), r.title, r.type,
-                           r.totalUnits, r.score, r.year, r.synopsis});
-      }
-    }
-    return results;
+    return searchViaEngine(*client_, getKey(), type, query, limit, true);
   }
+
+private:
+  std::shared_ptr<iHttpClient> client_;
 };
 
 class anilistProvider : public iProvider {
 public:
+  explicit anilistProvider(std::shared_ptr<iHttpClient> client)
+      : client_(std::move(client)) {}
+
   std::string getKey() const override { return "anilist"; }
   std::string getDisplayName() const override { return "AniList"; }
   std::string getShortBadge() const override { return "AL"; }
@@ -118,21 +111,16 @@ public:
   std::vector<providerSearchResult> search(mediaType type,
                                            const std::string& query,
                                            size_t limit) override {
-    std::string err;
-    auto rawResults = remoteSearchEngine::query(type, query, err, limit);
-    std::vector<providerSearchResult> results;
-    for (const auto& r : rawResults) {
-      results.push_back({getKey(), std::to_string(r.malId), r.title, r.type,
-                         r.totalUnits, r.score, r.year, r.synopsis});
-    }
-    return results;
+    return searchViaEngine(*client_, getKey(), type, query, limit, false);
   }
+
+private:
+  std::shared_ptr<iHttpClient> client_;
 };
 
 class kitsuProvider : public iProvider {
 public:
-  explicit kitsuProvider(
-      std::shared_ptr<iHttpClient> client = std::make_shared<curlHttpClient>())
+  explicit kitsuProvider(std::shared_ptr<iHttpClient> client)
       : client_(std::move(client)) {}
 
   std::string getKey() const override { return "kitsu"; }
@@ -167,63 +155,13 @@ public:
     if (!resp.ok() || resp.value().body.empty())
       return {};
 
-    const std::string& json = resp.value().body;
-    size_t dataPos = json.find("\"data\":[");
-    if (dataPos == std::string::npos)
-      dataPos = json.find("\"data\": [");
-    if (dataPos == std::string::npos)
-      return {};
-
     std::vector<providerSearchResult> results;
-    size_t cur = dataPos + 7;
-    while (cur < json.size() && results.size() < limit) {
-      size_t objStart = json.find(char(123), cur);
-      if (objStart == std::string::npos)
+    for (const auto& block :
+         jsonLite::splitArrayObjects(resp.value().body, "data")) {
+      if (results.size() >= limit)
         break;
-
-      int depth = 0;
-      size_t objEnd = std::string::npos;
-      bool inQuote = false;
-      for (size_t i = objStart; i < json.size(); ++i) {
-        if (json[i] == char(34) && (i == 0 || json[i - 1] != char(92))) {
-          inQuote = !inQuote;
-        } else if (!inQuote) {
-          if (json[i] == char(123)) {
-            depth++;
-          } else if (json[i] == char(125)) {
-            depth--;
-            if (depth == 0) {
-              objEnd = i;
-              break;
-            }
-          }
-        }
-      }
-
-      if (objEnd == std::string::npos)
-        break;
-      std::string block = json.substr(objStart, objEnd - objStart + 1);
-      cur = objEnd + 1;
-
-      std::string id = extractJsonString(block, "id");
-      if (id.empty())
-        continue;
-      std::string title = extractJsonString(block, "canonicalTitle");
-      if (title.empty())
-        title = extractJsonString(block, "en_jp");
-      if (title.empty())
-        continue;
-
-      providerSearchResult item;
-      item.providerKey = getKey();
-      item.remoteId = id;
-      item.title = title;
-      item.type = type;
-      item.totalUnits = static_cast<int>(extractJsonNumber(
-          block, type == mediaType::kAnime ? "episodeCount" : "chapterCount"));
-      double rating = extractJsonNumber(block, "averageRating");
-      item.score = rating > 0.0 ? rating / 10.0 : 0.0;
-      results.push_back(std::move(item));
+      if (auto item = parseKitsuItem(block, type))
+        results.push_back(std::move(*item));
     }
     return results;
   }
@@ -232,25 +170,10 @@ private:
   std::shared_ptr<iHttpClient> client_;
 };
 
-providerRegistry& providerRegistry::get() {
-  static providerRegistry instance;
-  return instance;
-}
-
-providerRegistry::providerRegistry()
-    : httpClient_(std::make_shared<curlHttpClient>()) {
-  registerProvider(std::make_shared<malProvider>());
-  registerProvider(std::make_shared<anilistProvider>());
-  registerProvider(std::make_shared<kitsuProvider>(httpClient_));
-}
-
 providerRegistry::providerRegistry(std::shared_ptr<iHttpClient> client)
     : httpClient_(std::move(client)) {
-  if (!httpClient_) {
-    httpClient_ = std::make_shared<curlHttpClient>();
-  }
-  registerProvider(std::make_shared<malProvider>());
-  registerProvider(std::make_shared<anilistProvider>());
+  registerProvider(std::make_shared<malProvider>(httpClient_));
+  registerProvider(std::make_shared<anilistProvider>(httpClient_));
   registerProvider(std::make_shared<kitsuProvider>(httpClient_));
 }
 

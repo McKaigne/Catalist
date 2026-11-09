@@ -4,12 +4,19 @@
 #include <cstring>
 #include <exception>
 #include <iostream>
+#include <memory>
 #include <unistd.h>
 
 #include "catalist/cli.hpp"
 #include "catalist/config.hpp"
+#include "catalist/core/clock.hpp"
 #include "catalist/core/logger.hpp"
 #include "catalist/database.hpp"
+#include "catalist/platform/fileSystem.hpp"
+#include "catalist/platform/httpClient.hpp"
+#include "catalist/platform/processLauncher.hpp"
+#include "catalist/provider.hpp"
+#include "catalist/sync.hpp"
 #include "catalist/tui.hpp"
 
 namespace {
@@ -86,8 +93,14 @@ int main(int argc, char* argv[]) {
 
   setupCrashHandlers();
 
+  catalist::realClock clock;
+  catalist::realFileSystem fileSystem;
+  catalist::realProcessLauncher launcher;
+  auto http = std::make_shared<catalist::curlHttpClient>();
+  catalist::providerRegistry providers(http);
+
   auto logPath = catalist::database::getConfigDir() / "catalist.log";
-  catalist::logger::get().init(logPath);
+  catalist::logger::get().init(logPath, clock);
   LOG_INFO("Catalist starting up...");
 
   catalist::database db;
@@ -104,11 +117,16 @@ int main(int argc, char* argv[]) {
 
   if (argc > 1) {
     LOG_INFO("Dispatching CLI command: " + std::string(argv[1]));
-    return catalist::cliDispatcher::dispatch(argc, argv, db, config);
+    catalist::cliServices cliServices{clock, *http};
+    return catalist::cliDispatcher::dispatch(argc, argv, db, config,
+                                             cliServices);
   }
 
   LOG_INFO("Launching interactive TUI screen.");
-  catalist::appTui app(db, config);
+  catalist::malAuth auth(fileSystem, *http, launcher, clock,
+                         catalist::database::getConfigDir() / "mal_auth.json");
+  catalist::appTui app(db, config,
+                       {launcher, clock, *http, providers, auth});
   app.run();
   LOG_INFO("Catalist session exited cleanly.");
 

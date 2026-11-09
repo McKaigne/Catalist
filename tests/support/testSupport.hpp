@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "catalist/core/clock.hpp"
 #include "catalist/entry.hpp"
 
 namespace catalist::test {
@@ -114,6 +115,9 @@ private:
 };
 
 [[nodiscard]] entryBuilder makeEntry();
+
+// 2026-10-20 12:00:00 UTC; the test main pins TZ=UTC so local dates agree.
+[[nodiscard]] fixedClock makeTestClock();
 
 std::filesystem::path fixturePath(const std::string& relativePath);
 std::string readTextFile(const std::filesystem::path& path);

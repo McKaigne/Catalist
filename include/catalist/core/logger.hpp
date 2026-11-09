@@ -7,6 +7,8 @@
 #include <string>
 #include <string_view>
 
+#include "catalist/core/clock.hpp"
+
 namespace catalist {
 
 enum class logLevel {
@@ -20,7 +22,7 @@ class logger {
  public:
   static logger& get();
 
-  void init(const std::filesystem::path& logPath);
+  void init(const std::filesystem::path& logPath, const iClock& clock);
   void log(logLevel level, std::string_view message);
 
   static void debug(std::string_view message);
@@ -38,6 +40,7 @@ class logger {
   std::ofstream logFile_;
   mutable std::mutex mutex_;
   bool initialized_ = false;
+  const iClock* clock_ = nullptr;
 
   void ensureOpen();
 };

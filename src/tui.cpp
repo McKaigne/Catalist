@@ -111,12 +111,8 @@ static std::string formatDays(double days) {
   return formatCommas(whole) + "." + std::to_string(frac);
 }
 
-static std::string getTodayDateStr() {
-  auto now = std::chrono::system_clock::now();
-  auto inTimeT = std::chrono::system_clock::to_time_t(now);
-  std::stringstream ss;
-  ss << std::put_time(std::localtime(&inTimeT), "%Y-%m-%d");
-  return ss.str();
+static std::string getTodayDateStr(const iClock& clock) {
+  return localDate(clock).toString();
 }
 
 static std::string formatCatalogDate(const entry& e) {
@@ -138,36 +134,30 @@ static std::string formatCatalogDate(const entry& e) {
   return d;
 }
 
-static std::string getFormattedTimestamp() {
-  auto now = std::chrono::system_clock::now();
-  auto inTimeT = std::chrono::system_clock::to_time_t(now);
-  auto tm = *std::localtime(&inTimeT);
-  char buf[32];
-  std::strftime(buf, sizeof(buf), "%b %d, %I:%M %p", &tm);
-  return std::string(buf);
+static std::string getFormattedTimestamp(const iClock& clock) {
+  return formatLocalTime(clock, "%b %d, %I:%M %p");
 }
 
-struct pipeDeleter {
-  void operator()(FILE* f) const {
-    if (f)
-      pclose(f);
-  }
-};
-
-static std::string runZenityFilePicker() {
-  std::array<char, 256> buffer;
-  std::string commandOutput;
-  std::unique_ptr<FILE, pipeDeleter> pipe(popen(
-      "zenity --file-selection --title=\"Select MyAnimeList XML Export\" --file-filter=\"*.xml\" 2>/dev/null",
-      "r"));
-  if (!pipe)
+static std::string runZenityFilePicker(iProcessLauncher& launcher) {
+  auto picked = launcher.capture({"zenity", "--file-selection",
+                                  "--title=Select MyAnimeList XML Export",
+                                  "--file-filter=*.xml"});
+  if (!picked.ok())
     return "";
-  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-    commandOutput += buffer.data();
+  std::string chosenPath = picked.value().standardOutput;
+  if (!chosenPath.empty() && chosenPath.back() == '\n')
+    chosenPath.pop_back();
+  return chosenPath;
+}
+
+static void copyTextToClipboard(iProcessLauncher& launcher,
+                                const std::string& text) {
+  const std::vector<std::vector<std::string>> clipboardTools = {
+      {"wl-copy"}, {"xclip", "-selection", "clipboard"}, {"pbcopy"}};
+  for (const auto& tool : clipboardTools) {
+    if (launcher.feed(tool, text))
+      return;
   }
-  if (!commandOutput.empty() && commandOutput.back() == '\n')
-    commandOutput.pop_back();
-  return commandOutput;
 }
 
 static Element makePill(const std::string& textStr, ftxui::Color fg,
@@ -248,7 +238,8 @@ static std::string getSortArrow(sortKey key, bool reverse) {
   return isSortAscending(key, reverse) ? " ▲" : " ▼";
 }
 
-appTui::appTui(database& db, appConfig& config) : db_(db), config_(config) {}
+appTui::appTui(database& db, appConfig& config, tuiServices services)
+    : db_(db), config_(config), services_(services) {}
 
 void appTui::run() {
   auto screen = ScreenInteractive::Fullscreen();
@@ -318,34 +309,19 @@ void appTui::run() {
   auto copyToClipboard = [&](const std::string& str) {
     if (str.empty())
       return;
-    FILE* pipe = popen(
-        "wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null || pbcopy 2>/dev/null",
-        "w");
-    if (pipe) {
-      fwrite(str.data(), 1, str.size(), pipe);
-      pclose(pipe);
-    }
+    copyTextToClipboard(services_.launcher, str);
     pushNotification("Copied: \"" + clipTitle(str, 42) + "\"");
   };
 
   auto openInBrowser = [&](const entry& e) {
-    std::string url = providerRegistry::get().resolveUrl(e);
+    std::string url = services_.providers.resolveUrl(e);
     if (url.empty()) {
       pushNotification(
           "Error: No external provider links associated with this entry.");
       return;
     }
 
-    std::string cmd;
-#if defined(_WIN32)
-    cmd = "start " + url;
-#elif defined(__APPLE__)
-    cmd = "open \"" + url + "\" &";
-#else
-    cmd = "xdg-open \"" + url + "\" >/dev/null 2>&1 &";
-#endif
-    int ret = std::system(cmd.c_str());
-    (void)ret;
+    services_.launcher.spawnDetached(browserOpenCommand(url));
     statusMessage = "Opened: " + url;
   };
 
@@ -520,7 +496,7 @@ void appTui::run() {
         (currentTab == viewTab::kManga) ? mediaType::kManga : mediaType::kAnime;
     std::string err;
     remoteResults =
-        remoteSearchEngine::query(media, remoteSearchQuery, err, 10);
+        remoteSearchEngine(services_.http).query(media, remoteSearchQuery, err, 10);
     remoteLoading = false;
 
     remoteResultLabels.clear();
@@ -541,7 +517,7 @@ void appTui::run() {
     LOG_INFO("Mutating progress for ID " + std::to_string(e.id) + " (\"" + e.title + "\") dir=" + std::to_string(dir));
     entry before = e;
     int newProg = std::max(0, e.progress + dir);
-    std::string today = getTodayDateStr();
+    std::string today = getTodayDateStr(services_.clock);
 
     if (dir > 0) {
       if (e.startDate.empty() || e.startDate.find("0000") == 0) {
@@ -569,7 +545,7 @@ void appTui::run() {
     e.updatedAt = today;
     recordAction(historyAction::kMutate, e.type, before, e);
     db_.updateEntry(e);
-    db_.logActivity({getFormattedTimestamp(), e.type, e.title, e.status,
+    db_.logActivity({getFormattedTimestamp(services_.clock), e.type, e.title, e.status,
                      e.progress, e.totalUnits, e.score});
     db_.saveAll();
     refreshViews();
@@ -581,7 +557,7 @@ void appTui::run() {
     LOG_INFO("Cycling status for ID " + std::to_string(e.id) + " (\"" + e.title + "\") dir=" + std::to_string(dir));
     entry before = e;
     watchStatus oldStatus = e.status;
-    std::string today = getTodayDateStr();
+    std::string today = getTodayDateStr(services_.clock);
 
     if (dir > 0) {
       switch (e.status) {
@@ -648,7 +624,7 @@ void appTui::run() {
     e.updatedAt = today;
     recordAction(historyAction::kMutate, e.type, before, e);
     db_.updateEntry(e);
-    db_.logActivity({getFormattedTimestamp(), e.type, e.title, e.status,
+    db_.logActivity({getFormattedTimestamp(services_.clock), e.type, e.title, e.status,
                      e.progress, e.totalUnits, e.score});
     db_.saveAll();
     refreshViews();
@@ -659,10 +635,10 @@ void appTui::run() {
     LOG_INFO("Adjusting rating for ID " + std::to_string(e.id) + " (\"" + e.title + "\") dir=" + std::to_string(dir));
     entry before = e;
     e.score = std::clamp(e.score + dir, 0, 10);
-    e.updatedAt = getTodayDateStr();
+    e.updatedAt = getTodayDateStr(services_.clock);
     recordAction(historyAction::kMutate, e.type, before, e);
     db_.updateEntry(e);
-    db_.logActivity({getFormattedTimestamp(), e.type, e.title, e.status,
+    db_.logActivity({getFormattedTimestamp(services_.clock), e.type, e.title, e.status,
                      e.progress, e.totalUnits, e.score});
     db_.saveAll();
     refreshViews();
@@ -698,7 +674,7 @@ void appTui::run() {
 
     std::thread([&, screenPtr]() {
       std::string outMsg;
-      metadataSync::syncOngoing(db_, outMsg);
+      metadataSync::syncOngoing(db_, services_.http, outMsg);
       syncIsRunning.store(false);
 
       {
@@ -748,7 +724,7 @@ void appTui::run() {
     } else if (verb == "sync") {
       triggerAsyncSync();
     } else if (verb == "import") {
-      std::string path = runZenityFilePicker();
+      std::string path = runZenityFilePicker(services_.launcher);
       if (!path.empty()) {
         size_t count = malParser::importXml(path, db_, false);
         pushNotification("Ingested " + std::to_string(count) +
@@ -1146,8 +1122,8 @@ void appTui::run() {
           e.progress = 0;
           e.totalUnits = sel.totalUnits;
           e.startDate =
-              sel.year.empty() ? getTodayDateStr() : (sel.year + "-01-01");
-          e.updatedAt = getTodayDateStr();
+              sel.year.empty() ? getTodayDateStr(services_.clock) : (sel.year + "-01-01");
+          e.updatedAt = getTodayDateStr(services_.clock);
           db_.addEntry(e);
           recordAction(historyAction::kAdd, e.type, entry{}, e);
           db_.saveAll();
@@ -1216,7 +1192,7 @@ void appTui::run() {
           auto& e = displayedEntries[catalogSelected];
           entry before = e;
           e.notes = inspectorNotesBuffer;
-          e.updatedAt = getTodayDateStr();
+          e.updatedAt = getTodayDateStr(services_.clock);
           recordAction(historyAction::kMutate, e.type, before, e);
           db_.updateEntry(e);
           db_.saveAll();
@@ -1339,7 +1315,7 @@ void appTui::run() {
             pushNotification(
                 "Created snapshot backup in ~/.config/catalist/backups/.");
           } else if (syncActionCursor == 2) {
-            std::string path = runZenityFilePicker();
+            std::string path = runZenityFilePicker(services_.launcher);
             if (!path.empty()) {
               size_t count = malParser::importXml(path, db_, false);
               pushNotification("Ingested " + std::to_string(count) +
@@ -2391,7 +2367,7 @@ void appTui::run() {
 
         // Construct dynamic provider text links (plain text, no pill)
         Elements providerBadges;
-        for (const auto& prov : providerRegistry::get().getAllProviders()) {
+        for (const auto& prov : services_.providers.getAllProviders()) {
           std::string rid = e.getRemoteId(prov->getKey());
           if (!rid.empty()) {
             if (!providerBadges.empty()) {
@@ -2567,7 +2543,7 @@ void appTui::run() {
                 detailPane});
     }
 
-    bool isMalAuth = malAuth::getInstance().isAuthenticated();
+    bool isMalAuth = services_.auth.isAuthenticated();
     Element accountBadge =
         isMalAuth
             ? makePill(icon::kSync + " MAL: Connected", theme.crust, theme.green)

@@ -53,18 +53,22 @@ TEST_CASE_FIXTURE(tempDirFixture, "cli add then step progress then rm") {
   std::vector<std::string> addArgs = {"Dungeon Meshi", "-t", "anime", "-s",
                                       "watching", "-e", "24", "-p", "10",
                                       "-r", "9"};
-  REQUIRE(cliDispatcher::executeAdd(addArgs, db) == 0);
+  auto clock = catalist::test::makeTestClock();
+  REQUIRE(cliDispatcher::executeAdd(addArgs, db, clock) == 0);
 
   auto entries = db.filterEntries(mediaType::kAnime, std::nullopt, -1,
                                   "Dungeon Meshi", sortKey::kTitle, false);
   REQUIRE(entries.size() == 1);
   int id = entries[0].id;
 
-  REQUIRE(cliDispatcher::executeSet({std::to_string(id), "-p", "a", "2"}, db) ==
+  REQUIRE(cliDispatcher::executeSet({std::to_string(id), "-p", "a", "2"}, db,
+                                    clock) ==
           0);
   auto stepped = db.getById(mediaType::kAnime, id);
   REQUIRE(stepped.has_value());
   CHECK(stepped->progress == 12);
+  CHECK(stepped->startDate == "2026-10-20");
+  CHECK(stepped->updatedAt == "2026-10-20");
 
   REQUIRE(cliDispatcher::executeRm({std::to_string(id), "-y"}, db) == 0);
   CHECK_FALSE(db.getById(mediaType::kAnime, id).has_value());

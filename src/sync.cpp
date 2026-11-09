@@ -5,15 +5,13 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <array>
 #include <chrono>
-#include <cstdlib>
-#include <fstream>
-#include <memory>
+#include <optional>
 #include <random>
 #include <regex>
 #include <thread>
 
+#include "catalist/core/jsonLite.hpp"
 #include "catalist/database.hpp"
 
 namespace catalist {
@@ -22,81 +20,31 @@ const std::string kMalClientId =
     "6114d00ca681b7701d1e15fe11a4987e";  // Standard open-source fallback client
                                          // ID
 
-struct pipeDeleter {
-  void operator()(FILE* f) const {
-    if (f)
-      pclose(f);
-  }
-};
+namespace {
 
-static std::string execCommand(const std::string& cmd) {
-  std::array<char, 256> buffer;
-  std::string commandOutput;
-  std::unique_ptr<FILE, pipeDeleter> pipe(popen(cmd.c_str(), "r"));
-  if (!pipe)
-    return "";
-  while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) !=
-         nullptr) {
-    commandOutput += buffer.data();
-  }
-  return commandOutput;
+std::string stringField(const std::string& json, const char* key) {
+  return jsonLite::extractJsonString(json, key).value_or("");
 }
 
-static std::string extractJsonString(const std::string& block,
-                                     const std::string& key) {
-  std::string pattern = "\"" + key + "\":\"";
-  size_t pos = block.find(pattern);
-  if (pos == std::string::npos) {
-    pattern = "\"" + key + "\": \"";
-    pos = block.find(pattern);
-    if (pos == std::string::npos)
-      return "";
-  }
-  size_t start = pos + pattern.size();
-  size_t end = start;
-  while (end < block.size()) {
-    if (block[end] == '"' && (end == 0 || block[end - 1] != '\\'))
-      break;
-    end++;
-  }
-  return (end > start) ? block.substr(start, end - start) : "";
+long long integerField(const std::string& json, const char* key) {
+  return static_cast<long long>(
+      jsonLite::extractJsonNumber(json, key).value_or(0.0));
 }
 
-static long long extractJsonNumber(const std::string& block,
-                                   const std::string& key) {
-  std::string pattern = "\"" + key + "\":";
-  size_t pos = block.find(pattern);
-  if (pos == std::string::npos) {
-    pattern = "\"" + key + "\": ";
-    pos = block.find(pattern);
-    if (pos == std::string::npos)
-      return 0;
-  }
-  size_t start = pos + pattern.size();
-  while (start < block.size() && (block[start] == ' ' || block[start] == '\t'))
-    start++;
-  size_t end = start;
-  while (end < block.size() && std::isdigit(block[end]))
-    end++;
-  if (end > start) {
-    try {
-      return std::stoll(block.substr(start, end - start));
-    } catch (...) {
-    }
-  }
-  return 0;
-}
+}  // namespace
 
 // -----------------------------------------------------------------------------
 // OAuth 2.0 PKCE & Loopback Server Implementation
 // -----------------------------------------------------------------------------
 
-malAuth& malAuth::getInstance() {
-  static malAuth instance;
-  return instance;
-}
-
-malAuth::malAuth() {
+malAuth::malAuth(iFileSystem& fileSystem, iHttpClient& http,
+                 iProcessLauncher& launcher, const iClock& clock,
+                 std::filesystem::path credentialsPath)
+    : fileSystem_(fileSystem),
+      http_(http),
+      launcher_(launcher),
+      clock_(clock),
+      credentialsPath_(std::move(credentialsPath)) {
   load();
 }
 
@@ -109,36 +57,29 @@ void malAuth::logout() {
   save();
 }
 
-std::string malAuth::getAccessToken() {
+std::string malAuth::getAccessToken() const {
   // TODO: Add refresh token rotation check here before returning
   return creds_.accessToken;
 }
 
 void malAuth::load() {
-  auto path = database::getConfigDir() / "mal_auth.json";
-  std::ifstream file(path);
-  if (!file.is_open())
+  auto content = fileSystem_.readFile(credentialsPath_);
+  if (!content)
     return;
-  std::string content((std::istreambuf_iterator<char>(file)),
-                      std::istreambuf_iterator<char>());
-  creds_.accessToken = extractJsonString(content, "access_token");
-  creds_.refreshToken = extractJsonString(content, "refresh_token");
-  creds_.expiresAt = extractJsonNumber(content, "expires_at");
+  creds_.accessToken = stringField(*content, "access_token");
+  creds_.refreshToken = stringField(*content, "refresh_token");
+  creds_.expiresAt = integerField(*content, "expires_at");
 }
 
 void malAuth::save() {
-  auto path = database::getConfigDir() / "mal_auth.json";
-  std::ofstream file(path);
-  if (file.is_open()) {
-    file << "{\n"
-         << "  \"access_token\": \"" << creds_.accessToken << "\",\n"
-         << "  \"refresh_token\": \"" << creds_.refreshToken << "\",\n"
-         << "  \"expires_at\": " << creds_.expiresAt << "\n"
-         << "}\n";
-    file.close();
-    // Enforce 0600 permissions (S_IRUSR | S_IWUSR) for security
-    chmod(path.c_str(), S_IRUSR | S_IWUSR);
-  }
+  std::string content = "{\n  \"access_token\": \"" + creds_.accessToken +
+                        "\",\n  \"refresh_token\": \"" +
+                        creds_.refreshToken + "\",\n  \"expires_at\": " +
+                        std::to_string(creds_.expiresAt) + "\n}\n";
+  if (!fileSystem_.writeFileAtomic(credentialsPath_, content))
+    return;
+  // Tokens grant account access, so the file must not be world-readable.
+  fileSystem_.restrictToOwner(credentialsPath_);
 }
 
 static std::string generateCodeVerifier() {
@@ -226,26 +167,28 @@ static std::string waitForAuthCode() {
 
 bool malAuth::exchangeToken(const std::string& code,
                             const std::string& verifier, std::string& outMsg) {
-  std::string cmd =
-      "curl -s -X POST \"https://myanimelist.net/v1/oauth2/token\" "
-      "-H \"Content-Type: application/x-www-form-urlencoded\" "
-      "-d \"client_id=" +
-      kMalClientId + "&code=" + code + "&code_verifier=" + verifier +
-      "&grant_type=authorization_code\" 2>/dev/null";
+  httpRequest request;
+  request.url = "https://myanimelist.net/v1/oauth2/token";
+  request.method = "POST";
+  request.headers["Content-Type"] = "application/x-www-form-urlencoded";
+  request.body = "client_id=" + kMalClientId + "&code=" + code +
+                 "&code_verifier=" + verifier +
+                 "&grant_type=authorization_code";
 
-  std::string json = execCommand(cmd);
-  if (json.empty() || json.find("access_token") == std::string::npos) {
+  auto response = http_.execute(request);
+  std::string json = response.ok() ? response.value().body : "";
+  if (json.find("access_token") == std::string::npos) {
     outMsg = "Failed to exchange authorization code with MyAnimeList.";
     return false;
   }
 
-  creds_.accessToken = extractJsonString(json, "access_token");
-  creds_.refreshToken = extractJsonString(json, "refresh_token");
-  long long expiresIn = extractJsonNumber(json, "expires_in");
-
-  auto now = std::chrono::system_clock::now().time_since_epoch();
-  auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now).count();
-  creds_.expiresAt = seconds + expiresIn;
+  creds_.accessToken = stringField(json, "access_token");
+  creds_.refreshToken = stringField(json, "refresh_token");
+  long long expiresIn = integerField(json, "expires_in");
+  auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+                        clock_.now().time_since_epoch())
+                        .count();
+  creds_.expiresAt = nowSeconds + expiresIn;
 
   save();
   outMsg = "Successfully authenticated with MyAnimeList.";
@@ -255,21 +198,11 @@ bool malAuth::exchangeToken(const std::string& code,
 bool malAuth::authenticate(std::string& outMsg) {
   std::string verifier = generateCodeVerifier();
   std::string authUrl =
-      "https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=" +
+      "https://myanimelist.net/v1/oauth2/authorize?response_type=code&"
+      "client_id=" +
       kMalClientId + "&code_challenge=" + verifier +
       "&code_challenge_method=plain";
-
-  std::string openCmd;
-#if defined(_WIN32)
-  openCmd = "start \"\" \"" + authUrl + "\"";
-#elif defined(__APPLE__)
-  openCmd = "open \"" + authUrl + "\"";
-#else
-  openCmd = "xdg-open \"" + authUrl + "\" >/dev/null 2>&1 &";
-#endif
-
-  int ret = std::system(openCmd.c_str());
-  (void)ret;
+  launcher_.spawnDetached(browserOpenCommand(authUrl));
 
   std::string code = waitForAuthCode();
   if (code.empty()) {
@@ -280,32 +213,38 @@ bool malAuth::authenticate(std::string& outMsg) {
   return exchangeToken(code, verifier, outMsg);
 }
 
-size_t metadataSync::syncOngoing(database& db, std::string& outMsg) {
+namespace {
+
+std::optional<int> fetchEpisodeCount(iHttpClient& http, int malId) {
+  httpRequest request;
+  request.url = "https://api.jikan.moe/v4/anime/" + std::to_string(malId);
+  request.timeout = std::chrono::milliseconds(3000);
+  auto response = http.execute(request);
+  if (!response.ok() || response.value().body.empty())
+    return std::nullopt;
+  auto episodes = jsonLite::extractJsonNumber(response.value().body, "episodes");
+  if (!episodes)
+    return std::nullopt;
+  return static_cast<int>(*episodes);
+}
+
+}  // namespace
+
+size_t metadataSync::syncOngoing(database& db, iHttpClient& http,
+                                 std::string& outMsg) {
   size_t updated = 0;
 
   for (auto e : db.getEntries(mediaType::kAnime)) {
-    if (e.totalUnits == 0 && e.malId > 0) {
-      std::string cmd = "curl -s -m 3 \"https://api.jikan.moe/v4/anime/" +
-                        std::to_string(e.malId) + "\" 2>/dev/null";
-      std::string resp = execCommand(cmd);
-      std::this_thread::sleep_for(std::chrono::milliseconds(340));
-      if (resp.empty())
-        continue;
-
-      std::regex epRe(R"("episodes":\s*(\d+))");
-      std::smatch m;
-      if (std::regex_search(resp, m, epRe)) {
-        try {
-          int eps = std::stoi(m[1].str());
-          if (eps > 0 && eps != e.totalUnits) {
-            e.totalUnits = eps;
-            db.updateEntry(e);
-            updated++;
-          }
-        } catch (...) {
-        }
-      }
-    }
+    if (e.totalUnits != 0 || e.malId <= 0)
+      continue;
+    auto episodes = fetchEpisodeCount(http, e.malId);
+    // Jikan rate-limits to roughly three requests per second.
+    std::this_thread::sleep_for(std::chrono::milliseconds(340));
+    if (!episodes || *episodes <= 0 || *episodes == e.totalUnits)
+      continue;
+    e.totalUnits = *episodes;
+    db.updateEntry(e);
+    updated++;
   }
 
   if (updated > 0) {

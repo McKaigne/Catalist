@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 
 #include "support/testSupport.hpp"
@@ -20,6 +21,8 @@ int main(int argc, char** argv) {
   ::setenv("HOME", homeDir.c_str(), 1);
   ::setenv("XDG_CONFIG_HOME", (homeDir / ".config").c_str(), 1);
   ::setenv("NO_COLOR", "1", 1);
+  ::setenv("TZ", "UTC", 1);
+  ::tzset();
 
   doctest::Context context(argc, argv);
   int exitCode = context.run();

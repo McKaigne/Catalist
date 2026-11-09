@@ -2,7 +2,12 @@
 
 #include "catalist/commandPalette.hpp"
 #include "catalist/config.hpp"
+#include "catalist/core/clock.hpp"
 #include "catalist/database.hpp"
+#include "catalist/platform/httpClient.hpp"
+#include "catalist/platform/processLauncher.hpp"
+#include "catalist/provider.hpp"
+#include "catalist/sync.hpp"
 #include "catalist/themeRegistry.hpp"
 #include <set>
 #include <string>
@@ -38,14 +43,23 @@ struct historyAction {
   entry after;
 };
 
+struct tuiServices {
+  iProcessLauncher& launcher;
+  const iClock& clock;
+  iHttpClient& http;
+  providerRegistry& providers;
+  malAuth& auth;
+};
+
 class appTui {
  public:
-  appTui(database& db, appConfig& config);
+  appTui(database& db, appConfig& config, tuiServices services);
   void run();
 
  private:
   database& db_;
   appConfig& config_;
+  tuiServices services_;
   commandPalette commandPalette_;
   std::vector<historyAction> undoStack_;
   std::vector<historyAction> redoStack_;

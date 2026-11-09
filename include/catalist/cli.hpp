@@ -5,6 +5,8 @@
 #include <vector>
 
 #include "catalist/config.hpp"
+#include "catalist/core/clock.hpp"
+#include "catalist/platform/httpClient.hpp"
 #include "catalist/database.hpp"
 #include "catalist/remoteSearch.hpp"
 
@@ -27,9 +29,15 @@ struct cliFilterOptions {
   outputFormat format = outputFormat::kTable;
 };
 
+struct cliServices {
+  const iClock& clock;
+  iHttpClient& http;
+};
+
 class cliDispatcher {
 public:
-  static int dispatch(int argc, char* argv[], database& db, appConfig& config);
+  static int dispatch(int argc, char* argv[], database& db, appConfig& config,
+                      const cliServices& services);
 
   static bool parseRatingSpec(const std::string& spec, int& minScore,
                               int& maxScore, bool& unratedOnly);
@@ -41,8 +49,10 @@ public:
                        const appConfig& config);
   static int executeCount(const std::vector<std::string>& args, database& db);
   static int executeShow(const std::vector<std::string>& args, database& db);
-  static int executeAdd(const std::vector<std::string>& args, database& db);
-  static int executeSet(const std::vector<std::string>& args, database& db);
+  static int executeAdd(const std::vector<std::string>& args, database& db,
+                        const iClock& clock);
+  static int executeSet(const std::vector<std::string>& args, database& db,
+                        const iClock& clock);
   static int executeRm(const std::vector<std::string>& args, database& db);
   static int executeRandom(const std::vector<std::string>& args, database& db);
   static int executeStats(const std::vector<std::string>& args,
@@ -50,7 +60,8 @@ public:
   static int executeExport(const std::vector<std::string>& args,
                            const database& db);
   static int executeImport(const std::vector<std::string>& args, database& db);
-  static int executeSearch(const std::vector<std::string>& args, database& db);
+  static int executeSearch(const std::vector<std::string>& args, database& db,
+                           iHttpClient& http);
   static int executeConfig(const std::vector<std::string>& args,
                            appConfig& config);
   static int executeCompletion(const std::vector<std::string>& args);

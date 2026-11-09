@@ -8,12 +8,12 @@
 
 ## ADR-002: Strong Types and Optionality over Magic Sentinels
 - **Context:** Magic values (`-1`, `"0000-00-00"`) caused error-prone checks.
-- **Decision:** Use `std::optional<T>` and `Result<T>` instead of magic sentinels.
+- **Decision:** Use `std::optional<T>` and `result<T>` instead of magic sentinels.
 
 ## ADR-003: Decoupled Multi-Provider Subsystem
 - **Context:** Remote search routines were split across ad-hoc curl routines.
-- **Decision:** Unify external providers behind the `IProvider` interface,
-  managed by `ProviderRegistry`.
+- **Decision:** Unify external providers behind the `iProvider` interface,
+  managed by `providerRegistry`.
 
 ## ADR-004: Explicit Unix Filter and Standard Stream Discipline
 - **Context:** Terminal tools must integrate smoothly into shell pipelines.

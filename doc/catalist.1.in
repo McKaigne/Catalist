@@ -11,6 +11,18 @@ catalist \- keyboard-driven anime and manga watchlist manager
 .B catalist
 is a modal, local-first terminal interface and headless Unix CLI for tracking
 anime series and manga publications in RFC 4180 CSV files.
+Run without arguments to start the terminal interface.
+.SH OPTIONS
+.TP
+.BR --tab " <" \fIID\fR >
+Start the terminal interface on the given tab: anime, manga, queue, search,
+library, history, stats, settings or help.
+.TP
+.BR -v ", " --version
+Print the version.
+.TP
+.BR -h ", " --help
+Print usage.
 .SH COMMANDS
 .TP
 .BR ls " [" \fIFLAGS\fR ]
@@ -45,5 +57,58 @@ Inspect or modify settings in \fBcatalist.kdl\fR.
 .TP
 .BR completion " <" \fIbash\fR | \fIzsh\fR | \fIfish\fR >
 Emit shell completion definitions.
+.SH TABS
+The number keys select the tabs in top-bar order.
+.TP
+.B 1 Anime, 2 Manga
+Catalogue with sidebar filters, sortable table and details card.
+.TP
+.B 3 Queue
+Watching and Plan to Watch entries in a user order; \fBJ\fR/\fBK\fR reorder.
+.TP
+.B 4 Search
+Online search across MyAnimeList, AniList and Kitsu; \fBEnter\fR adds.
+.TP
+.B 5 Library
+Start year, status and entries columns.
+.TP
+.B 6 History
+Activity heatmap and day-by-day log.
+.TP
+.B 7 Stats
+Totals, score histogram and entries per year; \fBm\fR toggles media.
+.TP
+.B 8 Settings
+Themes with live preview, preferences, backups, import, export and MAL login.
+.TP
+.B 9 Help
+Keys from the active keybindings.
+.SH KEYS
+.TP
+.B j k g G h l
+Move, jump and change pane on every tab.
+.TP
+.B + - S R P
+Progress, status, rating and progress steps in the catalogue.
+.TP
+.B Space v
+Visual (batch) selection.
+.TP
+.B / a d u U o y
+Filter, add (opens Search), delete, undo, redo, open in browser, copy title.
+.TP
+.B : ? q Tab
+Command palette, help, save and quit, next tab.
+.SH FILES
+.TP
+.I ~/.config/catalist/anime.csv, manga.csv, history.csv
+Catalogue and activity history (override the directory with
+\fBCATALIST_DATA_DIR\fR).
+.TP
+.I ~/.config/catalist/catalist.kdl
+Theme, preferences, startup tab, tab order and keybindings.
+.TP
+.I ~/.config/catalist/backups/
+Snapshot backups.
 .SH AUTHORS
 McKaigne <https://github.com/McKaigne/Catalist>

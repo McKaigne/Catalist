@@ -52,44 +52,59 @@ ctest --test-dir build --output-on-failure
 
 ---
 
-## Core Keybindings (TUI)
+## Tabs (TUI)
 
-### Navigation & Views
+Run `catalist` for the TUI, or `catalist --tab <id>` to open it on a specific tab.
+The number keys follow the order shown in the top bar.
+
+| Key | Tab | What it does |
+| :--- | :--- | :--- |
+| `1` | Anime | Your anime catalogue: sidebar filters, sortable table, details card |
+| `2` | Manga | The same for manga |
+| `3` | Queue | Watching and Plan to Watch entries in your own order (`J`/`K` to reorder) |
+| `4` | Search | Online search across MyAnimeList, AniList and Kitsu; `Enter` adds |
+| `5` | Library | Browse by start year, then status, then entries |
+| `6` | History | Activity heatmap and a day-by-day log of updates |
+| `7` | Stats | Totals, score histogram and entries per year (`m` toggles anime/manga) |
+| `8` | Settings | Themes (live preview), preferences, backups, import/export, MAL login |
+| `9` | Help | Every key, read live from your keybindings |
+
+The tab list, its order and the startup tab are configured in `catalist.kdl`
+(`top-bar` and `general { startup-tab "queue" }`).
+
+## Core Keybindings
+
+### Everywhere
 | Key | Action |
 | :--- | :--- |
-| `j` / `k` | Move cursor down / up |
-| `h` / `l` | Move focus between Sidebar, Catalog, and Details panes |
-| `g` / `G` | Jump to top / bottom of catalog list |
-| `Tab` / `S-Tab` | Cycle through top tabs (Catalist, Anime, Manga, Overview, Sync, Settings) |
-| `1` / `2` / `3` | Direct switch to Anime / Manga / Overview tabs |
+| `1`–`9` | Switch to the numbered tab |
+| `Tab` / `S-Tab` | Next / previous tab |
+| `j` / `k`, `g` / `G` | Move down / up, jump to top / bottom (every tab) |
+| `h` / `l` | Move between panes, columns or panels |
+| `:` | Command palette (`:theme`, `:sync`, `:backup`, `:import`, `:about`, `:tab <id>`, `:w`, `:q`) |
+| `?` | Open Help |
+| `q` | Save and quit |
 
-### Editing & Progress
+### Catalogue (Anime / Manga)
 | Key | Action |
 | :--- | :--- |
 | `+` / `-` | Increment / decrement watched episodes or read chapters |
-| `S` | Cycle status (`Watching` -> `Completed` -> `On-Hold` -> `Dropped` -> `Plan to Watch`) |
-| `R` | Bump user rating score (`0` through `10`) |
-| `e` / `Enter` | Edit entry notes / inspect details |
-| `d` | Delete selected entry (prompts confirmation) |
-| `u` / `U` | Undo / redo database mutations |
+| `S` / `R` / `P` | Cycle status / bump rating / add progress (applies to the visual selection) |
+| `Space` / `v` | Toggle visual (batch) selection |
+| `e` / `Enter` | Open the details card; `e` on Notes edits them |
+| `d` | Delete (asks to confirm; deletes the whole selection in visual mode) |
+| `u` / `U` | Undo / redo |
+| `/` | Filter by title |
+| `a` | Add an entry (opens the Search tab) |
+| `o` / `y` | Open in browser / copy the title |
+| `c` `t` `s` `r` `p` | Sort by date, title, status, rating or progress (press again to reverse) |
 
-### Discovery & Integrations
+### Queue, Search, Library, Stats
 | Key | Action |
 | :--- | :--- |
-| `/` | Enter search filter mode (exits back into catalog on `Enter` / `Esc`) |
-| `a` | Search online remote providers (AniList / MAL) and add entry |
-| `o` | Open active entry in default browser via resolved provider link |
-| `y` | Yank / copy active entry title to system clipboard |
-| `:` | Open Command Palette |
-| `q` | Save and quit |
-
-### Multi-Column Sorting
-Pressing a sort hotkey toggles sort order between ascending and descending:
-- `c` — Sort by start / completion Date
-- `t` — Sort by Title
-- `s` — Sort by Watch Status
-- `r` — Sort by Rating Score
-- `p` — Sort by Progress Count
+| `J` / `K` | Queue: move the entry down / up |
+| `/`, `p` or `h`/`l` | Search: type a query, switch provider |
+| `m` | Search, Library, Stats: toggle anime / manga |
 
 ---
 
@@ -124,7 +139,10 @@ catalist import --clean myanimelist.xml  # Ingest MAL export with safe merging
 - **Local-First & Offline**: Your library is stored in `~/.config/catalist/anime.csv` and `manga.csv`. No background daemon or database setup required.
 - **Atomic File Operations**: All disk writes write to a `.tmp` file before an atomic `rename`, preventing database corruption during power cuts or unexpected exits.
 - **Tier 1 / Tier 2 Merge Hierarchy**: Re-importing MyAnimeList XML archives never overwrites local progress, scores, or notes. Upstream metadata updates refresh total episodes and provider IDs without clobbering user edits.
-- **KDL Workspace Configuration**: Declaratively customize theme, mouse support, default sorting, and layout via `~/.config/catalist/catalist.kdl`.
+- **KDL Workspace Configuration**: Declaratively customize theme, mouse support, default sorting, startup tab, tab order and keybindings via `~/.config/catalist/catalist.kdl`. Files from older versions load as-is.
+- **Backups**: `Settings → Data` (or `:backup`) writes timestamped copies to `~/.config/catalist/backups/`; restoring one first backs up the current data.
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.
 
 ---
 

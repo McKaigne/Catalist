@@ -7,7 +7,11 @@
 #include <string>
 #include <unordered_map>
 
+#include "catalist/cli/commandContext.hpp"
+#include "catalist/config/config.hpp"
 #include "catalist/core/clock.hpp"
+#include "catalist/platform/httpClient.hpp"
+#include "catalist/storage/database.hpp"
 #include "catalist/model/entry.hpp"
 #include "catalist/platform/fileSystem.hpp"
 
@@ -124,6 +128,18 @@ private:
 };
 
 [[nodiscard]] entryBuilder makeEntry();
+
+// A commandContext for CLI tests: fixed clock, mock HTTP, the given data
+// store and a deterministic "random" pick (always the first entry).
+class cliHarness {
+public:
+  cliHarness(database& db, iFileSystem& fileSystem, const iClock& clock,
+             const std::filesystem::path& dataDir);
+
+  appConfig config;
+  mockHttpClient http;
+  cli::commandContext context;
+};
 
 // 2026-10-20 12:00:00 UTC; the test main pins TZ=UTC so local dates agree.
 [[nodiscard]] fixedClock makeTestClock();

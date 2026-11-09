@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include "catalist/cli/dispatcher.hpp"
+#include "catalist/cli/commands/commands.hpp"
 #include "catalist/cli/resolveEntry.hpp"
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"
@@ -84,7 +84,8 @@ TEST_CASE_FIXTURE(libraryFixture, "resolveEntry treats an oversized number as a 
 TEST_CASE_FIXTURE(libraryFixture, "cli show lists candidates for an ambiguous query") {
   catalist::test::streamCapture out(std::cout);
   catalist::test::streamCapture err(std::cerr);
-  CHECK(catalist::cliDispatcher::executeShow({"o"}, db) == 1);
+  catalist::test::cliHarness harness(db, fileSystem(), clock(), tempDir());
+  CHECK(catalist::cli::runShow({"o"}, harness.context) == 1);
   CHECK(out.text() == "");
   CHECK(err.text() ==
         "error: ambiguous query 'o'. Matches multiple entries:\n"

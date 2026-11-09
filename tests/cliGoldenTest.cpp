@@ -6,13 +6,12 @@
 
 #include <unistd.h>
 
-#include "catalist/cli/dispatcher.hpp"
+#include "catalist/cli/commands/commands.hpp"
 #include "catalist/config/config.hpp"
 #include "catalist/storage/database.hpp"
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"
 
-using catalist::cliDispatcher;
 using catalist::test::loadGolden;
 using catalist::test::streamCapture;
 using catalist::test::tempDirFixture;
@@ -37,14 +36,16 @@ cliRun runCli(commandFn&& command) {
 }
 
 struct sampleLibraryFixture : tempDirFixture {
-  sampleLibraryFixture() : db(fileSystem(), clock(), tempDir()) {
+  sampleLibraryFixture()
+      : db(fileSystem(), clock(), tempDir()),
+        harness(db, fileSystem(), clock(), tempDir()) {
     catalist::test::seedSampleLibrary(db);
   }
   catalist::database db;
-  catalist::appConfig config;
+  catalist::test::cliHarness harness;
 
   cliRun ls(const std::vector<std::string>& args) {
-    return runCli([&] { return cliDispatcher::executeLs(args, db, config); });
+    return runCli([&] { return catalist::cli::runLs(args, harness.context); });
   }
 };
 
@@ -85,42 +86,42 @@ TEST_CASE_FIXTURE(sampleLibraryFixture, "golden ls json") {
 
 TEST_CASE_FIXTURE(sampleLibraryFixture, "golden show by id") {
   checkGolden("showById.txt", runCli([&] {
-                return cliDispatcher::executeShow({"52991"}, db);
+                return catalist::cli::runShow({"52991"}, harness.context);
               }));
 }
 
 TEST_CASE_FIXTURE(sampleLibraryFixture, "golden show manga json") {
   checkGolden("showMangaJson.json", runCli([&] {
-                return cliDispatcher::executeShow({"Chainsaw", "--json"}, db);
+                return catalist::cli::runShow({"Chainsaw", "--json"}, harness.context);
               }));
 }
 
 TEST_CASE_FIXTURE(sampleLibraryFixture, "golden count") {
   checkGolden("count.txt", runCli([&] {
-                return cliDispatcher::executeCount({"-s", "watching"}, db);
+                return catalist::cli::runCount({"-s", "watching"}, harness.context);
               }));
 }
 
 TEST_CASE_FIXTURE(sampleLibraryFixture, "golden count json") {
   checkGolden("countJson.json", runCli([&] {
-                return cliDispatcher::executeCount({"--json"}, db);
+                return catalist::cli::runCount({"--json"}, harness.context);
               }));
 }
 
 TEST_CASE_FIXTURE(sampleLibraryFixture, "golden stats json") {
   checkGolden("statsJson.json", runCli([&] {
-                return cliDispatcher::executeStats({"--json"}, db);
+                return catalist::cli::runStats({"--json"}, harness.context);
               }));
 }
 
 TEST_CASE_FIXTURE(sampleLibraryFixture, "golden export json") {
   checkGolden("exportJson.json", runCli([&] {
-                return cliDispatcher::executeExport({"json"}, db);
+                return catalist::cli::runExport({"json"}, harness.context);
               }));
 }
 
 TEST_CASE_FIXTURE(sampleLibraryFixture, "golden export csv") {
   checkGolden("exportCsv.csv", runCli([&] {
-                return cliDispatcher::executeExport({"csv"}, db);
+                return catalist::cli::runExport({"csv"}, harness.context);
               }));
 }

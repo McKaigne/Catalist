@@ -69,7 +69,22 @@ target_include_directories(catalistCore PUBLIC
 target_compile_options(catalistCore PRIVATE ${CATALIST_WARNING_FLAGS})
 
 add_library(catalistCli STATIC
+  src/cli/args.cpp
+  src/cli/commands/add.cpp
+  src/cli/commands/completion.cpp
+  src/cli/commands/config.cpp
+  src/cli/commands/count.cpp
+  src/cli/commands/export.cpp
+  src/cli/commands/import.cpp
+  src/cli/commands/ls.cpp
+  src/cli/commands/random.cpp
+  src/cli/commands/rm.cpp
+  src/cli/commands/search.cpp
+  src/cli/commands/set.cpp
+  src/cli/commands/show.cpp
+  src/cli/commands/stats.cpp
   src/cli/dispatcher.cpp
+  src/cli/output.cpp
   src/cli/resolveEntry.cpp
 )
 target_link_libraries(catalistCli PUBLIC catalistCore)

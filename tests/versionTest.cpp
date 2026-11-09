@@ -46,14 +46,12 @@ TEST_CASE("kVersionString is major.minor.patch matching the numeric parts") {
 
 TEST_CASE_FIXTURE(catalist::test::tempDirFixture, "cli --version prints kVersionString") {
   catalist::database db(fileSystem(), clock(), tempDir());
-  catalist::appConfig config;
   catalist::test::streamCapture out(std::cout);
   char program[] = "catalist";
   char flag[] = "--version";
   char* argv[] = {program, flag};
-  catalist::mockHttpClient http;
-  catalist::cliServices services{clock(), http, fileSystem()};
-  CHECK(catalist::cliDispatcher::dispatch(2, argv, db, config, services) == 0);
+  catalist::test::cliHarness harness(db, fileSystem(), clock(), tempDir());
+  CHECK(catalist::cli::dispatch(2, argv, harness.context) == 0);
   CHECK(out.text() ==
         std::string("Catalist v") + catalist::kVersionString + " (C++17 / FTXUI)\n");
 }

@@ -4,12 +4,11 @@
 #include <string>
 #include <vector>
 
-#include "catalist/cli/dispatcher.hpp"
+#include "catalist/cli/commands/commands.hpp"
 #include "catalist/storage/database.hpp"
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"
 
-using catalist::cliDispatcher;
 using catalist::mediaType;
 using catalist::watchStatus;
 using catalist::test::streamCapture;
@@ -18,15 +17,20 @@ using catalist::test::tempDirFixture;
 namespace {
 
 struct setFixture : tempDirFixture {
-  setFixture() : db(fileSystem(), clock(), tempDir()) { catalist::test::seedSampleLibrary(db); }
+  setFixture()
+      : db(fileSystem(), clock(), tempDir()),
+        harness(db, fileSystem(), clock(), tempDir()) {
+    catalist::test::seedSampleLibrary(db);
+  }
   catalist::database db;
+  catalist::test::cliHarness harness;
   std::string out;
   std::string err;
 
   int set(const std::vector<std::string>& args) {
     streamCapture outCapture(std::cout);
     streamCapture errCapture(std::cerr);
-    int exitCode = cliDispatcher::executeSet(args, db, clock());
+    int exitCode = catalist::cli::runSet(args, harness.context);
     out = outCapture.text();
     err = errCapture.text();
     return exitCode;

@@ -117,9 +117,11 @@ int main(int argc, char* argv[]) {
 
   if (argc > 1) {
     LOG_INFO("Dispatching CLI command: " + std::string(argv[1]));
-    catalist::cliServices cliServices{clock, *http, fileSystem};
-    return catalist::cliDispatcher::dispatch(argc, argv, db, config,
-                                             cliServices);
+    catalist::cli::commandContext cliContext{
+        db,         config,     clock,
+        *http,      fileSystem, configPath,
+        catalist::cli::pickRandomIndex};
+    return catalist::cli::dispatch(argc, argv, cliContext);
   }
 
   LOG_INFO("Launching interactive TUI screen.");

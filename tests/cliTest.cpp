@@ -2,11 +2,14 @@
 
 #include <iostream>
 
-#include "catalist/cli/dispatcher.hpp"
+#include "catalist/cli/args.hpp"
+#include "catalist/cli/commands/commands.hpp"
+#include "catalist/cli/output.hpp"
 #include "catalist/storage/database.hpp"
 #include "support/testSupport.hpp"
 
-using catalist::cliDispatcher;
+using catalist::cli::formatJsonEntry;
+using catalist::cli::parseRatingSpec;
 using catalist::mediaType;
 using catalist::sortKey;
 using catalist::test::makeEntry;
@@ -14,73 +17,74 @@ using catalist::test::streamCapture;
 using catalist::test::tempDirFixture;
 
 TEST_CASE("parseRatingSpec handles exact relational range and unrated") {
-  int minScore = -1;
-  int maxScore = -1;
-  bool unrated = false;
+  auto exact = parseRatingSpec("9");
+  REQUIRE(exact.has_value());
+  CHECK(exact->minScore == 9);
+  CHECK(exact->maxScore == 9);
 
-  CHECK(cliDispatcher::parseRatingSpec("9", minScore, maxScore, unrated));
-  CHECK(minScore == 9);
-  CHECK(maxScore == 9);
+  auto atLeast = parseRatingSpec(">=8");
+  REQUIRE(atLeast.has_value());
+  CHECK(atLeast->minScore == 8);
+  CHECK(atLeast->maxScore == 10);
 
-  CHECK(cliDispatcher::parseRatingSpec(">=8", minScore, maxScore, unrated));
-  CHECK(minScore == 8);
-  CHECK(maxScore == 10);
+  auto atMost = parseRatingSpec("<=6");
+  REQUIRE(atMost.has_value());
+  CHECK(atMost->minScore == 0);
+  CHECK(atMost->maxScore == 6);
 
-  CHECK(cliDispatcher::parseRatingSpec("<=6", minScore, maxScore, unrated));
-  CHECK(minScore == 0);
-  CHECK(maxScore == 6);
+  auto range = parseRatingSpec("7..9");
+  REQUIRE(range.has_value());
+  CHECK(range->minScore == 7);
+  CHECK(range->maxScore == 9);
 
-  CHECK(cliDispatcher::parseRatingSpec("7..9", minScore, maxScore, unrated));
-  CHECK(minScore == 7);
-  CHECK(maxScore == 9);
-
-  CHECK(cliDispatcher::parseRatingSpec("unrated", minScore, maxScore, unrated));
-  CHECK(unrated);
-  CHECK(minScore == 0);
+  auto unrated = parseRatingSpec("unrated");
+  REQUIRE(unrated.has_value());
+  CHECK(unrated->unratedOnly);
+  CHECK(unrated->minScore == 0);
 }
 
 TEST_CASE("formatJsonEntry includes id and title") {
   catalist::entry e = makeEntry().id(42).title("Odd Taxi").score(8);
-  auto json = cliDispatcher::formatJsonEntry(e);
+  auto json = formatJsonEntry(e);
   CHECK(json.find("\"id\":42") != std::string::npos);
   CHECK(json.find("\"title\":\"Odd Taxi\"") != std::string::npos);
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "cli add then step progress then rm") {
   catalist::database db(fileSystem(), clock(), tempDir());
+  catalist::test::cliHarness harness(db, fileSystem(), clock(), tempDir());
   streamCapture out(std::cout);
 
   std::vector<std::string> addArgs = {"Dungeon Meshi", "-t", "anime", "-s",
                                       "watching", "-e", "24", "-p", "10",
                                       "-r", "9"};
-  REQUIRE(cliDispatcher::executeAdd(addArgs, db, clock()) == 0);
+  REQUIRE(catalist::cli::runAdd(addArgs, harness.context) == 0);
 
   auto entries = db.filterEntries(mediaType::kAnime, std::nullopt, std::nullopt,
                                   "Dungeon Meshi", sortKey::kTitle, false);
   REQUIRE(entries.size() == 1);
   int id = entries[0].id;
 
-  REQUIRE(cliDispatcher::executeSet({std::to_string(id), "-p", "a", "2"}, db,
-                                    clock()) ==
-          0);
+  REQUIRE(catalist::cli::runSet({std::to_string(id), "-p", "a", "2"},
+                                 harness.context) == 0);
   auto stepped = db.getById(mediaType::kAnime, id);
   REQUIRE(stepped.has_value());
   CHECK(stepped->progress == 12);
   CHECK(catalist::formatDate(stepped->startDate) == "2026-10-20");
   CHECK(catalist::formatDate(stepped->updatedAt) == "2026-10-20");
 
-  REQUIRE(cliDispatcher::executeRm({std::to_string(id), "-y"}, db) == 0);
+  REQUIRE(catalist::cli::runRm({std::to_string(id), "-y"}, harness.context) == 0);
   CHECK_FALSE(db.getById(mediaType::kAnime, id).has_value());
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "cli config list and completion generators succeed") {
-  catalist::appConfig config;
+  catalist::database db(fileSystem(), clock(), tempDir());
+  catalist::test::cliHarness harness(db, fileSystem(), clock(), tempDir());
   streamCapture out(std::cout);
-  CHECK(cliDispatcher::executeConfig({"list"}, config, fileSystem(),
-                                     tempDir() / "catalist.kdl") == 0);
-  CHECK(cliDispatcher::executeCompletion({"bash"}) == 0);
-  CHECK(cliDispatcher::executeCompletion({"zsh"}) == 0);
-  CHECK(cliDispatcher::executeCompletion({"fish"}) == 0);
+  CHECK(catalist::cli::runConfig({"list"}, harness.context) == 0);
+  CHECK(catalist::cli::runCompletion({"bash"}, harness.context) == 0);
+  CHECK(catalist::cli::runCompletion({"zsh"}, harness.context) == 0);
+  CHECK(catalist::cli::runCompletion({"fish"}, harness.context) == 0);
 }
 
 TEST_CASE("formatJsonEntry escapes quote backslash newline and control characters") {
@@ -88,7 +92,7 @@ TEST_CASE("formatJsonEntry escapes quote backslash newline and control character
                           .id(1)
                           .title("say \"hi\" \\ back")
                           .notes("line1\nline2\r\ttab\b\f\x01\x1f end");
-  auto json = cliDispatcher::formatJsonEntry(e);
+  auto json = formatJsonEntry(e);
   CHECK(json.find("\"title\":\"say \\\"hi\\\" \\\\ back\"") != std::string::npos);
   CHECK(json.find("\"notes\":\"line1\\nline2\\r\\ttab\\b\\f\\u0001\\u001f end\"") !=
         std::string::npos);
@@ -96,7 +100,7 @@ TEST_CASE("formatJsonEntry escapes quote backslash newline and control character
 
 TEST_CASE("formatJsonEntry passes utf8 bytes through unescaped") {
   catalist::entry e = makeEntry().id(1).title("葬送のフリーレン");
-  auto json = cliDispatcher::formatJsonEntry(e);
+  auto json = formatJsonEntry(e);
   CHECK(json.find("\"title\":\"葬送のフリーレン\"") != std::string::npos);
 }
 
@@ -104,16 +108,16 @@ namespace {
 
 struct ratingSpec {
   bool accepted = false;
-  int minScore = -1;
-  int maxScore = -1;
+  int minScore = 0;
+  int maxScore = 0;
   bool unrated = false;
 };
 
 ratingSpec parseRating(const std::string& spec) {
-  ratingSpec parsed;
-  parsed.accepted = cliDispatcher::parseRatingSpec(
-      spec, parsed.minScore, parsed.maxScore, parsed.unrated);
-  return parsed;
+  auto parsed = parseRatingSpec(spec);
+  if (!parsed)
+    return {};
+  return {true, parsed->minScore, parsed->maxScore, parsed->unratedOnly};
 }
 
 }  // namespace
@@ -167,17 +171,18 @@ TEST_CASE("parseRatingSpec rejects invalid input") {
 
 TEST_CASE_FIXTURE(tempDirFixture, "cli add rejects a malformed date and set clears one") {
   catalist::database db(fileSystem(), clock(), tempDir());
+  catalist::test::cliHarness harness(db, fileSystem(), clock(), tempDir());
   streamCapture out(std::cout);
   streamCapture err(std::cerr);
 
-  CHECK(cliDispatcher::executeAdd({"X", "--start", "soon"}, db, clock()) == 2);
+  CHECK(catalist::cli::runAdd({"X", "--start", "soon"}, harness.context) == 2);
   CHECK(err.text() ==
         "error: invalid date 'soon' for '--start'. Expected YYYY-MM-DD.\n");
   CHECK(db.getEntries(mediaType::kAnime).empty());
 
-  REQUIRE(cliDispatcher::executeAdd({"X", "--finish", "2026-01-02"}, db,
-                                    clock()) == 0);
-  REQUIRE(cliDispatcher::executeSet({"X", "--finish", ""}, db, clock()) == 0);
+  REQUIRE(catalist::cli::runAdd({"X", "--finish", "2026-01-02"},
+                                 harness.context) == 0);
+  REQUIRE(catalist::cli::runSet({"X", "--finish", ""}, harness.context) == 0);
   auto updated = db.getEntries(mediaType::kAnime).at(0);
   CHECK_FALSE(updated.finishDate.has_value());
   CHECK(catalist::formatDate(updated.startDate) == "2026-10-20");

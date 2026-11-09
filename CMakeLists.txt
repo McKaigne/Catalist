@@ -76,10 +76,23 @@ target_link_libraries(catalistCli PUBLIC catalistCore)
 target_compile_options(catalistCli PRIVATE ${CATALIST_WARNING_FLAGS})
 
 add_library(catalistTui STATIC
+  src/tui/actions.cpp
   src/tui/app.cpp
+  src/tui/keys.cpp
+  src/tui/syncRunner.cpp
+  src/tui/tab.cpp
+  src/tui/tabRegistry.cpp
+  src/tui/tabs/aboutTab.cpp
+  src/tui/tabs/catalogTab.cpp
+  src/tui/tabs/overviewTab.cpp
+  src/tui/tabs/settingsTab.cpp
+  src/tui/tabs/syncTab.cpp
   src/tui/theme/statusStyle.cpp
   src/tui/theme/themeRegistry.cpp
   src/tui/widgets/commandPalette.cpp
+  src/tui/widgets/marquee.cpp
+  src/tui/widgets/notifier.cpp
+  src/tui/widgets/pill.cpp
 )
 target_link_libraries(catalistTui PUBLIC
   catalistCore

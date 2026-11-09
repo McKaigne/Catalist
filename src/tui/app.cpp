@@ -3,236 +3,309 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <cmath>
-#include <filesystem>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/event.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
-#include <ftxui/screen/box.hpp>
-#include <ftxui/screen/screen.hpp>
-#include <iomanip>
-#include <iostream>
-#include <mutex>
-#include <set>
+#include <ftxui/screen/terminal.hpp>
 #include <sstream>
 #include <thread>
 
 #include "catalist/core/logger.hpp"
 #include "catalist/core/version.hpp"
-#include "catalist/model/entryOps.hpp"
-#include "catalist/net/malAuth.hpp"
-#include "catalist/net/metadataSync.hpp"
-#include "catalist/net/providers/providerRegistry.hpp"
-#include "catalist/net/remoteSearch.hpp"
-#include "catalist/storage/backup.hpp"
-#include "catalist/storage/malParser.hpp"
+#include "catalist/tui/actions.hpp"
+#include "catalist/tui/appContext.hpp"
+#include "catalist/tui/keys.hpp"
+#include "catalist/tui/tabRegistry.hpp"
+#include "catalist/tui/tabs/aboutTab.hpp"
+#include "catalist/tui/tabs/catalogTab.hpp"
+#include "catalist/tui/tabs/overviewTab.hpp"
+#include "catalist/tui/tabs/settingsTab.hpp"
+#include "catalist/tui/tabs/syncTab.hpp"
 #include "catalist/tui/theme/palettes.hpp"
-#include "catalist/tui/theme/statusStyle.hpp"
+#include "catalist/tui/theme/themeRegistry.hpp"
+#include "catalist/tui/widgets/pill.hpp"
 
 namespace catalist {
 
 using namespace ftxui;
 
-static std::vector<std::string> getGlyphs(const std::string& str) {
-  std::vector<std::string> glyphs;
-  size_t byteIdx = 0;
-  while (byteIdx < str.size()) {
-    unsigned char c = static_cast<unsigned char>(str[byteIdx]);
-    size_t step = 1;
-    if ((c & 0x80) == 0)
-      step = 1;
-    else if ((c & 0xE0) == 0xC0)
-      step = 2;
-    else if ((c & 0xF0) == 0xE0)
-      step = 3;
-    else if ((c & 0xF8) == 0xF0)
-      step = 4;
+namespace {
 
-    if (byteIdx + step > str.size())
-      step = str.size() - byteIdx;
-    glyphs.push_back(str.substr(byteIdx, step));
-    byteIdx += step;
+// Redraw cadence for the scrolling titles in the catalogue.
+constexpr auto kTickInterval = std::chrono::milliseconds(250);
+
+// The legacy number keys: each tab keeps the digit it had before the tabs
+// became pluggable.
+char hotkeyFor(const std::string& tabId) {
+  if (tabId == "about")
+    return '0';
+  if (tabId == "anime")
+    return '1';
+  if (tabId == "manga")
+    return '2';
+  if (tabId == "overview")
+    return '3';
+  if (tabId == "sync")
+    return '4';
+  if (tabId == "settings")
+    return '5';
+  return '\0';
+}
+
+bool isBackTab(const Event& event) {
+  return event == Event::TabReverse || event == Event::Special("\033[Z");
+}
+
+bool isPopupDismissal(const Event& event) {
+  return event == Event::Character(';') || event == Event::Escape ||
+         event == Event::Return;
+}
+
+int indexOf(const std::vector<iTab*>& tabs, const std::string& tabId) {
+  for (size_t i = 0; i < tabs.size(); ++i) {
+    if (tabs[i]->id() == tabId)
+      return static_cast<int>(i);
   }
-  return glyphs;
+  return -1;
 }
 
-static std::string clipTitle(const std::string& str, size_t maxCodePoints,
-                             size_t offset = 0) {
-  auto glyphs = getGlyphs(str);
-  if (glyphs.size() <= maxCodePoints)
-    return str;
-  std::string res = "";
-  size_t start = offset % glyphs.size();
-  for (size_t i = 0; i < maxCodePoints; ++i) {
-    res += glyphs[(start + i) % glyphs.size()];
-  }
-  return res;
+Element tabLabel(bool active, const std::string& label,
+                 const std::string& glyph, const std::string& count,
+                 const themePalette& theme) {
+  std::string shown = " " + glyph + " " + label;
+  if (!count.empty())
+    shown += " (" + count + ")";
+  shown += " ";
+  return text(shown) | (active ? bold | color(theme.mauve) : color(theme.subtext));
 }
 
-static std::string makeMarqueeTitle(const std::string& title, size_t maxCols,
-                                    uint64_t elapsedMs, uint64_t pauseMs = 2000,
-                                    uint64_t stepMs = 250) {
-  auto glyphs = getGlyphs(title);
-  if (glyphs.size() <= maxCols)
-    return title;
-
-  std::string loopStr = title + "   •   ";
-  auto loopGlyphs = getGlyphs(loopStr);
-  size_t totalGlyphs = loopGlyphs.size();
-  if (totalGlyphs == 0)
-    return "";
-
-  uint64_t scrollDurationMs = totalGlyphs * stepMs;
-  uint64_t cycleDurationMs = pauseMs + scrollDurationMs;
-  uint64_t cycleTime = elapsedMs % cycleDurationMs;
-
-  size_t offset = 0;
-  if (cycleTime >= pauseMs) {
-    uint64_t scrollTime = cycleTime - pauseMs;
-    offset = static_cast<size_t>(scrollTime / stepMs) % totalGlyphs;
-  }
-
-  std::string res = "";
-  for (size_t i = 0; i < maxCols; ++i) {
-    res += loopGlyphs[(offset + i) % totalGlyphs];
-  }
-  return res;
+std::string truncated(std::string message, int maxLength) {
+  if (static_cast<int>(message.size()) <= maxLength)
+    return message;
+  return message.substr(0, std::max(0, maxLength - 3)) + "...";
 }
 
-static std::string formatCommas(long long n) {
-  std::string s = std::to_string(n);
-  int insertPosition = static_cast<int>(s.length()) - 3;
-  while (insertPosition > 0) {
-    s.insert(insertPosition, ",");
-    insertPosition -= 3;
-  }
-  return s;
-}
+class shell {
+public:
+  shell(appContext& ctx, std::vector<iTab*> tabs, commandPalette& palette,
+        ScreenInteractive& screen)
+      : ctx_(ctx), tabs_(std::move(tabs)), palette_(palette), screen_(screen) {}
 
-static std::string formatDays(double days) {
-  long long whole = static_cast<long long>(days);
-  int frac = static_cast<int>(std::round((days - whole) * 10.0)) % 10;
-  return formatCommas(whole) + "." + std::to_string(frac);
-}
+  int& activeIndex() { return activeIndex_; }
+  iTab& activeTab() { return *tabs_[activeIndex_]; }
 
-static std::optional<isoDate> catalogDate(const entry& e) {
-  bool showsFinish = e.status == watchStatus::kCompleted && e.finishDate;
-  if (showsFinish)
-    return e.finishDate;
-  if (e.startDate)
-    return e.startDate;
-  return e.updatedAt;
-}
-
-static std::string formatCatalogDate(const entry& e) {
-  auto shown = catalogDate(e);
-  return shown ? shown->toString() : "    -     ";
-}
-
-static std::string getFormattedTimestamp(const iClock& clock) {
-  return formatLocalTime(clock, "%b %d, %I:%M %p");
-}
-
-static std::string runZenityFilePicker(iProcessLauncher& launcher) {
-  auto picked = launcher.capture({"zenity", "--file-selection",
-                                  "--title=Select MyAnimeList XML Export",
-                                  "--file-filter=*.xml"});
-  if (!picked.ok())
-    return "";
-  std::string chosenPath = picked.value().standardOutput;
-  if (!chosenPath.empty() && chosenPath.back() == '\n')
-    chosenPath.pop_back();
-  return chosenPath;
-}
-
-static void copyTextToClipboard(iProcessLauncher& launcher,
-                                const std::string& text) {
-  const std::vector<std::vector<std::string>> clipboardTools = {
-      {"wl-copy"}, {"xclip", "-selection", "clipboard"}, {"pbcopy"}};
-  for (const auto& tool : clipboardTools) {
-    if (launcher.feed(tool, text))
+  void activate(int index) {
+    if (index < 0 || index >= static_cast<int>(tabs_.size()))
       return;
-  }
-}
-
-static Element makePill(const std::string& textStr, ftxui::Color fg,
-                        ftxui::Color bg, bool boldText = true) {
-  static const std::string capLeft = "\xEE\x82\xB6";
-  static const std::string capRight = "\xEE\x82\xB4";
-  auto content = text(textStr) | color(fg) | bgcolor(bg);
-  if (boldText)
-    content = content | bold;
-  return hbox({text(capLeft) | color(bg), content, text(capRight) | color(bg)});
-}
-
-static Element highlightMatches(const std::string& textStr,
-                                const std::string& query, bool isRowActive,
-                                const themePalette& theme) {
-  if (query.empty()) {
-    auto el = text(textStr) | color(theme.text);
-    if (isRowActive)
-      el = el | bold;
-    return el;
-  }
-  std::string lowerText = textStr;
-  std::string lowerQuery = query;
-  std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(),
-                 ::tolower);
-  std::transform(lowerQuery.begin(), lowerQuery.end(), lowerQuery.begin(),
-                 ::tolower);
-
-  size_t lastPos = 0;
-  size_t pos = lowerText.find(lowerQuery, 0);
-
-  if (pos == std::string::npos) {
-    auto el = text(textStr) | color(theme.text);
-    if (isRowActive)
-      el = el | bold;
-    return el;
+    activeIndex_ = index;
+    activeTab().onActivate(ctx_);
   }
 
-  Elements parts;
-  while (pos != std::string::npos) {
-    if (pos > lastPos) {
-      auto nonMatch =
-          text(textStr.substr(lastPos, pos - lastPos)) | color(theme.text);
-      if (isRowActive)
-        nonMatch = nonMatch | bold;
-      parts.push_back(nonMatch);
+  bool onEvent(const Event& event) {
+    if (event == Event::Custom)
+      return true;
+    if (event.is_mouse() && !ctx_.config.mouse)
+      return true;
+    if (ctx_.notices.hasPopup()) {
+      if (isPopupDismissal(event))
+        ctx_.notices.dismiss();
+      return true;
     }
-    auto matchEl = text(textStr.substr(pos, lowerQuery.size())) | bold |
-                   color(theme.crust) | bgcolor(theme.yellow);
-    parts.push_back(matchEl);
-    lastPos = pos + lowerQuery.size();
-    pos = lowerText.find(lowerQuery, lastPos);
+    if (palette_.isOpen())
+      return palette_.onEvent(event, [this](const std::string& command) {
+        runCommand(command);
+      });
+    if (activeTab().capturesInput())
+      return false;
+    return handleGlobalKey(event);
   }
-  if (lastPos < textStr.size()) {
-    auto post = text(textStr.substr(lastPos)) | color(theme.text);
-    if (isRowActive)
-      post = post | bold;
-    parts.push_back(post);
+
+  Element render() {
+    const auto& theme = themeRegistry::active();
+    auto base = vbox({renderTopBar(theme), activeTab().render(ctx_) | flex,
+                      renderBottomBar(theme)});
+    if (auto popup = ctx_.notices.renderPopup(theme))
+      return dbox({base, *popup});
+    if (palette_.isOpen())
+      return dbox({base, palette_.render(theme)});
+    if (auto modal = activeTab().overlay(ctx_))
+      return dbox({base, *modal});
+    return base;
   }
-  return hbox(std::move(parts));
+
+private:
+  bool handleGlobalKey(const Event& event) {
+    int count = static_cast<int>(tabs_.size());
+    if (event == Event::Tab) {
+      activate((activeIndex_ + 1) % count);
+      return true;
+    }
+    if (isBackTab(event)) {
+      activate((activeIndex_ + count - 1) % count);
+      return true;
+    }
+    if (switchByHotkey(event))
+      return true;
+    if (keys::isBound(event, ctx_.config.keybinds, keyAction::kCommandPalette)) {
+      palette_.open();
+      return true;
+    }
+    bool quits = keys::isCharacter(event, 'q') ||
+                 keys::isBound(event, ctx_.config.keybinds, keyAction::kQuit);
+    if (quits)
+      quit();
+    return quits;
+  }
+
+  bool switchByHotkey(const Event& event) {
+    if (!event.is_character())
+      return false;
+    for (size_t i = 0; i < tabs_.size(); ++i) {
+      char hotkey = hotkeyFor(tabs_[i]->id());
+      if (hotkey == '\0' || event.character() != std::string(1, hotkey))
+        continue;
+      activate(static_cast<int>(i));
+      return true;
+    }
+    return false;
+  }
+
+  void quit() {
+    ctx_.db.saveAll();
+    screen_.ExitLoopClosure()();
+  }
+
+  void applyTheme(const std::string& themeName) {
+    if (themeName.empty()) {
+      ctx_.notices.setStatus("Current theme: " + ctx_.config.theme);
+      return;
+    }
+    if (!themeRegistry::hasTheme(themeName)) {
+      ctx_.notices.setStatus("Unknown theme: " + themeName);
+      return;
+    }
+    ctx_.config.theme = themeName;
+    themeRegistry::setActive(themeName);
+    saveConfig(ctx_);
+    ctx_.notices.setStatus("Applied theme: " + themeName);
+  }
+
+  void runCommand(const std::string& commandLine) {
+    LOG_INFO("Command Palette dispatch: " + commandLine);
+    std::stringstream words(commandLine);
+    std::string verb;
+    std::string argument;
+    words >> verb >> argument;
+
+    if (verb == "theme") {
+      applyTheme(argument);
+    } else if (verb == "q" || verb == "quit" || verb == "wq") {
+      quit();
+    } else if (verb == "w" || verb == "write") {
+      ctx_.db.saveAll();
+      ctx_.notices.push("Saved watchlists to disk successfully.");
+    } else if (verb == "backup") {
+      createBackup(ctx_);
+    } else if (verb == "sync") {
+      startBackgroundSync(ctx_);
+    } else if (verb == "import") {
+      importXmlInteractively(ctx_);
+    } else {
+      ctx_.notices.setStatus("Command executed: " + verb);
+    }
+    activeTab().onActivate(ctx_);
+  }
+
+  Element renderTopBar(const themePalette& theme) {
+    Elements items;
+    auto addTab = [&](iTab& tab, const std::string& label,
+                      const std::string& glyph, bool showCount) {
+      bool active = &tab == &activeTab();
+      std::string count = showCount ? tab.countBadge(ctx_).value_or("") : "";
+      items.push_back(tabLabel(active, label, glyph, count, theme));
+      items.push_back(text("│") | color(theme.surface0));
+    };
+    auto version = text(std::string("v") + kVersionString) | color(theme.overlay0);
+
+    auto topBar = ctx_.config.kdlDoc.getNode("top-bar");
+    bool configured = topBar && !topBar->children.empty();
+    for (const auto& item : configured ? topBar->children
+                                       : std::vector<kdl::node>{}) {
+      if (item.name == "tab") {
+        int index = indexOf(tabs_, item.getArgString(0));
+        if (index < 0)
+          continue;
+        iTab& tab = *tabs_[index];
+        addTab(tab, item.getPropString("label", tab.title()),
+               item.getPropString("icon", tab.icon()),
+               item.getPropBool("show-count", false));
+      } else if (item.name == "spacer") {
+        items.push_back(filler());
+      } else if (item.name == "text") {
+        items.push_back(text(item.getArgString(0)) | color(theme.overlay0));
+      } else if (item.name == "version") {
+        items.push_back(version);
+      }
+    }
+    if (!configured) {
+      for (iTab* tab : tabs_)
+        addTab(*tab, tab->title(), tab->icon(), tab->countBadge(ctx_).has_value());
+      items.push_back(filler());
+      items.push_back(hbox({version, text(" ")}));
+    }
+    return hbox(std::move(items)) | border | color(theme.surface0) |
+           size(HEIGHT, EQUAL, 3);
+  }
+
+  Element renderBottomBar(const themePalette& theme) {
+    Element account =
+        ctx_.auth.isAuthenticated()
+            ? pill(icon::kSync + " MAL: Connected", theme.crust, theme.green)
+            : pill(icon::kOffline + " Offline", Color::Black, theme.surface2);
+
+    Elements hintItems;
+    for (const auto& item : activeTab().hints()) {
+      if (!hintItems.empty())
+        hintItems.push_back(text("  "));
+      hintItems.push_back(hbox({text(item.key) | bold | color(theme.text),
+                                text(" " + item.description) |
+                                    color(theme.subtext)}));
+    }
+
+    std::string selection = activeTab().selectionSummary();
+    Element selectionElement =
+        selection.empty() ? text("")
+                          : hbox({text(" " + selection + " ") | bold |
+                                      color(theme.green),
+                                  text("│ ") | color(theme.surface1)});
+
+    int maxStatusLength = std::max(16, Terminal::Size().dimx - 76 - 28);
+    return hbox({text(" "), account, text(" │ ") | color(theme.surface1),
+                 selectionElement,
+                 text(truncated(ctx_.notices.status(), maxStatusLength)) |
+                     color(theme.yellow),
+                 filler(), hbox(std::move(hintItems)), text(" ")}) |
+           border | color(theme.surface0) | size(HEIGHT, EQUAL, 3);
+  }
+
+  appContext& ctx_;
+  std::vector<iTab*> tabs_;
+  commandPalette& palette_;
+  ScreenInteractive& screen_;
+  int activeIndex_ = 0;
+};
+
+void registerTabs(tabRegistry& registry, const appConfig& config) {
+  registry.add(std::make_unique<aboutTab>());
+  registry.add(std::make_unique<catalogTab>(mediaType::kAnime, config));
+  registry.add(std::make_unique<catalogTab>(mediaType::kManga, config));
+  registry.add(std::make_unique<overviewTab>());
+  registry.add(std::make_unique<syncTab>());
+  registry.add(std::make_unique<settingsTab>());
 }
 
-static bool isSortAscending(sortKey key, bool reverse) {
-  switch (key) {
-    case sortKey::kScore:
-    case sortKey::kProgress:
-    case sortKey::kDate:
-      return reverse;
-    case sortKey::kTitle:
-    case sortKey::kStatus:
-    case sortKey::kId:
-      return !reverse;
-  }
-  return false;
-}
-
-static std::string getSortArrow(sortKey key, bool reverse) {
-  return isSortAscending(key, reverse) ? " ▲" : " ▼";
-}
+}  // namespace
 
 appTui::appTui(database& db, appConfig& config, tuiServices services)
     : db_(db), config_(config), services_(services) {}
@@ -240,2337 +313,47 @@ appTui::appTui(database& db, appConfig& config, tuiServices services)
 void appTui::run() {
   themeRegistry::setActive(config_.theme);
   auto screen = ScreenInteractive::Fullscreen();
-  auto* screenPtr = &screen;
-
-  appMode currentMode = appMode::kNor;
-  focusedCard currentFocus = focusedCard::kCatalog;
-  int detailsCursorIndex = 0;  // 0: Status, 1: Rating, 2: Progress (Tracking
-                               // Card), 3: Notes (Notes Card)
-  viewTab currentTab =
-      (config_.defaultMedia == "manga") ? viewTab::kManga : viewTab::kAnime;
-  sortKey currentSort = sortKey::kScore;
-  bool reverseSort = config_.reverseSort;
-
-  int lastTrackedSelected = -1;
-  uint64_t lastSelectionChangeMs = 0;
-
-  std::vector<std::string> notificationQueue;
-  std::mutex notifMutex;
-  auto pushNotification = [&](const std::string& msg) {
-    std::lock_guard<std::mutex> lock(notifMutex);
-    notificationQueue.push_back(msg);
-  };
-
-  int aboutActiveCard = 0;
-  int syncActivePanel = 0;
-  int syncActionCursor = 0;
-  int syncBackupCursor = 0;
-  int settingsActivePanel = 0;
-  int settingsThemeCursor = 0;
-  int settingsPrefCursor = 0;
-
-  int sidebarSelected = 1;
-  int catalogSelected = 0;
-  std::set<watchStatus> multiFilterStatuses;
-  std::set<int> multiFilterScores;
-  std::set<int> visualSelectedIds;
-
-  std::string searchQuery = "";
-  std::string inspectorNotesBuffer = "";
-  std::string statusMessage = "Ready.";
-  int pendingDeleteId = 0;
-
-  bool isOnlineModalOpen = false;
-  std::string remoteSearchQuery = "";
-  std::vector<remoteSearchResult> remoteResults;
-  std::vector<std::string> remoteResultLabels;
-  int remoteSelected = 0;
-  bool remoteLoading = false;
-  std::string remoteStatusMsg = "";
-
-  bool isInspectorEditingNotes = false;
-
-  std::atomic<bool> syncIsRunning{false};
-
-  std::vector<std::string> sidebarLabels;
-  std::vector<std::string> catalogIndexLabels;
-  std::vector<entry> displayedEntries;
-
-  Box headerDateBox, headerTitleBox, headerStatusBox, headerRatingBox,
-      headerProgressBox;
-  Box searchBarBox;
-  std::vector<Box> rowBoxes;
-  std::vector<Box> sidebarBoxes;
-  std::vector<Box> modalResultBoxes;
-
-  auto copyToClipboard = [&](const std::string& str) {
-    if (str.empty())
-      return;
-    copyTextToClipboard(services_.launcher, str);
-    pushNotification("Copied: \"" + clipTitle(str, 42) + "\"");
-  };
-
-  auto openInBrowser = [&](const entry& e) {
-    std::string url = services_.providers.resolveUrl(e);
-    if (url.empty()) {
-      pushNotification(
-          "Error: No external provider links associated with this entry.");
-      return;
-    }
-
-    services_.launcher.spawnDetached(browserOpenCommand(url));
-    statusMessage = "Opened: " + url;
-  };
-
-  auto recordAction = [&](historyAction::type type, mediaType media,
-                          const entry& before, const entry& after) {
-    undo_.record({type, media, before, after});
-  };
-
-  auto performUndo = [&]() {
-    auto action = undo_.takeUndo();
-    if (!action) {
-      pushNotification("Nothing left to undo.");
-      return;
-    }
-    if (action->actionType == historyAction::kMutate)
-      db_.updateEntry(action->before);
-    else if (action->actionType == historyAction::kDelete)
-      db_.addEntry(action->before);
-    else if (action->actionType == historyAction::kAdd)
-      db_.removeEntry(action->media, action->after.id);
-    db_.saveAll();
-    pushNotification("Action undone successfully.");
-  };
-
-  auto performRedo = [&]() {
-    auto action = undo_.takeRedo();
-    if (!action) {
-      pushNotification("Nothing left to redo.");
-      return;
-    }
-    if (action->actionType == historyAction::kMutate)
-      db_.updateEntry(action->after);
-    else if (action->actionType == historyAction::kDelete)
-      db_.removeEntry(action->media, action->before.id);
-    else if (action->actionType == historyAction::kAdd)
-      db_.addEntry(action->after);
-    db_.saveAll();
-    pushNotification("Action redone successfully.");
-  };
-
-  auto refreshViews = [&]() {
-    mediaType media =
-        (currentTab == viewTab::kManga) ? mediaType::kManga : mediaType::kAnime;
-
-    sidebarLabels = {
-        "  LIBRARY",
-        icon::kLibrary + " All Media    (" +
-            std::to_string(db_.getEntries(media).size()) + ")",
-        "  STATUS",
-        icon::kWatching +
-            (media == mediaType::kManga ? " Reading      ("
-                                       : " Watching     (") +
-            std::to_string(db_.countByStatus(media, watchStatus::kWatching)) +
-            ")",
-        icon::kCompleted + " Completed    (" +
-            std::to_string(db_.countByStatus(media, watchStatus::kCompleted)) +
-            ")",
-        icon::kOnHold + " On-Hold      (" +
-            std::to_string(db_.countByStatus(media, watchStatus::kOnHold)) + ")",
-        icon::kDropped + " Dropped      (" +
-            std::to_string(db_.countByStatus(media, watchStatus::kDropped)) +
-            ")",
-        icon::kPlan + " Planned      (" +
-            std::to_string(db_.countByStatus(media, watchStatus::kPlanToWatch)) +
-            ")",
-        "  RATINGS",
-        renderStarMeter(10) + " (" +
-            std::to_string(db_.countByScore(media, 10)) + ")",
-        renderStarMeter(9) + " (" + std::to_string(db_.countByScore(media, 9)) +
-            ")",
-        renderStarMeter(8) + " (" + std::to_string(db_.countByScore(media, 8)) +
-            ")",
-        renderStarMeter(7) + " (" + std::to_string(db_.countByScore(media, 7)) +
-            ")",
-        renderStarMeter(6) + " (" + std::to_string(db_.countByScore(media, 6)) +
-            ")",
-        renderStarMeter(5) + " (" + std::to_string(db_.countByScore(media, 5)) +
-            ")",
-        renderStarMeter(0) + " (" + std::to_string(db_.countByScore(media, 0)) +
-            ")"};
-
-    std::vector<entry> pool;
-    for (const auto& e : db_.getEntries(media)) {
-      if (!multiFilterStatuses.empty() &&
-          multiFilterStatuses.find(e.status) == multiFilterStatuses.end())
-        continue;
-      if (!multiFilterScores.empty() &&
-          multiFilterScores.find(e.score) == multiFilterScores.end())
-        continue;
-
-      if (multiFilterStatuses.empty() && multiFilterScores.empty()) {
-        if (sidebarSelected == 3 && e.status != watchStatus::kWatching)
-          continue;
-        if (sidebarSelected == 4 && e.status != watchStatus::kCompleted)
-          continue;
-        if (sidebarSelected == 5 && e.status != watchStatus::kOnHold)
-          continue;
-        if (sidebarSelected == 6 && e.status != watchStatus::kDropped)
-          continue;
-        if (sidebarSelected == 7 && e.status != watchStatus::kPlanToWatch)
-          continue;
-        if (sidebarSelected == 9 && e.score != 10)
-          continue;
-        if (sidebarSelected == 10 && e.score != 9)
-          continue;
-        if (sidebarSelected == 11 && e.score != 8)
-          continue;
-        if (sidebarSelected == 12 && e.score != 7)
-          continue;
-        if (sidebarSelected == 13 && e.score != 6)
-          continue;
-        if (sidebarSelected == 14 && e.score != 5)
-          continue;
-        if (sidebarSelected == 15 && e.score != 0)
-          continue;
-      }
-
-      if (!searchQuery.empty()) {
-        std::string tLower = e.title;
-        std::string qLower = searchQuery;
-        std::transform(tLower.begin(), tLower.end(), tLower.begin(), ::tolower);
-        std::transform(qLower.begin(), qLower.end(), qLower.begin(), ::tolower);
-        if (tLower.find(qLower) == std::string::npos)
-          continue;
-      }
-
-      pool.push_back(e);
-    }
-
-    database::sortEntries(pool, currentSort, reverseSort);
-
-    displayedEntries = std::move(pool);
-    catalogIndexLabels.clear();
-    rowBoxes.assign(displayedEntries.size(), Box{});
-    sidebarBoxes.assign(sidebarLabels.size(), Box{});
-    for (size_t i = 0; i < displayedEntries.size(); ++i) {
-      catalogIndexLabels.push_back(std::to_string(i));
-    }
-
-    if (catalogSelected >= static_cast<int>(displayedEntries.size())) {
-      catalogSelected =
-          std::max(0, static_cast<int>(displayedEntries.size()) - 1);
-    }
-  };
-
-  refreshViews();
-
-  auto openRemoteSearchModal = [&]() {
-    isOnlineModalOpen = true;
-    currentMode = appMode::kSch;
-    remoteSearchQuery = searchQuery;
-    remoteResults.clear();
-    remoteResultLabels.clear();
-    remoteSelected = 0;
-    remoteStatusMsg = "";
-    remoteLoading = false;
-  };
-
-  auto executeRemoteSearch = [&]() {
-    if (remoteSearchQuery.empty())
-      return;
-    remoteLoading = true;
-    remoteStatusMsg = "Querying AniList / MyAnimeList...";
-    mediaType media =
-        (currentTab == viewTab::kManga) ? mediaType::kManga : mediaType::kAnime;
-    std::string err;
-    remoteResults =
-        remoteSearchEngine(services_.http).query(media, remoteSearchQuery, err, 10);
-    remoteLoading = false;
-
-    remoteResultLabels.clear();
-    modalResultBoxes.assign(remoteResults.size(), Box{});
-    for (size_t i = 0; i < remoteResults.size(); ++i) {
-      remoteResultLabels.push_back(std::to_string(i));
-    }
-    remoteSelected = 0;
-    if (remoteResults.empty()) {
-      remoteStatusMsg = err.empty() ? "No results found." : err;
-    } else {
-      remoteStatusMsg =
-          std::to_string(remoteResults.size()) + " matches from MyAnimeList.";
-    }
-  };
-
-  auto commitMutation = [&](const entry& before, const entry& after) {
-    undo_.record({historyAction::kMutate, after.type, before, after});
-    db_.updateEntry(after);
-    db_.logActivity({getFormattedTimestamp(services_.clock), after.type,
-                     after.title, after.status, after.progress,
-                     after.totalUnits, after.score});
-    db_.saveAll();
-    refreshViews();
-  };
-
-  auto mutateProgress = [&](const entry& before, int dir) {
-    LOG_INFO("Mutating progress for ID " + std::to_string(before.id) + " (\"" +
-             before.title + "\") dir=" + std::to_string(dir));
-    entry after = stepProgress(before, dir, localDate(services_.clock));
-    commitMutation(before, after);
-    statusMessage = "Progress: " + std::to_string(after.progress) + "/" +
-                    (after.totalUnits > 0 ? std::to_string(after.totalUnits)
-                                          : "?");
-  };
-
-  auto mutateStatus = [&](const entry& before, int dir) {
-    LOG_INFO("Cycling status for ID " + std::to_string(before.id) + " (\"" +
-             before.title + "\") dir=" + std::to_string(dir));
-    entry after = cycleStatus(before, dir, localDate(services_.clock));
-    commitMutation(before, after);
-    statusMessage = "Status: " + statusToString(after.status, after.type);
-  };
-
-  auto mutateRating = [&](const entry& before, int dir) {
-    LOG_INFO("Adjusting rating for ID " + std::to_string(before.id) + " (\"" +
-             before.title + "\") dir=" + std::to_string(dir));
-    entry after = adjustRating(before, dir, localDate(services_.clock));
-    commitMutation(before, after);
-    statusMessage = "Rating: " + renderStarMeter(after.score);
-  };
-
-  auto toggleColumnSort = [&](sortKey targetKey, const std::string& name) {
-    LOG_INFO("Toggled sort column: " + name);
-    if (currentSort == targetKey) {
-      reverseSort = !reverseSort;
-    } else {
-      currentSort = targetKey;
-      if (targetKey == sortKey::kScore || targetKey == sortKey::kProgress ||
-          targetKey == sortKey::kDate) {
-        reverseSort = true;
-      } else {
-        reverseSort = false;
-      }
-    }
-    refreshViews();
-    bool asc = isSortAscending(currentSort, reverseSort);
-    statusMessage =
-        "Sort: " + name + (asc ? " (Increasing ▲)" : " (Decreasing ▼)");
-  };
-
-  auto triggerAsyncSync = [&]() {
-    if (syncIsRunning.load()) {
-      pushNotification("Sync already active in background...");
-      return;
-    }
-    syncIsRunning.store(true);
-    statusMessage = "Reconciling ongoing titles with MyAnimeList...";
-
-    std::thread([&, screenPtr]() {
-      std::string outMsg;
-      metadataSync::syncOngoing(db_, services_.http, outMsg);
-      syncIsRunning.store(false);
-
-      {
-        std::lock_guard<std::mutex> lock(notifMutex);
-        notificationQueue.push_back(outMsg);
-      }
-      screenPtr->PostEvent(Event::Custom);
-    }).detach();
-  };
-
-  auto dispatchCommand = [&](const std::string& cmdLine) {
-    LOG_INFO("Command Palette dispatch: " + cmdLine);
-    if (cmdLine.empty())
-      return;
-    std::stringstream ss(cmdLine);
-    std::string verb;
-    ss >> verb;
-
-    if (verb == "theme") {
-      std::string themeName;
-      ss >> themeName;
-      if (themeName.empty()) {
-        statusMessage = "Current theme: " + config_.theme;
-        return;
-      }
-      if (themeRegistry::hasTheme(themeName)) {
-        config_.theme = themeName;
-        themeRegistry::setActive(themeName);
-        config_.save(services_.fileSystem, db_.getConfigPath() / "catalist.kdl");
-        statusMessage = "Applied theme: " + themeName;
-      } else {
-        statusMessage = "Unknown theme: " + themeName;
-      }
-    } else if (verb == "q" || verb == "quit") {
-      db_.saveAll();
-      screen.ExitLoopClosure()();
-    } else if (verb == "w" || verb == "write") {
-      db_.saveAll();
-      pushNotification("Saved watchlists to disk successfully.");
-    } else if (verb == "wq") {
-      db_.saveAll();
-      screen.ExitLoopClosure()();
-    } else if (verb == "backup") {
-      db_.createBackupSnapshot();
-      pushNotification(
-          "Created snapshot backup in ~/.config/catalist/backups/.");
-    } else if (verb == "sync") {
-      triggerAsyncSync();
-    } else if (verb == "import") {
-      std::string path = runZenityFilePicker(services_.launcher);
-      if (!path.empty()) {
-        size_t count = malParser::importXml(services_.fileSystem, path, db_, false);
-        pushNotification("Ingested " + std::to_string(count) +
-                         " entries from XML backup.");
-        refreshViews();
-      }
-    } else {
-      statusMessage = "Command executed: " + verb;
-    }
-  };
-
-  MenuOption sidebarOpt;
-  sidebarOpt.on_change = [&]() { refreshViews(); };
-  sidebarOpt.entries_option.transform = [&](const EntryState& state) {
-    const auto& theme = themeRegistry::active();
-    int idx = -1;
-    for (size_t i = 0; i < sidebarLabels.size(); ++i) {
-      if (sidebarLabels[i] == state.label) {
-        idx = static_cast<int>(i);
-        break;
-      }
-    }
-
-    if (idx == 0 || state.label == "  LIBRARY") {
-      return text("  LIBRARY") | bold | color(theme.overlay0);
-    }
-    if (idx == 2 || state.label == "  STATUS") {
-      return text("  STATUS") | bold | color(theme.overlay0);
-    }
-    if (idx == 8 || state.label == "  RATINGS") {
-      return text("  RATINGS") | bold | color(theme.overlay0);
-    }
-
-    bool inMulti = false;
-    if (idx == 3 && multiFilterStatuses.count(watchStatus::kWatching))
-      inMulti = true;
-    else if (idx == 4 && multiFilterStatuses.count(watchStatus::kCompleted))
-      inMulti = true;
-    else if (idx == 5 && multiFilterStatuses.count(watchStatus::kOnHold))
-      inMulti = true;
-    else if (idx == 6 && multiFilterStatuses.count(watchStatus::kDropped))
-      inMulti = true;
-    else if (idx == 7 && multiFilterStatuses.count(watchStatus::kPlanToWatch))
-      inMulti = true;
-    else if (idx >= 9 && idx <= 14 && multiFilterScores.count(19 - idx))
-      inMulti = true;
-    else if (idx == 15 && multiFilterScores.count(0))
-      inMulti = true;
-
-    std::string prefix = "   ";
-    if (inMulti) {
-      prefix = icon::kCheckMulti + " ";
-    } else if (multiFilterStatuses.empty() && multiFilterScores.empty() &&
-               idx == sidebarSelected) {
-      prefix = icon::kCheckSingle + " ";
-    }
-
-    // Precise Cursor Isolation: Only highlight background if cursor is on this
-    // exact row
-    bool isCursorOnThis = (currentMode != appMode::kSch) &&
-                          (idx == sidebarSelected) &&
-                          (currentFocus == focusedCard::kSidebar);
-    bool isFilterActive =
-        inMulti || (multiFilterStatuses.empty() && multiFilterScores.empty() &&
-                    idx == sidebarSelected);
-
-    Element el;
-    if (isCursorOnThis) {
-      el = hbox({text(prefix) | color(theme.mauve) | bold,
-                 text(state.label) | bold | color(theme.text)}) |
-           bgcolor(theme.surface0) | focus;
-    } else if (isFilterActive) {
-      el = hbox({text(prefix) | color(theme.green) | bold,
-                 text(state.label) | bold | color(theme.lavender)});
-    } else {
-      el = hbox({text("   "), text(state.label) | color(theme.subtext)});
-    }
-
-    return el;
-  };
-  auto sidebarMenu = Menu(&sidebarLabels, &sidebarSelected, sidebarOpt);
-
-  InputOption searchOpt;
-  searchOpt.transform = [&](InputState state) {
-    const auto& theme = themeRegistry::active();
-    Element el = state.element;
-    if (state.is_placeholder)
-      el = el | color(theme.overlay0);
-    else
-      el = el | color(theme.text);
-    if (state.focused)
-      el = el | color(theme.peach);
-    return el;
-  };
-  auto searchInput = Input(&searchQuery, "Press '/' to search...", searchOpt);
-  auto remoteSearchInput =
-      Input(&remoteSearchQuery, "Search title and press [ret]...", searchOpt);
-
-  MenuOption catalogOpt;
-  catalogOpt.entries_option.transform = [&](const EntryState& state) {
-    const auto& theme = themeRegistry::active();
-    int idx = 0;
-    try {
-      idx = std::stoi(state.label);
-    } catch (...) {
-      return text("");
-    }
-    if (idx < 0 || idx >= static_cast<int>(displayedEntries.size()))
-      return text("");
-    const auto& e = displayedEntries[idx];
-
-    bool isRowActive =
-        (currentMode != appMode::kSch) && (idx == catalogSelected) &&
-        (currentFocus == focusedCard::kCatalog ||
-         currentFocus == focusedCard::kDetails || currentMode == appMode::kEdt);
-    bool isSelected = visualSelectedIds.count(e.id) > 0;
-
-    int termWidth = Terminal::Size().dimx;
-    size_t maxChars = static_cast<size_t>(std::max(16, termWidth - 134));
-    auto nowMs = static_cast<uint64_t>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count());
-    if (catalogSelected != lastTrackedSelected) {
-      lastTrackedSelected = catalogSelected;
-      lastSelectionChangeMs = nowMs;
-    }
-    uint64_t elapsedSinceSelect =
-        (nowMs >= lastSelectionChangeMs) ? (nowMs - lastSelectionChangeMs) : 0;
-
-    std::string displayTitle;
-    if (isRowActive) {
-      displayTitle =
-          makeMarqueeTitle(e.title, maxChars, elapsedSinceSelect, 2000, 250);
-    } else {
-      displayTitle = clipTitle(e.title, maxChars, 0);
-    }
-
-    std::string marker;
-    ftxui::Color markerColor = theme.green;
-    if (isSelected) {
-      marker = (visualSelectedIds.size() > 1) ? (icon::kCheckMulti + " ")
-                                              : (icon::kCheckSingle + " ");
-    } else if (isRowActive) {
-      marker = "▌ ";
-      markerColor = theme.mauve;
-    } else {
-      marker = "  ";
-    }
-
-    auto markerEl = text(marker) | bold | color(markerColor);
-
-    auto statusElement = hbox(
-        {text(statusToIcon(e.status) + " ") | color(statusToColor(e.status)),
-         text(statusToString(e.status, e.type)) |
-             color(statusToColor(e.status))});
-
-    auto row =
-        hbox({markerEl,
-              text(formatCatalogDate(e)) | size(WIDTH, EQUAL, 10) |
-                  color(theme.subtext),
-              text(" "),
-              hbox({text(" " + typeToIcon(e.type) + " "),
-                    highlightMatches(displayTitle, searchQuery, isRowActive,
-                                     theme)}) |
-                  flex,
-              text(" "), statusElement | size(WIDTH, EQUAL, 14), text(" "),
-              text(" " + renderStarMeter(e.score)) | size(WIDTH, EQUAL, 12) |
-                  color(theme.yellow),
-              text(" "),
-              text(" " + icon::kGauge + " " + std::to_string(e.progress) + "/" +
-                   (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?")) |
-                  size(WIDTH, EQUAL, 12) | color(theme.lavender),
-              text(" ")});
-
-    if (isRowActive)
-      row = row | bgcolor(theme.surface0) | focus;
-    else if (isSelected)
-      row = row | bgcolor(theme.surface0);
-
-    return row;
-  };
-
-  MenuOption remoteMenuOpt;
-  remoteMenuOpt.entries_option.transform = [&](const EntryState& state) {
-    const auto& theme = themeRegistry::active();
-    int idx = 0;
-    try {
-      idx = std::stoi(state.label);
-    } catch (...) {
-      return text("");
-    }
-    if (idx < 0 || idx >= static_cast<int>(remoteResults.size()))
-      return text("");
-    const auto& r = remoteResults[idx];
-    bool active = (idx == remoteSelected);
-
-    std::string displayTitle = clipTitle(r.title, 34, 0);
-
-    auto row =
-        hbox({text(active ? "▌ " : "  ") | color(theme.mauve) | bold,
-              text("[" + std::to_string(idx + 1) + "] ") |
-                  size(WIDTH, EQUAL, 5) | color(theme.peach) | bold,
-              text(displayTitle) | size(WIDTH, EQUAL, 34) | color(theme.text) |
-                  (active ? bold : nothing),
-              text(" "),
-              text(r.year.empty() ? " -  " : r.year) | size(WIDTH, EQUAL, 6) |
-                  color(theme.subtext),
-              text(" "),
-              text(r.totalUnits > 0 ? (std::to_string(r.totalUnits) + " eps")
-                                    : "ongoing") |
-                  size(WIDTH, EQUAL, 9) | color(theme.subtext),
-              text(" "),
-              text("★ " + (r.score > 0.0 ? std::to_string(r.score).substr(0, 4)
-                                         : " -  ")) |
-                  size(WIDTH, EQUAL, 8) | color(theme.yellow),
-              text(" "),
-              text("MAL " + std::to_string(r.malId)) | size(WIDTH, EQUAL, 10) |
-                  color(theme.overlay0)});
-
-    if (active)
-      row = row | bgcolor(theme.surface0) | focus;
-    if (idx >= 0 && idx < static_cast<int>(modalResultBoxes.size())) {
-      row = row | reflect(modalResultBoxes[idx]);
-    }
-    return row;
-  };
-
-  auto catalogMenu = Menu(&catalogIndexLabels, &catalogSelected, catalogOpt);
-  auto remoteMenu = Menu(&remoteResultLabels, &remoteSelected, remoteMenuOpt);
-  auto inspectorNotesInput =
-      Input(&inspectorNotesBuffer, "Write notes here...");
-
-  auto modalContainer = Container::Vertical({remoteSearchInput, remoteMenu});
-
-  auto mainContainer = Container::Horizontal(
-      {sidebarMenu, catalogMenu, inspectorNotesInput, modalContainer});
-
-  auto globalHandler = CatchEvent(mainContainer, [&](Event event) {
-    if (event == Event::Custom)
-      return true;
-    if (!config_.mouse && event.is_mouse())
-      return true;
-
-    if (config_.mouse && event.is_mouse()) {
-      auto m = event.mouse();
-      if (m.button == Mouse::Left && m.motion == Mouse::Pressed) {
-        if (searchBarBox.Contain(m.x, m.y)) {
-          currentMode = appMode::kSch;
-          searchInput->TakeFocus();
-          statusMessage = "Search title... [ret] Apply  [Esc] Clear";
-          return true;
-        }
-        if (headerDateBox.Contain(m.x, m.y)) {
-          toggleColumnSort(sortKey::kDate, "Date");
-          return true;
-        }
-        if (headerTitleBox.Contain(m.x, m.y)) {
-          toggleColumnSort(sortKey::kTitle, "Title");
-          return true;
-        }
-        if (headerStatusBox.Contain(m.x, m.y)) {
-          toggleColumnSort(sortKey::kStatus, "Status");
-          return true;
-        }
-        if (headerRatingBox.Contain(m.x, m.y)) {
-          toggleColumnSort(sortKey::kScore, "Rating");
-          return true;
-        }
-        if (headerProgressBox.Contain(m.x, m.y)) {
-          toggleColumnSort(sortKey::kProgress, "Progress");
-          return true;
-        }
-      }
-    }
-
-    // PENDING DELETE CONFIRMATION
-    if (pendingDeleteId > 0) {
-      if (event == Event::Character('y') || event == Event::Character('Y')) {
-        mediaType media = (currentTab == viewTab::kManga ? mediaType::kManga
-                                                        : mediaType::kAnime);
-        auto opt = db_.getById(media, pendingDeleteId);
-        if (opt) {
-          recordAction(historyAction::kDelete, media, opt.value(), entry{});
-          db_.removeEntry(media, pendingDeleteId);
-          db_.saveAll();
-          pushNotification("Deleted '" + clipTitle(opt->title, 36) + "'.");
-        }
-        pendingDeleteId = 0;
-        refreshViews();
-        return true;
-      }
-      if (event == Event::Character('n') || event == Event::Character('N') ||
-          event == Event::Escape) {
-        pendingDeleteId = 0;
-        statusMessage = "Deletion canceled.";
-        return true;
-      }
-      return true;
-    }
-
-    // POPUP NOTIFICATION CAPTURE
-    bool hasNotif = false;
-    {
-      std::lock_guard<std::mutex> lock(notifMutex);
-      hasNotif = !notificationQueue.empty();
-    }
-    if (hasNotif) {
-      if (event == Event::Character(';') || event == Event::Escape ||
-          event == Event::Return) {
-        std::lock_guard<std::mutex> lock(notifMutex);
-        if (!notificationQueue.empty()) {
-          notificationQueue.erase(notificationQueue.begin());
-        }
-      }
-      return true;
-    }
-
-    if (commandPalette_.isOpen()) {
-      if (event == Event::Escape) {
-        commandPalette_.close();
-        currentMode = appMode::kNor;
-        return true;
-      }
-      if (event == Event::Return) {
-        commandPalette_.execute([&](const std::string& cmd) {
-          dispatchCommand(cmd);
-          currentMode = appMode::kNor;
-        });
-        return true;
-      }
-      if (event == Event::Tab) {
-        commandPalette_.handleEvent("", false, false, true, false, false);
-        return true;
-      }
-      if (event == Event::Backspace) {
-        commandPalette_.handleEvent("", true, false, false, false, false);
-        return true;
-      }
-      if (event == Event::ArrowUp) {
-        commandPalette_.handleEvent("", false, false, false, true, false);
-        return true;
-      }
-      if (event == Event::ArrowDown) {
-        commandPalette_.handleEvent("", false, false, false, false, true);
-        return true;
-      }
-      if (event.is_character()) {
-        commandPalette_.handleEvent(event.character(), false, false, false,
-                                    false, false);
-        return true;
-      }
-      return true;
-    }
-
-    if (isOnlineModalOpen) {
-      if (event == Event::Escape) {
-        isOnlineModalOpen = false;
-        currentMode = appMode::kNor;
-        catalogMenu->TakeFocus();
-        return true;
-      }
-      if (event == Event::Tab) {
-        if (remoteSearchInput->Focused())
-          remoteMenu->TakeFocus();
-        else
-          remoteSearchInput->TakeFocus();
-        return true;
-      }
-      if (remoteSearchInput->Focused()) {
-        if (event == Event::Return) {
-          executeRemoteSearch();
-          remoteMenu->TakeFocus();
-          return true;
-        }
-        if (event == Event::ArrowDown) {
-          remoteMenu->TakeFocus();
-          return true;
-        }
-        remoteSearchInput->OnEvent(event);
-        return true;
-      }
-      if (remoteMenu->Focused()) {
-        if (event == Event::Return && !remoteResults.empty() &&
-            remoteSelected >= 0 &&
-            remoteSelected < static_cast<int>(remoteResults.size())) {
-          const auto& sel = remoteResults[remoteSelected];
-          entry e;
-          e.id = sel.malId;
-          e.malId = sel.malId;
-          e.type = sel.type;
-          e.title = sel.title;
-          e.status = watchStatus::kWatching;
-          e.score = 0;
-          e.progress = 0;
-          e.totalUnits = sel.totalUnits;
-          isoDate today = localDate(services_.clock);
-          e.startDate = isoDate::parse(sel.year + "-01-01").value_or(today);
-          e.updatedAt = today;
-          db_.addEntry(e);
-          recordAction(historyAction::kAdd, e.type, entry{}, e);
-          db_.saveAll();
-          refreshViews();
-
-          for (size_t i = 0; i < displayedEntries.size(); ++i) {
-            if (displayedEntries[i].id == e.id) {
-              catalogSelected = static_cast<int>(i);
-              break;
-            }
-          }
-          isOnlineModalOpen = false;
-          currentMode = appMode::kNor;
-          catalogMenu->TakeFocus();
-          pushNotification("Successfully added '" + e.title + "'.");
-          return true;
-        }
-        if (event == Event::ArrowUp || event == Event::Character('k')) {
-          if (remoteSelected > 0)
-            remoteSelected--;
-          else
-            remoteSearchInput->TakeFocus();
-          return true;
-        }
-        if (event == Event::ArrowDown || event == Event::Character('j')) {
-          if (!remoteResults.empty() &&
-              remoteSelected < static_cast<int>(remoteResults.size()) - 1)
-            remoteSelected++;
-          return true;
-        }
-      }
-      return true;
-    }
-
-    if (currentMode == appMode::kSch) {
-      if (event == Event::Escape) {
-        searchQuery = "";
-        refreshViews();
-        currentFocus = focusedCard::kCatalog;
-        catalogMenu->TakeFocus();
-        currentMode = appMode::kNor;
-        statusMessage = "Search cleared.";
-        return true;
-      }
-      if (event == Event::Return || event == Event::ArrowDown) {
-        refreshViews();
-        currentFocus = focusedCard::kCatalog;
-        catalogMenu->TakeFocus();
-        currentMode = appMode::kNor;
-        statusMessage =
-            searchQuery.empty()
-                ? "Filter cleared."
-                : ("Filtered: '" + searchQuery + "' (" +
-                   std::to_string(displayedEntries.size()) + " matches)");
-        return true;
-      }
-      searchInput->OnEvent(event);
-      refreshViews();
-      return true;
-    }
-
-    if (isInspectorEditingNotes) {
-      if (event == Event::Escape || event == Event::Return) {
-        if (!displayedEntries.empty() && catalogSelected >= 0 &&
-            catalogSelected < static_cast<int>(displayedEntries.size())) {
-          auto& e = displayedEntries[catalogSelected];
-          entry before = e;
-          e.notes = inspectorNotesBuffer;
-          e.updatedAt = localDate(services_.clock);
-          recordAction(historyAction::kMutate, e.type, before, e);
-          db_.updateEntry(e);
-          db_.saveAll();
-          refreshViews();
-        }
-        isInspectorEditingNotes = false;
-        currentMode = appMode::kNor;
-        statusMessage = "Saved notes.";
-        return true;
-      }
-      inspectorNotesInput->OnEvent(event);
-      return true;
-    }
-
-    // TOP-LEVEL TAB TRAVERSAL
-    if (event == Event::Tab) {
-      int next = (static_cast<int>(currentTab) + 1) % 6;
-      currentTab = static_cast<viewTab>(next);
-      refreshViews();
-      return true;
-    }
-    if (event == Event::TabReverse || event == Event::Special("\033[Z") ||
-        event == Event::Special("\x1b[Z")) {
-      int prev = (static_cast<int>(currentTab) + 5) % 6;
-      currentTab = static_cast<viewTab>(prev);
-      refreshViews();
-      return true;
-    }
-
-    if (event == Event::Character('0')) {
-      currentTab = viewTab::kAbout;
-      return true;
-    }
-    if (event == Event::Character('1')) {
-      currentTab = viewTab::kAnime;
-      catalogSelected = 0;
-      refreshViews();
-      return true;
-    }
-    if (event == Event::Character('2')) {
-      currentTab = viewTab::kManga;
-      catalogSelected = 0;
-      refreshViews();
-      return true;
-    }
-    if (event == Event::Character('3')) {
-      currentTab = viewTab::kOverview;
-      return true;
-    }
-    if (event == Event::Character('4')) {
-      currentTab = viewTab::kSync;
-      return true;
-    }
-    if (event == Event::Character('5')) {
-      currentTab = viewTab::kSettings;
-      return true;
-    }
-
-    if (event == Event::Character(':')) {
-      currentMode = appMode::kCmd;
-      commandPalette_.open();
-      return true;
-    }
-
-    // ABOUT TAB CONTROLS
-    if (currentTab == viewTab::kAbout) {
-      if (event == Event::Character('h') || event == Event::ArrowLeft) {
-        if (aboutActiveCard > 0)
-          aboutActiveCard--;
-        return true;
-      }
-      if (event == Event::Character('l') || event == Event::ArrowRight) {
-        if (aboutActiveCard < 2)
-          aboutActiveCard++;
-        return true;
-      }
-      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::kQuit, event.character())) {
-        db_.saveAll();
-        screen.ExitLoopClosure()();
-        return true;
-      }
-      return false;
-    }
-
-    // SYNC TAB CONTROLS
-    if (currentTab == viewTab::kSync) {
-      if (event == Event::Character('h') || event == Event::ArrowLeft) {
-        syncActivePanel = 0;
-        return true;
-      }
-      if (event == Event::Character('l') || event == Event::ArrowRight) {
-        syncActivePanel = 1;
-        return true;
-      }
-      if (event == Event::Character('j') || event == Event::ArrowDown) {
-        if (syncActivePanel == 0) {
-          if (syncActionCursor < 2)
-            syncActionCursor++;
-        } else {
-          syncBackupCursor++;
-        }
-        return true;
-      }
-      if (event == Event::Character('k') || event == Event::ArrowUp) {
-        if (syncActivePanel == 0) {
-          if (syncActionCursor > 0)
-            syncActionCursor--;
-        } else {
-          if (syncBackupCursor > 0)
-            syncBackupCursor--;
-        }
-        return true;
-      }
-      if (event == Event::Return) {
-        if (syncActivePanel == 0) {
-          if (syncActionCursor == 0)
-            triggerAsyncSync();
-          else if (syncActionCursor == 1) {
-            db_.createBackupSnapshot();
-            pushNotification(
-                "Created snapshot backup in ~/.config/catalist/backups/.");
-          } else if (syncActionCursor == 2) {
-            std::string path = runZenityFilePicker(services_.launcher);
-            if (!path.empty()) {
-              size_t count = malParser::importXml(services_.fileSystem, path, db_, false);
-              pushNotification("Ingested " + std::to_string(count) +
-                               " entries from XML backup.");
-              refreshViews();
-            }
-          }
-        }
-        return true;
-      }
-      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::kQuit, event.character())) {
-        db_.saveAll();
-        screen.ExitLoopClosure()();
-        return true;
-      }
-      return false;
-    }
-
-    // SETTINGS TAB CONTROLS
-    if (currentTab == viewTab::kSettings) {
-      auto themes = themeRegistry::getAvailableThemes();
-      if (event == Event::Character('h') || event == Event::ArrowLeft) {
-        settingsActivePanel = 0;
-        return true;
-      }
-      if (event == Event::Character('l') || event == Event::ArrowRight) {
-        settingsActivePanel = 1;
-        return true;
-      }
-      if (event == Event::Character('j') || event == Event::ArrowDown) {
-        if (settingsActivePanel == 0) {
-          if (settingsThemeCursor < static_cast<int>(themes.size()) - 1)
-            settingsThemeCursor++;
-        } else {
-          if (settingsPrefCursor < 4)
-            settingsPrefCursor++;
-        }
-        return true;
-      }
-      if (event == Event::Character('k') || event == Event::ArrowUp) {
-        if (settingsActivePanel == 0) {
-          if (settingsThemeCursor > 0)
-            settingsThemeCursor--;
-        } else {
-          if (settingsPrefCursor > 0)
-            settingsPrefCursor--;
-        }
-        return true;
-      }
-      if (event == Event::Return || event == Event::Character(' ')) {
-        if (settingsActivePanel == 0) {
-          std::string th = themes[settingsThemeCursor];
-          config_.theme = th;
-          themeRegistry::setActive(th);
-          config_.save(services_.fileSystem, db_.getConfigPath() / "catalist.kdl");
-          statusMessage = "Applied theme: " + th;
-        } else {
-          if (settingsPrefCursor == 0) {
-            config_.mouse = !config_.mouse;
-            statusMessage =
-                config_.mouse ? "Mouse enabled." : "Mouse disabled.";
-          } else if (settingsPrefCursor == 1) {
-            if (config_.defaultMedia == "anime")
-              config_.defaultMedia = "manga";
-            else if (config_.defaultMedia == "manga")
-              config_.defaultMedia = "overview";
-            else
-              config_.defaultMedia = "anime";
-            statusMessage = "Default view: " + config_.defaultMedia;
-          } else if (settingsPrefCursor == 2) {
-            if (config_.defaultSort == "score")
-              config_.defaultSort = "title";
-            else if (config_.defaultSort == "title")
-              config_.defaultSort = "date";
-            else if (config_.defaultSort == "date")
-              config_.defaultSort = "progress";
-            else
-              config_.defaultSort = "score";
-            statusMessage = "Default sort: " + config_.defaultSort;
-          } else if (settingsPrefCursor == 3) {
-            config_.reverseSort = false;
-            statusMessage = "Sort: Ascending";
-          } else if (settingsPrefCursor == 4) {
-            config_.reverseSort = true;
-            statusMessage = "Sort: Descending";
-          }
-          config_.save(services_.fileSystem, db_.getConfigPath() / "catalist.kdl");
-        }
-        return true;
-      }
-      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::kQuit, event.character())) {
-        db_.saveAll();
-        screen.ExitLoopClosure()();
-        return true;
-      }
-      return false;
-    }
-
-    if (currentTab == viewTab::kOverview) {
-      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::kQuit, event.character())) {
-        db_.saveAll();
-        screen.ExitLoopClosure()();
-        return true;
-      }
-      return false;
-    }
-
-    // BATCH & GLOBAL HOTKEYS
-    if (event == Event::Character('S')) {
-      if (!visualSelectedIds.empty()) {
-        for (auto id : visualSelectedIds) {
-          auto opt =
-              db_.getById((currentTab == viewTab::kManga ? mediaType::kManga
-                                                        : mediaType::kAnime),
-                          id);
-          if (opt) {
-            auto e = opt.value();
-            mutateStatus(e, 1);
-          }
-        }
-        statusMessage = "Batch cycled status for " +
-                        std::to_string(visualSelectedIds.size()) + " entries.";
-      } else if (!displayedEntries.empty()) {
-        auto e = displayedEntries[catalogSelected];
-        mutateStatus(e, 1);
-      }
-      return true;
-    }
-
-    if (event == Event::Character('R')) {
-      if (!visualSelectedIds.empty()) {
-        for (auto id : visualSelectedIds) {
-          auto opt =
-              db_.getById((currentTab == viewTab::kManga ? mediaType::kManga
-                                                        : mediaType::kAnime),
-                          id);
-          if (opt) {
-            auto e = opt.value();
-            mutateRating(e, 1);
-          }
-        }
-        statusMessage = "Batch bumped rating for " +
-                        std::to_string(visualSelectedIds.size()) + " entries.";
-      } else if (!displayedEntries.empty()) {
-        auto e = displayedEntries[catalogSelected];
-        mutateRating(e, 1);
-      }
-      return true;
-    }
-
-    if (event == Event::Character('P') || event == Event::Character('+') ||
-        event == Event::Character('=')) {
-      if (!visualSelectedIds.empty()) {
-        for (auto id : visualSelectedIds) {
-          auto opt =
-              db_.getById((currentTab == viewTab::kManga ? mediaType::kManga
-                                                        : mediaType::kAnime),
-                          id);
-          if (opt) {
-            auto e = opt.value();
-            mutateProgress(e, 1);
-          }
-        }
-        statusMessage = "Batch incremented progress for " +
-                        std::to_string(visualSelectedIds.size()) + " entries.";
-      } else if (!displayedEntries.empty()) {
-        auto e = displayedEntries[catalogSelected];
-        mutateProgress(e, 1);
-      }
-      return true;
-    }
-
-    if (event == Event::Character('-')) {
-      if (!visualSelectedIds.empty()) {
-        for (auto id : visualSelectedIds) {
-          auto opt =
-              db_.getById((currentTab == viewTab::kManga ? mediaType::kManga
-                                                        : mediaType::kAnime),
-                          id);
-          if (opt) {
-            auto e = opt.value();
-            mutateProgress(e, -1);
-          }
-        }
-        statusMessage = "Batch decremented progress for " +
-                        std::to_string(visualSelectedIds.size()) + " entries.";
-      } else if (!displayedEntries.empty()) {
-        auto e = displayedEntries[catalogSelected];
-        mutateProgress(e, -1);
-      }
-      return true;
-    }
-
-    if (currentFocus != focusedCard::kDetails) {
-      if (event == Event::Character('c')) {
-        toggleColumnSort(sortKey::kDate, "Date");
-        return true;
-      }
-      if (event == Event::Character('t')) {
-        toggleColumnSort(sortKey::kTitle, "Title");
-        return true;
-      }
-      if (event == Event::Character('s')) {
-        toggleColumnSort(sortKey::kStatus, "Status");
-        return true;
-      }
-      if (event == Event::Character('r')) {
-        toggleColumnSort(sortKey::kScore, "Rating");
-        return true;
-      }
-      if (event == Event::Character('p')) {
-        toggleColumnSort(sortKey::kProgress, "Progress");
-        return true;
-      }
-    }
-
-    // CATALOG CARD FOCUS
-    if (currentFocus == focusedCard::kCatalog) {
-      if (event == Event::Character('h') || event == Event::ArrowLeft) {
-        currentFocus = focusedCard::kSidebar;
-        sidebarMenu->TakeFocus();
-        return true;
-      }
-      if (event == Event::Character('l') || event == Event::ArrowRight) {
-        currentFocus = focusedCard::kDetails;
-        detailsCursorIndex = 0;
-        return true;
-      }
-      if (event == Event::Character(' ') || event == Event::Character('v')) {
-        if (!displayedEntries.empty()) {
-          int id = displayedEntries[catalogSelected].id;
-          if (visualSelectedIds.count(id))
-            visualSelectedIds.erase(id);
-          else
-            visualSelectedIds.insert(id);
-          currentMode = visualSelectedIds.empty() ? appMode::kNor : appMode::kVis;
-        }
-        return true;
-      }
-      if (event == Event::Return || event == Event::Character('e')) {
-        currentFocus = focusedCard::kDetails;
-        detailsCursorIndex = 0;
-        statusMessage =
-            "Details: [j/k] Navigate properties, [h/l] Adjust, [e/ret] Notes";
-        return true;
-      }
-      if (event == Event::Character('j') || event == Event::ArrowDown) {
-        if (!displayedEntries.empty() &&
-            catalogSelected < static_cast<int>(displayedEntries.size()) - 1) {
-          catalogSelected++;
-        }
-        return true;
-      }
-      if (event == Event::Character('k') || event == Event::ArrowUp) {
-        if (catalogSelected > 0)
-          catalogSelected--;
-        return true;
-      }
-      if (event == Event::Character('g')) {
-        catalogSelected = 0;
-        return true;
-      }
-      if (event == Event::Character('G')) {
-        if (!displayedEntries.empty())
-          catalogSelected = static_cast<int>(displayedEntries.size()) - 1;
-        return true;
-      }
-    }
-    // SIDEBAR CARD FOCUS
-    else if (currentFocus == focusedCard::kSidebar) {
-      if (event == Event::Character('l') || event == Event::ArrowRight) {
-        currentFocus = focusedCard::kCatalog;
-        catalogMenu->TakeFocus();
-        return true;
-      }
-      if (event == Event::Character('j') || event == Event::ArrowDown) {
-        if (sidebarSelected < static_cast<int>(sidebarLabels.size()) - 1) {
-          sidebarSelected++;
-          if (sidebarSelected == 0 || sidebarSelected == 2 ||
-              sidebarSelected == 8)
-            sidebarSelected++;
-          refreshViews();
-        }
-        return true;
-      }
-      if (event == Event::Character('k') || event == Event::ArrowUp) {
-        if (sidebarSelected > 1) {
-          sidebarSelected--;
-          if (sidebarSelected == 0 || sidebarSelected == 2 ||
-              sidebarSelected == 8)
-            sidebarSelected--;
-          refreshViews();
-        }
-        return true;
-      }
-      if (event == Event::Character(' ')) {
-        if (sidebarSelected == 3) {
-          if (multiFilterStatuses.count(watchStatus::kWatching))
-            multiFilterStatuses.erase(watchStatus::kWatching);
-          else
-            multiFilterStatuses.insert(watchStatus::kWatching);
-        } else if (sidebarSelected == 4) {
-          if (multiFilterStatuses.count(watchStatus::kCompleted))
-            multiFilterStatuses.erase(watchStatus::kCompleted);
-          else
-            multiFilterStatuses.insert(watchStatus::kCompleted);
-        } else if (sidebarSelected == 5) {
-          if (multiFilterStatuses.count(watchStatus::kOnHold))
-            multiFilterStatuses.erase(watchStatus::kOnHold);
-          else
-            multiFilterStatuses.insert(watchStatus::kOnHold);
-        } else if (sidebarSelected == 6) {
-          if (multiFilterStatuses.count(watchStatus::kDropped))
-            multiFilterStatuses.erase(watchStatus::kDropped);
-          else
-            multiFilterStatuses.insert(watchStatus::kDropped);
-        } else if (sidebarSelected == 7) {
-          if (multiFilterStatuses.count(watchStatus::kPlanToWatch))
-            multiFilterStatuses.erase(watchStatus::kPlanToWatch);
-          else
-            multiFilterStatuses.insert(watchStatus::kPlanToWatch);
-        } else if (sidebarSelected >= 9 && sidebarSelected <= 14) {
-          int score = 19 - sidebarSelected;
-          if (multiFilterScores.count(score))
-            multiFilterScores.erase(score);
-          else
-            multiFilterScores.insert(score);
-        } else if (sidebarSelected == 15) {
-          if (multiFilterScores.count(0))
-            multiFilterScores.erase(0);
-          else
-            multiFilterScores.insert(0);
-        }
-        refreshViews();
-        return true;
-      }
-      if (event == Event::Return) {
-        multiFilterStatuses.clear();
-        multiFilterScores.clear();
-        refreshViews();
-        currentFocus = focusedCard::kCatalog;
-        catalogMenu->TakeFocus();
-        return true;
-      }
-    }
-    // DETAILS CARDS FOCUS (0: Status, 1: Rating, 2: Progress, 3: Notes)
-    else if (currentFocus == focusedCard::kDetails) {
-      if (event == Event::Escape) {
-        currentFocus = focusedCard::kCatalog;
-        currentMode = appMode::kNor;
-        return true;
-      }
-
-      if (event == Event::Character('j') || event == Event::ArrowDown) {
-        if (detailsCursorIndex < 3)
-          detailsCursorIndex++;
-        return true;
-      }
-      if (event == Event::Character('k') || event == Event::ArrowUp) {
-        if (detailsCursorIndex > 0)
-          detailsCursorIndex--;
-        return true;
-      }
-
-      if (!displayedEntries.empty()) {
-        auto e = displayedEntries[catalogSelected];
-
-        if (event == Event::Character('h') || event == Event::ArrowLeft) {
-          if (detailsCursorIndex == 3) {
-            currentFocus = focusedCard::kCatalog;
-            return true;
-          }
-          if (detailsCursorIndex == 0) {
-            mutateStatus(e, -1);
-            return true;
-          }
-          if (detailsCursorIndex == 1) {
-            mutateRating(e, -1);
-            return true;
-          }
-          if (detailsCursorIndex == 2) {
-            mutateProgress(e, -1);
-            return true;
-          }
-          return true;
-        }
-
-        if (event == Event::Character('l') || event == Event::ArrowRight) {
-          if (detailsCursorIndex == 0) {
-            mutateStatus(e, 1);
-            return true;
-          }
-          if (detailsCursorIndex == 1) {
-            mutateRating(e, 1);
-            return true;
-          }
-          if (detailsCursorIndex == 2) {
-            mutateProgress(e, 1);
-            return true;
-          }
-          return true;
-        }
-
-        if (event == Event::Return || event == Event::Character('e') ||
-            event == Event::Character(' ')) {
-          if (detailsCursorIndex == 0) {
-            mutateStatus(e, 1);
-            return true;
-          }
-          if (detailsCursorIndex == 1) {
-            mutateRating(e, 1);
-            return true;
-          }
-          if (detailsCursorIndex == 2) {
-            mutateProgress(e, 1);
-            return true;
-          }
-          if (detailsCursorIndex == 3) {
-            inspectorNotesBuffer = e.notes;
-            isInspectorEditingNotes = true;
-            currentMode = appMode::kEdt;
-            inspectorNotesInput->TakeFocus();
-            statusMessage = "Editing notes. Press [ret] or [Esc] to commit.";
-            return true;
-          }
-        }
-      }
-    }
-
-    if (event == Event::Character('/')) {
-      currentMode = appMode::kSch;
-      searchInput->TakeFocus();
-      statusMessage = "Search title... [ret] Apply  [Esc] Clear";
-      return true;
-    }
-
-    if (event == Event::Character('a')) {
-      openRemoteSearchModal();
-      remoteSearchInput->TakeFocus();
-      return true;
-    }
-
-    if (event == Event::Character('d')) {
-      if (!visualSelectedIds.empty()) {
-        for (auto id : visualSelectedIds) {
-          db_.removeEntry((currentTab == viewTab::kManga ? mediaType::kManga
-                                                        : mediaType::kAnime),
-                          id);
-        }
-        visualSelectedIds.clear();
-        currentMode = appMode::kNor;
-        db_.saveAll();
-        refreshViews();
-        pushNotification("Deleted selected entries.");
-      } else if (!displayedEntries.empty() && catalogSelected >= 0 &&
-                 catalogSelected < static_cast<int>(displayedEntries.size())) {
-        pendingDeleteId = displayedEntries[catalogSelected].id;
-        statusMessage = "Delete '" +
-                        clipTitle(displayedEntries[catalogSelected].title, 24) +
-                        "'? Confirm [y/N]";
-      }
-      return true;
-    }
-
-    if (event == Event::Character('u')) {
-      performUndo();
-      refreshViews();
-      return true;
-    }
-    if (event == Event::Character('U') || event == Event::Special("\x12")) {
-      performRedo();
-      refreshViews();
-      return true;
-    }
-
-    if (event == Event::Character('o')) {
-      if (!displayedEntries.empty() && catalogSelected >= 0 &&
-          catalogSelected < static_cast<int>(displayedEntries.size())) {
-        openInBrowser(displayedEntries[catalogSelected]);
-      }
-      return true;
-    }
-
-    if (event == Event::Character('y')) {
-      if (!displayedEntries.empty() && catalogSelected >= 0 &&
-          catalogSelected < static_cast<int>(displayedEntries.size())) {
-        copyToClipboard(displayedEntries[catalogSelected].title);
-      }
-      return true;
-    }
-
-    if (event == Event::Character('q') || config_.keybinds.matches(keyAction::kQuit, event.character())) {
-      db_.saveAll();
-      screen.ExitLoopClosure()();
-      return true;
-    }
-
-    return false;
+  syncRunner sync(db_, services_.http, notices_,
+                  [&screen] { screen.PostEvent(Event::Custom); });
+  appContext ctx{db_,
+                 config_,
+                 undo_,
+                 notices_,
+                 services_.launcher,
+                 services_.clock,
+                 services_.fileSystem,
+                 services_.http,
+                 services_.providers,
+                 services_.auth,
+                 sync};
+
+  tabRegistry registry;
+  registerTabs(registry, config_);
+  auto tabs = registry.ordered(config_.kdlDoc);
+  Components tabComponents;
+  for (iTab* tab : tabs)
+    tabComponents.push_back(makeTabComponent(*tab, ctx));
+
+  shell app(ctx, tabs, palette_, screen);
+  std::string startupTab = config_.defaultMedia == "manga" ? "manga" : "anime";
+  app.activate(std::max(0, indexOf(tabs, startupTab)));
+
+  auto tabContainer = Container::Tab(tabComponents, &app.activeIndex());
+  auto withGlobalKeys = CatchEvent(tabContainer, [&app](Event event) {
+    return app.onEvent(event);
   });
-
-  auto buildOverviewStatisticsSection = [&]() {
-    const auto& theme = themeRegistry::active();
-
-    auto makeStatSection = [&](mediaType type, const std::string& title,
-                               ftxui::Color accentColor) {
-      size_t cWatch = db_.countByStatus(type, watchStatus::kWatching);
-      size_t cComp = db_.countByStatus(type, watchStatus::kCompleted);
-      size_t cHold = db_.countByStatus(type, watchStatus::kOnHold);
-      size_t cDrop = db_.countByStatus(type, watchStatus::kDropped);
-      size_t cPlan = db_.countByStatus(type, watchStatus::kPlanToWatch);
-      size_t cTotal = db_.getEntries(type).size();
-
-      double days = db_.daysSpent(type);
-      double mean = db_.averageScore(type);
-
-      int width = 46;
-      Elements barElements;
-      if (cTotal == 0) {
-        barElements.push_back(text(std::string(width, ' ')) |
-                              bgcolor(theme.surface0));
-      } else {
-        int wWatch = static_cast<int>((cWatch * width) / cTotal);
-        int wComp = static_cast<int>((cComp * width) / cTotal);
-        int wHold = static_cast<int>((cHold * width) / cTotal);
-        int wDrop = static_cast<int>((cDrop * width) / cTotal);
-        if (cWatch > 0 && wWatch == 0)
-          wWatch = 1;
-        if (cComp > 0 && wComp == 0)
-          wComp = 1;
-        if (cHold > 0 && wHold == 0)
-          wHold = 1;
-        if (cDrop > 0 && wDrop == 0)
-          wDrop = 1;
-        int wSum = wWatch + wComp + wHold + wDrop;
-        int wPlan = std::max(0, width - wSum);
-
-        if (wWatch > 0)
-          barElements.push_back(text(std::string(wWatch, ' ')) |
-                                bgcolor(theme.green));
-        if (wComp > 0)
-          barElements.push_back(text(std::string(wComp, ' ')) |
-                                bgcolor(theme.blue));
-        if (wHold > 0)
-          barElements.push_back(text(std::string(wHold, ' ')) |
-                                bgcolor(theme.yellow));
-        if (wDrop > 0)
-          barElements.push_back(text(std::string(wDrop, ' ')) |
-                                bgcolor(theme.red));
-        if (wPlan > 0)
-          barElements.push_back(text(std::string(wPlan, ' ')) |
-                                bgcolor(theme.overlay0));
-      }
-
-      std::stringstream ssMean;
-      ssMean << std::fixed << std::setprecision(2) << mean;
-
-      auto statsPane =
-          vbox(
-              {hbox({text(title) | bold | color(accentColor), filler(),
-                     text("All " + title) | color(theme.blue)}),
-               text(""),
-               hbox({text("Days: ") | color(theme.subtext),
-                     text(formatDays(days)) | bold | color(theme.text),
-                     filler(), text("Mean Score: ") | color(theme.subtext),
-                     text(ssMean.str()) | bold | color(theme.text)}),
-               text(""), hbox(std::move(barElements)), text(""),
-               hbox(
-                   {vbox(
-                        {hbox({text("● ") | color(theme.green),
-                               text(type == mediaType::kAnime ? "Watching"
-                                                             : "Reading") |
-                                   color(theme.blue),
-                               filler(),
-                               text(formatCommas(cWatch)) | color(theme.text)}),
-                         hbox({text("● ") | color(theme.blue),
-                               text("Completed") | color(theme.blue), filler(),
-                               text(formatCommas(cComp)) | color(theme.text)}),
-                         hbox({text("● ") | color(theme.yellow),
-                               text("On-Hold") | color(theme.blue), filler(),
-                               text(formatCommas(cHold)) | color(theme.text)}),
-                         hbox({text("● ") | color(theme.red),
-                               text("Dropped") | color(theme.blue), filler(),
-                               text(formatCommas(cDrop)) | color(theme.text)}),
-                         hbox({text("● ") | color(theme.overlay0),
-                               text(type == mediaType::kAnime ? "Plan to Watch"
-                                                             : "Plan to Read") |
-                                   color(theme.blue),
-                               filler(),
-                               text(formatCommas(cPlan)) |
-                                   color(theme.text)})}) |
-                        size(WIDTH, EQUAL, 23),
-                    text("   "),
-                    vbox(
-                        {hbox({text("Total Entries") | color(theme.subtext),
-                               filler(),
-                               text(formatCommas(cTotal)) | color(theme.text)}),
-                         hbox({text(type == mediaType::kAnime ? "Rewatched"
-                                                             : "Reread") |
-                                   color(theme.subtext),
-                               filler(),
-                               text(formatCommas(db_.totalRewatched(type))) |
-                                   color(theme.text)}),
-                         hbox({text(type == mediaType::kAnime ? "Episodes"
-                                                             : "Chapters") |
-                                   color(theme.subtext),
-                               filler(),
-                               text(formatCommas(db_.totalProgress(type))) |
-                                   color(theme.text)}),
-                         (type == mediaType::kManga
-                              ? hbox({text("Volumes") | color(theme.subtext),
-                                      filler(),
-                                      text(formatCommas(
-                                          db_.totalVolumes(mediaType::kManga))) |
-                                          color(theme.text)})
-                              : text(""))}) |
-                        size(WIDTH, EQUAL, 20)})}) |
-          size(WIDTH, EQUAL, 48);
-
-      auto recentList = db_.getRecentActivity(type, 3);
-      Elements recentBoxes;
-      recentBoxes.push_back(hbox(
-          {text(type == mediaType::kAnime ? "Last Anime Updates"
-                                         : "Last Manga Updates") |
-               bold | color(theme.text),
-           filler(),
-           text(type == mediaType::kAnime ? "Anime History" : "Manga History") |
-               color(theme.blue)}));
-      recentBoxes.push_back(text(""));
-
-      if (recentList.empty()) {
-        recentBoxes.push_back(text(" No recent history logged.") |
-                              color(theme.subtext));
-      } else {
-        for (const auto& act : recentList) {
-          float rRatio = (act.totalUnits > 0)
-                             ? std::clamp(static_cast<float>(act.progress) /
-                                              act.totalUnits,
-                                          0.0f, 1.0f)
-                             : 0.0f;
-          int gWidth = 14;
-          int filled = static_cast<int>(std::round(rRatio * gWidth));
-
-          auto miniBar = hbox(
-              {text(std::string(filled, ' ')) |
-                   bgcolor(act.status == watchStatus::kCompleted ? theme.blue
-                                                                : theme.green),
-               text(std::string(std::max(0, gWidth - filled), ' ')) |
-                   bgcolor(theme.surface1)});
-
-          std::string subline =
-              statusToString(act.status, act.type) + " " +
-              std::to_string(act.progress) + "/" +
-              (act.totalUnits > 0 ? std::to_string(act.totalUnits) : "?") +
-              " · Scored " + (act.score > 0 ? std::to_string(act.score) : "-");
-
-          recentBoxes.push_back(
-              vbox({text(clipTitle(act.title, 42)) | bold | color(theme.blue),
-                    hbox({miniBar, filler(),
-                          text(act.timestamp) | color(theme.overlay0)}),
-                    text(subline) | color(theme.subtext), text("")}));
-        }
-      }
-
-      auto updatesPane = vbox(std::move(recentBoxes)) | size(WIDTH, EQUAL, 46);
-
-      return hbox({statsPane, text("    "), separator() | color(theme.surface0),
-                   text("    "), updatesPane});
-    };
-
-    return vbox({text("Statistics") | bold | color(theme.text), text(""),
-                 makeStatSection(mediaType::kAnime, "Anime Stats",
-                                 theme.lavender),
-                 text(""),
-                 makeStatSection(mediaType::kManga, "Manga Stats", theme.peach),
-                 filler()}) |
-           size(WIDTH, EQUAL, 102) | center | flex;
-  };
-
-  auto buildAboutSection = [&]() {
-    const auto& theme = themeRegistry::active();
-
-    auto cardIntro =
-        vbox({text(" 󰄛 Welcome to Catalist") | bold | color(theme.mauve),
-              text(""), text(" Catalist is a fast, lightweight anime"),
-              text(" and manga tracker for your terminal."), text(""),
-              text(" Log watched episodes and read chapters,"),
-              text(" rate your favorite series, and browse"),
-              text(" your library with zero clutter or ads."), text(""),
-              text(std::string(" Version: v") + kVersionString) |
-                  color(theme.overlay0), filler()}) |
-        border | color(aboutActiveCard == 0 ? theme.mauve : theme.surface0) |
-        size(WIDTH, EQUAL, 34);
-
-    auto cardStorage =
-        vbox({text(" 󰓹 Private & Local Storage") | bold | color(theme.peach),
-              text(""), text(" Your watchlist is saved locally on"),
-              text(" your computer in simple CSV files."), text(""),
-              text("  • Total Anime : " +
-                   std::to_string(db_.getEntries(mediaType::kAnime).size())),
-              text("  • Total Manga : " +
-                   std::to_string(db_.getEntries(mediaType::kManga).size())),
-              text(""), text(" Location:"),
-              text(" ~/.config/catalist/") | color(theme.subtext), text(""),
-              text(" No accounts or tracking required.") | color(theme.green),
-              filler()}) |
-        border | color(aboutActiveCard == 1 ? theme.mauve : theme.surface0) |
-        size(WIDTH, EQUAL, 36);
-
-    auto cardOnline =
-        vbox({text(" 󰖟 Online Discovery & Sync") | bold |
-                  color(theme.lavender),
-              text(""), text(" Search online libraries instantly"),
-              text(" by pressing [a] from the catalog."), text(""),
-              text(" Pull episode totals, synopsis, and"),
-              text(" scores directly from MyAnimeList"),
-              text(" and AniList without leaving the app."), text(""),
-              text(" Reconcile ongoing series in Sync.") | color(theme.subtext),
-              filler()}) |
-        border | color(aboutActiveCard == 2 ? theme.mauve : theme.surface0) |
-        size(WIDTH, EQUAL, 34);
-
-    return vbox({text(""),
-                 hbox({cardIntro, text(" "), cardStorage, text(" "),
-                       cardOnline}) |
-                     center | flex,
-                 text(""),
-                 text(" [h/l] Switch Card  │  [Tab] Next Tab ") |
-                     color(theme.overlay0) | center,
-                 filler()}) |
-           center | flex;
-  };
-
-  auto buildSyncSection = [&]() {
-    const auto& theme = themeRegistry::active();
-
-    auto backupFiles =
-        backup::listSnapshots(services_.fileSystem, db_.getConfigPath());
-
-    Elements backupElements;
-    if (backupFiles.empty()) {
-      backupElements.push_back(text("  No snapshots found in backups/.") |
-                               color(theme.subtext));
-    } else {
-      for (size_t i = 0; i < backupFiles.size() && i < 8; ++i) {
-        bool selected =
-            (syncActivePanel == 1 && syncBackupCursor == static_cast<int>(i));
-        backupElements.push_back(
-            hbox({text(selected ? " ▌ " : "   ") | color(theme.mauve) | bold,
-                  text(backupFiles[i]) | (selected ? bold : nothing) |
-                      color(selected ? theme.peach : theme.text)}));
-      }
-    }
-
-    auto makeActionBtn = [&](int idx, const std::string& iconStr,
-                             const std::string& name, const std::string& desc) {
-      bool active = (syncActivePanel == 0 && syncActionCursor == idx);
-      return vbox(
-          {hbox({text(active ? " ▌ " : "   ") | color(theme.mauve) | bold,
-                 text(iconStr + " " + name) | (active ? bold : nothing) |
-                     color(active ? theme.peach : theme.text)}),
-           text("     " + desc) | color(theme.subtext), text("")});
-    };
-
-    auto syncStatusText = syncIsRunning.load()
-                              ? "● Sync active in background..."
-                              : "● Upstream idle and ready.";
-    auto syncStatusColor = syncIsRunning.load() ? theme.yellow : theme.green;
-
-    auto panelActions =
-        vbox(
-            {text(" Upstream Operations") | bold | color(theme.lavender),
-             text(""),
-             text(" Status: " + std::string(syncStatusText)) | bold |
-                 color(syncStatusColor),
-             text(""),
-             makeActionBtn(
-                 0, "󰓦", "Reconcile Ongoing Titles",
-                 "Fetches finished totals for ongoing anime from MAL."),
-             makeActionBtn(
-                 1, "󰆓", "Create Snapshot Backup",
-                 "Generates an instant timestamped CSV backup replica."),
-             makeActionBtn(2, "󰈞", "Ingest MyAnimeList Archive",
-                           "Import an exported official myanimelist.xml file."),
-             filler(),
-             text(" Press [ret] to trigger selected action.") |
-                 color(theme.overlay0)}) |
-        border | color(syncActivePanel == 0 ? theme.mauve : theme.surface0) |
-        size(WIDTH, EQUAL, 44);
-
-    auto panelBackups =
-        vbox(
-            {text(" Snapshot Backups Repository") | bold | color(theme.peach),
-             text(""),
-             text(" Location: ~/.config/catalist/backups/") |
-                 color(theme.subtext),
-             text(""),
-             vbox(std::move(backupElements)) | vscroll_indicator | frame | flex,
-             text(""),
-             text(" Press [h/l] to switch panels  │  [j/k] to navigate.") |
-                 color(theme.overlay0)}) |
-        border | color(syncActivePanel == 1 ? theme.mauve : theme.surface0) |
-        flex;
-
-    return vbox({text(""),
-                 hbox({panelActions, text(" "), panelBackups}) |
-                     size(WIDTH, EQUAL, 92) | center | flex,
-                 text("")}) |
-           center | flex;
-  };
-
-  auto buildSettingsSection = [&]() {
-    const auto& theme = themeRegistry::active();
-    auto themes = themeRegistry::getAvailableThemes();
-
-    Elements themeElements;
-    for (size_t i = 0; i < themes.size(); ++i) {
-      bool active = (config_.theme == themes[i]);
-      bool cursorOnThis = (settingsActivePanel == 0 &&
-                           settingsThemeCursor == static_cast<int>(i));
-
-      std::string marker =
-          active ? (icon::kCheckSingle + " ") : (icon::kCheckBlank + " ");
-      themeElements.push_back(hbox(
-          {text(cursorOnThis ? " ▌ " : "   ") | color(theme.mauve) | bold,
-           text(marker) | color(active ? theme.green : theme.overlay0) | bold,
-           text(themes[i]) | (active ? bold : nothing) |
-               color(cursorOnThis ? theme.peach
-                                  : (active ? theme.mauve : theme.text))}));
-    }
-
-    auto makePrefRow = [&](int idx, const std::string& name,
-                           const std::string& val) {
-      bool active = (settingsActivePanel == 1 && settingsPrefCursor == idx);
-      return hbox({text(active ? " ▌ " : "   ") | color(theme.mauve) | bold,
-                   text(name) | size(WIDTH, EQUAL, 22) |
-                       (active ? bold : nothing) |
-                       color(active ? theme.peach : theme.text),
-                   text(" " + val) | color(theme.lavender) | bold});
-    };
-
-    auto panelThemes =
-        vbox({text(" Visual Theme Palette") | bold | color(theme.mauve),
-              text(""),
-              vbox(std::move(themeElements)) | vscroll_indicator | frame | flex,
-              text(""),
-              text(" Press [ret] to apply selected theme.") |
-                  color(theme.overlay0)}) |
-        border |
-        color(settingsActivePanel == 0 ? theme.mauve : theme.surface0) |
-        size(WIDTH, EQUAL, 38);
-
-    auto panelPrefs =
-        vbox({text(" Runtime Preferences") | bold | color(theme.peach),
-              text(""),
-              makePrefRow(0, "Mouse Support:",
-                          config_.mouse ? (icon::kCheckSingle + " Enabled")
-                                        : (icon::kCheckBlank + " Disabled")),
-              text(""), makePrefRow(1, "Default View:", config_.defaultMedia),
-              text(""), makePrefRow(2, "Default Sort:", config_.defaultSort),
-              text(""),
-              makePrefRow(3, "Sort Descending:",
-                          config_.reverseSort
-                              ? (icon::kCheckSingle + " High to Low")
-                              : (icon::kCheckBlank + " High to Low")),
-              makePrefRow(4, "Sort Ascending: ",
-                          !config_.reverseSort
-                              ? (icon::kCheckSingle + " Low to High")
-                              : (icon::kCheckBlank + " Low to High")),
-              text(""),
-              text(" Press [ret] or [spc] to cycle options.") |
-                  color(theme.overlay0),
-              text(""),
-              text(" Configuration Store:") | bold | color(theme.lavender),
-              text(" ~/.config/catalist/catalist.kdl") | color(theme.subtext),
-              filler()}) |
-        border |
-        color(settingsActivePanel == 1 ? theme.mauve : theme.surface0) | flex;
-
-    return vbox({text(""),
-                 hbox({panelThemes, text(" "), panelPrefs}) |
-                     size(WIDTH, EQUAL, 92) | center | flex,
-                 text("")}) |
-           center | flex;
-  };
-
-  auto mainRenderer = Renderer(globalHandler, [&]() {
-    const auto& theme = themeRegistry::active();
-    size_t aCount = db_.getEntries(mediaType::kAnime).size();
-    size_t mCount = db_.getEntries(mediaType::kManga).size();
-
-    auto nowMs = static_cast<uint64_t>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count());
-
-    auto topBarNode = config_.kdlDoc.getNode("top-bar");
-    Elements tabElements;
-
-    auto makeTabItem = [&](viewTab t, const std::string& iconStr,
-                           const std::string& title,
-                           const std::string& countStr = "") {
-      bool active = (currentTab == t);
-      std::string label = " " + iconStr + " " + title;
-      if (!countStr.empty())
-        label += " (" + countStr + ")";
-      label += " ";
-      return text(label) |
-             (active ? (bold | color(theme.mauve)) : color(theme.subtext));
-    };
-
-    if (topBarNode.has_value() && !topBarNode->children.empty()) {
-      for (const auto& item : topBarNode->children) {
-        if (item.name == "tab") {
-          std::string tid = item.getArgString(0);
-          std::string label = item.getPropString("label", tid);
-          std::string ic = item.getPropString("icon", "");
-          bool showCount = item.getPropBool("show-count", false);
-
-          viewTab vTab = viewTab::kAnime;
-          std::string cnt = "";
-          if (tid == "about")
-            vTab = viewTab::kAbout;
-          else if (tid == "anime") {
-            vTab = viewTab::kAnime;
-            if (showCount)
-              cnt = std::to_string(aCount);
-          } else if (tid == "manga") {
-            vTab = viewTab::kManga;
-            if (showCount)
-              cnt = std::to_string(mCount);
-          } else if (tid == "overview" || tid == "stats")
-            vTab = viewTab::kOverview;
-          else if (tid == "sync")
-            vTab = viewTab::kSync;
-          else if (tid == "settings")
-            vTab = viewTab::kSettings;
-
-          tabElements.push_back(makeTabItem(vTab, ic, label, cnt));
-          tabElements.push_back(text("│") | color(theme.surface0));
-        } else if (item.name == "spacer") {
-          tabElements.push_back(filler());
-        } else if (item.name == "text") {
-          tabElements.push_back(text(item.getArgString(0)) |
-                                color(theme.overlay0));
-        } else if (item.name == "version") {
-          tabElements.push_back(text(std::string("v") + kVersionString) |
-                                color(theme.overlay0));
-        }
-      }
-    } else {
-      tabElements = {makeTabItem(viewTab::kAbout, icon::kAppLogo, "Catalist"),
-                     text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::kAnime, icon::kAnime, "Anime",
-                                 std::to_string(aCount)),
-                     text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::kManga, icon::kManga, "Manga",
-                                 std::to_string(mCount)),
-                     text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::kOverview, icon::kStats, "Overview"),
-                     text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::kSync, icon::kSync, "Sync"),
-                     text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::kSettings, "󰒓", "Settings"),
-                     filler(),
-                     text(std::string("v") + kVersionString + " ") |
-                         color(theme.overlay0)};
-    }
-
-    auto topCard = hbox(std::move(tabElements)) | border |
-                   color(theme.surface0) | size(HEIGHT, EQUAL, 3);
-
-    Element contentPane;
-
-    if (currentTab == viewTab::kOverview) {
-      contentPane = buildOverviewStatisticsSection();
-    } else if (currentTab == viewTab::kAbout) {
-      contentPane = buildAboutSection();
-    } else if (currentTab == viewTab::kSync) {
-      contentPane = buildSyncSection();
-    } else if (currentTab == viewTab::kSettings) {
-      contentPane = buildSettingsSection();
-    } else {
-      Element details = text("No record selected.") | color(theme.subtext);
-      if (!displayedEntries.empty() && catalogSelected >= 0 &&
-          catalogSelected < static_cast<int>(displayedEntries.size())) {
-        const auto& e = displayedEntries[catalogSelected];
-        float ratio =
-            (e.totalUnits > 0)
-                ? std::clamp(static_cast<float>(e.progress) / e.totalUnits,
-                             0.0f, 1.0f)
-                : 0.0f;
-        auto gaugeColor = (ratio >= 1.0f || e.status == watchStatus::kCompleted)
-                              ? theme.green
-                              : theme.blue;
-
-        bool onDetails = (currentFocus == focusedCard::kDetails);
-
-        auto fieldRow = [&](int idx, const std::string& label,
-                            Element content) {
-          bool active = onDetails && (detailsCursorIndex == idx);
-          std::string prefix = active ? "▌ " : "  ";
-          return hbox({text(prefix) | color(theme.mauve) | bold,
-                       text(label) | size(WIDTH, EQUAL, 12) |
-                           (active ? bold : nothing) |
-                           color(active ? theme.peach : theme.subtext),
-                       content | flex});
-        };
-
-        auto typePill =
-            makePill(typeToIcon(e.type) + " " + typeToString(e.type),
-                     theme.crust, typeToColor(e.type));
-        auto statusPill = makePill(
-            statusToIcon(e.status) + " " + statusToString(e.status, e.type),
-            theme.crust, statusToColor(e.status));
-
-        size_t maxDetailChars = 36;
-        if (catalogSelected != lastTrackedSelected) {
-          lastTrackedSelected = catalogSelected;
-          lastSelectionChangeMs = nowMs;
-        }
-        uint64_t elapsedSinceSelect = (nowMs >= lastSelectionChangeMs)
-                                          ? (nowMs - lastSelectionChangeMs)
-                                          : 0;
-        std::string displayTitle = makeMarqueeTitle(
-            e.title, maxDetailChars, elapsedSinceSelect, 2000, 250);
-
-        std::string startDisplay =
-            e.startDate ? e.startDate->toString() : "Not started";
-        std::string unfinishedLabel =
-            e.status == watchStatus::kCompleted ? "Completed" : "In progress";
-        std::string finishDisplay =
-            e.finishDate ? e.finishDate->toString() : unfinishedLabel;
-        std::string updatedDisplay =
-            e.updatedAt ? e.updatedAt->toString() : "-";
-
-        // Construct dynamic provider text links (plain text, no pill)
-        Elements providerBadges;
-        for (const auto& prov : services_.providers.getAllProviders()) {
-          std::string rid = e.getRemoteId(prov->getKey());
-          if (!rid.empty()) {
-            if (!providerBadges.empty()) {
-              providerBadges.push_back(text("  "));
-            }
-            providerBadges.push_back(text(prov->getShortBadge() + " #" + rid) |
-                                     color(theme.text));
-          }
-        }
-        if (providerBadges.empty()) {
-          providerBadges.push_back(text("-") | color(theme.subtext));
-        }
-
-        // Card 1: Details (Identity metadata, stationary border)
-        auto seriesCard =
-            vbox({hbox({text("  DETAILS") | bold | color(theme.lavender),
-                        filler(),
-                        text("ID #" + std::to_string(e.id) + " ") |
-                            color(theme.overlay0)}),
-                  text(""),
-                  hbox({text("  " + displayTitle) | bold | color(theme.mauve)}),
-                  text(""),
-                  hbox({text("  Type:     ") | color(theme.subtext), typePill,
-                        filler()}),
-                  hbox({text("  Links:    ") | color(theme.subtext),
-                        hbox(std::move(providerBadges)) | flex}),
-                  hbox({text("  Updated:  ") | color(theme.subtext),
-                        text(updatedDisplay) | color(theme.text), filler()}),
-                  hbox({text("  Started:  ") | color(theme.subtext),
-                        text(startDisplay) | color(theme.text), filler()}),
-                  hbox({text("  Finished: ") | color(theme.subtext),
-                        text(finishDisplay) | color(theme.text), filler()})}) |
-            border | color(theme.surface0);
-
-        // Card 2: Tracking Card (Status + Metrics together, highlights when
-        // index <= 2)
-        bool isTrackingSelected =
-            (currentMode != appMode::kSch) && onDetails && (detailsCursorIndex <= 2);
-        auto trackingCard =
-            vbox({hbox({text("  TRACKING") | bold | color(theme.lavender),
-                        filler(),
-                        text(isTrackingSelected ? "[Active]" : "") |
-                            color(theme.peach)}),
-                  text(""), text("  STATUS") | bold | color(theme.overlay0),
-                  fieldRow(0, "Status:", statusPill), text(""),
-                  text("  METRICS") | bold | color(theme.overlay0),
-                  fieldRow(1, "Rating:",
-                           hbox({text(renderStarMeter(e.score)) |
-                                     color(theme.yellow),
-                                 text(" (" + std::to_string(e.score) + "/10)") |
-                                     color(theme.text)})),
-                  text(""),
-                  fieldRow(
-                      2, "Progress:",
-                      vbox({hbox({text(std::to_string(e.progress) + " / " +
-                                       (e.totalUnits > 0
-                                            ? std::to_string(e.totalUnits)
-                                            : "?") +
-                                       (e.type == mediaType::kAnime ? " eps"
-                                                                   : " chs")) |
-                                      color(theme.text),
-                                  filler(),
-                                  text(e.totalUnits > 0
-                                           ? std::to_string(static_cast<int>(
-                                                 ratio * 100)) +
-                                                 "% "
-                                           : "Ongoing ") |
-                                      color(theme.subtext)}),
-                            gauge(ratio) | color(gaugeColor)}))}) |
-            border | color(isTrackingSelected ? theme.mauve : theme.surface0);
-
-        // Card 3: Notes Card (Highlights when index == 3)
-        bool isNotesSelected =
-            (currentMode != appMode::kSch) && onDetails && (detailsCursorIndex == 3);
-        auto notesCard =
-            vbox(
-                {hbox({text("  NOTES") | bold | color(theme.lavender), filler(),
-                       text(isNotesSelected
-                                ? (isInspectorEditingNotes ? "[Editing]"
-                                                           : "[Active]")
-                                : "") |
-                           color(theme.peach)}),
-                 text(""),
-                 fieldRow(3, "Notes:",
-                          (isInspectorEditingNotes
-                               ? (inspectorNotesInput->Render() | border |
-                                  color(theme.peach))
-                               : (text(e.notes.empty()
-                                           ? "(empty - press e or ret to edit)"
-                                           : e.notes) |
-                                  color(e.notes.empty() ? theme.overlay0
-                                                        : theme.subtext)))),
-                 filler()}) |
-            border |
-            color(isNotesSelected
-                      ? (isInspectorEditingNotes ? theme.peach : theme.mauve)
-                      : theme.surface0) |
-            flex;
-
-        details = vbox({seriesCard, trackingCard, notesCard});
-      }
-
-      auto makeHeaderCell = [&](const std::string& name, sortKey key, int width,
-                                Box& box, bool isFlex = false) {
-        bool active = (currentSort == key);
-        std::string label = " " + name;
-        if (active)
-          label += getSortArrow(key, reverseSort);
-        Element cell = text(label);
-        if (isFlex)
-          cell = cell | flex;
-        else
-          cell = cell | size(WIDTH, EQUAL, width);
-
-        if (active)
-          cell = cell | bold | color(theme.mauve) | underlined;
-        else
-          cell = cell | bold | color(theme.subtext);
-        return cell | reflect(box);
-      };
-
-      auto headerRibbon = hbox(
-          {text("   ") | size(WIDTH, EQUAL, 3),
-           makeHeaderCell("Date", sortKey::kDate, 10, headerDateBox), text(" "),
-           makeHeaderCell("Title", sortKey::kTitle, 28, headerTitleBox, true),
-           text(" "),
-           makeHeaderCell("Status", sortKey::kStatus, 14, headerStatusBox),
-           text(" "),
-           makeHeaderCell("Rating", sortKey::kScore, 12, headerRatingBox),
-           text(" "),
-           makeHeaderCell("Progress", sortKey::kProgress, 12, headerProgressBox),
-           text(" ")});
-
-      bool inSearchMode = (currentMode == appMode::kSch);
-
-      auto sidebarCard =
-          vbox({text("  Categories") | bold | color(theme.lavender), text(""),
-                sidebarMenu->Render() | vscroll_indicator | frame | flex}) |
-          border |
-          color((!inSearchMode && currentFocus == focusedCard::kSidebar)
-                    ? theme.mauve
-                    : theme.surface0) |
-          size(WIDTH, EQUAL, 28);
-
-      auto searchCard =
-          hbox({text(" " + icon::kSearch + " ") | color(theme.peach),
-                searchInput->Render() | flex,
-                text(searchQuery.empty() ? "All entries "
-                                         : ("Filter: '" + searchQuery + "' ")) |
-                    color(theme.subtext),
-                text(" ")}) |
-          border |
-          color(currentMode == appMode::kSch ? theme.peach : theme.surface0) |
-          size(HEIGHT, EQUAL, 3) | reflect(searchBarBox);
-
-      auto catalogCard =
-          vbox({headerRibbon, text(""),
-                displayedEntries.empty()
-                    ? (text(" No matching entries found.") |
-                       color(theme.subtext) | center | flex)
-                    : (catalogMenu->Render() | vscroll_indicator | frame |
-                       flex)}) |
-          border |
-          color((!inSearchMode && currentFocus == focusedCard::kCatalog)
-                    ? theme.mauve
-                    : theme.surface0) |
-          flex;
-
-      auto detailPane = vbox({details | flex}) | size(WIDTH, EQUAL, 42);
-
-      contentPane =
-          hbox({sidebarCard, vbox({searchCard, catalogCard | flex}) | flex,
-                detailPane});
-    }
-
-    bool isMalAuth = services_.auth.isAuthenticated();
-    Element accountBadge =
-        isMalAuth
-            ? makePill(icon::kSync + " MAL: Connected", theme.crust, theme.green)
-            : makePill(icon::kOffline + " Offline", Color::Black, theme.surface2);
-
-    auto hintItem = [&](const std::string& key, const std::string& desc) {
-      return hbox({text(key) | bold | color(theme.text),
-                   text(" " + desc) | color(theme.subtext)});
-    };
-
-    Elements hints;
-    if (currentFocus == focusedCard::kDetails && currentMode != appMode::kEdt) {
-      hints = {hintItem("j/k", "field"),   text("  "),
-               hintItem("h/l", "adjust"),  text("  "),
-               hintItem("e/ret", "notes"), text("  "),
-               hintItem("Esc", "catalog")};
-    } else if (currentMode == appMode::kNor || currentMode == appMode::kVis) {
-      hints = {hintItem("Tab", "tabs"),       text("  "),
-               hintItem("h/l", "panes"),      text("  "),
-               hintItem("e/ret", "edit"),     text("  "),
-               hintItem("c/t/s/r/p", "sort"), text("  "),
-               hintItem("S/R/P", "cycle"),    text("  "),
-               hintItem("+/-", "ep"),         text("  "),
-               hintItem("spc", "select"),     text("  "),
-               hintItem("a", "add"),          text("  "),
-               hintItem("d", "del"),          text("  "),
-               hintItem("/", "find"),         text("  "),
-               hintItem(":", "cmd")};
-    } else if (currentMode == appMode::kEdt) {
-      hints = {hintItem("ret", "commit"), text("  "),
-               hintItem("Esc", "cancel")};
-    } else if (currentMode == appMode::kSch) {
-      hints = {hintItem("ret", "apply"), text("  "), hintItem("Esc", "clear")};
-    }
-
-    Element selectionTelemetry = text("");
-    if (!visualSelectedIds.empty()) {
-      selectionTelemetry =
-          hbox({text(" (" + std::to_string(visualSelectedIds.size()) +
-                     " selected) ") |
-                    bold | color(theme.green),
-                text("│ ") | color(theme.surface1)});
-    }
-
-    int termWidth = Terminal::Size().dimx;
-    int hintsWidth = 76;
-    int maxStatusLen = std::max(16, termWidth - hintsWidth - 28);
-    std::string safeStatusMessage = statusMessage;
-    if (static_cast<int>(safeStatusMessage.size()) > maxStatusLen) {
-      safeStatusMessage =
-          safeStatusMessage.substr(0, std::max(0, maxStatusLen - 3)) + "...";
-    }
-
-    auto bottomRibbon =
-        hbox({text(" "), accountBadge, text(" │ ") | color(theme.surface1),
-              selectionTelemetry,
-              text(safeStatusMessage) | color(theme.yellow), filler(),
-              hbox(std::move(hints)), text(" ")}) |
-        border | color(theme.surface0) | size(HEIGHT, EQUAL, 3);
-
-    auto baseUi = vbox({topCard, contentPane | flex, bottomRibbon});
-
-    bool hasNotif = false;
-    std::string activeNotif;
-    {
-      std::lock_guard<std::mutex> lock(notifMutex);
-      if (!notificationQueue.empty()) {
-        hasNotif = true;
-        activeNotif = notificationQueue.front();
-      }
-    }
-
-    if (hasNotif) {
-      auto popupWindow =
-          vbox({
-              hbox({text("  󰎟 Notification ") | bold | color(theme.mauve),
-                    filler(), text(" [;] Dismiss ") | color(theme.subtext)}),
-              text(""),
-              text("  " + activeNotif) | color(theme.text) | center,
-              text(""),
-          }) |
-          border | color(theme.mauve) | bgcolor(theme.crust) |
-          size(WIDTH, EQUAL,
-               std::max(40, static_cast<int>(activeNotif.size()) + 8)) |
-          clear_under | center;
-
-      return dbox({baseUi, popupWindow});
-    }
-
-    if (commandPalette_.isOpen()) {
-      return dbox({baseUi, commandPalette_.render(theme)});
-    }
-
-    if (isOnlineModalOpen) {
-      Element resultsList =
-          text(" Type query above and press [ret] to query MyAnimeList.") |
-          color(theme.subtext) | center | flex;
-      if (remoteLoading) {
-        resultsList = text(" Querying AniList / MyAnimeList...") | bold |
-                      color(theme.yellow) | center | flex;
-      } else if (!remoteResults.empty()) {
-        resultsList = remoteMenu->Render() | vscroll_indicator | frame | flex;
-      } else if (!remoteStatusMsg.empty()) {
-        resultsList =
-            text(" " + remoteStatusMsg) | color(theme.red) | center | flex;
-      }
-
-      auto modalWindow =
-          vbox(
-              {hbox({text("  󰖟 Online Search & Add ") | bold |
-                         color(theme.mauve),
-                     filler(), text(" [Esc] Close ") | color(theme.subtext)}),
-               text(""),
-               remoteSearchInput->Render() | border |
-                   color(remoteSearchInput->Focused() ? theme.peach
-                                                      : theme.surface0),
-               text(""),
-               vbox({resultsList}) | border |
-                   color(remoteMenu->Focused() ? theme.mauve : theme.surface0) |
-                   size(HEIGHT, EQUAL, 14),
-               text(""),
-               text(
-                   " [ret] Add/Search  │  [Tab] Switch Input/Results  │  [j/k] Select  │  [Esc] Close ") |
-                   color(theme.subtext)}) |
-          border | color(theme.mauve) | bgcolor(theme.base) |
-          size(WIDTH, EQUAL, 86) | clear_under | center;
-
-      return dbox({baseUi, modalWindow});
-    }
-
-    return baseUi;
-  });
-
-  std::atomic<bool> appRunning{true};
-  std::thread tickerThread([&]() {
-    while (appRunning.load()) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(250));
-      screenPtr->PostEvent(Event::Custom);
+  auto root = Renderer(withGlobalKeys, [&app] { return app.render(); });
+
+  std::atomic<bool> running{true};
+  std::thread ticker([&]() {
+    while (running.load()) {
+      std::this_thread::sleep_for(kTickInterval);
+      screen.PostEvent(Event::Custom);
     }
   });
-
-  screen.Loop(mainRenderer);
-
-  appRunning = false;
-  if (tickerThread.joinable()) {
-    tickerThread.join();
-  }
+  screen.Loop(root);
+  running = false;
+  ticker.join();
 }
 
 }  // namespace catalist

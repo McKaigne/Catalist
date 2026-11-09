@@ -88,59 +88,66 @@ void commandPalette::updateFilter() {
                  std::max(0, static_cast<int>(filteredItems_.size()) - 1));
 }
 
-void commandPalette::handleEvent(const std::string& keyChar, bool isBack,
-                                 bool isEnter, bool isTab, bool isUp,
-                                 bool isDown) {
-  (void)isEnter;
-  if (isBack) {
-    if (!query_.empty()) {
-      query_.pop_back();
-      updateFilter();
-    }
-    return;
-  }
+bool commandPalette::hasSelection() const {
+  return selectedIndex_ >= 0 &&
+         selectedIndex_ < static_cast<int>(filteredItems_.size());
+}
 
-  if (isTab) {
-    if (!filteredItems_.empty() && selectedIndex_ >= 0 &&
-        selectedIndex_ < static_cast<int>(filteredItems_.size())) {
-      query_ = filteredItems_[selectedIndex_].command + " ";
-      updateFilter();
-    }
+void commandPalette::eraseLastCharacter() {
+  if (query_.empty())
     return;
-  }
+  query_.pop_back();
+  updateFilter();
+}
 
-  if (isUp) {
-    if (selectedIndex_ > 0)
-      selectedIndex_--;
+void commandPalette::completeSelection() {
+  if (!hasSelection())
     return;
-  }
+  query_ = filteredItems_[selectedIndex_].command + " ";
+  updateFilter();
+}
 
-  if (isDown) {
-    if (selectedIndex_ < static_cast<int>(filteredItems_.size()) - 1)
-      selectedIndex_++;
-    return;
-  }
+void commandPalette::moveSelection(int delta) {
+  int last = static_cast<int>(filteredItems_.size()) - 1;
+  selectedIndex_ = std::clamp(selectedIndex_ + delta, 0, std::max(0, last));
+}
 
-  if (!keyChar.empty()) {
-    query_ += keyChar;
-    updateFilter();
-  }
+void commandPalette::appendText(const std::string& typed) {
+  query_ += typed;
+  updateFilter();
+}
+
+bool commandPalette::onEvent(
+    const Event& event,
+    const std::function<void(const std::string&)>& onExecute) {
+  if (event == Event::Escape)
+    close();
+  else if (event == Event::Return)
+    execute(onExecute);
+  else if (event == Event::Tab)
+    completeSelection();
+  else if (event == Event::Backspace)
+    eraseLastCharacter();
+  else if (event == Event::ArrowUp)
+    moveSelection(-1);
+  else if (event == Event::ArrowDown)
+    moveSelection(1);
+  else if (event.is_character())
+    appendText(event.character());
+  return true;
 }
 
 void commandPalette::execute(
     const std::function<void(const std::string&)>& onExecute) {
-  std::string cmd = query_;
-  if (cmd.empty() && !filteredItems_.empty() && selectedIndex_ >= 0 &&
-      selectedIndex_ < static_cast<int>(filteredItems_.size())) {
-    cmd = filteredItems_[selectedIndex_].command;
-  }
+  std::string command = query_;
+  if (command.empty() && hasSelection())
+    command = filteredItems_[selectedIndex_].command;
   close();
-  if (!cmd.empty()) {
-    onExecute(cmd);
-  }
+  if (!command.empty())
+    onExecute(command);
 }
 
-Element commandPalette::render(const themePalette& theme) {
+Element commandPalette::render(const themePalette& theme) const {
   Elements items;
 
   for (size_t i = 0; i < filteredItems_.size(); ++i) {

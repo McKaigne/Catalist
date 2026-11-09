@@ -1,7 +1,7 @@
-#ifndef CATALIST_COMMAND_PALETTE_HPP_
-#define CATALIST_COMMAND_PALETTE_HPP_
+#ifndef CATALIST_TUI_WIDGETS_COMMAND_PALETTE_HPP_
+#define CATALIST_TUI_WIDGETS_COMMAND_PALETTE_HPP_
 
-#include <ftxui/component/component.hpp>
+#include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <functional>
 #include <string>
@@ -23,13 +23,14 @@ class commandPalette {
 
   void open(const std::string& initialPrefix = "");
   void close();
-  bool isOpen() const;
+  [[nodiscard]] bool isOpen() const;
 
-  void handleEvent(const std::string& keyChar, bool isBack, bool isEnter,
-                   bool isTab, bool isUp, bool isDown);
-  void execute(const std::function<void(const std::string&)>& onExecute);
+  // Consumes every event while open; Return runs the typed (or selected)
+  // command through onExecute, Escape closes.
+  bool onEvent(const ftxui::Event& event,
+               const std::function<void(const std::string&)>& onExecute);
 
-  ftxui::Element render(const themePalette& theme);
+  [[nodiscard]] ftxui::Element render(const themePalette& theme) const;
 
  private:
   bool isOpen_ = false;
@@ -40,8 +41,14 @@ class commandPalette {
 
   void updateFilter();
   void initCatalog();
+  void execute(const std::function<void(const std::string&)>& onExecute);
+  void completeSelection();
+  void moveSelection(int delta);
+  void eraseLastCharacter();
+  void appendText(const std::string& typed);
+  [[nodiscard]] bool hasSelection() const;
 };
 
 }  // namespace catalist
 
-#endif  // CATALIST_COMMAND_PALETTE_HPP_
+#endif  // CATALIST_TUI_WIDGETS_COMMAND_PALETTE_HPP_

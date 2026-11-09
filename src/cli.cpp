@@ -8,6 +8,7 @@
 #include <random>
 #include <sstream>
 
+#include "catalist/cli/resolveEntry.hpp"
 #include "catalist/core/jsonLite.hpp"
 #include "catalist/core/version.hpp"
 #include "catalist/malParser.hpp"
@@ -57,6 +58,45 @@ static void emitError(const std::string& code, const std::string& message,
       std::cerr << "error: " << message << "\n";
     }
   }
+}
+
+static std::vector<std::string> collectQueries(const std::string& target) {
+  if (target != "-")
+    return {target};
+  std::vector<std::string> queries;
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    line.erase(0, line.find_first_not_of(" \t\r\n"));
+    line.erase(line.find_last_not_of(" \t\r\n") + 1);
+    if (!line.empty())
+      queries.push_back(line);
+  }
+  return queries;
+}
+
+static std::string describeCandidates(const std::vector<entry>& candidates) {
+  std::string listing;
+  for (const auto& c : candidates) {
+    listing += "  - [" + std::to_string(c.id) + "] " + c.title + " (" +
+               (c.type == mediaType::kAnime ? "anime" : "manga") + ")\n";
+  }
+  return listing;
+}
+
+static void reportResolveError(const resolveError& failure, bool jsonMode,
+                               bool listCandidates) {
+  if (failure.kind == resolveFailure::kNotFound) {
+    emitError("notFound", "entry not found matching '" + failure.query + "'.",
+              jsonMode);
+    return;
+  }
+  std::string message =
+      "ambiguous query '" + failure.query + "'. Matches multiple entries";
+  if (listCandidates)
+    message += ":\n" + describeCandidates(failure.candidates);
+  else
+    message += ".";
+  emitError("ambiguous", message, jsonMode);
 }
 
 bool cliDispatcher::parseRatingSpec(const std::string& spec, int& minScore,
@@ -636,18 +676,7 @@ int cliDispatcher::executeShow(const std::vector<std::string>& args,
     return 2;
   }
 
-  std::vector<std::string> queries;
-  if (target == "-") {
-    std::string line;
-    while (std::getline(std::cin, line)) {
-      line.erase(0, line.find_first_not_of(" \t\r\n"));
-      line.erase(line.find_last_not_of(" \t\r\n") + 1);
-      if (!line.empty())
-        queries.push_back(line);
-    }
-  } else {
-    queries.push_back(target);
-  }
+  std::vector<std::string> queries = collectQueries(target);
 
   if (queries.empty()) {
     emitError("input", "no queries received from stdin.", jsonMode);
@@ -657,65 +686,15 @@ int cliDispatcher::executeShow(const std::vector<std::string>& args,
   int exitCode = 0;
   for (size_t qIdx = 0; qIdx < queries.size(); ++qIdx) {
     const auto& q = queries[qIdx];
-    std::optional<entry> match;
-
-    bool isInt = !q.empty() && std::all_of(q.begin(), q.end(), ::isdigit);
-    if (isInt) {
-      int id = std::stoi(q);
-      match = db.getById(mediaType::kAnime, id);
-      if (!match.has_value()) {
-        match = db.getById(mediaType::kManga, id);
-      }
-    }
-
-    if (!match.has_value()) {
-      std::string qLower = q;
-      std::transform(qLower.begin(), qLower.end(), qLower.begin(), ::tolower);
-
-      std::vector<entry> candidates;
-      auto searchType = [&](mediaType t) {
-        for (const auto& e : db.getEntries(t)) {
-          std::string titleLower = e.title;
-          std::transform(titleLower.begin(), titleLower.end(),
-                         titleLower.begin(), ::tolower);
-          if (titleLower == qLower) {
-            candidates.clear();
-            candidates.push_back(e);
-            return true;
-          }
-          if (titleLower.find(qLower) != std::string::npos) {
-            candidates.push_back(e);
-          }
-        }
-        return false;
-      };
-
-      if (!searchType(mediaType::kAnime)) {
-        searchType(mediaType::kManga);
-      }
-
-      if (candidates.size() == 1) {
-        match = candidates[0];
-      } else if (candidates.size() > 1) {
-        std::string msg =
-            "ambiguous query '" + q + "'. Matches multiple entries:\n";
-        for (const auto& c : candidates) {
-          msg += "  - [" + std::to_string(c.id) + "] " + c.title + " (" +
-                 (c.type == mediaType::kAnime ? "anime" : "manga") + ")\n";
-        }
-        emitError("ambiguous", msg, jsonMode);
-        exitCode = 1;
-        continue;
-      }
-    }
-
-    if (!match.has_value()) {
-      emitError("notFound", "entry not found matching '" + q + "'.", jsonMode);
+    auto resolved = resolveEntry(db, q);
+    if (!resolved.ok()) {
+      reportResolveError(resolved.errorValue(), jsonMode, true);
       exitCode = 1;
       continue;
     }
+    const entry& match = resolved.value();
 
-    printSingleDetail(match.value(), jsonMode);
+    printSingleDetail(match, jsonMode);
     if (qIdx + 1 < queries.size())
       std::cout << "\n";
   }
@@ -1048,18 +1027,7 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
     return 2;
   }
 
-  std::vector<std::string> queries;
-  if (target == "-") {
-    std::string line;
-    while (std::getline(std::cin, line)) {
-      line.erase(0, line.find_first_not_of(" \t\r\n"));
-      line.erase(line.find_last_not_of(" \t\r\n") + 1);
-      if (!line.empty())
-        queries.push_back(line);
-    }
-  } else {
-    queries.push_back(target);
-  }
+  std::vector<std::string> queries = collectQueries(target);
 
   if (queries.empty()) {
     emitError("input", "no target identifiers received from stdin.", jsonMode);
@@ -1068,59 +1036,14 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
 
   int successCount = 0;
   for (const auto& q : queries) {
-    std::optional<entry> match;
-
-    bool isInt = !q.empty() && std::all_of(q.begin(), q.end(), ::isdigit);
-    if (isInt) {
-      int id = std::stoi(q);
-      match = db.getById(mediaType::kAnime, id);
-      if (!match.has_value()) {
-        match = db.getById(mediaType::kManga, id);
-      }
-    }
-
-    if (!match.has_value()) {
-      std::string qLower = q;
-      std::transform(qLower.begin(), qLower.end(), qLower.begin(), ::tolower);
-
-      std::vector<entry> candidates;
-      auto searchType = [&](mediaType t) {
-        for (const auto& e : db.getEntries(t)) {
-          std::string titleLower = e.title;
-          std::transform(titleLower.begin(), titleLower.end(),
-                         titleLower.begin(), ::tolower);
-          if (titleLower == qLower) {
-            candidates.clear();
-            candidates.push_back(e);
-            return true;
-          }
-          if (titleLower.find(qLower) != std::string::npos) {
-            candidates.push_back(e);
-          }
-        }
-        return false;
-      };
-
-      if (!searchType(mediaType::kAnime)) {
-        searchType(mediaType::kManga);
-      }
-
-      if (candidates.size() == 1) {
-        match = candidates[0];
-      } else if (candidates.size() > 1) {
-        emitError("ambiguous",
-                  "ambiguous query '" + q + "'. Matches multiple entries.",
-                  jsonMode);
-        continue;
-      }
-    }
-
-    if (!match.has_value()) {
-      emitError("notFound", "entry not found matching '" + q + "'.", jsonMode);
+    auto resolved = resolveEntry(db, q);
+    if (!resolved.ok()) {
+      reportResolveError(resolved.errorValue(), jsonMode, false);
       continue;
     }
+    const entry& match = resolved.value();
 
-    auto e = match.value();
+    auto e = match;
 
     if (setProgress.has_value()) {
       e.progress = setProgress.value();
@@ -1203,18 +1126,7 @@ int cliDispatcher::executeRm(const std::vector<std::string>& args,
     return 2;
   }
 
-  std::vector<std::string> queries;
-  if (target == "-") {
-    std::string line;
-    while (std::getline(std::cin, line)) {
-      line.erase(0, line.find_first_not_of(" \t\r\n"));
-      line.erase(line.find_last_not_of(" \t\r\n") + 1);
-      if (!line.empty())
-        queries.push_back(line);
-    }
-  } else {
-    queries.push_back(target);
-  }
+  std::vector<std::string> queries = collectQueries(target);
 
   if (queries.empty()) {
     emitError("input", "no targets received from stdin.", jsonMode);
@@ -1223,59 +1135,14 @@ int cliDispatcher::executeRm(const std::vector<std::string>& args,
 
   int deletedCount = 0;
   for (const auto& q : queries) {
-    std::optional<entry> match;
-
-    bool isInt = !q.empty() && std::all_of(q.begin(), q.end(), ::isdigit);
-    if (isInt) {
-      int id = std::stoi(q);
-      match = db.getById(mediaType::kAnime, id);
-      if (!match.has_value()) {
-        match = db.getById(mediaType::kManga, id);
-      }
-    }
-
-    if (!match.has_value()) {
-      std::string qLower = q;
-      std::transform(qLower.begin(), qLower.end(), qLower.begin(), ::tolower);
-
-      std::vector<entry> candidates;
-      auto searchType = [&](mediaType t) {
-        for (const auto& e : db.getEntries(t)) {
-          std::string titleLower = e.title;
-          std::transform(titleLower.begin(), titleLower.end(),
-                         titleLower.begin(), ::tolower);
-          if (titleLower == qLower) {
-            candidates.clear();
-            candidates.push_back(e);
-            return true;
-          }
-          if (titleLower.find(qLower) != std::string::npos) {
-            candidates.push_back(e);
-          }
-        }
-        return false;
-      };
-
-      if (!searchType(mediaType::kAnime)) {
-        searchType(mediaType::kManga);
-      }
-
-      if (candidates.size() == 1) {
-        match = candidates[0];
-      } else if (candidates.size() > 1) {
-        emitError("ambiguous",
-                  "ambiguous query '" + q + "'. Matches multiple entries.",
-                  jsonMode);
-        continue;
-      }
-    }
-
-    if (!match.has_value()) {
-      emitError("notFound", "entry not found matching '" + q + "'.", jsonMode);
+    auto resolved = resolveEntry(db, q);
+    if (!resolved.ok()) {
+      reportResolveError(resolved.errorValue(), jsonMode, false);
       continue;
     }
+    const entry& match = resolved.value();
 
-    const auto& e = match.value();
+    const auto& e = match;
 
     if (!forceYes) {
       if (!IS_TTY()) {

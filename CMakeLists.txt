@@ -50,6 +50,7 @@ set(CATALIST_SOURCES
   src/malParser.cpp
   src/sync.cpp
   src/cli.cpp
+  src/cli/resolveEntry.cpp
   src/remoteSearch.cpp
   src/themeRegistry.cpp
   src/keybindManager.cpp
@@ -111,6 +112,7 @@ add_executable(catalistTests
   tests/malParserTest.cpp
   tests/providerTest.cpp
   tests/remoteSearchTest.cpp
+  tests/resolveEntryTest.cpp
   tests/resultTest.cpp
   tests/shellTest.cpp
   tests/urlTest.cpp

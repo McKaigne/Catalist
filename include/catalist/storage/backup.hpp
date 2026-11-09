@@ -2,6 +2,7 @@
 #define CATALIST_STORAGE_BACKUP_HPP_
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,8 +25,22 @@ std::vector<std::filesystem::path> createSnapshot(
 [[nodiscard]] std::vector<std::string> listSnapshots(
     const iFileSystem& fileSystem, const std::filesystem::path& dataDir);
 
-// Copies backups/<snapshotName> over the catalogue file it was taken from
-// (anime_* or manga_*). Returns false for unknown names or failed copies.
+struct snapshotContent {
+  mediaType type;
+  std::string csv;
+};
+
+// Reads backups/<snapshotName>; the prefix (anime_ or manga_) says which
+// catalogue it belongs to. Names with path separators are rejected.
+[[nodiscard]] std::optional<snapshotContent> readSnapshot(
+    const iFileSystem& fileSystem, const std::filesystem::path& dataDir,
+    const std::string& snapshotName);
+
+// Writes previously read snapshot content over its catalogue file.
+[[nodiscard]] bool writeSnapshot(iFileSystem& fileSystem,
+                                 const std::filesystem::path& dataDir,
+                                 const snapshotContent& snapshot);
+
 [[nodiscard]] bool restoreSnapshot(iFileSystem& fileSystem,
                                    const std::filesystem::path& dataDir,
                                    const std::string& snapshotName);

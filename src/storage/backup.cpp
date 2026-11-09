@@ -40,23 +40,37 @@ std::vector<std::string> listSnapshots(const iFileSystem& fileSystem,
   return names;
 }
 
-bool restoreSnapshot(iFileSystem& fileSystem,
-                     const std::filesystem::path& dataDir,
-                     const std::string& snapshotName) {
+std::optional<snapshotContent> readSnapshot(
+    const iFileSystem& fileSystem, const std::filesystem::path& dataDir,
+    const std::string& snapshotName) {
   bool isPlainName = snapshotName.find('/') == std::string::npos &&
                      snapshotName.find("..") == std::string::npos;
   if (!isPlainName)
-    return false;
+    return std::nullopt;
   std::optional<mediaType> kind;
   if (snapshotName.rfind("anime_", 0) == 0)
     kind = mediaType::kAnime;
   else if (snapshotName.rfind("manga_", 0) == 0)
     kind = mediaType::kManga;
   if (!kind)
-    return false;
-  auto source = backupDirectory(dataDir) / snapshotName;
-  return fileSystem.exists(source) &&
-         fileSystem.copyFile(source, dataDir / csvCodec::catalogFileName(*kind));
+    return std::nullopt;
+  auto csv = fileSystem.readFile(backupDirectory(dataDir) / snapshotName);
+  if (!csv)
+    return std::nullopt;
+  return snapshotContent{*kind, std::move(*csv)};
+}
+
+bool writeSnapshot(iFileSystem& fileSystem, const std::filesystem::path& dataDir,
+                   const snapshotContent& snapshot) {
+  return fileSystem.writeFileAtomic(
+      dataDir / csvCodec::catalogFileName(snapshot.type), snapshot.csv);
+}
+
+bool restoreSnapshot(iFileSystem& fileSystem,
+                     const std::filesystem::path& dataDir,
+                     const std::string& snapshotName) {
+  auto snapshot = readSnapshot(fileSystem, dataDir, snapshotName);
+  return snapshot && writeSnapshot(fileSystem, dataDir, *snapshot);
 }
 
 std::vector<std::filesystem::path> exportCatalog(iFileSystem& fileSystem,

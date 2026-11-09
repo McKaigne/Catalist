@@ -97,10 +97,18 @@ void startMalLogin(appContext& ctx) {
   ctx.notices.setStatus("Waiting for MyAnimeList login in your browser...");
 }
 
+// The chosen snapshot is read before the safety snapshot is taken: both use
+// second-resolution names, so the safety copy may overwrite the very file
+// being restored.
 void restoreBackup(appContext& ctx, const std::string& snapshotName) {
+  auto dataDir = ctx.db.getConfigPath();
+  auto snapshot = backup::readSnapshot(ctx.fileSystem, dataDir, snapshotName);
+  if (!snapshot) {
+    ctx.notices.push("Could not restore " + snapshotName + ".");
+    return;
+  }
   ctx.db.createBackupSnapshot();
-  if (!backup::restoreSnapshot(ctx.fileSystem, ctx.db.getConfigPath(),
-                               snapshotName)) {
+  if (!backup::writeSnapshot(ctx.fileSystem, dataDir, *snapshot)) {
     ctx.notices.push("Could not restore " + snapshotName + ".");
     return;
   }

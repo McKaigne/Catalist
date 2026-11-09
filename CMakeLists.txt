@@ -148,6 +148,7 @@ endif()
 
 add_executable(catalistTests
   tests/activityTest.cpp
+  tests/cliCommandsTest.cpp
   tests/cliGoldenTest.cpp
   tests/cliSetTest.cpp
   tests/cliTest.cpp
@@ -190,3 +191,37 @@ target_link_libraries(catalistTests PRIVATE
 target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 
 doctest_discover_tests(catalistTests)
+
+# Tab, widget and theme tests need FTXUI, so they live in their own binary;
+# catalistTests stays free of it.
+add_executable(catalistTuiTests
+  tests/testMain.cpp
+  tests/support/sampleLibrary.cpp
+  tests/support/testSupport.cpp
+  tests/tui/catalogTabTest.cpp
+  tests/tui/commandPaletteTest.cpp
+  tests/tui/helpTabTest.cpp
+  tests/tui/historyTabTest.cpp
+  tests/tui/libraryTabTest.cpp
+  tests/tui/queueTabTest.cpp
+  tests/tui/searchTabTest.cpp
+  tests/tui/settingsTabTest.cpp
+  tests/tui/statsTabTest.cpp
+  tests/tui/tabRegistryTest.cpp
+  tests/tui/themeRegistryTest.cpp
+  tests/tui/tuiHarness.cpp
+  tests/tui/widgetsTest.cpp
+)
+target_include_directories(catalistTuiTests PRIVATE tests)
+target_compile_definitions(catalistTuiTests PRIVATE
+  CATALIST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
+)
+target_link_libraries(catalistTuiTests PRIVATE
+  doctest::doctest
+  catalistCore
+  catalistCli
+  catalistTui
+)
+target_compile_options(catalistTuiTests PRIVATE ${CATALIST_WARNING_FLAGS})
+
+doctest_discover_tests(catalistTuiTests)

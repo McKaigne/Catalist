@@ -18,7 +18,7 @@
 
 namespace catalist {
 
-const std::string MAL_CLIENT_ID =
+const std::string kMalClientId =
     "6114d00ca681b7701d1e15fe11a4987e";  // Standard open-source fallback client
                                          // ID
 
@@ -230,7 +230,7 @@ bool malAuth::exchangeToken(const std::string& code,
       "curl -s -X POST \"https://myanimelist.net/v1/oauth2/token\" "
       "-H \"Content-Type: application/x-www-form-urlencoded\" "
       "-d \"client_id=" +
-      MAL_CLIENT_ID + "&code=" + code + "&code_verifier=" + verifier +
+      kMalClientId + "&code=" + code + "&code_verifier=" + verifier +
       "&grant_type=authorization_code\" 2>/dev/null";
 
   std::string json = execCommand(cmd);
@@ -256,7 +256,7 @@ bool malAuth::authenticate(std::string& outMsg) {
   std::string verifier = generateCodeVerifier();
   std::string authUrl =
       "https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=" +
-      MAL_CLIENT_ID + "&code_challenge=" + verifier +
+      kMalClientId + "&code_challenge=" + verifier +
       "&code_challenge_method=plain";
 
   std::string openCmd;

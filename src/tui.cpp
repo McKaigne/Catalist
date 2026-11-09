@@ -398,23 +398,23 @@ void appTui::run() {
 
     sidebarLabels = {
         "  LIBRARY",
-        icon::Library + " All Media    (" +
+        icon::kLibrary + " All Media    (" +
             std::to_string(db_.getEntries(media).size()) + ")",
         "  STATUS",
-        icon::Watching +
+        icon::kWatching +
             (media == mediaType::kManga ? " Reading      ("
                                        : " Watching     (") +
             std::to_string(db_.countByStatus(media, watchStatus::kWatching)) +
             ")",
-        icon::Completed + " Completed    (" +
+        icon::kCompleted + " Completed    (" +
             std::to_string(db_.countByStatus(media, watchStatus::kCompleted)) +
             ")",
-        icon::OnHold + " On-Hold      (" +
+        icon::kOnHold + " On-Hold      (" +
             std::to_string(db_.countByStatus(media, watchStatus::kOnHold)) + ")",
-        icon::Dropped + " Dropped      (" +
+        icon::kDropped + " Dropped      (" +
             std::to_string(db_.countByStatus(media, watchStatus::kDropped)) +
             ")",
-        icon::Plan + " Planned      (" +
+        icon::kPlan + " Planned      (" +
             std::to_string(db_.countByStatus(media, watchStatus::kPlanToWatch)) +
             ")",
         "  RATINGS",
@@ -799,10 +799,10 @@ void appTui::run() {
 
     std::string prefix = "   ";
     if (inMulti) {
-      prefix = icon::CheckMulti + " ";
+      prefix = icon::kCheckMulti + " ";
     } else if (multiFilterStatuses.empty() && multiFilterScores.empty() &&
                idx == sidebarSelected) {
-      prefix = icon::CheckSingle + " ";
+      prefix = icon::kCheckSingle + " ";
     }
 
     // Precise Cursor Isolation: Only highlight background if cursor is on this
@@ -889,8 +889,8 @@ void appTui::run() {
     std::string marker;
     ftxui::Color markerColor = theme.green;
     if (isSelected) {
-      marker = (visualSelectedIds.size() > 1) ? (icon::CheckMulti + " ")
-                                              : (icon::CheckSingle + " ");
+      marker = (visualSelectedIds.size() > 1) ? (icon::kCheckMulti + " ")
+                                              : (icon::kCheckSingle + " ");
     } else if (isRowActive) {
       marker = "▌ ";
       markerColor = theme.mauve;
@@ -918,7 +918,7 @@ void appTui::run() {
               text(" " + renderStarMeter(e.score)) | size(WIDTH, EQUAL, 12) |
                   color(theme.yellow),
               text(" "),
-              text(" " + icon::Gauge + " " + std::to_string(e.progress) + "/" +
+              text(" " + icon::kGauge + " " + std::to_string(e.progress) + "/" +
                    (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?")) |
                   size(WIDTH, EQUAL, 12) | color(theme.lavender),
               text(" ")});
@@ -2167,7 +2167,7 @@ void appTui::run() {
                            settingsThemeCursor == static_cast<int>(i));
 
       std::string marker =
-          active ? (icon::CheckSingle + " ") : (icon::CheckBlank + " ");
+          active ? (icon::kCheckSingle + " ") : (icon::kCheckBlank + " ");
       themeElements.push_back(hbox(
           {text(cursorOnThis ? " ▌ " : "   ") | color(theme.mauve) | bold,
            text(marker) | color(active ? theme.green : theme.overlay0) | bold,
@@ -2201,19 +2201,19 @@ void appTui::run() {
         vbox({text(" Runtime Preferences") | bold | color(theme.peach),
               text(""),
               makePrefRow(0, "Mouse Support:",
-                          config_.mouse ? (icon::CheckSingle + " Enabled")
-                                        : (icon::CheckBlank + " Disabled")),
+                          config_.mouse ? (icon::kCheckSingle + " Enabled")
+                                        : (icon::kCheckBlank + " Disabled")),
               text(""), makePrefRow(1, "Default View:", config_.defaultMedia),
               text(""), makePrefRow(2, "Default Sort:", config_.defaultSort),
               text(""),
               makePrefRow(3, "Sort Descending:",
                           config_.reverseSort
-                              ? (icon::CheckSingle + " High to Low")
-                              : (icon::CheckBlank + " High to Low")),
+                              ? (icon::kCheckSingle + " High to Low")
+                              : (icon::kCheckBlank + " High to Low")),
               makePrefRow(4, "Sort Ascending: ",
                           !config_.reverseSort
-                              ? (icon::CheckSingle + " Low to High")
-                              : (icon::CheckBlank + " Low to High")),
+                              ? (icon::kCheckSingle + " Low to High")
+                              : (icon::kCheckBlank + " Low to High")),
               text(""),
               text(" Press [ret] or [spc] to cycle options.") |
                   color(theme.overlay0),
@@ -2293,17 +2293,17 @@ void appTui::run() {
         }
       }
     } else {
-      tabElements = {makeTabItem(viewTab::kAbout, icon::AppLogo, "Catalist"),
+      tabElements = {makeTabItem(viewTab::kAbout, icon::kAppLogo, "Catalist"),
                      text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::kAnime, icon::Anime, "Anime",
+                     makeTabItem(viewTab::kAnime, icon::kAnime, "Anime",
                                  std::to_string(aCount)),
                      text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::kManga, icon::Manga, "Manga",
+                     makeTabItem(viewTab::kManga, icon::kManga, "Manga",
                                  std::to_string(mCount)),
                      text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::kOverview, icon::Stats, "Overview"),
+                     makeTabItem(viewTab::kOverview, icon::kStats, "Overview"),
                      text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::kSync, icon::Sync, "Sync"),
+                     makeTabItem(viewTab::kSync, icon::kSync, "Sync"),
                      text("│") | color(theme.surface0),
                      makeTabItem(viewTab::kSettings, "󰒓", "Settings"),
                      filler(),
@@ -2531,7 +2531,7 @@ void appTui::run() {
           size(WIDTH, EQUAL, 28);
 
       auto searchCard =
-          hbox({text(" " + icon::Search + " ") | color(theme.peach),
+          hbox({text(" " + icon::kSearch + " ") | color(theme.peach),
                 searchInput->Render() | flex,
                 text(searchQuery.empty() ? "All entries "
                                          : ("Filter: '" + searchQuery + "' ")) |
@@ -2564,8 +2564,8 @@ void appTui::run() {
     bool isMalAuth = malAuth::getInstance().isAuthenticated();
     Element accountBadge =
         isMalAuth
-            ? makePill(icon::Sync + " MAL: Connected", theme.crust, theme.green)
-            : makePill(icon::Offline + " Offline", Color::Black, theme.surface2);
+            ? makePill(icon::kSync + " MAL: Connected", theme.crust, theme.green)
+            : makePill(icon::kOffline + " Offline", Color::Black, theme.surface2);
 
     auto hintItem = [&](const std::string& key, const std::string& desc) {
       return hbox({text(key) | bold | color(theme.text),

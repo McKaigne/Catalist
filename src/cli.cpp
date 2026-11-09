@@ -23,17 +23,17 @@
 namespace catalist {
 
 namespace ansi {
-const std::string Reset = "\033[0m";
-const std::string Bold = "\033[1m";
-const std::string Dim = "\033[2m";
-const std::string Mauve = "\033[38;2;203;166;247m";
-const std::string Lavender = "\033[38;2;180;190;254m";
-const std::string Peach = "\033[38;2;250;179;135m";
-const std::string Yellow = "\033[38;2;249;226;175m";
-const std::string Green = "\033[38;2;166;227;161m";
-const std::string Blue = "\033[38;2;137;180;250m";
-const std::string Red = "\033[38;2;243;139;168m";
-const std::string Subtext = "\033[38;2;166;173;200m";
+const std::string kReset = "\033[0m";
+const std::string kBold = "\033[1m";
+const std::string kDim = "\033[2m";
+const std::string kMauve = "\033[38;2;203;166;247m";
+const std::string kLavender = "\033[38;2;180;190;254m";
+const std::string kPeach = "\033[38;2;250;179;135m";
+const std::string kYellow = "\033[38;2;249;226;175m";
+const std::string kGreen = "\033[38;2;166;227;161m";
+const std::string kBlue = "\033[38;2;137;180;250m";
+const std::string kRed = "\033[38;2;243;139;168m";
+const std::string kSubtext = "\033[38;2;166;173;200m";
 }  // namespace ansi
 
 static bool shouldColor() {
@@ -84,7 +84,7 @@ static void emitError(const std::string& code, const std::string& message,
               << "\",\"message\":\"" << escapeJsonString(message) << "\"}}\n";
   } else {
     if (shouldColor()) {
-      std::cerr << ansi::Red << ansi::Bold << "error: " << ansi::Reset
+      std::cerr << ansi::kRed << ansi::kBold << "error: " << ansi::kReset
                 << message << "\n";
     } else {
       std::cerr << "error: " << message << "\n";
@@ -526,23 +526,23 @@ int cliDispatcher::executeLs(const std::vector<std::string>& args, database& db,
 
   std::ostringstream out;
   if (tty && color)
-    out << ansi::Bold << ansi::Mauve;
+    out << ansi::kBold << ansi::kMauve;
   out << std::right << std::setw(maxIdLen + 2) << "ID" << "  " << std::left
       << std::setw(30) << "TITLE" << "  " << std::setw(7) << "TYPE" << "  "
       << std::setw(12) << "STATUS" << "  " << std::right << std::setw(7)
       << "RATING" << "  " << std::setw(9) << "PROGRESS";
   if (tty && color)
-    out << ansi::Reset;
+    out << ansi::kReset;
   out << "\n";
 
   if (tty) {
     if (color)
-      out << ansi::Dim << ansi::Subtext;
+      out << ansi::kDim << ansi::kSubtext;
     out << std::string(maxIdLen + 2, '-') << "  " << std::string(30, '-')
         << "  " << std::string(7, '-') << "  " << std::string(12, '-') << "  "
         << std::string(7, '-') << "  " << std::string(9, '-');
     if (color)
-      out << ansi::Reset;
+      out << ansi::kReset;
     out << "\n";
   }
 
@@ -569,10 +569,10 @@ int cliDispatcher::executeLs(const std::vector<std::string>& args, database& db,
   if (tty) {
     out << "\n";
     if (color)
-      out << ansi::Subtext;
+      out << ansi::kSubtext;
     out << entries.size() << " entries shown\n";
     if (color)
-      out << ansi::Reset;
+      out << ansi::kReset;
   }
 
   std::cout << out.str();
@@ -608,15 +608,15 @@ static void printSingleDetail(const entry& e, bool jsonMode) {
   bool color = shouldColor();
   auto tag = [&](const std::string& name) {
     if (color)
-      std::cout << ansi::Bold << ansi::Subtext << std::left << std::setw(14)
-                << name << ansi::Reset;
+      std::cout << ansi::kBold << ansi::kSubtext << std::left << std::setw(14)
+                << name << ansi::kReset;
     else
       std::cout << std::left << std::setw(14) << name;
   };
 
   tag("Title:");
-  std::cout << (color ? ansi::Bold : "") << e.title
-            << (color ? ansi::Reset : "") << "\n";
+  std::cout << (color ? ansi::kBold : "") << e.title
+            << (color ? ansi::kReset : "") << "\n";
   tag("Type:");
   std::cout << (e.type == mediaType::kAnime ? "Anime" : "Manga") << "\n";
   tag("Status:");
@@ -917,9 +917,9 @@ int cliDispatcher::executeAdd(const std::vector<std::string>& args,
     }
   } else {
     bool color = shouldColor();
-    std::cout << (color ? ansi::Green + ansi::Bold : "") << "Added "
+    std::cout << (color ? ansi::kGreen + ansi::kBold : "") << "Added "
               << (type == mediaType::kAnime ? "anime" : "manga") << " '" << title
-              << "' [ID " << assignedId << "]" << (color ? ansi::Reset : "")
+              << "' [ID " << assignedId << "]" << (color ? ansi::kReset : "")
               << "\n";
   }
 
@@ -1201,14 +1201,14 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
       std::cout << formatJsonEntry(e) << "\n";
     } else {
       bool color = shouldColor();
-      std::cout << (color ? ansi::Green : "") << "Updated [" << e.id << "] '"
+      std::cout << (color ? ansi::kGreen : "") << "Updated [" << e.id << "] '"
                 << e.title << "': "
                 << "Progress " << e.progress << "/"
                 << (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?")
                 << ", "
                 << "Rating " << e.score << "/10, "
                 << "Status " << statusToString(e.status, e.type)
-                << (color ? ansi::Reset : "") << "\n";
+                << (color ? ansi::kReset : "") << "\n";
     }
   }
 
@@ -1345,8 +1345,8 @@ int cliDispatcher::executeRm(const std::vector<std::string>& args,
                 << escapeJsonString(e.title) << "\"}\n";
     } else {
       bool color = shouldColor();
-      std::cout << (color ? ansi::Red : "") << "Deleted '" << e.title
-                << "' [ID " << e.id << "]" << (color ? ansi::Reset : "")
+      std::cout << (color ? ansi::kRed : "") << "Deleted '" << e.title
+                << "' [ID " << e.id << "]" << (color ? ansi::kReset : "")
                 << "\n";
     }
   }
@@ -1465,9 +1465,9 @@ int cliDispatcher::executeStats(const std::vector<std::string>& args,
     size_t cPlan = db.countByStatus(type, watchStatus::kPlanToWatch);
 
     if (color)
-      std::cout << ansi::Bold
-                << (type == mediaType::kAnime ? ansi::Lavender : ansi::Peach)
-                << "=== " << name << " Telemetry ===" << ansi::Reset << "\n";
+      std::cout << ansi::kBold
+                << (type == mediaType::kAnime ? ansi::kLavender : ansi::kPeach)
+                << "=== " << name << " Telemetry ===" << ansi::kReset << "\n";
     else
       std::cout << "=== " << name << " Telemetry ===\n";
 
@@ -1484,14 +1484,14 @@ int cliDispatcher::executeStats(const std::vector<std::string>& args,
       std::cout << "  Volumes Logged:     " << db.totalVolumes(mediaType::kManga)
                 << "\n";
     }
-    std::cout << "  Status Breakdown:   " << (color ? ansi::Green : "")
+    std::cout << "  Status Breakdown:   " << (color ? ansi::kGreen : "")
               << cWatch << " "
               << (type == mediaType::kAnime ? "watching" : "reading") << ", "
-              << (color ? ansi::Blue : "") << cComp << " completed, "
-              << (color ? ansi::Yellow : "") << cHold << " on-hold, "
-              << (color ? ansi::Red : "") << cDrop << " dropped, "
-              << (color ? ansi::Subtext : "") << cPlan << " planned"
-              << (color ? ansi::Reset : "") << "\n\n";
+              << (color ? ansi::kBlue : "") << cComp << " completed, "
+              << (color ? ansi::kYellow : "") << cHold << " on-hold, "
+              << (color ? ansi::kRed : "") << cDrop << " dropped, "
+              << (color ? ansi::kSubtext : "") << cPlan << " planned"
+              << (color ? ansi::kReset : "") << "\n\n";
   };
 
   if (!filterType.has_value() || filterType.value() == mediaType::kAnime) {
@@ -1699,20 +1699,20 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
   bool color = shouldColor();
   std::cout << "\n";
   if (color)
-    std::cout << ansi::Bold << ansi::Mauve;
+    std::cout << ansi::kBold << ansi::kMauve;
   std::cout << "  #  " << std::left << std::setw(38) << "TITLE" << "  "
             << std::setw(7) << "TYPE" << "  " << std::setw(9) << "EPISODES"
             << "  " << std::setw(6) << "YEAR" << "  " << std::setw(6) << "SCORE"
             << "  "
             << "MAL ID\n";
   if (color)
-    std::cout << ansi::Reset << ansi::Dim << ansi::Subtext;
+    std::cout << ansi::kReset << ansi::kDim << ansi::kSubtext;
   std::cout << " --  " << std::string(38, '-') << "  " << std::string(7, '-')
             << "  " << std::string(9, '-') << "  " << std::string(6, '-')
             << "  " << std::string(6, '-') << "  "
             << "------\n";
   if (color)
-    std::cout << ansi::Reset;
+    std::cout << ansi::kReset;
 
   for (size_t i = 0; i < results.size(); ++i) {
     const auto& r = results[i];
@@ -1785,12 +1785,12 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
   db.saveAll();
 
   if (color)
-    std::cout << ansi::Green << ansi::Bold;
+    std::cout << ansi::kGreen << ansi::kBold;
   std::cout << "Added " << (e.type == mediaType::kAnime ? "anime" : "manga")
             << " '" << e.title << "' [MAL ID " << e.malId
             << "] to watchlist.\n";
   if (color)
-    std::cout << ansi::Reset;
+    std::cout << ansi::kReset;
 
   return 0;
 }

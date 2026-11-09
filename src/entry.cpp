@@ -23,33 +23,33 @@ std::string statusToString(watchStatus status, mediaType type) {
 std::string statusToIcon(watchStatus status) {
   switch (status) {
     case watchStatus::kWatching:
-      return icon::Watching;
+      return icon::kWatching;
     case watchStatus::kCompleted:
-      return icon::Completed;
+      return icon::kCompleted;
     case watchStatus::kOnHold:
-      return icon::OnHold;
+      return icon::kOnHold;
     case watchStatus::kDropped:
-      return icon::Dropped;
+      return icon::kDropped;
     case watchStatus::kPlanToWatch:
-      return icon::Plan;
+      return icon::kPlan;
   }
-  return icon::Plan;
+  return icon::kPlan;
 }
 
 ftxui::Color statusToColor(watchStatus status) {
   switch (status) {
     case watchStatus::kWatching:
-      return theme::Green;
+      return theme::kGreen;
     case watchStatus::kCompleted:
-      return theme::Mauve;
+      return theme::kMauve;
     case watchStatus::kOnHold:
-      return theme::Yellow;
+      return theme::kYellow;
     case watchStatus::kDropped:
-      return theme::Red;
+      return theme::kRed;
     case watchStatus::kPlanToWatch:
-      return theme::Overlay0;
+      return theme::kOverlay0;
   }
-  return theme::Subtext;
+  return theme::kSubtext;
 }
 
 watchStatus stringToStatus(const std::string& str) {
@@ -85,21 +85,21 @@ std::string typeToString(mediaType type) {
 std::string typeToIcon(mediaType type) {
   switch (type) {
     case mediaType::kAnime:
-      return icon::Anime;
+      return icon::kAnime;
     case mediaType::kManga:
-      return icon::Manga;
+      return icon::kManga;
   }
-  return icon::Anime;
+  return icon::kAnime;
 }
 
 ftxui::Color typeToColor(mediaType type) {
   switch (type) {
     case mediaType::kAnime:
-      return theme::Blue;
+      return theme::kBlue;
     case mediaType::kManga:
-      return theme::Peach;
+      return theme::kPeach;
   }
-  return theme::Blue;
+  return theme::kBlue;
 }
 
 mediaType stringToType(const std::string& str) {
@@ -121,17 +121,17 @@ std::string renderStarMeter(int score) {
   for (int i = 0; i < full; ++i) {
     if (!meter.empty())
       meter += " ";
-    meter += icon::StarFull;
+    meter += icon::kStarFull;
   }
   if (half) {
     if (!meter.empty())
       meter += " ";
-    meter += icon::StarHalf;
+    meter += icon::kStarHalf;
   }
   for (int i = 0; i < empty; ++i) {
     if (!meter.empty())
       meter += " ";
-    meter += icon::StarEmpty;
+    meter += icon::kStarEmpty;
   }
   return meter;
 }

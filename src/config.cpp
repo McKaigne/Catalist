@@ -5,7 +5,7 @@
 
 namespace catalist {
 
-static const char* DEFAULT_KDL =
+static const char* kDefaultKdl =
     R"kdl(// ==============================================================================
 // Catalist Workspace Specification (KDL 1.0)
 // ==============================================================================
@@ -83,11 +83,11 @@ bool appConfig::generateDefault(const std::filesystem::path& path) {
   std::ofstream file(path);
   if (!file.is_open())
     return false;
-  file << DEFAULT_KDL;
+  file << kDefaultKdl;
   file.close();
 
   std::string err;
-  kdlDoc = kdl::document::parse(DEFAULT_KDL, err);
+  kdlDoc = kdl::document::parse(kDefaultKdl, err);
   return true;
 }
 
@@ -149,13 +149,13 @@ bool appConfig::save(const std::filesystem::path& path) const {
     n.args.push_back(v);
     return n;
   };
-  auto S = [](const std::string& s) {
+  auto stringValue = [](const std::string& s) {
     kdl::value v;
     v.valueType = kdl::value::type::kString;
     v.stringVal = s;
     return v;
   };
-  auto B = [](bool b) {
+  auto boolValue = [](bool b) {
     kdl::value v;
     v.valueType = kdl::value::type::kBoolean;
     v.boolVal = b;
@@ -165,10 +165,10 @@ bool appConfig::save(const std::filesystem::path& path) const {
   bool foundGeneral = false;
   for (auto& n : doc.rootNodes) {
     if (n.name == "general") {
-      n.children = {mk("theme", S(theme)), mk("mouse", B(mouse)),
-                    mk("default-media", S(defaultMedia)),
-                    mk("default-sort", S(defaultSort)),
-                    mk("reverse-sort", B(reverseSort))};
+      n.children = {mk("theme", stringValue(theme)), mk("mouse", boolValue(mouse)),
+                    mk("default-media", stringValue(defaultMedia)),
+                    mk("default-sort", stringValue(defaultSort)),
+                    mk("reverse-sort", boolValue(reverseSort))};
       n.props.clear();
       foundGeneral = true;
       break;
@@ -177,10 +177,10 @@ bool appConfig::save(const std::filesystem::path& path) const {
   if (!foundGeneral) {
     kdl::node gn;
     gn.name = "general";
-    gn.children = {mk("theme", S(theme)), mk("mouse", B(mouse)),
-                   mk("default-media", S(defaultMedia)),
-                   mk("default-sort", S(defaultSort)),
-                   mk("reverse-sort", B(reverseSort))};
+    gn.children = {mk("theme", stringValue(theme)), mk("mouse", boolValue(mouse)),
+                   mk("default-media", stringValue(defaultMedia)),
+                   mk("default-sort", stringValue(defaultSort)),
+                   mk("reverse-sort", boolValue(reverseSort))};
     doc.rootNodes.insert(doc.rootNodes.begin(), gn);
   }
 

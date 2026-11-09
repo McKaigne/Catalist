@@ -38,9 +38,11 @@ public:
   [[nodiscard]] std::string text() const { return buffer_.str(); }
 
 private:
+  // buffer_ must be declared before original_: the constructor hands
+  // buffer_'s streambuf to the target while initialising original_.
   std::ostream& target_;
-  std::streambuf* original_;
   std::ostringstream buffer_;
+  std::streambuf* original_;
 };
 
 class stdinFeed {
@@ -51,6 +53,7 @@ public:
   stdinFeed& operator=(const stdinFeed&) = delete;
 
 private:
+  // Same ordering constraint as streamCapture.
   std::istringstream buffer_;
   std::streambuf* original_;
 };

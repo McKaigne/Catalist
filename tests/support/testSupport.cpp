@@ -46,7 +46,7 @@ tempDirFixture::~tempDirFixture() {
 }
 
 streamCapture::streamCapture(std::ostream& target)
-    : target_(target), original_(target.rdbuf(buffer_.rdbuf())) {}
+    : target_(target), buffer_(), original_(target.rdbuf(buffer_.rdbuf())) {}
 
 streamCapture::~streamCapture() {
   target_.rdbuf(original_);

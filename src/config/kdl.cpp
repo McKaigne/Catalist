@@ -1,4 +1,4 @@
-#include "catalist/kdl.hpp"
+#include "catalist/config/kdl.hpp"
 
 #include <algorithm>
 #include <cctype>

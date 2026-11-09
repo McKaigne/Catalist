@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "catalist/config.hpp"
-#include "catalist/keybindManager.hpp"
+#include "catalist/config/config.hpp"
+#include "catalist/config/keybindManager.hpp"
 #include "support/testSupport.hpp"
 
 using catalist::appConfig;

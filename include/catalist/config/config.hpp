@@ -4,9 +4,9 @@
 #include <filesystem>
 #include <string>
 
-#include "catalist/kdl.hpp"
+#include "catalist/config/kdl.hpp"
 #include "catalist/platform/fileSystem.hpp"
-#include "catalist/keybindManager.hpp"
+#include "catalist/config/keybindManager.hpp"
 
 namespace catalist {
 

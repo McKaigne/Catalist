@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "catalist/storage/database.hpp"
-#include "catalist/malParser.hpp"
+#include "catalist/storage/malParser.hpp"
 #include "support/testSupport.hpp"
 
 using catalist::test::tempDirFixture;

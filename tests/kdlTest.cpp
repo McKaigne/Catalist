@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "catalist/kdl.hpp"
+#include "catalist/config/kdl.hpp"
 
 using catalist::kdl::document;
 using catalist::kdl::node;

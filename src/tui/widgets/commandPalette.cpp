@@ -1,4 +1,4 @@
-#include "catalist/commandPalette.hpp"
+#include "catalist/tui/widgets/commandPalette.hpp"
 
 #include <algorithm>
 #include <sstream>

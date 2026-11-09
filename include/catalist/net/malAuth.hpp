@@ -1,5 +1,5 @@
-#ifndef CATALIST_SYNC_HPP_
-#define CATALIST_SYNC_HPP_
+#ifndef CATALIST_NET_MAL_AUTH_HPP_
+#define CATALIST_NET_MAL_AUTH_HPP_
 
 #include <chrono>
 #include <cstdint>
@@ -8,7 +8,6 @@
 #include <string>
 
 #include "catalist/core/clock.hpp"
-#include "catalist/storage/database.hpp"
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
@@ -73,12 +72,7 @@ class malAuth {
   malCredentials creds_;
 };
 
-class metadataSync {
- public:
-  static size_t syncOngoing(database& db, iHttpClient& http,
-                            std::string& outMsg);
-};
 
 }  // namespace catalist
 
-#endif  // CATALIST_SYNC_HPP_
+#endif  // CATALIST_NET_MAL_AUTH_HPP_

@@ -21,6 +21,8 @@ if(NOT ftxui_FOUND)
   FetchContent_MakeAvailable(ftxui)
 endif()
 
+set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
+
 set(CATALIST_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
 configure_file(
   include/catalist/core/version.hpp.in
@@ -29,52 +31,66 @@ configure_file(
 )
 configure_file(doc/catalist.1.in "${CMAKE_CURRENT_BINARY_DIR}/doc/catalist.1" @ONLY)
 
-include_directories(include "${CATALIST_GENERATED_INCLUDE_DIR}")
-
-set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
-
-set(CATALIST_SOURCES
+# Domain, storage, networking and configuration. Must stay free of FTXUI so
+# the CLI and the tests can be built and run without a terminal UI.
+add_library(catalistCore STATIC
+  src/config/config.cpp
+  src/config/kdl.cpp
+  src/config/keybindManager.cpp
   src/core/clock.cpp
   src/core/date.cpp
   src/core/jsonLite.cpp
   src/core/logger.cpp
   src/core/shell.cpp
   src/core/url.cpp
-  src/platform/fileSystem.cpp
-  src/platform/httpClient.cpp
-  src/platform/processLauncher.cpp
-  src/kdl.cpp
   src/model/entry.cpp
   src/model/entryOps.cpp
   src/model/undoStack.cpp
-  src/config.cpp
+  src/net/malAuth.cpp
+  src/net/metadataSync.cpp
+  src/net/providers/anilistProvider.cpp
+  src/net/providers/engineSearch.cpp
+  src/net/providers/kitsuProvider.cpp
+  src/net/providers/malProvider.cpp
+  src/net/providers/providerRegistry.cpp
+  src/net/remoteSearch.cpp
+  src/platform/fileSystem.cpp
+  src/platform/httpClient.cpp
+  src/platform/processLauncher.cpp
   src/storage/backup.cpp
   src/storage/csvCodec.cpp
   src/storage/database.cpp
-  src/malParser.cpp
-  src/sync.cpp
-  src/cli.cpp
+  src/storage/malParser.cpp
+)
+target_include_directories(catalistCore PUBLIC
+  include
+  "${CATALIST_GENERATED_INCLUDE_DIR}"
+)
+target_compile_options(catalistCore PRIVATE ${CATALIST_WARNING_FLAGS})
+
+add_library(catalistCli STATIC
+  src/cli/dispatcher.cpp
   src/cli/resolveEntry.cpp
-  src/remoteSearch.cpp
+)
+target_link_libraries(catalistCli PUBLIC catalistCore)
+target_compile_options(catalistCli PRIVATE ${CATALIST_WARNING_FLAGS})
+
+add_library(catalistTui STATIC
+  src/tui/app.cpp
   src/tui/theme/statusStyle.cpp
   src/tui/theme/themeRegistry.cpp
-  src/keybindManager.cpp
-  src/commandPalette.cpp
-  src/provider.cpp
+  src/tui/widgets/commandPalette.cpp
 )
-
-add_executable(catalist
-  ${CATALIST_SOURCES}
-  src/tui.cpp
-  src/main.cpp
-)
-
-target_link_libraries(catalist PRIVATE
+target_link_libraries(catalistTui PUBLIC
+  catalistCore
   ftxui::screen
   ftxui::dom
   ftxui::component
 )
+target_compile_options(catalistTui PRIVATE ${CATALIST_WARNING_FLAGS})
 
+add_executable(catalist src/main.cpp)
+target_link_libraries(catalist PRIVATE catalistCore catalistCli catalistTui)
 target_compile_options(catalist PRIVATE ${CATALIST_WARNING_FLAGS})
 
 install(TARGETS catalist DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -98,22 +114,19 @@ else()
 endif()
 
 add_executable(catalistTests
-  tests/testMain.cpp
-  tests/support/testSupport.cpp
-  tests/support/sampleLibrary.cpp
   tests/cliGoldenTest.cpp
   tests/cliSetTest.cpp
   tests/cliTest.cpp
   tests/configTest.cpp
   tests/csvCodecTest.cpp
   tests/databaseTest.cpp
+  tests/dateTest.cpp
   tests/entryOpsTest.cpp
   tests/entryTest.cpp
   tests/fileSystemTest.cpp
   tests/jsonLiteTest.cpp
   tests/kdlTest.cpp
   tests/keybindManagerTest.cpp
-  tests/dateTest.cpp
   tests/loggerTest.cpp
   tests/malAuthTest.cpp
   tests/malParserTest.cpp
@@ -122,23 +135,23 @@ add_executable(catalistTests
   tests/resolveEntryTest.cpp
   tests/resultTest.cpp
   tests/shellTest.cpp
+  tests/support/sampleLibrary.cpp
+  tests/support/testSupport.cpp
+  tests/testMain.cpp
   tests/undoStackTest.cpp
   tests/urlTest.cpp
   tests/versionTest.cpp
-  ${CATALIST_SOURCES}
 )
 
 target_include_directories(catalistTests PRIVATE tests)
 target_compile_definitions(catalistTests PRIVATE
   CATALIST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
 )
-
 target_link_libraries(catalistTests PRIVATE
   doctest::doctest
-  ftxui::screen
-  ftxui::dom
+  catalistCore
+  catalistCli
 )
-
 target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 
 doctest_discover_tests(catalistTests)

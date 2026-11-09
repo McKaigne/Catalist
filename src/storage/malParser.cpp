@@ -1,4 +1,4 @@
-#include "catalist/malParser.hpp"
+#include "catalist/storage/malParser.hpp"
 
 #include <string>
 

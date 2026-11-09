@@ -1,4 +1,4 @@
-#include "catalist/cli.hpp"
+#include "catalist/cli/dispatcher.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -11,10 +11,10 @@
 #include "catalist/cli/resolveEntry.hpp"
 #include "catalist/core/jsonLite.hpp"
 #include "catalist/core/version.hpp"
-#include "catalist/malParser.hpp"
+#include "catalist/storage/malParser.hpp"
 #include "catalist/model/entryOps.hpp"
 #include "catalist/storage/csvCodec.hpp"
-#include "catalist/remoteSearch.hpp"
+#include "catalist/net/remoteSearch.hpp"
 
 #if defined(_WIN32)
 #include <io.h>

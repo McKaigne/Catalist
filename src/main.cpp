@@ -7,17 +7,17 @@
 #include <memory>
 #include <unistd.h>
 
-#include "catalist/cli.hpp"
-#include "catalist/config.hpp"
+#include "catalist/cli/dispatcher.hpp"
+#include "catalist/config/config.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/core/logger.hpp"
 #include "catalist/storage/database.hpp"
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
-#include "catalist/provider.hpp"
-#include "catalist/sync.hpp"
-#include "catalist/tui.hpp"
+#include "catalist/net/providers/providerRegistry.hpp"
+#include "catalist/net/malAuth.hpp"
+#include "catalist/tui/app.hpp"
 
 namespace {
 

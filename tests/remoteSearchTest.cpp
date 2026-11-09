@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "catalist/platform/httpClient.hpp"
-#include "catalist/remoteSearch.hpp"
+#include "catalist/net/remoteSearch.hpp"
 
 using catalist::mediaType;
 using catalist::mockHttpClient;

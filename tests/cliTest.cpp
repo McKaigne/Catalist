@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include "catalist/cli.hpp"
+#include "catalist/cli/dispatcher.hpp"
 #include "catalist/storage/database.hpp"
 #include "support/testSupport.hpp"
 

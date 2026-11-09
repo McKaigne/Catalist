@@ -1,4 +1,4 @@
-#include "catalist/remoteSearch.hpp"
+#include "catalist/net/remoteSearch.hpp"
 
 #include <sstream>
 

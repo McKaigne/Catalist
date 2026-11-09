@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include "catalist/cli.hpp"
+#include "catalist/cli/dispatcher.hpp"
 #include "catalist/cli/resolveEntry.hpp"
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"

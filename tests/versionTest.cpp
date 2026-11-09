@@ -4,8 +4,8 @@
 #include <sstream>
 #include <string>
 
-#include "catalist/cli.hpp"
-#include "catalist/config.hpp"
+#include "catalist/cli/dispatcher.hpp"
+#include "catalist/config/config.hpp"
 #include "catalist/core/version.hpp"
 #include "catalist/storage/database.hpp"
 #include "support/testSupport.hpp"

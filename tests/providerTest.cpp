@@ -3,7 +3,7 @@
 #include <memory>
 
 #include "catalist/platform/httpClient.hpp"
-#include "catalist/provider.hpp"
+#include "catalist/net/providers/providerRegistry.hpp"
 
 TEST_CASE("kitsu provider parses search results from an injected client") {
   auto mockClient = std::make_shared<catalist::mockHttpClient>();

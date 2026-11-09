@@ -1,4 +1,4 @@
-#include "catalist/keybindManager.hpp"
+#include "catalist/config/keybindManager.hpp"
 
 #include <algorithm>
 

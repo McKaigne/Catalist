@@ -1,4 +1,4 @@
-#include "catalist/config.hpp"
+#include "catalist/config/config.hpp"
 
 #include <cctype>
 #include <sstream>

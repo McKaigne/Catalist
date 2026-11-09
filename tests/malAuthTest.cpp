@@ -7,7 +7,7 @@
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
-#include "catalist/sync.hpp"
+#include "catalist/net/malAuth.hpp"
 #include "support/testSupport.hpp"
 
 using catalist::parseAuthCode;

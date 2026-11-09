@@ -6,8 +6,8 @@
 
 #include <unistd.h>
 
-#include "catalist/cli.hpp"
-#include "catalist/config.hpp"
+#include "catalist/cli/dispatcher.hpp"
+#include "catalist/config/config.hpp"
 #include "catalist/storage/database.hpp"
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"

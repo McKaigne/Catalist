@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "catalist/keybindManager.hpp"
+#include "catalist/config/keybindManager.hpp"
 
 using catalist::keyAction;
 using catalist::keybindManager;

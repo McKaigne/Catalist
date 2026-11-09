@@ -1,10 +1,4 @@
-#include "catalist/core/version.hpp"
-#include "catalist/model/entryOps.hpp"
-#include "catalist/storage/backup.hpp"
-#include "catalist/tui/theme/palettes.hpp"
-#include "catalist/tui/theme/statusStyle.hpp"
-#include "catalist/tui.hpp"
-#include "catalist/core/logger.hpp"
+#include "catalist/tui/app.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -24,10 +18,17 @@
 #include <sstream>
 #include <thread>
 
-#include "catalist/malParser.hpp"
-#include "catalist/provider.hpp"
-#include "catalist/remoteSearch.hpp"
-#include "catalist/sync.hpp"
+#include "catalist/core/logger.hpp"
+#include "catalist/core/version.hpp"
+#include "catalist/model/entryOps.hpp"
+#include "catalist/net/malAuth.hpp"
+#include "catalist/net/metadataSync.hpp"
+#include "catalist/net/providers/providerRegistry.hpp"
+#include "catalist/net/remoteSearch.hpp"
+#include "catalist/storage/backup.hpp"
+#include "catalist/storage/malParser.hpp"
+#include "catalist/tui/theme/palettes.hpp"
+#include "catalist/tui/theme/statusStyle.hpp"
 
 namespace catalist {
 

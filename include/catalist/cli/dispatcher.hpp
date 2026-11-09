@@ -4,12 +4,12 @@
 #include <string>
 #include <vector>
 
-#include "catalist/config.hpp"
+#include "catalist/config/config.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/storage/database.hpp"
-#include "catalist/remoteSearch.hpp"
+#include "catalist/net/remoteSearch.hpp"
 
 namespace catalist {
 

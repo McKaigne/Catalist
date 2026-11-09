@@ -58,7 +58,7 @@ int runRm(const commandArgs& args, commandContext& ctx) {
     const auto& e = match;
 
     if (!forceYes) {
-      if (!IS_TTY()) {
+      if (!ctx.interactive) {
         emitError(
             "safety",
             "deletion of '" + e.title +
@@ -82,7 +82,7 @@ int runRm(const commandArgs& args, commandContext& ctx) {
       std::cout << "{\"deleted\":true,\"id\":" << e.id << ",\"title\":\""
                 << escapeJsonString(e.title) << "\"}\n";
     } else {
-      bool color = shouldColor();
+      bool color = shouldColor(ctx.interactive);
       std::cout << (color ? ansi::kRed : "") << "Deleted '" << e.title
                 << "' [ID " << e.id << "]" << (color ? ansi::kReset : "")
                 << "\n";

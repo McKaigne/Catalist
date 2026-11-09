@@ -137,7 +137,8 @@ int main(int argc, char* argv[]) {
     catalist::cli::commandContext cliContext{
         db,         settings,   clock,
         *http,      fileSystem, settingsPath,
-        catalist::cli::pickRandomIndex};
+        catalist::cli::pickRandomIndex,
+        isatty(STDOUT_FILENO) == 1};
     return catalist::cli::dispatch(argc, argv, cliContext);
   }
 

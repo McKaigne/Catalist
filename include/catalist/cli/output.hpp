@@ -7,14 +7,6 @@
 #include "catalist/cli/resolveEntry.hpp"
 #include "catalist/model/entry.hpp"
 
-#if defined(_WIN32)
-#include <io.h>
-#define IS_TTY() (_isatty(_fileno(stdout)))
-#else
-#include <unistd.h>
-#define IS_TTY() (isatty(STDOUT_FILENO))
-#endif
-
 namespace catalist {
 
 namespace ansi {
@@ -37,7 +29,10 @@ extern const std::string kSubtext;
 // machine formats otherwise; every diagnostic goes to stderr.
 namespace catalist::cli {
 
-[[nodiscard]] bool shouldColor();
+inline const std::string kStatusChoices =
+    "Expected: watching, reading, completed, on-hold, dropped, planned.";
+
+[[nodiscard]] bool shouldColor(bool interactive);
 void emitError(const std::string& code, const std::string& message,
                bool jsonMode);
 void reportResolveError(const resolveError& failure, bool jsonMode,
@@ -45,7 +40,7 @@ void reportResolveError(const resolveError& failure, bool jsonMode,
 
 [[nodiscard]] std::string formatJsonEntry(const entry& e);
 [[nodiscard]] std::string formatJsonEntries(const std::vector<entry>& entries);
-void printSingleDetail(const entry& e, bool jsonMode);
+void printSingleDetail(const entry& e, bool jsonMode, bool color);
 void printUsage();
 
 }  // namespace catalist::cli

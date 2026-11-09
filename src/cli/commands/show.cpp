@@ -52,7 +52,7 @@ int runShow(const commandArgs& args, commandContext& ctx) {
     }
     const entry& match = resolved.value();
 
-    printSingleDetail(match, jsonMode);
+    printSingleDetail(match, jsonMode, shouldColor(ctx.interactive));
     if (qIdx + 1 < queries.size())
       std::cout << "\n";
   }

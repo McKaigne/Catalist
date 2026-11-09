@@ -113,7 +113,12 @@ int runSet(const commandArgs& args, commandContext& ctx) {
         emitError("usage", "missing argument for '--status'", jsonMode);
         return 2;
       }
-      setStatus = stringToStatus(args[i]);
+      setStatus = parseStatus(args[i]);
+      if (!setStatus) {
+        emitError("usage", "invalid status '" + args[i] + "'. " + kStatusChoices,
+                  jsonMode);
+        return 2;
+      }
     } else if (arg == "--episodes" || arg == "--chapters" || arg == "--total" ||
                arg == "-e") {
       if (++i >= args.size()) {
@@ -236,7 +241,7 @@ int runSet(const commandArgs& args, commandContext& ctx) {
     if (jsonMode) {
       std::cout << formatJsonEntry(e) << "\n";
     } else {
-      bool color = shouldColor();
+      bool color = shouldColor(ctx.interactive);
       std::cout << (color ? ansi::kGreen : "") << "Updated [" << e.id << "] '"
                 << e.title << "': "
                 << "Progress " << e.progress << "/"

@@ -21,6 +21,16 @@ using namespace ftxui;
 
 namespace {
 
+sortKey sortKeyFor(const std::string& name) {
+  if (name == "title")
+    return sortKey::kTitle;
+  if (name == "date")
+    return sortKey::kDate;
+  if (name == "progress")
+    return sortKey::kProgress;
+  return sortKey::kScore;
+}
+
 std::string lowercase(std::string text) {
   std::transform(text.begin(), text.end(), text.begin(),
                  [](unsigned char c) { return std::tolower(c); });
@@ -152,7 +162,9 @@ void toggleMembership(std::set<member>& members, const member& item) {
 }  // namespace
 
 catalogTab::catalogTab(mediaType media, const appSettings& settings)
-    : media_(media), reverseSort_(settings.reverseSort) {
+    : media_(media),
+      sortBy_(sortKeyFor(settings.defaultSort)),
+      reverseSort_(settings.reverseSort) {
   buildComponents();
 }
 

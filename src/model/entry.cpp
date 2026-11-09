@@ -20,7 +20,7 @@ std::string statusToString(watchStatus status, mediaType type) {
   return "Unknown";
 }
 
-watchStatus stringToStatus(const std::string& str) {
+std::optional<watchStatus> parseStatus(const std::string& str) {
   std::string lower = str;
   std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
@@ -37,7 +37,7 @@ watchStatus stringToStatus(const std::string& str) {
   } else if (lower.find("drop") != std::string::npos || lower == "4") {
     return watchStatus::kDropped;
   }
-  return watchStatus::kPlanToWatch;
+  return std::nullopt;
 }
 
 std::string typeToString(mediaType type) {

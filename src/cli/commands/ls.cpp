@@ -60,8 +60,8 @@ int runLs(const commandArgs& args, commandContext& ctx) {
     return 0;
   }
 
-  bool tty = IS_TTY();
-  bool color = shouldColor();
+  bool tty = ctx.interactive;
+  bool color = shouldColor(ctx.interactive);
 
   int maxIdLen = 4;
   for (const auto& e : entries) {

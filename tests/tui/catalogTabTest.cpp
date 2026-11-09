@@ -116,3 +116,14 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog open and copy go through the laun
         std::vector<std::string>{"xdg-open", "https://myanimelist.net/anime/52991"});
   CHECK(launcher.calls()[1].standardInput == "Sousou no Frieren");
 }
+
+TEST_CASE("tui catalog starts in the default sort from settings") {
+  catalist::test::tuiHarness harness;
+  catalist::test::seedSampleLibrary(harness.db);
+  harness.settings.defaultSort = "title";
+  harness.settings.reverseSort = false;
+  catalogTab tab(mediaType::kAnime, harness.settings);
+  tab.onActivate(harness.ctx);
+  auto shown = harness.screen(tab);
+  CHECK(shown.find("Title ▲") != std::string::npos);
+}

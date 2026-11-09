@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   and changes that file and rejects values outside the allowed choices.
 - Metadata sync is a row in Settings → Data (`:sync` still works).
 
+### Fixed
+- Dates such as 2024-13-45 or 2023-02-29 are rejected instead of stored.
+- `--status` in `ls`, `count`, `add` and `set` rejects unknown values instead
+  of treating them as Plan to Watch; an unknown status in a CSV or MAL XML
+  file is still loaded as Plan to Watch but logged.
+- In the oldest 7-column CSV layout, a numeric title (such as "86") is no
+  longer also read as the AniList id.
+- `ls` decides between the terminal table and the piped layout from the
+  stream it writes to, and error colour follows stderr.
+- `export json` no longer puts a line break before the comma between the
+  anime and manga lists.
+- The Anime and Manga tabs start in the default sort chosen in Settings.
+
 ### Removed
 - The Queue, Search, Library, History and Help tabs, with `?` (help), `:help`
   and `a` (add, which opened Search) in the TUI. Add entries with

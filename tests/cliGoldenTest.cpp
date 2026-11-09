@@ -57,15 +57,16 @@ void checkGolden(const std::string& name, const cliRun& run) {
 
 }  // namespace
 
-// The table layout switches on isatty(STDOUT_FILENO) rather than on the
-// captured stream, so the golden file is only meaningful for piped stdout,
-// which is how ctest runs it.
 TEST_CASE_FIXTURE(sampleLibraryFixture, "golden ls table") {
-  if (::isatty(STDOUT_FILENO)) {
-    MESSAGE("stdout is a terminal; the piped table layout cannot be checked");
-    return;
-  }
   checkGolden("lsTable.txt", ls({}));
+}
+
+TEST_CASE_FIXTURE(sampleLibraryFixture, "ls on a terminal adds a rule and a footer") {
+  harness.context.interactive = true;
+  auto run = ls({});
+  CHECK(run.out.find("------") != std::string::npos);
+  CHECK(run.out.find("6 entries shown") != std::string::npos);
+  CHECK(run.out.find("\033[") == std::string::npos);
 }
 
 TEST_CASE_FIXTURE(sampleLibraryFixture, "golden ls plain") {

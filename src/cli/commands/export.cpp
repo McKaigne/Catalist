@@ -11,6 +11,16 @@
 
 namespace catalist::cli {
 
+namespace {
+
+std::string withoutTrailingNewline(std::string text) {
+  if (!text.empty() && text.back() == '\n')
+    text.pop_back();
+  return text;
+}
+
+}  // namespace
+
 int runExport(const commandArgs& args, commandContext& ctx) {
   database& db = ctx.db;
   if (args.empty()) {
@@ -37,9 +47,11 @@ int runExport(const commandArgs& args, commandContext& ctx) {
       std::cout << formatJsonEntries(db.getEntries(filterType.value()));
     } else {
       std::cout << "{\n  \"anime\": "
-                << formatJsonEntries(db.getEntries(mediaType::kAnime))
+                << withoutTrailingNewline(
+                       formatJsonEntries(db.getEntries(mediaType::kAnime)))
                 << ",\n  \"manga\": "
-                << formatJsonEntries(db.getEntries(mediaType::kManga))
+                << withoutTrailingNewline(
+                       formatJsonEntries(db.getEntries(mediaType::kManga)))
                 << "\n}\n";
     }
     return 0;

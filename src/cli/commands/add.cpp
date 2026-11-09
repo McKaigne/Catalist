@@ -54,7 +54,13 @@ int runAdd(const commandArgs& args, commandContext& ctx) {
         emitError("usage", "missing argument for '--status'", jsonMode);
         return 2;
       }
-      status = stringToStatus(args[i]);
+      auto parsedStatus = parseStatus(args[i]);
+      if (!parsedStatus) {
+        emitError("usage", "invalid status '" + args[i] + "'. " + kStatusChoices,
+                  jsonMode);
+        return 2;
+      }
+      status = *parsedStatus;
     } else if (arg == "--rating" || arg == "-r" || arg == "--score") {
       if (++i >= args.size()) {
         emitError("usage", "missing argument for '--rating'", jsonMode);
@@ -168,7 +174,7 @@ int runAdd(const commandArgs& args, commandContext& ctx) {
       std::cout << formatJsonEntry(opt.value()) << "\n";
     }
   } else {
-    bool color = shouldColor();
+    bool color = shouldColor(ctx.interactive);
     std::cout << (color ? ansi::kGreen + ansi::kBold : "") << "Added "
               << (type == mediaType::kAnime ? "anime" : "manga") << " '" << title
               << "' [ID " << assignedId << "]" << (color ? ansi::kReset : "")

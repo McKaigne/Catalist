@@ -19,12 +19,29 @@ TEST_CASE("isoDate rejects the zero sentinel and short input") {
   CHECK_FALSE(isoDate::parse("").has_value());
 }
 
-// Characterization: pins current (buggy) behaviour, see roadmap Found issues.
-TEST_CASE("isoDate accepts out of range month and day") {
-  auto parsed = isoDate::parse("2024-13-45");
-  REQUIRE(parsed.has_value());
-  CHECK(parsed->month() == 13);
-  CHECK(parsed->day() == 45);
+TEST_CASE("isoDate rejects days that are not on the calendar") {
+  CHECK_FALSE(isoDate::parse("2024-13-45").has_value());
+  CHECK_FALSE(isoDate::parse("2024-00-10").has_value());
+  CHECK_FALSE(isoDate::parse("2023-02-29").has_value());
+  CHECK_FALSE(isoDate::parse("2024-04-31").has_value());
+  CHECK(isoDate::parse("2024-02-29").has_value());
+  CHECK(isoDate::parse("2000-02-29").has_value());
+  CHECK_FALSE(isoDate::parse("1900-02-29").has_value());
+}
+
+TEST_CASE("isoDate rejects malformed text but accepts a trailing time") {
+  CHECK_FALSE(isoDate::parse("2024/03/22").has_value());
+  CHECK_FALSE(isoDate::parse("2024-3-22xx").has_value());
+  CHECK_FALSE(isoDate::parse("2024-03-22abc").has_value());
+  CHECK_FALSE(isoDate::parse("20a4-03-22").has_value());
+  CHECK(isoDate::parse("2024-03-22T10:00:00+00:00")->toString() == "2024-03-22");
+  CHECK(isoDate::parse("2024-03-22 10:00")->toString() == "2024-03-22");
+}
+
+TEST_CASE("isoDate fromParts validates each part") {
+  CHECK(isoDate::fromParts(2026, 11, 10)->toString() == "2026-11-10");
+  CHECK_FALSE(isoDate::fromParts(2026, 11, 31).has_value());
+  CHECK_FALSE(isoDate::fromParts(0, 1, 1).has_value());
 }
 
 TEST_CASE("isoDate day numbers round trip across leap years and eras") {

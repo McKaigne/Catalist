@@ -58,7 +58,7 @@ int runStats(const commandArgs& args, commandContext& ctx) {
     return 0;
   }
 
-  bool color = shouldColor();
+  bool color = shouldColor(ctx.interactive);
 
   auto printMediaStats = [&](mediaType type) {
     std::string name = (type == mediaType::kAnime ? "Anime" : "Manga");

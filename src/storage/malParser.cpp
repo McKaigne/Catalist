@@ -2,7 +2,18 @@
 
 #include <string>
 
+#include "catalist/core/logger.hpp"
+
 namespace catalist {
+
+static watchStatus importedStatus(const std::string& field,
+                                  const std::string& title) {
+  auto status = parseStatus(field);
+  if (!status)
+    LOG_WARN("Unknown MAL status '" + field + "' for '" + title +
+             "'; imported as Plan to Watch.");
+  return status.value_or(watchStatus::kPlanToWatch);
+}
 
 static std::string decodeXmlEntities(std::string text) {
   auto replaceAll = [&](const std::string& from, const std::string& to) {
@@ -122,7 +133,7 @@ size_t malParser::importXml(const iFileSystem& fileSystem,
     }
 
     std::string statusStr = extractTag(block, "my_status");
-    e.status = stringToStatus(statusStr);
+    e.status = importedStatus(statusStr, e.title);
 
     e.startDate = isoDate::parse(extractTag(block, "my_start_date"));
     e.finishDate = isoDate::parse(extractTag(block, "my_finish_date"));
@@ -205,7 +216,7 @@ size_t malParser::importXml(const iFileSystem& fileSystem,
     }
 
     std::string statusStr = extractTag(block, "my_status");
-    e.status = stringToStatus(statusStr);
+    e.status = importedStatus(statusStr, e.title);
 
     e.startDate = isoDate::parse(extractTag(block, "my_start_date"));
     e.finishDate = isoDate::parse(extractTag(block, "my_finish_date"));

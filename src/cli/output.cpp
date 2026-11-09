@@ -5,6 +5,8 @@
 #include <iostream>
 #include <sstream>
 
+#include <unistd.h>
+
 #include "catalist/core/jsonLite.hpp"
 
 namespace catalist {
@@ -42,8 +44,8 @@ std::string describeCandidates(const std::vector<entry>& candidates) {
 
 }  // namespace
 
-bool shouldColor() {
-  return IS_TTY() && (std::getenv("NO_COLOR") == nullptr);
+bool shouldColor(bool interactive) {
+  return interactive && std::getenv("NO_COLOR") == nullptr;
 }
 
 using jsonLite::escapeJsonString;
@@ -54,7 +56,7 @@ void emitError(const std::string& code, const std::string& message,
     std::cerr << "{\"error\":{\"code\":\"" << escapeJsonString(code)
               << "\",\"message\":\"" << escapeJsonString(message) << "\"}}\n";
   } else {
-    if (shouldColor()) {
+    if (shouldColor(isatty(STDERR_FILENO))) {
       std::cerr << ansi::kRed << ansi::kBold << "error: " << ansi::kReset
                 << message << "\n";
     } else {
@@ -159,13 +161,12 @@ void printUsage() {
       << "  --json                    Output structured JSON\n";
 }
 
-void printSingleDetail(const entry& e, bool jsonMode) {
+void printSingleDetail(const entry& e, bool jsonMode, bool color) {
   if (jsonMode) {
     std::cout << formatJsonEntry(e) << "\n";
     return;
   }
 
-  bool color = shouldColor();
   auto tag = [&](const std::string& name) {
     if (color)
       std::cout << ansi::kBold << ansi::kSubtext << std::left << std::setw(14)

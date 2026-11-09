@@ -117,7 +117,9 @@ std::optional<std::string> applyValue(const std::string& name,
     if (!opts.type)
       return "invalid media type '" + value + "'. Expected 'anime' or 'manga'.";
   } else if (name == "--status") {
-    opts.status = stringToStatus(value);
+    opts.status = parseStatus(value);
+    if (!opts.status)
+      return "invalid status '" + value + "'. " + kStatusChoices;
   } else if (name == "--rating") {
     opts.rating = parseRatingSpec(value);
     if (!opts.rating)

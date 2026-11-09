@@ -2,6 +2,8 @@
 
 #include <sstream>
 
+#include "catalist/core/logger.hpp"
+
 namespace catalist::csvCodec {
 
 namespace {
@@ -103,6 +105,16 @@ void fillOptionalColumns(entry& decoded, const std::vector<std::string>& fields,
     decoded.queuePos = parseInt(*value);
 }
 
+// Our own files only hold names we wrote, so an unknown status is a hand
+// edit; keeping the row (as Plan to Watch) beats dropping it on the next save.
+watchStatus decodeStatus(const std::string& field, const std::string& title) {
+  auto status = parseStatus(field);
+  if (!status)
+    LOG_WARN("Unknown status '" + field + "' for '" + title +
+             "'; loaded as Plan to Watch.");
+  return status.value_or(watchStatus::kPlanToWatch);
+}
+
 void backfillRemoteIds(entry& decoded) {
   if (decoded.malId > 0 && !decoded.remoteIds.count("mal"))
     decoded.remoteIds["mal"] = std::to_string(decoded.malId);
@@ -196,12 +208,12 @@ std::optional<entry> decodeEntry(const std::vector<std::string>& fields,
   decoded.type = type;
   decoded.id = *id;
   decoded.malId = intOrZero(fields[1]);
-  if (!fields[2].empty())
-    decoded.anilistId = intOrZero(fields[2]);
 
   size_t offset = titleColumn(fields);
+  if (offset > 2)
+    decoded.anilistId = intOrZero(fields[2]);
   decoded.title = fields[offset];
-  decoded.status = stringToStatus(fields[offset + 1]);
+  decoded.status = decodeStatus(fields[offset + 1], decoded.title);
   decoded.score = intOrZero(fields[offset + 2]);
   decoded.progress = intOrZero(fields[offset + 3]);
   decoded.totalUnits = intOrZero(fields[offset + 4]);
@@ -249,7 +261,7 @@ std::vector<activityRecord> decodeHistory(std::string_view text) {
     record.timestamp = fields[0];
     record.type = fields[1] == "anime" ? mediaType::kAnime : mediaType::kManga;
     record.title = fields[2];
-    record.status = stringToStatus(fields[3]);
+    record.status = decodeStatus(fields[3], record.title);
     record.progress = intOrZero(fields[4]);
     record.totalUnits = intOrZero(fields[5]);
     record.score = intOrZero(fields[6]);

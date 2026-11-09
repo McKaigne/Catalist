@@ -102,7 +102,7 @@ int runSearch(const commandArgs& args, commandContext& ctx) {
     return 0;
   }
 
-  bool color = shouldColor();
+  bool color = shouldColor(ctx.interactive);
   std::cout << "\n";
   if (color)
     std::cout << ansi::kBold << ansi::kMauve;
@@ -138,7 +138,7 @@ int runSearch(const commandArgs& args, commandContext& ctx) {
               << r.malId << "\n";
   }
 
-  if (!IS_TTY())
+  if (!ctx.interactive)
     return 0;
 
   std::cout << "\nSelect number to add [1-" << results.size()

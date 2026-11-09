@@ -120,9 +120,8 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads legacy seven column layout") {
   CHECK(entries[0].anilistId == 0);
   CHECK(entries[0].getRemoteId("mal") == "52991");
 
-  // Characterization: a numeric title is also parsed as the AniList id.
   CHECK(entries[1].title == "86");
-  CHECK(entries[1].anilistId == 86);
+  CHECK(entries[1].anilistId == 0);
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads offset three layout without type column") {

@@ -45,7 +45,7 @@ int runRandom(const commandArgs& args, commandContext& ctx) {
     return 0;
   }
 
-  printSingleDetail(picked, false);
+  printSingleDetail(picked, false, shouldColor(ctx.interactive));
   return 0;
 }
 

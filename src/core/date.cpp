@@ -1,23 +1,59 @@
 #include "catalist/core/date.hpp"
 
+#include <charconv>
 #include <iomanip>
 #include <sstream>
 
 namespace catalist {
 
+namespace {
+
+std::optional<int> parseDigits(std::string_view digits) {
+  int number = 0;
+  auto [end, error] =
+      std::from_chars(digits.data(), digits.data() + digits.size(), number);
+  if (error != std::errc() || end != digits.data() + digits.size() ||
+      digits.front() == '-' || digits.front() == '+')
+    return std::nullopt;
+  return number;
+}
+
+bool isLeapYear(int year) {
+  return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+}
+
+int daysInMonth(int year, int month) {
+  static const int kDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  return month == 2 && isLeapYear(year) ? 29 : kDays[month - 1];
+}
+
+bool hasDateShape(std::string_view text) {
+  if (text.size() < 10 || text[4] != '-' || text[7] != '-')
+    return false;
+  return text.size() == 10 || text[10] == 'T' || text[10] == ' ';
+}
+
+}  // namespace
+
 std::optional<isoDate> isoDate::parse(std::string_view dateStr) {
-  if (dateStr.size() < 10)
+  if (!hasDateShape(dateStr))
+    return std::nullopt;
+  auto year = parseDigits(dateStr.substr(0, 4));
+  auto month = parseDigits(dateStr.substr(5, 2));
+  auto day = parseDigits(dateStr.substr(8, 2));
+  if (!year || !month || !day)
+    return std::nullopt;
+  return fromParts(*year, *month, *day);
+}
+
+std::optional<isoDate> isoDate::fromParts(int year, int month, int day) {
+  if (year <= 0 || month < 1 || month > 12 || day < 1 ||
+      day > daysInMonth(year, month))
     return std::nullopt;
   isoDate date;
-  try {
-    date.year_ = std::stoi(std::string(dateStr.substr(0, 4)));
-    date.month_ = std::stoi(std::string(dateStr.substr(5, 2)));
-    date.day_ = std::stoi(std::string(dateStr.substr(8, 2)));
-  } catch (...) {
-    return std::nullopt;
-  }
-  if (date.year_ <= 0)
-    return std::nullopt;
+  date.year_ = year;
+  date.month_ = month;
+  date.day_ = day;
   return date;
 }
 

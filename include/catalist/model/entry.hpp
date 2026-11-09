@@ -43,7 +43,9 @@ struct entry {
 
 std::string statusToString(watchStatus status,
                            mediaType type = mediaType::kAnime);
-watchStatus stringToStatus(const std::string& str);
+// Accepts the display names, CLI spellings and MAL's 1-5 codes; absent for
+// anything else.
+[[nodiscard]] std::optional<watchStatus> parseStatus(const std::string& str);
 
 std::string typeToString(mediaType type);
 

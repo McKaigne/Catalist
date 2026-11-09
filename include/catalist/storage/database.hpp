@@ -9,6 +9,7 @@
 
 #include "catalist/core/clock.hpp"
 #include "catalist/model/activity.hpp"
+#include "catalist/model/deletion.hpp"
 #include "catalist/model/entry.hpp"
 #include "catalist/platform/fileSystem.hpp"
 
@@ -25,7 +26,12 @@ class database {
   const std::vector<entry>& getEntries(mediaType type) const;
   std::optional<entry> getById(mediaType type, int id) const;
   bool updateEntry(const entry& mediaEntry);
+  // Entries that had been synced are remembered in pendingDeletions() so
+  // the next sync can delete them remotely too.
   bool removeEntry(mediaType type, int id);
+  [[nodiscard]] std::vector<deletedEntry> pendingDeletions() const;
+  // Drops `service` from the matching deletion; forgets it once none remain.
+  void settleDeletion(const deletedEntry& deleted, const std::string& service);
   bool changeMediaType(mediaType currentType, int id);
   void clear(mediaType type);
   static void sortEntries(std::vector<entry>& v, sortKey key, bool reverse);
@@ -78,10 +84,14 @@ class database {
   std::vector<entry> animeEntries_;
   std::vector<entry> mangaEntries_;
   std::vector<activityRecord> historyRecords_;
+  std::vector<deletedEntry> deletions_;
   int nextLocalId_ = 10001;
 
   std::vector<entry>& getList(mediaType type);
   const std::vector<entry>& getList(mediaType type) const;
+  void forgetDeletionsOf(const entry& restored);
+  void loadDeletions();
+  bool saveDeletions() const;
 };
 
 }  // namespace catalist

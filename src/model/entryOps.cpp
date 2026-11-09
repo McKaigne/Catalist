@@ -137,4 +137,28 @@ entry adjustRating(entry target, int delta, const isoDate& today) {
   return target;
 }
 
+entry mergeImported(entry existing, const entry& incoming) {
+  if (incoming.totalUnits > 0)
+    existing.totalUnits = incoming.totalUnits;
+  if (incoming.totalVolumes > 0)
+    existing.totalVolumes = incoming.totalVolumes;
+  for (const auto& [provider, remoteId] : incoming.remoteIds)
+    existing.setRemoteId(provider, remoteId);
+  if (incoming.malId > 0 && existing.malId <= 0)
+    existing.setRemoteId("mal", std::to_string(incoming.malId));
+  if (incoming.anilistId > 0 && existing.anilistId <= 0)
+    existing.setRemoteId("anilist", std::to_string(incoming.anilistId));
+  if (existing.notes.empty() && !incoming.notes.empty())
+    existing.notes = incoming.notes;
+  if (existing.score == 0 && incoming.score > 0)
+    existing.score = incoming.score;
+  if (existing.progress == 0 && incoming.progress > 0)
+    existing.progress = incoming.progress;
+  if (!existing.startDate && incoming.startDate)
+    existing.startDate = incoming.startDate;
+  if (!existing.finishDate && incoming.finishDate)
+    existing.finishDate = incoming.finishDate;
+  return existing;
+}
+
 }  // namespace catalist

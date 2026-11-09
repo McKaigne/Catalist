@@ -19,7 +19,7 @@ TEST_CASE("csvCodec reads the zero date sentinel as absent and writes it empty")
 
   auto encoded = csvCodec::encodeEntries(decoded);
   CHECK(encoded.find("0000-00-00") == std::string::npos);
-  CHECK(encoded.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,0,mal=1,\n") !=
+  CHECK(encoded.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,0,mal=1,,\n") !=
         std::string::npos);
 }
 
@@ -103,4 +103,26 @@ TEST_CASE("csvCodec queue position round trips and is absent in older files") {
       "3,0,0,anime,Q,Watching,0,0,0,0,0,0,,,,,0,\n", mediaType::kAnime);
   REQUIRE(legacy.size() == 1);
   CHECK_FALSE(legacy[0].queuePos.has_value());
+}
+
+TEST_CASE("csvCodec round trips the synced services and deletion records") {
+  catalist::entry synced;
+  synced.id = 5;
+  synced.malId = 5;
+  synced.title = "Synced";
+  synced.syncedWith = {"mal", "anilist"};
+  auto decoded = csvCodec::decodeEntries(csvCodec::encodeEntries({synced}),
+                                         mediaType::kAnime);
+  REQUIRE(decoded.size() == 1);
+  CHECK(decoded[0].syncedWith == std::set<std::string>{"anilist", "mal"});
+
+  catalist::deletedEntry deleted{mediaType::kManga, 2, 30002, "Berserk, \"dark\"",
+                                 {"anilist"}};
+  auto records = csvCodec::decodeDeletions(csvCodec::encodeDeletions({deleted}));
+  REQUIRE(records.size() == 1);
+  CHECK(records[0].type == mediaType::kManga);
+  CHECK(records[0].malId == 2);
+  CHECK(records[0].anilistId == 30002);
+  CHECK(records[0].title == "Berserk, \"dark\"");
+  CHECK(records[0].pendingServices == std::set<std::string>{"anilist"});
 }

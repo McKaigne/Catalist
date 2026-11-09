@@ -306,3 +306,35 @@ TEST_CASE("backup exportCatalog writes both catalogues to exports") {
   REQUIRE(anime.has_value());
   CHECK(anime->find("Exported") != std::string::npos);
 }
+
+TEST_CASE_FIXTURE(tempDirFixture, "database remembers deleting a synced entry until each service settles") {
+  catalist::database db(fileSystem(), clock(), tempDir());
+  catalist::entry synced = catalist::test::makeEntry().id(7).malId(7).title("Seven");
+  synced.syncedWith = {"mal", "anilist"};
+  db.addEntry(synced);
+  db.addEntry(catalist::test::makeEntry().id(8).title("Local only"));
+  REQUIRE(db.removeEntry(mediaType::kAnime, 7));
+  REQUIRE(db.removeEntry(mediaType::kAnime, 8));
+  REQUIRE(db.pendingDeletions().size() == 1);
+  REQUIRE(db.saveAll());
+
+  catalist::database reloaded(fileSystem(), clock(), tempDir());
+  reloaded.loadAll();
+  auto pending = reloaded.pendingDeletions();
+  REQUIRE(pending.size() == 1);
+  reloaded.settleDeletion(pending[0], "mal");
+  CHECK(reloaded.pendingDeletions()[0].pendingServices ==
+        std::set<std::string>{"anilist"});
+  reloaded.settleDeletion(pending[0], "anilist");
+  CHECK(reloaded.pendingDeletions().empty());
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "database re-adding a deleted entry cancels its remote deletion") {
+  catalist::database db(fileSystem(), clock(), tempDir());
+  catalist::entry synced = catalist::test::makeEntry().id(7).malId(7).title("Seven");
+  synced.syncedWith = {"mal"};
+  db.addEntry(synced);
+  REQUIRE(db.removeEntry(mediaType::kAnime, 7));
+  db.addEntry(synced);
+  CHECK(db.pendingDeletions().empty());
+}

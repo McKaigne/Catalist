@@ -11,7 +11,8 @@ namespace {
 const char* kCatalogHeader =
     "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,"
     "volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,"
-    "dirty,external_ids,queue_pos\n";
+    "dirty,external_ids,queue_pos,synced\n";
+const char* kDeletionsHeader = "#type,mal_id,anilist_id,title,services\n";
 const char* kHistoryHeader =
     "#timestamp,type,title,status,progress,total_units,score\n";
 
@@ -103,6 +104,8 @@ void fillOptionalColumns(entry& decoded, const std::vector<std::string>& fields,
     decoded.remoteIds = deserializeRemoteIds(*value);
   if (auto* value = column(14))
     decoded.queuePos = parseInt(*value);
+  if (auto* value = column(15))
+    decoded.syncedWith = deserializeServiceSet(*value);
 }
 
 // Our own files only hold names we wrote, so an unknown status is a hand
@@ -130,6 +133,10 @@ std::string catalogFileName(mediaType type) {
 
 std::string historyFileName() {
   return "history.csv";
+}
+
+std::string deletionsFileName() {
+  return "deleted.csv";
 }
 
 std::string escapeField(const std::string& field) {
@@ -244,7 +251,37 @@ std::string encodeEntries(const std::vector<entry>& entries) {
         << escapeField(e.notes) << "," << formatDate(e.updatedAt) << ","
         << (e.dirty ? "1" : "0") << ","
         << escapeField(serializeRemoteIds(e.remoteIds)) << ","
-        << (e.queuePos ? std::to_string(*e.queuePos) : "") << "\n";
+        << (e.queuePos ? std::to_string(*e.queuePos) : "") << ","
+        << escapeField(serializeServiceSet(e.syncedWith)) << "\n";
+  }
+  return out.str();
+}
+
+std::vector<deletedEntry> decodeDeletions(std::string_view text) {
+  std::vector<deletedEntry> records;
+  for (const auto& record : splitRecords(text)) {
+    auto fields = splitFields(record);
+    if (fields.size() < 5)
+      continue;
+    deletedEntry deleted;
+    deleted.type = fields[0] == "manga" ? mediaType::kManga : mediaType::kAnime;
+    deleted.malId = intOrZero(fields[1]);
+    deleted.anilistId = intOrZero(fields[2]);
+    deleted.title = fields[3];
+    deleted.pendingServices = deserializeServiceSet(fields[4]);
+    if (!deleted.pendingServices.empty())
+      records.push_back(std::move(deleted));
+  }
+  return records;
+}
+
+std::string encodeDeletions(const std::vector<deletedEntry>& records) {
+  std::ostringstream out;
+  out << kDeletionsHeader;
+  for (const auto& deleted : records) {
+    out << typeKey(deleted.type) << "," << deleted.malId << ","
+        << deleted.anilistId << "," << escapeField(deleted.title) << ","
+        << escapeField(serializeServiceSet(deleted.pendingServices)) << "\n";
   }
   return out.str();
 }

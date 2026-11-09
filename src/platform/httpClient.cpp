@@ -5,13 +5,51 @@
 #include <array>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <sstream>
+
+#include <unistd.h>
 
 namespace catalist {
 
 namespace {
+
+// A mkstemp file (mode 0600) removed when the request is done.
+class privateTempFile {
+public:
+  privateTempFile() = default;
+  privateTempFile(const privateTempFile&) = delete;
+  privateTempFile& operator=(const privateTempFile&) = delete;
+  ~privateTempFile() {
+    if (!path_.empty())
+      ::unlink(path_.c_str());
+  }
+
+  bool write(const std::string& content) {
+    std::string pattern =
+        (std::filesystem::temp_directory_path() / "catalist_XXXXXX").string();
+    int descriptor = ::mkstemp(pattern.data());
+    if (descriptor < 0)
+      return false;
+    path_ = pattern;
+    size_t offset = 0;
+    while (offset < content.size()) {
+      ssize_t written =
+          ::write(descriptor, content.data() + offset, content.size() - offset);
+      if (written <= 0)
+        break;
+      offset += static_cast<size_t>(written);
+    }
+    ::close(descriptor);
+    return offset == content.size();
+  }
+
+  [[nodiscard]] const std::string& path() const { return path_; }
+
+private:
+  std::string path_;
+};
 
 struct pipeDeleter {
   void operator()(FILE* fp) const {
@@ -31,32 +69,29 @@ result<httpResponse> curlHttpClient::execute(const httpRequest& request) {
   cmd << "curl -s -S -L -m " << (request.timeout.count() / 1000) << " -X "
       << shell::escapeShellArg(request.method);
 
-  for (const auto& [headerKey, headerVal] : request.headers) {
-    cmd << " -H " << shell::escapeShellArg(headerKey + ": " + headerVal);
+  // Headers carry bearer tokens and bodies carry codes, so both go through
+  // owner-only files instead of the command line other users can read.
+  privateTempFile headerFile;
+  if (!request.headers.empty()) {
+    std::string headerLines;
+    for (const auto& [headerKey, headerVal] : request.headers)
+      headerLines += headerKey + ": " + headerVal + "\n";
+    if (!headerFile.write(headerLines))
+      return result<httpResponse>::failure("Could not write request headers.");
+    cmd << " -H @" << shell::escapeShellArg(headerFile.path());
   }
 
-  std::filesystem::path tempBodyFile;
+  privateTempFile bodyFile;
   if (!request.body.empty()) {
-    auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-    tempBodyFile = std::filesystem::temp_directory_path() /
-                   ("catalist_body_" + std::to_string(now) + ".tmp");
-    std::ofstream ofs(tempBodyFile, std::ios::binary);
-    if (ofs.is_open()) {
-      ofs.write(request.body.data(), static_cast<std::streamsize>(request.body.size()));
-      ofs.close();
-      cmd << " --data-binary @" << shell::escapeShellArg(tempBodyFile.string());
-    }
+    if (!bodyFile.write(request.body))
+      return result<httpResponse>::failure("Could not write request body.");
+    cmd << " --data-binary @" << shell::escapeShellArg(bodyFile.path());
   }
 
   cmd << " -w \"\\nCATALIST_HTTP_STATUS:%{http_code}\" "
       << shell::escapeShellArg(request.url) << " 2>/dev/null";
 
   std::unique_ptr<FILE, pipeDeleter> pipe(popen(cmd.str().c_str(), "r"));
-  if (!tempBodyFile.empty()) {
-    std::error_code ec;
-    std::filesystem::remove(tempBodyFile, ec);
-  }
-
   if (!pipe) {
     return result<httpResponse>::failure("Failed to spawn curl subprocess.");
   }
@@ -93,13 +128,27 @@ void mockHttpClient::setResponse(const std::string& urlPattern,
   responses_[urlPattern] = response;
 }
 
+void mockHttpClient::setResponder(responder answer) {
+  responder_ = std::move(answer);
+}
+
 result<httpResponse> mockHttpClient::execute(const httpRequest& request) {
   requests_.push_back(request);
+  if (responder_) {
+    if (auto answered = responder_(request))
+      return result<httpResponse>::success(*answered);
+  }
+  const httpResponse* best = nullptr;
+  size_t bestLength = 0;
   for (const auto& [pattern, resp] : responses_) {
-    if (request.url.find(pattern) != std::string::npos) {
-      return result<httpResponse>::success(resp);
+    bool matches = request.url.find(pattern) != std::string::npos;
+    if (matches && (best == nullptr || pattern.size() > bestLength)) {
+      best = &resp;
+      bestLength = pattern.size();
     }
   }
+  if (best)
+    return result<httpResponse>::success(*best);
   return result<httpResponse>::failure("MockHttpClient: No fixture for " +
                                        request.url);
 }

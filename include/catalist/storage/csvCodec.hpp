@@ -8,6 +8,7 @@
 
 #include "catalist/core/date.hpp"
 #include "catalist/model/activity.hpp"
+#include "catalist/model/deletion.hpp"
 #include "catalist/model/entry.hpp"
 
 // RFC 4180 encoding and decoding of the catalogue and history files. Pure
@@ -16,6 +17,7 @@ namespace catalist::csvCodec {
 
 [[nodiscard]] std::string catalogFileName(mediaType type);
 [[nodiscard]] std::string historyFileName();
+[[nodiscard]] std::string deletionsFileName();
 
 [[nodiscard]] std::string escapeField(const std::string& field);
 
@@ -34,6 +36,9 @@ namespace catalist::csvCodec {
 [[nodiscard]] std::vector<entry> decodeEntries(std::string_view text,
                                                mediaType type);
 [[nodiscard]] std::string encodeEntries(const std::vector<entry>& entries);
+
+[[nodiscard]] std::vector<deletedEntry> decodeDeletions(std::string_view text);
+[[nodiscard]] std::string encodeDeletions(const std::vector<deletedEntry>& records);
 
 [[nodiscard]] std::vector<activityRecord> decodeHistory(std::string_view text);
 [[nodiscard]] std::string encodeHistory(

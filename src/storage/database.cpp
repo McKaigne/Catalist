@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <mutex>
 
+#include "catalist/model/entryOps.hpp"
 #include "catalist/storage/backup.hpp"
 #include "catalist/storage/csvCodec.hpp"
 
@@ -22,35 +23,6 @@ bool isSameTitle(const entry& existing, const entry& incoming) {
     return true;
   std::string incomingMal = incoming.getRemoteId("mal");
   return !incomingMal.empty() && existing.getRemoteId("mal") == incomingMal;
-}
-
-// Re-imports and syncs may correct totals and provider links...
-void refreshUpstreamMetadata(entry& existing, const entry& incoming) {
-  if (incoming.totalUnits > 0)
-    existing.totalUnits = incoming.totalUnits;
-  if (incoming.totalVolumes > 0)
-    existing.totalVolumes = incoming.totalVolumes;
-  for (const auto& [provider, remoteId] : incoming.remoteIds)
-    existing.setRemoteId(provider, remoteId);
-  if (incoming.malId > 0 && existing.malId <= 0)
-    existing.malId = incoming.malId;
-  if (incoming.anilistId > 0 && existing.anilistId <= 0)
-    existing.anilistId = incoming.anilistId;
-}
-
-// ...but the user's own score, progress, notes and dates always win; imported
-// values only fill fields the user never set.
-void backfillUntouchedUserFields(entry& existing, const entry& incoming) {
-  if (existing.notes.empty() && !incoming.notes.empty())
-    existing.notes = incoming.notes;
-  if (existing.score == 0 && incoming.score > 0)
-    existing.score = incoming.score;
-  if (existing.progress == 0 && incoming.progress > 0)
-    existing.progress = incoming.progress;
-  if (!existing.startDate && incoming.startDate)
-    existing.startDate = incoming.startDate;
-  if (!existing.finishDate && incoming.finishDate)
-    existing.finishDate = incoming.finishDate;
 }
 
 }  // namespace
@@ -136,12 +108,12 @@ int database::addEntry(entry mediaEntry) {
     nextLocalId_ = mediaEntry.id + 1;
   }
 
+  forgetDeletionsOf(mediaEntry);
   auto& list = getList(mediaEntry.type);
   for (auto& existing : list) {
     if (!isSameTitle(existing, mediaEntry))
       continue;
-    refreshUpstreamMetadata(existing, mediaEntry);
-    backfillUntouchedUserFields(existing, mediaEntry);
+    existing = mergeImported(existing, mediaEntry);
     return existing.id;
   }
 
@@ -185,13 +157,65 @@ bool database::removeEntry(mediaType type, int id) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   LOG_INFO("Removing entry ID " + std::to_string(id));
   auto& list = getList(type);
-  auto it = std::remove_if(list.begin(), list.end(),
-                           [id](const entry& e) { return e.id == id; });
-  if (it != list.end()) {
-    list.erase(it, list.end());
-    return true;
+  auto it = std::find_if(list.begin(), list.end(),
+                         [id](const entry& e) { return e.id == id; });
+  if (it == list.end())
+    return false;
+  if (!it->syncedWith.empty())
+    deletions_.push_back(
+        {type, it->malId, it->anilistId, it->title, it->syncedWith});
+  list.erase(it);
+  return true;
+}
+
+std::vector<deletedEntry> database::pendingDeletions() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  return deletions_;
+}
+
+void database::settleDeletion(const deletedEntry& deleted,
+                              const std::string& service) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  for (auto& pending : deletions_) {
+    bool same = pending.type == deleted.type && pending.malId == deleted.malId &&
+                pending.anilistId == deleted.anilistId;
+    if (same)
+      pending.pendingServices.erase(service);
   }
-  return false;
+  deletions_.erase(std::remove_if(deletions_.begin(), deletions_.end(),
+                                  [](const deletedEntry& pending) {
+                                    return pending.pendingServices.empty();
+                                  }),
+                   deletions_.end());
+}
+
+// Undoing a delete, or adding the same title again, cancels the remote
+// deletion that removing it scheduled.
+void database::forgetDeletionsOf(const entry& restored) {
+  auto matches = [&restored](const deletedEntry& pending) {
+    if (pending.type != restored.type)
+      return false;
+    return (restored.malId > 0 && pending.malId == restored.malId) ||
+           (restored.anilistId > 0 && pending.anilistId == restored.anilistId);
+  };
+  deletions_.erase(
+      std::remove_if(deletions_.begin(), deletions_.end(), matches),
+      deletions_.end());
+}
+
+void database::loadDeletions() {
+  auto content =
+      fileSystem_.readFile(configDir_ / csvCodec::deletionsFileName());
+  deletions_ = content ? csvCodec::decodeDeletions(*content)
+                       : std::vector<deletedEntry>{};
+}
+
+bool database::saveDeletions() const {
+  auto path = configDir_ / csvCodec::deletionsFileName();
+  if (deletions_.empty() && !fileSystem_.exists(path))
+    return true;
+  return fileSystem_.writeFileAtomic(path,
+                                     csvCodec::encodeDeletions(deletions_));
 }
 
 bool database::changeMediaType(mediaType currentType, int id) {
@@ -423,6 +447,7 @@ bool database::loadAll() {
   bool a = loadCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
   bool m = loadCsv(mediaType::kManga, getCsvPath(mediaType::kManga));
   loadHistory();
+  loadDeletions();
   autoHealIds();
   return a || m;
 }
@@ -433,7 +458,8 @@ bool database::saveAll() const {
   bool a = saveCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
   bool m = saveCsv(mediaType::kManga, getCsvPath(mediaType::kManga));
   saveHistory();
-  return a && m;
+  bool d = saveDeletions();
+  return a && m && d;
 }
 
 }  // namespace catalist

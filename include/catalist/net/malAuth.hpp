@@ -15,6 +15,8 @@
 
 namespace catalist {
 
+extern const std::string kMalClientId;
+
 // Receives the browser redirect that carries the OAuth authorization code.
 class iAuthCallbackServer {
  public:
@@ -57,12 +59,17 @@ class malAuth {
   void logout();
 
   [[nodiscard]] std::string getAccessToken() const;
+  // Swaps a token that expires within a minute for a new one using the
+  // refresh token; false when no usable token remains.
+  bool ensureFreshToken();
   void load();
   void save();
 
  private:
   bool exchangeToken(const std::string& code, const std::string& verifier,
                      std::string& outMsg);
+  bool requestToken(const std::string& formBody);
+  [[nodiscard]] long long nowSeconds() const;
 
   iFileSystem& fileSystem_;
   iHttpClient& http_;

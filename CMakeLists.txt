@@ -24,6 +24,8 @@ endif()
 set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 
 set(CATALIST_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
+set(CATALIST_ANILIST_CLIENT_ID "" CACHE STRING
+    "AniList API client id (register at anilist.co/settings/developer with the redirect URL https://anilist.co/api/v2/oauth/pin)")
 configure_file(
   include/catalist/core/version.hpp.in
   "${CATALIST_GENERATED_INCLUDE_DIR}/catalist/core/version.hpp"
@@ -46,7 +48,11 @@ add_library(catalistCore STATIC
   src/model/entry.cpp
   src/model/entryOps.cpp
   src/model/undoStack.cpp
+  src/net/anilistAuth.cpp
+  src/net/anilistListService.cpp
+  src/net/listSync.cpp
   src/net/malAuth.cpp
+  src/net/malListService.cpp
   src/net/metadataSync.cpp
   src/net/providers/anilistProvider.cpp
   src/net/providers/engineSearch.cpp
@@ -152,6 +158,8 @@ add_executable(catalistTests
   tests/fileSystemTest.cpp
   tests/jsonLiteTest.cpp
   tests/jsonTest.cpp
+  tests/listServiceTest.cpp
+  tests/listSyncTest.cpp
   tests/settingsTest.cpp
   tests/loggerTest.cpp
   tests/malAuthTest.cpp

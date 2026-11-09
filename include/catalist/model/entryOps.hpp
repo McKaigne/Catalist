@@ -25,6 +25,11 @@ namespace catalist {
 [[nodiscard]] entry cycleStatus(entry target, int direction,
                                 const isoDate& today);
 
+// Folds an imported row into an entry the user already has. Totals and
+// provider ids are refreshed, but the user's own score, progress, notes and
+// dates win: imported values only fill fields the user never set.
+[[nodiscard]] entry mergeImported(entry existing, const entry& incoming);
+
 // Changes the score by delta, kept within 0..10.
 [[nodiscard]] entry adjustRating(entry target, int delta, const isoDate& today);
 

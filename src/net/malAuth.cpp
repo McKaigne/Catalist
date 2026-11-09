@@ -58,8 +58,6 @@ void malAuth::logout() {
   save();
 }
 
-// Access tokens are not refreshed yet; an expired token simply fails the
-// request and the user logs in again.
 std::string malAuth::getAccessToken() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return creds_.accessToken;
@@ -215,38 +213,63 @@ std::optional<std::string> loopbackAuthServer::waitForCode(
   return code;
 }
 
-bool malAuth::exchangeToken(const std::string& code,
-                            const std::string& verifier, std::string& outMsg) {
+long long malAuth::nowSeconds() const {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+             clock_.now().time_since_epoch())
+      .count();
+}
+
+bool malAuth::requestToken(const std::string& formBody) {
   httpRequest request;
   request.url = "https://myanimelist.net/v1/oauth2/token";
   request.method = "POST";
   request.headers["Content-Type"] = "application/x-www-form-urlencoded";
-  request.body = "client_id=" + url::encode(kMalClientId) +
-                 "&code=" + url::encode(code) +
-                 "&code_verifier=" + url::encode(verifier) +
-                 "&grant_type=authorization_code";
+  request.body = formBody;
 
   auto response = http_.execute(request);
   std::string json = response.ok() ? response.value().body : "";
-  if (json.find("access_token") == std::string::npos) {
-    outMsg = "Failed to exchange authorization code with MyAnimeList.";
+  std::string accessToken = stringField(json, "access_token");
+  if (accessToken.empty())
     return false;
-  }
 
   long long expiresIn = integerField(json, "expires_in");
-  auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
-                        clock_.now().time_since_epoch())
-                        .count();
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    creds_.accessToken = stringField(json, "access_token");
+    creds_.accessToken = accessToken;
     creds_.refreshToken = stringField(json, "refresh_token");
-    creds_.expiresAt = nowSeconds + expiresIn;
+    creds_.expiresAt = nowSeconds() + expiresIn;
   }
-
   save();
-  outMsg = "Successfully authenticated with MyAnimeList.";
   return true;
+}
+
+bool malAuth::exchangeToken(const std::string& code,
+                            const std::string& verifier, std::string& outMsg) {
+  bool exchanged = requestToken(
+      "client_id=" + url::encode(kMalClientId) + "&code=" + url::encode(code) +
+      "&code_verifier=" + url::encode(verifier) +
+      "&grant_type=authorization_code");
+  outMsg = exchanged ? "Successfully authenticated with MyAnimeList."
+                     : "Failed to exchange authorization code with MyAnimeList.";
+  return exchanged;
+}
+
+bool malAuth::ensureFreshToken() {
+  malCredentials current;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    current = creds_;
+  }
+  if (current.accessToken.empty())
+    return false;
+  bool expiresSoon = current.expiresAt > 0 && current.expiresAt - 60 < nowSeconds();
+  if (!expiresSoon)
+    return true;
+  if (current.refreshToken.empty())
+    return false;
+  return requestToken("client_id=" + url::encode(kMalClientId) +
+                      "&grant_type=refresh_token&refresh_token=" +
+                      url::encode(current.refreshToken));
 }
 
 bool malAuth::authenticate(std::string& outMsg) {

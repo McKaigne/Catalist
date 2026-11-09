@@ -1,5 +1,6 @@
 #include "catalist/config/config.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <sstream>
 
@@ -47,6 +48,109 @@ void upgradeLegacyVersionNodes(kdl::document& doc) {
   }
 }
 
+kdl::value stringValue(const std::string& text) {
+  kdl::value converted;
+  converted.valueType = kdl::value::type::kString;
+  converted.stringVal = text;
+  return converted;
+}
+
+kdl::value boolValue(bool flag) {
+  kdl::value converted;
+  converted.valueType = kdl::value::type::kBoolean;
+  converted.boolVal = flag;
+  return converted;
+}
+
+kdl::node singleArgNode(const std::string& name, kdl::value argument) {
+  kdl::node made;
+  made.name = name;
+  made.args.push_back(std::move(argument));
+  return made;
+}
+
+kdl::node tabNode(const std::string& id, const std::string& label,
+                  const std::string& glyph, bool showCount) {
+  kdl::node tab = singleArgNode("tab", stringValue(id));
+  tab.props["label"] = stringValue(label);
+  tab.props["icon"] = stringValue(glyph);
+  if (showCount)
+    tab.props["show-count"] = boolValue(true);
+  return tab;
+}
+
+std::vector<kdl::node> defaultTabNodes() {
+  return {tabNode("anime", "Anime", "󰴙", true),
+          tabNode("manga", "Manga", "󱥬", true),
+          tabNode("queue", "Queue", "󰐌", false),
+          tabNode("search", "Search", "", false),
+          tabNode("library", "Library", "󰓹", false),
+          tabNode("history", "History", "󰄉", false),
+          tabNode("stats", "Stats", "󰄫", false),
+          tabNode("settings", "Settings", "󰒓", false),
+          tabNode("help", "Help", "󰋖", false)};
+}
+
+bool isLegacyTabId(const std::string& id) {
+  return id == "about" || id == "overview" || id == "sync";
+}
+
+bool listsLegacyTabs(const kdl::node& topBar) {
+  return std::any_of(topBar.children.begin(), topBar.children.end(),
+                     [](const kdl::node& child) {
+                       return child.name == "tab" &&
+                              isLegacyTabId(child.getArgString(0));
+                     });
+}
+
+// Top bars from before 0.3.0 list the removed about/overview/sync tabs; they
+// get the new tab set while keeping their spacer, text and version items.
+void upgradeLegacyTopBar(kdl::document& doc) {
+  for (auto& root : doc.rootNodes) {
+    if (root.name != "top-bar" || !listsLegacyTabs(root))
+      continue;
+    std::vector<kdl::node> upgraded = defaultTabNodes();
+    for (const auto& child : root.children) {
+      if (child.name != "tab")
+        upgraded.push_back(child);
+    }
+    root.children = std::move(upgraded);
+  }
+}
+
+void applyGeneralSetting(appConfig& config, const std::string& name,
+                         const kdl::value& setting) {
+  if (setting.valueType == kdl::value::type::kNull)
+    return;
+  if (name == "theme")
+    config.theme = setting.asString();
+  else if (name == "mouse")
+    config.mouse = setting.asBool(config.mouse);
+  else if (name == "default-media")
+    config.defaultMedia = setting.asString();
+  else if (name == "default-sort")
+    config.defaultSort = setting.asString();
+  else if (name == "reverse-sort")
+    config.reverseSort = setting.asBool(config.reverseSort);
+  else if (name == "startup-tab")
+    config.startupTab = setting.asString();
+  else if (name == "welcome-shown")
+    config.welcomeShown = setting.asBool(config.welcomeShown);
+}
+
+std::vector<kdl::node> generalNodes(const appConfig& config) {
+  std::vector<kdl::node> nodes = {
+      singleArgNode("theme", stringValue(config.theme)),
+      singleArgNode("mouse", boolValue(config.mouse)),
+      singleArgNode("default-media", stringValue(config.defaultMedia)),
+      singleArgNode("default-sort", stringValue(config.defaultSort)),
+      singleArgNode("reverse-sort", boolValue(config.reverseSort))};
+  if (config.startupTab)
+    nodes.push_back(singleArgNode("startup-tab", stringValue(*config.startupTab)));
+  nodes.push_back(singleArgNode("welcome-shown", boolValue(config.welcomeShown)));
+  return nodes;
+}
+
 }  // namespace
 
 static const char* kDefaultKdl =
@@ -60,6 +164,7 @@ general {
     default-media "anime"
     default-sort "score"
     reverse-sort true
+    startup-tab "anime"
 }
 
 keybinds {
@@ -76,12 +181,15 @@ keybinds {
 }
 
 top-bar height=3 border=true {
-    tab "about"    label="Catalist"  icon="󰄛"
-    tab "anime"    label="Anime"     icon="󰴙"  show-count=true
-    tab "manga"    label="Manga"     icon="󱥬"  show-count=true
-    tab "overview" label="Overview"  icon="󰄫"
-    tab "sync"     label="Sync"      icon="󰓦"
-    tab "settings" label="Settings"  icon="󰒓"
+    tab "anime"    label="Anime"    icon="󰴙"  show-count=true
+    tab "manga"    label="Manga"    icon="󱥬"  show-count=true
+    tab "queue"    label="Queue"    icon="󰐌"
+    tab "search"   label="Search"   icon=""
+    tab "library"  label="Library"  icon="󰓹"
+    tab "history"  label="History"  icon="󰄉"
+    tab "stats"    label="Stats"    icon="󰄫"
+    tab "settings" label="Settings" icon="󰒓"
+    tab "help"     label="Help"     icon="󰋖"
     spacer
     version color="overlay0"
 }
@@ -145,26 +253,13 @@ bool appConfig::load(iFileSystem& fileSystem,
   kdlDoc = kdl::document::parse(*content, err);
   upgradeLegacyVersionNodes(kdlDoc);
 
-  auto gen = kdlDoc.getNode("general");
-  if (gen.has_value()) {
-    theme = gen->getPropString("theme", theme);
-    mouse = gen->getPropBool("mouse", mouse);
-    defaultMedia = gen->getPropString("default-media", defaultMedia);
-    defaultSort = gen->getPropString("default-sort", defaultSort);
-    reverseSort = gen->getPropBool("reverse-sort", reverseSort);
+  upgradeLegacyTopBar(kdlDoc);
 
-    for (const auto& child : gen->children) {
-      if (child.name == "theme")
-        theme = child.getArgString(0, theme);
-      else if (child.name == "mouse")
-        mouse = child.getArg(0).asBool(mouse);
-      else if (child.name == "default-media")
-        defaultMedia = child.getArgString(0, defaultMedia);
-      else if (child.name == "default-sort")
-        defaultSort = child.getArgString(0, defaultSort);
-      else if (child.name == "reverse-sort")
-        reverseSort = child.getArg(0).asBool(reverseSort);
-    }
+  if (auto general = kdlDoc.getNode("general")) {
+    for (const auto& [name, setting] : general->props)
+      applyGeneralSetting(*this, name, setting);
+    for (const auto& child : general->children)
+      applyGeneralSetting(*this, child.name, child.getArg(0));
   }
 
   auto binds = kdlDoc.getNode("keybinds");
@@ -183,47 +278,17 @@ bool appConfig::load(iFileSystem& fileSystem,
 bool appConfig::save(iFileSystem& fileSystem,
                      const std::filesystem::path& path) const {
   kdl::document doc = kdlDoc;
-  auto mk = [](const std::string& name, kdl::value v) {
-    kdl::node n;
-    n.name = name;
-    n.args.push_back(v);
-    return n;
-  };
-  auto stringValue = [](const std::string& s) {
-    kdl::value v;
-    v.valueType = kdl::value::type::kString;
-    v.stringVal = s;
-    return v;
-  };
-  auto boolValue = [](bool b) {
-    kdl::value v;
-    v.valueType = kdl::value::type::kBoolean;
-    v.boolVal = b;
-    return v;
-  };
-
-  bool foundGeneral = false;
-  for (auto& n : doc.rootNodes) {
-    if (n.name == "general") {
-      n.children = {mk("theme", stringValue(theme)), mk("mouse", boolValue(mouse)),
-                    mk("default-media", stringValue(defaultMedia)),
-                    mk("default-sort", stringValue(defaultSort)),
-                    mk("reverse-sort", boolValue(reverseSort))};
-      n.props.clear();
-      foundGeneral = true;
-      break;
-    }
+  auto general = std::find_if(doc.rootNodes.begin(), doc.rootNodes.end(),
+                              [](const kdl::node& root) {
+                                return root.name == "general";
+                              });
+  if (general == doc.rootNodes.end()) {
+    kdl::node created;
+    created.name = "general";
+    general = doc.rootNodes.insert(doc.rootNodes.begin(), created);
   }
-  if (!foundGeneral) {
-    kdl::node gn;
-    gn.name = "general";
-    gn.children = {mk("theme", stringValue(theme)), mk("mouse", boolValue(mouse)),
-                   mk("default-media", stringValue(defaultMedia)),
-                   mk("default-sort", stringValue(defaultSort)),
-                   mk("reverse-sort", boolValue(reverseSort))};
-    doc.rootNodes.insert(doc.rootNodes.begin(), gn);
-  }
-
+  general->children = generalNodes(*this);
+  general->props.clear();
   return fileSystem.writeFileAtomic(path, doc.serialize());
 }
 

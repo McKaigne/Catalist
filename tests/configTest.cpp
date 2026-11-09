@@ -113,3 +113,64 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig save then load keeps general settin
   CHECK(reloaded.mouse == false);
   CHECK(reloaded.defaultSort == "progress");
 }
+
+TEST_CASE_FIXTURE(tempDirFixture, "appConfig upgrades a pre 0.3 top bar to the new tab set") {
+  auto configPath = tempDir() / "catalist.kdl";
+  writeTextFile(configPath, R"kdl(top-bar height=3 {
+    tab "about" label="Catalist"
+    tab "anime" label="Anime" show-count=true
+    tab "sync" label="Sync"
+    spacer
+    text "v0.2.0" color="overlay0"
+}
+)kdl");
+  appConfig config;
+  REQUIRE(config.load(fileSystem(), configPath));
+  auto topBar = config.kdlDoc.getNode("top-bar");
+  REQUIRE(topBar.has_value());
+  std::vector<std::string> ids;
+  for (const auto& child : topBar->children) {
+    if (child.name == "tab")
+      ids.push_back(child.getArgString(0));
+  }
+  CHECK(ids == std::vector<std::string>{"anime", "manga", "queue", "search",
+                                        "library", "history", "stats",
+                                        "settings", "help"});
+  CHECK(topBar->children[9].name == "spacer");
+  CHECK(topBar->children[10].name == "version");
+  CHECK(topBar->getPropInt("height") == 3);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "appConfig keeps a top bar that already uses current tab ids") {
+  auto configPath = tempDir() / "catalist.kdl";
+  writeTextFile(configPath,
+                "top-bar {\n    tab \"manga\"\n    tab \"queue\"\n}\n");
+  appConfig config;
+  REQUIRE(config.load(fileSystem(), configPath));
+  CHECK(config.kdlDoc.getNode("top-bar")->children.size() == 2);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "appConfig startup tab and welcome flag round trip") {
+  auto configPath = tempDir() / "catalist.kdl";
+  appConfig original;
+  CHECK_FALSE(original.startupTab.has_value());
+  original.startupTab = "queue";
+  original.welcomeShown = true;
+  REQUIRE(original.save(fileSystem(), configPath));
+
+  appConfig reloaded;
+  REQUIRE(reloaded.load(fileSystem(), configPath));
+  CHECK(reloaded.startupTab == "queue");
+  CHECK(reloaded.welcomeShown);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "appConfig default file lists the new tabs and a startup tab") {
+  appConfig config;
+  REQUIRE(config.load(fileSystem(), tempDir() / "fresh.kdl"));
+  auto general = config.kdlDoc.getNode("general");
+  REQUIRE(general.has_value());
+  CHECK(general->getChild("startup-tab")->getArgString(0) == "anime");
+  auto topBar = config.kdlDoc.getNode("top-bar");
+  REQUIRE(topBar.has_value());
+  CHECK(topBar->children.front().getArgString(0) == "anime");
+}

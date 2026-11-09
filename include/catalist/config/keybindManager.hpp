@@ -3,6 +3,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace catalist {
 
@@ -38,7 +39,17 @@ enum class keyAction {
   kRedo,
   kCommandPalette,
   kOpenHelp,
-  kQuit
+  kQuit,
+  kMoveItemUp,
+  kMoveItemDown,
+  kToggleMedia,
+  kNextProvider
+};
+
+struct keyBinding {
+  keyAction action;
+  std::string name;
+  std::string key;
 };
 
 class keybindManager {
@@ -46,12 +57,14 @@ class keybindManager {
   keybindManager();
 
   void setBinding(const std::string& actionName, const std::string& key);
-  std::string getKey(keyAction action) const;
-  bool matches(keyAction action, const std::string& key) const;
+  [[nodiscard]] std::string getKey(keyAction action) const;
+  [[nodiscard]] bool matches(keyAction action, const std::string& key) const;
+
+  // Every action with its config name and current key, in table order.
+  [[nodiscard]] std::vector<keyBinding> bindings() const;
 
  private:
   std::unordered_map<keyAction, std::string> primaryBindings_;
-  void loadDefaults();
 };
 
 }  // namespace catalist

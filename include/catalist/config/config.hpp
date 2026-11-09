@@ -2,6 +2,7 @@
 #define CATALIST_CONFIG_HPP_
 
 #include <filesystem>
+#include <optional>
 #include <string>
 
 #include "catalist/config/kdl.hpp"
@@ -16,6 +17,9 @@ struct appConfig {
   std::string defaultMedia = "anime";
   std::string defaultSort = "score";
   bool reverseSort = true;
+  // Tab id shown at launch; falls back to defaultMedia when unset.
+  std::optional<std::string> startupTab;
+  bool welcomeShown = false;
 
   keybindManager keybinds;
   kdl::document kdlDoc;

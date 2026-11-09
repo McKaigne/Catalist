@@ -12,23 +12,12 @@ public:
   static std::optional<isoDate> parse(std::string_view dateStr);
   static isoDate today();
 
-  static std::optional<isoDate> Parse(std::string_view dateStr) {
-    return parse(dateStr);
-  }
-  static isoDate Today() { return today(); }
-
   [[nodiscard]] std::string toString() const;
-  [[nodiscard]] std::string ToString() const { return toString(); }
 
   [[nodiscard]] int year() const { return year_; }
   [[nodiscard]] int month() const { return month_; }
   [[nodiscard]] int day() const { return day_; }
   [[nodiscard]] bool isEmpty() const { return year_ == 0; }
-
-  [[nodiscard]] int Year() const { return year(); }
-  [[nodiscard]] int Month() const { return month(); }
-  [[nodiscard]] int Day() const { return day(); }
-  [[nodiscard]] bool IsEmpty() const { return isEmpty(); }
 
   bool operator==(const isoDate& other) const {
     return year_ == other.year_ && month_ == other.month_ && day_ == other.day_;

@@ -96,7 +96,6 @@ result<httpResponse> curlHttpClient::execute(const httpRequest& request) {
     response.statusCode = response.body.empty() ? 500 : 200;
   }
 
-  response.status_code = response.statusCode;
   return result<httpResponse>::success(response);
 }
 

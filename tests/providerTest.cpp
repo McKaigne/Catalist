@@ -13,7 +13,7 @@ TEST_CASE("kitsu provider parses search results from an injected client") {
        "{\"data\":[{\"id\":\"1234\",\"attributes\":{\"canonicalTitle\":"
        "\"Frieren: Beyond Journey\", \"episodeCount\":28,\"averageRating\":"
        "\"89.4\"}}]}",
-       "", 0, ""});
+       ""});
 
   catalist::providerRegistry registry(mockClient);
   auto kitsu = registry.getProvider("kitsu");

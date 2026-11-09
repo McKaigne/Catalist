@@ -25,8 +25,8 @@ struct cliRun {
   std::string err;
 };
 
-template <typename Command>
-cliRun runCli(Command&& command) {
+template <typename commandFn>
+cliRun runCli(commandFn&& command) {
   cliRun run;
   streamCapture out(std::cout);
   streamCapture err(std::cerr);

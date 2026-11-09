@@ -72,8 +72,11 @@ add_executable(catalistTests
   tests/cliGoldenTest.cpp
   tests/cliSetTest.cpp
   tests/cliTest.cpp
+  tests/configTest.cpp
   tests/databaseTest.cpp
   tests/entryTest.cpp
+  tests/kdlTest.cpp
+  tests/keybindManagerTest.cpp
   tests/dateTest.cpp
   tests/loggerTest.cpp
   tests/malParserTest.cpp

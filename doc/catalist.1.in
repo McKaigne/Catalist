@@ -15,8 +15,8 @@ Run without arguments to start the terminal interface.
 .SH OPTIONS
 .TP
 .BR --tab " <" \fIID\fR >
-Start the terminal interface on the given tab: anime, manga, queue, search,
-library, history, stats, settings or help.
+Start the terminal interface on the given tab: anime, manga, stats or
+settings.
 .TP
 .BR -v ", " --version
 Print the version.
@@ -63,26 +63,12 @@ The number keys select the tabs in top-bar order.
 .B 1 Anime, 2 Manga
 Catalogue with sidebar filters, sortable table and details card.
 .TP
-.B 3 Queue
-Watching and Plan to Watch entries in a user order; \fBJ\fR/\fBK\fR reorder.
-.TP
-.B 4 Search
-Online search across MyAnimeList, AniList and Kitsu; \fBEnter\fR adds.
-.TP
-.B 5 Library
-Start year, status and entries columns.
-.TP
-.B 6 History
-Activity heatmap and day-by-day log.
-.TP
-.B 7 Stats
+.B 3 Stats
 Totals, score histogram and entries per year; \fBm\fR toggles media.
 .TP
-.B 8 Settings
-Themes with live preview, preferences, backups, import, export and MAL login.
-.TP
-.B 9 Help
-Keys from the active keybindings.
+.B 4 Settings
+Themes with live preview, preferences, backups, import, export, MyAnimeList
+sync and MAL login.
 .SH KEYS
 .TP
 .B j k g G h l
@@ -94,11 +80,11 @@ Progress, status, rating and progress steps in the catalogue.
 .B Space v
 Visual (batch) selection.
 .TP
-.B / a d u U o y
-Filter, add (opens Search), delete, undo, redo, open in browser, copy title.
+.B / d u U o y
+Filter, delete, undo, redo, open in browser, copy title.
 .TP
-.B : ? q Tab
-Command palette, help, save and quit, next tab.
+.B : q Tab
+Command palette, save and quit, next tab.
 .SH FILES
 .TP
 .I ~/.config/catalist/anime.csv, manga.csv, history.csv

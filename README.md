@@ -61,28 +61,22 @@ The number keys follow the order shown in the top bar.
 | :--- | :--- | :--- |
 | `1` | Anime | Your anime catalogue: sidebar filters, sortable table, details card |
 | `2` | Manga | The same for manga |
-| `3` | Queue | Watching and Plan to Watch entries in your own order (`J`/`K` to reorder) |
-| `4` | Search | Online search across MyAnimeList, AniList and Kitsu; `Enter` adds |
-| `5` | Library | Browse by start year, then status, then entries |
-| `6` | History | Activity heatmap and a day-by-day log of updates |
-| `7` | Stats | Totals, score histogram and entries per year (`m` toggles anime/manga) |
-| `8` | Settings | Themes (live preview), preferences, backups, import/export, MAL login |
-| `9` | Help | Every key, read live from your keybindings |
+| `3` | Stats | Totals, score histogram and entries per year (`m` toggles anime/manga) |
+| `4` | Settings | Themes (live preview), preferences, backups, import/export, MyAnimeList sync and login |
 
 The tab list, its order and the startup tab are configured in `catalist.kdl`
-(`top-bar` and `general { startup-tab "queue" }`).
+(`top-bar` and `general { startup-tab "stats" }`).
 
 ## Core Keybindings
 
 ### Everywhere
 | Key | Action |
 | :--- | :--- |
-| `1`–`9` | Switch to the numbered tab |
+| `1`–`4` | Switch to the numbered tab |
 | `Tab` / `S-Tab` | Next / previous tab |
 | `j` / `k`, `g` / `G` | Move down / up, jump to top / bottom (every tab) |
 | `h` / `l` | Move between panes, columns or panels |
 | `:` | Command palette (`:theme`, `:sync`, `:backup`, `:import`, `:about`, `:tab <id>`, `:w`, `:q`) |
-| `?` | Open Help |
 | `q` | Save and quit |
 
 ### Catalogue (Anime / Manga)
@@ -95,16 +89,17 @@ The tab list, its order and the startup tab are configured in `catalist.kdl`
 | `d` | Delete (asks to confirm; deletes the whole selection in visual mode) |
 | `u` / `U` | Undo / redo |
 | `/` | Filter by title |
-| `a` | Add an entry (opens the Search tab) |
 | `o` / `y` | Open in browser / copy the title |
 | `c` `t` `s` `r` `p` | Sort by date, title, status, rating or progress (press again to reverse) |
 
-### Queue, Search, Library, Stats
+### Stats and Settings
 | Key | Action |
 | :--- | :--- |
-| `J` / `K` | Queue: move the entry down / up |
-| `/`, `p` or `h`/`l` | Search: type a query, switch provider |
-| `m` | Search, Library, Stats: toggle anime / manga |
+| `m` | Stats: toggle anime / manga |
+| `Enter` / `Space` | Settings: apply the theme, cycle the preference or run the Data action under the cursor |
+
+Settings → Data → *Sync ongoing titles with MyAnimeList* fills in missing
+episode totals for anime you are still watching (the same as `:sync`).
 
 ---
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The TUI now has four tabs: Anime, Manga, Stats and Settings. Top bars in
+  `catalist.kdl` that list a removed tab are upgraded to the new set.
+- Metadata sync is a row in Settings → Data (`:sync` still works).
+
+### Removed
+- The Queue, Search, Library, History and Help tabs, with `?` (help), `:help`
+  and `a` (add, which opened Search) in the TUI. Add entries with
+  `catalist add`. Stored `queue_pos` values are kept in the CSV files.
+
 ## [0.3.0] - 2026-11-10
 
 ### Added

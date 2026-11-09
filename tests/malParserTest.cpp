@@ -28,12 +28,12 @@ TEST_CASE_FIXTURE(tempDirFixture, "malParser imports an anime block with CDATA")
   catalist::database db(tempDir());
   CHECK(catalist::malParser::importXml(xmlPath.string(), db, true) == 1);
 
-  auto imported = db.getById(catalist::mediaType::Anime, 52991);
+  auto imported = db.getById(catalist::mediaType::kAnime, 52991);
   REQUIRE(imported.has_value());
   CHECK(imported->title == "Sousou no Frieren");
   CHECK(imported->score == 10);
   CHECK(imported->progress == 28);
-  CHECK(imported->status == catalist::watchStatus::Completed);
+  CHECK(imported->status == catalist::watchStatus::kCompleted);
   CHECK(imported->notes == "Masterpiece.");
 }
 
@@ -57,16 +57,16 @@ TEST_CASE_FIXTURE(tempDirFixture, "malParser imports a manga block") {
 
   catalist::database db(tempDir());
   CHECK(catalist::malParser::importXml(xmlPath.string(), db) == 1);
-  auto imported = db.getById(catalist::mediaType::Manga, 2);
+  auto imported = db.getById(catalist::mediaType::kManga, 2);
   REQUIRE(imported.has_value());
-  CHECK(imported->type == catalist::mediaType::Manga);
+  CHECK(imported->type == catalist::mediaType::kManga);
   CHECK(imported->title == "Berserk");
   CHECK(imported->progress == 364);
   CHECK(imported->volumes == 42);
   CHECK(imported->rewatched == 2);
-  CHECK(imported->status == catalist::watchStatus::Watching);
+  CHECK(imported->status == catalist::watchStatus::kWatching);
   CHECK(imported->getRemoteId("mal") == "2");
-  CHECK(db.getEntries(catalist::mediaType::Anime).empty());
+  CHECK(db.getEntries(catalist::mediaType::kAnime).empty());
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "malParser decodes xml entities outside CDATA") {
@@ -82,17 +82,17 @@ TEST_CASE_FIXTURE(tempDirFixture, "malParser decodes xml entities outside CDATA"
 
   catalist::database db(tempDir());
   CHECK(catalist::malParser::importXml(xmlPath.string(), db) == 1);
-  auto imported = db.getById(catalist::mediaType::Anime, 1);
+  auto imported = db.getById(catalist::mediaType::kAnime, 1);
   REQUIRE(imported.has_value());
   CHECK(imported->title == "Tom & Jerry <3 \"x\" 'y'");
-  CHECK(imported->status == catalist::watchStatus::PlanToWatch);
+  CHECK(imported->status == catalist::watchStatus::kPlanToWatch);
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "malParser clean flag wipes only the imported media type") {
   catalist::database db(tempDir());
   db.addEntry(catalist::test::makeEntry().id(500).title("Old anime"));
   db.addEntry(catalist::test::makeEntry().id(501).title("Old manga")
-                  .type(catalist::mediaType::Manga));
+                  .type(catalist::mediaType::kManga));
 
   auto xmlPath = tempDir() / "clean.xml";
   catalist::test::writeTextFile(
@@ -101,9 +101,9 @@ TEST_CASE_FIXTURE(tempDirFixture, "malParser clean flag wipes only the imported 
       "<series_title>New</series_title></anime>\n");
 
   CHECK(catalist::malParser::importXml(xmlPath.string(), db, true) == 1);
-  CHECK_FALSE(db.getById(catalist::mediaType::Anime, 500).has_value());
-  CHECK(db.getById(catalist::mediaType::Anime, 9).has_value());
-  CHECK(db.getById(catalist::mediaType::Manga, 501).has_value());
+  CHECK_FALSE(db.getById(catalist::mediaType::kAnime, 500).has_value());
+  CHECK(db.getById(catalist::mediaType::kAnime, 9).has_value());
+  CHECK(db.getById(catalist::mediaType::kManga, 501).has_value());
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "malParser without clean merges into existing entries") {
@@ -117,7 +117,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "malParser without clean merges into existing 
       "<series_title>Renamed</series_title><my_score>2</my_score></anime>\n");
 
   CHECK(catalist::malParser::importXml(xmlPath.string(), db) == 1);
-  auto merged = db.getById(catalist::mediaType::Anime, 9);
+  auto merged = db.getById(catalist::mediaType::kAnime, 9);
   REQUIRE(merged.has_value());
   CHECK(merged->title == "Kept");
   CHECK(merged->score == 7);

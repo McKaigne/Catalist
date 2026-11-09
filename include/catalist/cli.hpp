@@ -10,7 +10,7 @@
 
 namespace catalist {
 
-enum class outputFormat { Table, Plain, Ids, Csv, Json };
+enum class outputFormat { kTable, kPlain, kIds, kCsv, kJson };
 
 struct cliFilterOptions {
   std::optional<mediaType> type;
@@ -21,10 +21,10 @@ struct cliFilterOptions {
   std::string year;
   std::string search;
   std::string tag;
-  sortKey sortBy = sortKey::Score;
+  sortKey sortBy = sortKey::kScore;
   bool reverseSort = false;
   int limit = -1;
-  outputFormat format = outputFormat::Table;
+  outputFormat format = outputFormat::kTable;
 };
 
 class cliDispatcher {

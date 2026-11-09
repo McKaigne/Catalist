@@ -12,10 +12,10 @@ namespace {
 
 const char* levelToString(logLevel level) {
   switch (level) {
-    case logLevel::Debug: return "DEBUG";
-    case logLevel::Info:  return "INFO ";
-    case logLevel::Warn:  return "WARN ";
-    case logLevel::Error: return "ERROR";
+    case logLevel::kDebug: return "DEBUG";
+    case logLevel::kInfo:  return "INFO ";
+    case logLevel::kWarn:  return "WARN ";
+    case logLevel::kError: return "ERROR";
   }
   return "INFO ";
 }
@@ -96,19 +96,19 @@ void logger::log(logLevel level, std::string_view message) {
 }
 
 void logger::debug(std::string_view message) {
-  get().log(logLevel::Debug, message);
+  get().log(logLevel::kDebug, message);
 }
 
 void logger::info(std::string_view message) {
-  get().log(logLevel::Info, message);
+  get().log(logLevel::kInfo, message);
 }
 
 void logger::warn(std::string_view message) {
-  get().log(logLevel::Warn, message);
+  get().log(logLevel::kWarn, message);
 }
 
 void logger::error(std::string_view message) {
-  get().log(logLevel::Error, message);
+  get().log(logLevel::kError, message);
 }
 
 std::filesystem::path logger::getLogPath() const {

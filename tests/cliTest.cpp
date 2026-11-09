@@ -55,19 +55,19 @@ TEST_CASE_FIXTURE(tempDirFixture, "cli add then step progress then rm") {
                                       "-r", "9"};
   REQUIRE(cliDispatcher::executeAdd(addArgs, db) == 0);
 
-  auto entries = db.filterEntries(mediaType::Anime, std::nullopt, -1,
-                                  "Dungeon Meshi", sortKey::Title, false);
+  auto entries = db.filterEntries(mediaType::kAnime, std::nullopt, -1,
+                                  "Dungeon Meshi", sortKey::kTitle, false);
   REQUIRE(entries.size() == 1);
   int id = entries[0].id;
 
   REQUIRE(cliDispatcher::executeSet({std::to_string(id), "-p", "a", "2"}, db) ==
           0);
-  auto stepped = db.getById(mediaType::Anime, id);
+  auto stepped = db.getById(mediaType::kAnime, id);
   REQUIRE(stepped.has_value());
   CHECK(stepped->progress == 12);
 
   REQUIRE(cliDispatcher::executeRm({std::to_string(id), "-y"}, db) == 0);
-  CHECK_FALSE(db.getById(mediaType::Anime, id).has_value());
+  CHECK_FALSE(db.getById(mediaType::kAnime, id).has_value());
 }
 
 TEST_CASE("cli config list and completion generators succeed") {

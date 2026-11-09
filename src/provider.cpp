@@ -77,7 +77,7 @@ public:
                         const std::string& remoteId) const override {
     if (remoteId.empty())
       return "";
-    return (type == mediaType::Anime)
+    return (type == mediaType::kAnime)
                ? "https://myanimelist.net/anime/" + remoteId
                : "https://myanimelist.net/manga/" + remoteId;
   }
@@ -111,7 +111,7 @@ public:
                         const std::string& remoteId) const override {
     if (remoteId.empty())
       return "";
-    return (type == mediaType::Anime) ? "https://anilist.co/anime/" + remoteId
+    return (type == mediaType::kAnime) ? "https://anilist.co/anime/" + remoteId
                                       : "https://anilist.co/manga/" + remoteId;
   }
 
@@ -146,7 +146,7 @@ public:
                         const std::string& remoteId) const override {
     if (remoteId.empty())
       return "";
-    return (type == mediaType::Anime) ? "https://kitsu.app/anime/" + remoteId
+    return (type == mediaType::kAnime) ? "https://kitsu.app/anime/" + remoteId
                                       : "https://kitsu.app/manga/" + remoteId;
   }
 
@@ -156,7 +156,7 @@ public:
     if (query.empty() || !client_)
       return {};
 
-    std::string path = (type == mediaType::Anime) ? "anime" : "manga";
+    std::string path = (type == mediaType::kAnime) ? "anime" : "manga";
     httpRequest req;
     req.url = "https://kitsu.io/api/edge/" + path +
               "?filter[text]=" + remoteSearchEngine::urlEncode(query) +
@@ -220,7 +220,7 @@ public:
       item.title = title;
       item.type = type;
       item.totalUnits = static_cast<int>(extractJsonNumber(
-          block, type == mediaType::Anime ? "episodeCount" : "chapterCount"));
+          block, type == mediaType::kAnime ? "episodeCount" : "chapterCount"));
       double rating = extractJsonNumber(block, "averageRating");
       item.score = rating > 0.0 ? rating / 10.0 : 0.0;
       results.push_back(std::move(item));

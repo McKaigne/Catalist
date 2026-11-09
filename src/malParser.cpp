@@ -66,7 +66,7 @@ size_t malParser::importXml(const std::string& filepath, database& db,
   size_t imported = 0;
 
   if (clean && content.find("<anime>") != std::string::npos) {
-    db.clear(mediaType::Anime);
+    db.clear(mediaType::kAnime);
   }
 
   size_t aPos = 0;
@@ -78,7 +78,7 @@ size_t malParser::importXml(const std::string& filepath, database& db,
     aPos = aEnd + 8;
 
     entry e;
-    e.type = mediaType::Anime;
+    e.type = mediaType::kAnime;
 
     std::string idStr = extractTag(block, "series_animedb_id");
     try {
@@ -135,7 +135,7 @@ size_t malParser::importXml(const std::string& filepath, database& db,
   }
 
   if (clean && content.find("<manga>") != std::string::npos) {
-    db.clear(mediaType::Manga);
+    db.clear(mediaType::kManga);
   }
 
   size_t mPos = 0;
@@ -147,7 +147,7 @@ size_t malParser::importXml(const std::string& filepath, database& db,
     mPos = mEnd + 8;
 
     entry e;
-    e.type = mediaType::Manga;
+    e.type = mediaType::kManga;
 
     std::string idStr = extractTag(block, "manga_mangadb_id");
     try {

@@ -159,7 +159,7 @@ static std::vector<remoteSearchResult> queryAniList(
   if (!out.is_open())
     return results;
 
-  std::string queryType = (type == mediaType::Anime) ? "ANIME" : "MANGA";
+  std::string queryType = (type == mediaType::kAnime) ? "ANIME" : "MANGA";
 
   out << "{\"query\":\"query($s:String,$t:MediaType){Page(perPage:" << limit
       << "){media(search:$s,type:$t){id idMal title{romaji english} episodes chapters status averageScore startDate{year}}}}\",\"variables\":{\"s\":\"";
@@ -240,7 +240,7 @@ static std::vector<remoteSearchResult> queryAniList(
       continue;
 
     r.titleEnglish = unescapeJsonString(extractJsonString(block, "english"));
-    std::string unitKey = (type == mediaType::Anime) ? "episodes" : "chapters";
+    std::string unitKey = (type == mediaType::kAnime) ? "episodes" : "chapters";
     r.totalUnits = static_cast<int>(extractJsonNumber(block, unitKey));
 
     double avg100 = extractJsonNumber(block, "averageScore");
@@ -261,7 +261,7 @@ static std::vector<remoteSearchResult> queryJikanFallback(
     mediaType type, const std::string& searchQuery, size_t limit) {
   std::vector<remoteSearchResult> results;
 
-  std::string endpoint = (type == mediaType::Anime) ? "anime" : "manga";
+  std::string endpoint = (type == mediaType::kAnime) ? "anime" : "manga";
   std::string url = "https://api.jikan.moe/v4/" + endpoint +
                     "?q=" + remoteSearchEngine::urlEncode(searchQuery) +
                     "&limit=" + std::to_string(limit);
@@ -322,7 +322,7 @@ static std::vector<remoteSearchResult> queryJikanFallback(
 
     r.titleEnglish =
         unescapeJsonString(extractJsonString(block, "title_english"));
-    std::string unitKey = (type == mediaType::Anime) ? "episodes" : "chapters";
+    std::string unitKey = (type == mediaType::kAnime) ? "episodes" : "chapters";
     r.totalUnits = static_cast<int>(extractJsonNumber(block, unitKey));
     r.score = extractJsonNumber(block, "score");
     r.status = extractJsonString(block, "status");

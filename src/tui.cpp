@@ -120,7 +120,7 @@ static std::string getTodayDateStr() {
 
 static std::string formatCatalogDate(const entry& e) {
   std::string d;
-  if (e.status == watchStatus::Completed && !e.finishDate.empty() &&
+  if (e.status == watchStatus::kCompleted && !e.finishDate.empty() &&
       e.finishDate.find("0000") != 0) {
     d = e.finishDate;
   } else if (!e.startDate.empty() && e.startDate.find("0000") != 0) {
@@ -231,13 +231,13 @@ static Element highlightMatches(const std::string& textStr,
 
 static bool isSortAscending(sortKey key, bool reverse) {
   switch (key) {
-    case sortKey::Score:
-    case sortKey::Progress:
-    case sortKey::Date:
+    case sortKey::kScore:
+    case sortKey::kProgress:
+    case sortKey::kDate:
       return reverse;
-    case sortKey::Title:
-    case sortKey::Status:
-    case sortKey::Id:
+    case sortKey::kTitle:
+    case sortKey::kStatus:
+    case sortKey::kId:
       return !reverse;
   }
   return false;
@@ -253,13 +253,13 @@ void appTui::run() {
   auto screen = ScreenInteractive::Fullscreen();
   auto* screenPtr = &screen;
 
-  appMode currentMode = appMode::Nor;
-  focusedCard currentFocus = focusedCard::Catalog;
+  appMode currentMode = appMode::kNor;
+  focusedCard currentFocus = focusedCard::kCatalog;
   int detailsCursorIndex = 0;  // 0: Status, 1: Rating, 2: Progress (Tracking
                                // Card), 3: Notes (Notes Card)
   viewTab currentTab =
-      (config_.defaultMedia == "manga") ? viewTab::Manga : viewTab::Anime;
-  sortKey currentSort = sortKey::Score;
+      (config_.defaultMedia == "manga") ? viewTab::kManga : viewTab::kAnime;
+  sortKey currentSort = sortKey::kScore;
   bool reverseSort = config_.reverseSort;
 
   int lastTrackedSelected = -1;
@@ -363,11 +363,11 @@ void appTui::run() {
     undoStack_.pop_back();
     redoStack_.push_back(act);
 
-    if (act.actionType == historyAction::Mutate)
+    if (act.actionType == historyAction::kMutate)
       db_.updateEntry(act.before);
-    else if (act.actionType == historyAction::Delete)
+    else if (act.actionType == historyAction::kDelete)
       db_.addEntry(act.before);
-    else if (act.actionType == historyAction::Add)
+    else if (act.actionType == historyAction::kAdd)
       db_.removeEntry(act.media, act.after.id);
     db_.saveAll();
     pushNotification("Action undone successfully.");
@@ -382,11 +382,11 @@ void appTui::run() {
     redoStack_.pop_back();
     undoStack_.push_back(act);
 
-    if (act.actionType == historyAction::Mutate)
+    if (act.actionType == historyAction::kMutate)
       db_.updateEntry(act.after);
-    else if (act.actionType == historyAction::Delete)
+    else if (act.actionType == historyAction::kDelete)
       db_.removeEntry(act.media, act.before.id);
-    else if (act.actionType == historyAction::Add)
+    else if (act.actionType == historyAction::kAdd)
       db_.addEntry(act.after);
     db_.saveAll();
     pushNotification("Action redone successfully.");
@@ -394,7 +394,7 @@ void appTui::run() {
 
   auto refreshViews = [&]() {
     mediaType media =
-        (currentTab == viewTab::Manga) ? mediaType::Manga : mediaType::Anime;
+        (currentTab == viewTab::kManga) ? mediaType::kManga : mediaType::kAnime;
 
     sidebarLabels = {
         "  LIBRARY",
@@ -402,20 +402,20 @@ void appTui::run() {
             std::to_string(db_.getEntries(media).size()) + ")",
         "  STATUS",
         icon::Watching +
-            (media == mediaType::Manga ? " Reading      ("
+            (media == mediaType::kManga ? " Reading      ("
                                        : " Watching     (") +
-            std::to_string(db_.countByStatus(media, watchStatus::Watching)) +
+            std::to_string(db_.countByStatus(media, watchStatus::kWatching)) +
             ")",
         icon::Completed + " Completed    (" +
-            std::to_string(db_.countByStatus(media, watchStatus::Completed)) +
+            std::to_string(db_.countByStatus(media, watchStatus::kCompleted)) +
             ")",
         icon::OnHold + " On-Hold      (" +
-            std::to_string(db_.countByStatus(media, watchStatus::OnHold)) + ")",
+            std::to_string(db_.countByStatus(media, watchStatus::kOnHold)) + ")",
         icon::Dropped + " Dropped      (" +
-            std::to_string(db_.countByStatus(media, watchStatus::Dropped)) +
+            std::to_string(db_.countByStatus(media, watchStatus::kDropped)) +
             ")",
         icon::Plan + " Planned      (" +
-            std::to_string(db_.countByStatus(media, watchStatus::PlanToWatch)) +
+            std::to_string(db_.countByStatus(media, watchStatus::kPlanToWatch)) +
             ")",
         "  RATINGS",
         renderStarMeter(10) + " (" +
@@ -443,15 +443,15 @@ void appTui::run() {
         continue;
 
       if (multiFilterStatuses.empty() && multiFilterScores.empty()) {
-        if (sidebarSelected == 3 && e.status != watchStatus::Watching)
+        if (sidebarSelected == 3 && e.status != watchStatus::kWatching)
           continue;
-        if (sidebarSelected == 4 && e.status != watchStatus::Completed)
+        if (sidebarSelected == 4 && e.status != watchStatus::kCompleted)
           continue;
-        if (sidebarSelected == 5 && e.status != watchStatus::OnHold)
+        if (sidebarSelected == 5 && e.status != watchStatus::kOnHold)
           continue;
-        if (sidebarSelected == 6 && e.status != watchStatus::Dropped)
+        if (sidebarSelected == 6 && e.status != watchStatus::kDropped)
           continue;
-        if (sidebarSelected == 7 && e.status != watchStatus::PlanToWatch)
+        if (sidebarSelected == 7 && e.status != watchStatus::kPlanToWatch)
           continue;
         if (sidebarSelected == 9 && e.score != 10)
           continue;
@@ -501,7 +501,7 @@ void appTui::run() {
 
   auto openRemoteSearchModal = [&]() {
     isOnlineModalOpen = true;
-    currentMode = appMode::Sch;
+    currentMode = appMode::kSch;
     remoteSearchQuery = searchQuery;
     remoteResults.clear();
     remoteResultLabels.clear();
@@ -516,7 +516,7 @@ void appTui::run() {
     remoteLoading = true;
     remoteStatusMsg = "Querying AniList / MyAnimeList...";
     mediaType media =
-        (currentTab == viewTab::Manga) ? mediaType::Manga : mediaType::Anime;
+        (currentTab == viewTab::kManga) ? mediaType::kManga : mediaType::kAnime;
     std::string err;
     remoteResults =
         remoteSearchEngine::query(media, remoteSearchQuery, err, 10);
@@ -546,27 +546,27 @@ void appTui::run() {
       if (e.startDate.empty() || e.startDate.find("0000") == 0) {
         e.startDate = today;
       }
-      if (e.status == watchStatus::PlanToWatch ||
-          e.status == watchStatus::OnHold || e.status == watchStatus::Dropped) {
-        e.status = watchStatus::Watching;
+      if (e.status == watchStatus::kPlanToWatch ||
+          e.status == watchStatus::kOnHold || e.status == watchStatus::kDropped) {
+        e.status = watchStatus::kWatching;
       }
       e.progress = newProg;
       if (e.totalUnits > 0 && e.progress >= e.totalUnits) {
         e.progress = e.totalUnits;
-        e.status = watchStatus::Completed;
+        e.status = watchStatus::kCompleted;
         e.finishDate = today;
       }
     } else if (dir < 0) {
       if (e.totalUnits > 0 && e.progress >= e.totalUnits &&
           newProg < e.totalUnits) {
-        e.status = watchStatus::Watching;
+        e.status = watchStatus::kWatching;
         e.finishDate = "0000-00-00";
       }
       e.progress = newProg;
     }
 
     e.updatedAt = today;
-    recordAction(historyAction::Mutate, e.type, before, e);
+    recordAction(historyAction::kMutate, e.type, before, e);
     db_.updateEntry(e);
     db_.logActivity({getFormattedTimestamp(), e.type, e.title, e.status,
                      e.progress, e.totalUnits, e.score});
@@ -584,50 +584,50 @@ void appTui::run() {
 
     if (dir > 0) {
       switch (e.status) {
-        case watchStatus::Watching:
-          e.status = watchStatus::Completed;
+        case watchStatus::kWatching:
+          e.status = watchStatus::kCompleted;
           break;
-        case watchStatus::Completed:
-          e.status = watchStatus::OnHold;
+        case watchStatus::kCompleted:
+          e.status = watchStatus::kOnHold;
           break;
-        case watchStatus::OnHold:
-          e.status = watchStatus::Dropped;
+        case watchStatus::kOnHold:
+          e.status = watchStatus::kDropped;
           break;
-        case watchStatus::Dropped:
-          e.status = watchStatus::PlanToWatch;
+        case watchStatus::kDropped:
+          e.status = watchStatus::kPlanToWatch;
           break;
-        case watchStatus::PlanToWatch:
-          e.status = watchStatus::Watching;
+        case watchStatus::kPlanToWatch:
+          e.status = watchStatus::kWatching;
           break;
       }
     } else {
       switch (e.status) {
-        case watchStatus::Watching:
-          e.status = watchStatus::PlanToWatch;
+        case watchStatus::kWatching:
+          e.status = watchStatus::kPlanToWatch;
           break;
-        case watchStatus::Completed:
-          e.status = watchStatus::Watching;
+        case watchStatus::kCompleted:
+          e.status = watchStatus::kWatching;
           break;
-        case watchStatus::OnHold:
-          e.status = watchStatus::Completed;
+        case watchStatus::kOnHold:
+          e.status = watchStatus::kCompleted;
           break;
-        case watchStatus::Dropped:
-          e.status = watchStatus::OnHold;
+        case watchStatus::kDropped:
+          e.status = watchStatus::kOnHold;
           break;
-        case watchStatus::PlanToWatch:
-          e.status = watchStatus::Dropped;
+        case watchStatus::kPlanToWatch:
+          e.status = watchStatus::kDropped;
           break;
       }
     }
 
-    if (e.status == watchStatus::Watching) {
+    if (e.status == watchStatus::kWatching) {
       if (e.startDate.empty() || e.startDate.find("0000") == 0) {
         e.startDate = today;
       }
-      if (oldStatus == watchStatus::Completed) {
+      if (oldStatus == watchStatus::kCompleted) {
         e.finishDate = "0000-00-00";
       }
-    } else if (e.status == watchStatus::Completed) {
+    } else if (e.status == watchStatus::kCompleted) {
       if (e.startDate.empty() || e.startDate.find("0000") == 0) {
         e.startDate = today;
       }
@@ -635,17 +635,17 @@ void appTui::run() {
       if (e.totalUnits > 0 && e.progress < e.totalUnits) {
         e.progress = e.totalUnits;
       }
-    } else if (e.status == watchStatus::Dropped ||
-               e.status == watchStatus::OnHold) {
+    } else if (e.status == watchStatus::kDropped ||
+               e.status == watchStatus::kOnHold) {
       if (e.finishDate.empty() || e.finishDate.find("0000") == 0) {
         e.finishDate = today;
       }
-    } else if (e.status == watchStatus::PlanToWatch) {
+    } else if (e.status == watchStatus::kPlanToWatch) {
       e.finishDate = "0000-00-00";
     }
 
     e.updatedAt = today;
-    recordAction(historyAction::Mutate, e.type, before, e);
+    recordAction(historyAction::kMutate, e.type, before, e);
     db_.updateEntry(e);
     db_.logActivity({getFormattedTimestamp(), e.type, e.title, e.status,
                      e.progress, e.totalUnits, e.score});
@@ -659,7 +659,7 @@ void appTui::run() {
     entry before = e;
     e.score = std::clamp(e.score + dir, 0, 10);
     e.updatedAt = getTodayDateStr();
-    recordAction(historyAction::Mutate, e.type, before, e);
+    recordAction(historyAction::kMutate, e.type, before, e);
     db_.updateEntry(e);
     db_.logActivity({getFormattedTimestamp(), e.type, e.title, e.status,
                      e.progress, e.totalUnits, e.score});
@@ -674,8 +674,8 @@ void appTui::run() {
       reverseSort = !reverseSort;
     } else {
       currentSort = targetKey;
-      if (targetKey == sortKey::Score || targetKey == sortKey::Progress ||
-          targetKey == sortKey::Date) {
+      if (targetKey == sortKey::kScore || targetKey == sortKey::kProgress ||
+          targetKey == sortKey::kDate) {
         reverseSort = true;
       } else {
         reverseSort = false;
@@ -782,15 +782,15 @@ void appTui::run() {
     }
 
     bool inMulti = false;
-    if (idx == 3 && multiFilterStatuses.count(watchStatus::Watching))
+    if (idx == 3 && multiFilterStatuses.count(watchStatus::kWatching))
       inMulti = true;
-    else if (idx == 4 && multiFilterStatuses.count(watchStatus::Completed))
+    else if (idx == 4 && multiFilterStatuses.count(watchStatus::kCompleted))
       inMulti = true;
-    else if (idx == 5 && multiFilterStatuses.count(watchStatus::OnHold))
+    else if (idx == 5 && multiFilterStatuses.count(watchStatus::kOnHold))
       inMulti = true;
-    else if (idx == 6 && multiFilterStatuses.count(watchStatus::Dropped))
+    else if (idx == 6 && multiFilterStatuses.count(watchStatus::kDropped))
       inMulti = true;
-    else if (idx == 7 && multiFilterStatuses.count(watchStatus::PlanToWatch))
+    else if (idx == 7 && multiFilterStatuses.count(watchStatus::kPlanToWatch))
       inMulti = true;
     else if (idx >= 9 && idx <= 14 && multiFilterScores.count(19 - idx))
       inMulti = true;
@@ -807,9 +807,9 @@ void appTui::run() {
 
     // Precise Cursor Isolation: Only highlight background if cursor is on this
     // exact row
-    bool isCursorOnThis = (currentMode != appMode::Sch) &&
+    bool isCursorOnThis = (currentMode != appMode::kSch) &&
                           (idx == sidebarSelected) &&
-                          (currentFocus == focusedCard::Sidebar);
+                          (currentFocus == focusedCard::kSidebar);
     bool isFilterActive =
         inMulti || (multiFilterStatuses.empty() && multiFilterScores.empty() &&
                     idx == sidebarSelected);
@@ -860,9 +860,9 @@ void appTui::run() {
     const auto& e = displayedEntries[idx];
 
     bool isRowActive =
-        (currentMode != appMode::Sch) && (idx == catalogSelected) &&
-        (currentFocus == focusedCard::Catalog ||
-         currentFocus == focusedCard::Details || currentMode == appMode::Edt);
+        (currentMode != appMode::kSch) && (idx == catalogSelected) &&
+        (currentFocus == focusedCard::kCatalog ||
+         currentFocus == focusedCard::kDetails || currentMode == appMode::kEdt);
     bool isSelected = visualSelectedIds.count(e.id) > 0;
 
     int termWidth = Terminal::Size().dimx;
@@ -996,29 +996,29 @@ void appTui::run() {
       auto m = event.mouse();
       if (m.button == Mouse::Left && m.motion == Mouse::Pressed) {
         if (searchBarBox.Contain(m.x, m.y)) {
-          currentMode = appMode::Sch;
+          currentMode = appMode::kSch;
           searchInput->TakeFocus();
           statusMessage = "Search title... [ret] Apply  [Esc] Clear";
           return true;
         }
         if (headerDateBox.Contain(m.x, m.y)) {
-          toggleColumnSort(sortKey::Date, "Date");
+          toggleColumnSort(sortKey::kDate, "Date");
           return true;
         }
         if (headerTitleBox.Contain(m.x, m.y)) {
-          toggleColumnSort(sortKey::Title, "Title");
+          toggleColumnSort(sortKey::kTitle, "Title");
           return true;
         }
         if (headerStatusBox.Contain(m.x, m.y)) {
-          toggleColumnSort(sortKey::Status, "Status");
+          toggleColumnSort(sortKey::kStatus, "Status");
           return true;
         }
         if (headerRatingBox.Contain(m.x, m.y)) {
-          toggleColumnSort(sortKey::Score, "Rating");
+          toggleColumnSort(sortKey::kScore, "Rating");
           return true;
         }
         if (headerProgressBox.Contain(m.x, m.y)) {
-          toggleColumnSort(sortKey::Progress, "Progress");
+          toggleColumnSort(sortKey::kProgress, "Progress");
           return true;
         }
       }
@@ -1027,11 +1027,11 @@ void appTui::run() {
     // PENDING DELETE CONFIRMATION
     if (pendingDeleteId > 0) {
       if (event == Event::Character('y') || event == Event::Character('Y')) {
-        mediaType media = (currentTab == viewTab::Manga ? mediaType::Manga
-                                                        : mediaType::Anime);
+        mediaType media = (currentTab == viewTab::kManga ? mediaType::kManga
+                                                        : mediaType::kAnime);
         auto opt = db_.getById(media, pendingDeleteId);
         if (opt) {
-          recordAction(historyAction::Delete, media, opt.value(), entry{});
+          recordAction(historyAction::kDelete, media, opt.value(), entry{});
           db_.removeEntry(media, pendingDeleteId);
           db_.saveAll();
           pushNotification("Deleted '" + clipTitle(opt->title, 36) + "'.");
@@ -1069,13 +1069,13 @@ void appTui::run() {
     if (commandPalette_.isOpen()) {
       if (event == Event::Escape) {
         commandPalette_.close();
-        currentMode = appMode::Nor;
+        currentMode = appMode::kNor;
         return true;
       }
       if (event == Event::Return) {
         commandPalette_.execute([&](const std::string& cmd) {
           dispatchCommand(cmd);
-          currentMode = appMode::Nor;
+          currentMode = appMode::kNor;
         });
         return true;
       }
@@ -1106,7 +1106,7 @@ void appTui::run() {
     if (isOnlineModalOpen) {
       if (event == Event::Escape) {
         isOnlineModalOpen = false;
-        currentMode = appMode::Nor;
+        currentMode = appMode::kNor;
         catalogMenu->TakeFocus();
         return true;
       }
@@ -1140,7 +1140,7 @@ void appTui::run() {
           e.malId = sel.malId;
           e.type = sel.type;
           e.title = sel.title;
-          e.status = watchStatus::Watching;
+          e.status = watchStatus::kWatching;
           e.score = 0;
           e.progress = 0;
           e.totalUnits = sel.totalUnits;
@@ -1148,7 +1148,7 @@ void appTui::run() {
               sel.year.empty() ? getTodayDateStr() : (sel.year + "-01-01");
           e.updatedAt = getTodayDateStr();
           db_.addEntry(e);
-          recordAction(historyAction::Add, e.type, entry{}, e);
+          recordAction(historyAction::kAdd, e.type, entry{}, e);
           db_.saveAll();
           refreshViews();
 
@@ -1159,7 +1159,7 @@ void appTui::run() {
             }
           }
           isOnlineModalOpen = false;
-          currentMode = appMode::Nor;
+          currentMode = appMode::kNor;
           catalogMenu->TakeFocus();
           pushNotification("Successfully added '" + e.title + "'.");
           return true;
@@ -1181,21 +1181,21 @@ void appTui::run() {
       return true;
     }
 
-    if (currentMode == appMode::Sch) {
+    if (currentMode == appMode::kSch) {
       if (event == Event::Escape) {
         searchQuery = "";
         refreshViews();
-        currentFocus = focusedCard::Catalog;
+        currentFocus = focusedCard::kCatalog;
         catalogMenu->TakeFocus();
-        currentMode = appMode::Nor;
+        currentMode = appMode::kNor;
         statusMessage = "Search cleared.";
         return true;
       }
       if (event == Event::Return || event == Event::ArrowDown) {
         refreshViews();
-        currentFocus = focusedCard::Catalog;
+        currentFocus = focusedCard::kCatalog;
         catalogMenu->TakeFocus();
-        currentMode = appMode::Nor;
+        currentMode = appMode::kNor;
         statusMessage =
             searchQuery.empty()
                 ? "Filter cleared."
@@ -1216,13 +1216,13 @@ void appTui::run() {
           entry before = e;
           e.notes = inspectorNotesBuffer;
           e.updatedAt = getTodayDateStr();
-          recordAction(historyAction::Mutate, e.type, before, e);
+          recordAction(historyAction::kMutate, e.type, before, e);
           db_.updateEntry(e);
           db_.saveAll();
           refreshViews();
         }
         isInspectorEditingNotes = false;
-        currentMode = appMode::Nor;
+        currentMode = appMode::kNor;
         statusMessage = "Saved notes.";
         return true;
       }
@@ -1246,42 +1246,42 @@ void appTui::run() {
     }
 
     if (event == Event::Character('0')) {
-      currentTab = viewTab::About;
+      currentTab = viewTab::kAbout;
       return true;
     }
     if (event == Event::Character('1')) {
-      currentTab = viewTab::Anime;
+      currentTab = viewTab::kAnime;
       catalogSelected = 0;
       refreshViews();
       return true;
     }
     if (event == Event::Character('2')) {
-      currentTab = viewTab::Manga;
+      currentTab = viewTab::kManga;
       catalogSelected = 0;
       refreshViews();
       return true;
     }
     if (event == Event::Character('3')) {
-      currentTab = viewTab::Overview;
+      currentTab = viewTab::kOverview;
       return true;
     }
     if (event == Event::Character('4')) {
-      currentTab = viewTab::Sync;
+      currentTab = viewTab::kSync;
       return true;
     }
     if (event == Event::Character('5')) {
-      currentTab = viewTab::Settings;
+      currentTab = viewTab::kSettings;
       return true;
     }
 
     if (event == Event::Character(':')) {
-      currentMode = appMode::Cmd;
+      currentMode = appMode::kCmd;
       commandPalette_.open();
       return true;
     }
 
     // ABOUT TAB CONTROLS
-    if (currentTab == viewTab::About) {
+    if (currentTab == viewTab::kAbout) {
       if (event == Event::Character('h') || event == Event::ArrowLeft) {
         if (aboutActiveCard > 0)
           aboutActiveCard--;
@@ -1292,7 +1292,7 @@ void appTui::run() {
           aboutActiveCard++;
         return true;
       }
-      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::Quit, event.character())) {
+      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::kQuit, event.character())) {
         db_.saveAll();
         screen.ExitLoopClosure()();
         return true;
@@ -1301,7 +1301,7 @@ void appTui::run() {
     }
 
     // SYNC TAB CONTROLS
-    if (currentTab == viewTab::Sync) {
+    if (currentTab == viewTab::kSync) {
       if (event == Event::Character('h') || event == Event::ArrowLeft) {
         syncActivePanel = 0;
         return true;
@@ -1349,7 +1349,7 @@ void appTui::run() {
         }
         return true;
       }
-      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::Quit, event.character())) {
+      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::kQuit, event.character())) {
         db_.saveAll();
         screen.ExitLoopClosure()();
         return true;
@@ -1358,7 +1358,7 @@ void appTui::run() {
     }
 
     // SETTINGS TAB CONTROLS
-    if (currentTab == viewTab::Settings) {
+    if (currentTab == viewTab::kSettings) {
       auto themes = themeRegistry::getAvailableThemes();
       if (event == Event::Character('h') || event == Event::ArrowLeft) {
         settingsActivePanel = 0;
@@ -1429,7 +1429,7 @@ void appTui::run() {
         }
         return true;
       }
-      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::Quit, event.character())) {
+      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::kQuit, event.character())) {
         db_.saveAll();
         screen.ExitLoopClosure()();
         return true;
@@ -1437,8 +1437,8 @@ void appTui::run() {
       return false;
     }
 
-    if (currentTab == viewTab::Overview) {
-      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::Quit, event.character())) {
+    if (currentTab == viewTab::kOverview) {
+      if (event == Event::Character('q') || config_.keybinds.matches(keyAction::kQuit, event.character())) {
         db_.saveAll();
         screen.ExitLoopClosure()();
         return true;
@@ -1451,8 +1451,8 @@ void appTui::run() {
       if (!visualSelectedIds.empty()) {
         for (auto id : visualSelectedIds) {
           auto opt =
-              db_.getById((currentTab == viewTab::Manga ? mediaType::Manga
-                                                        : mediaType::Anime),
+              db_.getById((currentTab == viewTab::kManga ? mediaType::kManga
+                                                        : mediaType::kAnime),
                           id);
           if (opt) {
             auto e = opt.value();
@@ -1472,8 +1472,8 @@ void appTui::run() {
       if (!visualSelectedIds.empty()) {
         for (auto id : visualSelectedIds) {
           auto opt =
-              db_.getById((currentTab == viewTab::Manga ? mediaType::Manga
-                                                        : mediaType::Anime),
+              db_.getById((currentTab == viewTab::kManga ? mediaType::kManga
+                                                        : mediaType::kAnime),
                           id);
           if (opt) {
             auto e = opt.value();
@@ -1494,8 +1494,8 @@ void appTui::run() {
       if (!visualSelectedIds.empty()) {
         for (auto id : visualSelectedIds) {
           auto opt =
-              db_.getById((currentTab == viewTab::Manga ? mediaType::Manga
-                                                        : mediaType::Anime),
+              db_.getById((currentTab == viewTab::kManga ? mediaType::kManga
+                                                        : mediaType::kAnime),
                           id);
           if (opt) {
             auto e = opt.value();
@@ -1515,8 +1515,8 @@ void appTui::run() {
       if (!visualSelectedIds.empty()) {
         for (auto id : visualSelectedIds) {
           auto opt =
-              db_.getById((currentTab == viewTab::Manga ? mediaType::Manga
-                                                        : mediaType::Anime),
+              db_.getById((currentTab == viewTab::kManga ? mediaType::kManga
+                                                        : mediaType::kAnime),
                           id);
           if (opt) {
             auto e = opt.value();
@@ -1532,38 +1532,38 @@ void appTui::run() {
       return true;
     }
 
-    if (currentFocus != focusedCard::Details) {
+    if (currentFocus != focusedCard::kDetails) {
       if (event == Event::Character('c')) {
-        toggleColumnSort(sortKey::Date, "Date");
+        toggleColumnSort(sortKey::kDate, "Date");
         return true;
       }
       if (event == Event::Character('t')) {
-        toggleColumnSort(sortKey::Title, "Title");
+        toggleColumnSort(sortKey::kTitle, "Title");
         return true;
       }
       if (event == Event::Character('s')) {
-        toggleColumnSort(sortKey::Status, "Status");
+        toggleColumnSort(sortKey::kStatus, "Status");
         return true;
       }
       if (event == Event::Character('r')) {
-        toggleColumnSort(sortKey::Score, "Rating");
+        toggleColumnSort(sortKey::kScore, "Rating");
         return true;
       }
       if (event == Event::Character('p')) {
-        toggleColumnSort(sortKey::Progress, "Progress");
+        toggleColumnSort(sortKey::kProgress, "Progress");
         return true;
       }
     }
 
     // CATALOG CARD FOCUS
-    if (currentFocus == focusedCard::Catalog) {
+    if (currentFocus == focusedCard::kCatalog) {
       if (event == Event::Character('h') || event == Event::ArrowLeft) {
-        currentFocus = focusedCard::Sidebar;
+        currentFocus = focusedCard::kSidebar;
         sidebarMenu->TakeFocus();
         return true;
       }
       if (event == Event::Character('l') || event == Event::ArrowRight) {
-        currentFocus = focusedCard::Details;
+        currentFocus = focusedCard::kDetails;
         detailsCursorIndex = 0;
         return true;
       }
@@ -1574,12 +1574,12 @@ void appTui::run() {
             visualSelectedIds.erase(id);
           else
             visualSelectedIds.insert(id);
-          currentMode = visualSelectedIds.empty() ? appMode::Nor : appMode::Vis;
+          currentMode = visualSelectedIds.empty() ? appMode::kNor : appMode::kVis;
         }
         return true;
       }
       if (event == Event::Return || event == Event::Character('e')) {
-        currentFocus = focusedCard::Details;
+        currentFocus = focusedCard::kDetails;
         detailsCursorIndex = 0;
         statusMessage =
             "Details: [j/k] Navigate properties, [h/l] Adjust, [e/ret] Notes";
@@ -1608,9 +1608,9 @@ void appTui::run() {
       }
     }
     // SIDEBAR CARD FOCUS
-    else if (currentFocus == focusedCard::Sidebar) {
+    else if (currentFocus == focusedCard::kSidebar) {
       if (event == Event::Character('l') || event == Event::ArrowRight) {
-        currentFocus = focusedCard::Catalog;
+        currentFocus = focusedCard::kCatalog;
         catalogMenu->TakeFocus();
         return true;
       }
@@ -1636,30 +1636,30 @@ void appTui::run() {
       }
       if (event == Event::Character(' ')) {
         if (sidebarSelected == 3) {
-          if (multiFilterStatuses.count(watchStatus::Watching))
-            multiFilterStatuses.erase(watchStatus::Watching);
+          if (multiFilterStatuses.count(watchStatus::kWatching))
+            multiFilterStatuses.erase(watchStatus::kWatching);
           else
-            multiFilterStatuses.insert(watchStatus::Watching);
+            multiFilterStatuses.insert(watchStatus::kWatching);
         } else if (sidebarSelected == 4) {
-          if (multiFilterStatuses.count(watchStatus::Completed))
-            multiFilterStatuses.erase(watchStatus::Completed);
+          if (multiFilterStatuses.count(watchStatus::kCompleted))
+            multiFilterStatuses.erase(watchStatus::kCompleted);
           else
-            multiFilterStatuses.insert(watchStatus::Completed);
+            multiFilterStatuses.insert(watchStatus::kCompleted);
         } else if (sidebarSelected == 5) {
-          if (multiFilterStatuses.count(watchStatus::OnHold))
-            multiFilterStatuses.erase(watchStatus::OnHold);
+          if (multiFilterStatuses.count(watchStatus::kOnHold))
+            multiFilterStatuses.erase(watchStatus::kOnHold);
           else
-            multiFilterStatuses.insert(watchStatus::OnHold);
+            multiFilterStatuses.insert(watchStatus::kOnHold);
         } else if (sidebarSelected == 6) {
-          if (multiFilterStatuses.count(watchStatus::Dropped))
-            multiFilterStatuses.erase(watchStatus::Dropped);
+          if (multiFilterStatuses.count(watchStatus::kDropped))
+            multiFilterStatuses.erase(watchStatus::kDropped);
           else
-            multiFilterStatuses.insert(watchStatus::Dropped);
+            multiFilterStatuses.insert(watchStatus::kDropped);
         } else if (sidebarSelected == 7) {
-          if (multiFilterStatuses.count(watchStatus::PlanToWatch))
-            multiFilterStatuses.erase(watchStatus::PlanToWatch);
+          if (multiFilterStatuses.count(watchStatus::kPlanToWatch))
+            multiFilterStatuses.erase(watchStatus::kPlanToWatch);
           else
-            multiFilterStatuses.insert(watchStatus::PlanToWatch);
+            multiFilterStatuses.insert(watchStatus::kPlanToWatch);
         } else if (sidebarSelected >= 9 && sidebarSelected <= 14) {
           int score = 19 - sidebarSelected;
           if (multiFilterScores.count(score))
@@ -1679,16 +1679,16 @@ void appTui::run() {
         multiFilterStatuses.clear();
         multiFilterScores.clear();
         refreshViews();
-        currentFocus = focusedCard::Catalog;
+        currentFocus = focusedCard::kCatalog;
         catalogMenu->TakeFocus();
         return true;
       }
     }
     // DETAILS CARDS FOCUS (0: Status, 1: Rating, 2: Progress, 3: Notes)
-    else if (currentFocus == focusedCard::Details) {
+    else if (currentFocus == focusedCard::kDetails) {
       if (event == Event::Escape) {
-        currentFocus = focusedCard::Catalog;
-        currentMode = appMode::Nor;
+        currentFocus = focusedCard::kCatalog;
+        currentMode = appMode::kNor;
         return true;
       }
 
@@ -1708,7 +1708,7 @@ void appTui::run() {
 
         if (event == Event::Character('h') || event == Event::ArrowLeft) {
           if (detailsCursorIndex == 3) {
-            currentFocus = focusedCard::Catalog;
+            currentFocus = focusedCard::kCatalog;
             return true;
           }
           if (detailsCursorIndex == 0) {
@@ -1759,7 +1759,7 @@ void appTui::run() {
           if (detailsCursorIndex == 3) {
             inspectorNotesBuffer = e.notes;
             isInspectorEditingNotes = true;
-            currentMode = appMode::Edt;
+            currentMode = appMode::kEdt;
             inspectorNotesInput->TakeFocus();
             statusMessage = "Editing notes. Press [ret] or [Esc] to commit.";
             return true;
@@ -1769,7 +1769,7 @@ void appTui::run() {
     }
 
     if (event == Event::Character('/')) {
-      currentMode = appMode::Sch;
+      currentMode = appMode::kSch;
       searchInput->TakeFocus();
       statusMessage = "Search title... [ret] Apply  [Esc] Clear";
       return true;
@@ -1784,12 +1784,12 @@ void appTui::run() {
     if (event == Event::Character('d')) {
       if (!visualSelectedIds.empty()) {
         for (auto id : visualSelectedIds) {
-          db_.removeEntry((currentTab == viewTab::Manga ? mediaType::Manga
-                                                        : mediaType::Anime),
+          db_.removeEntry((currentTab == viewTab::kManga ? mediaType::kManga
+                                                        : mediaType::kAnime),
                           id);
         }
         visualSelectedIds.clear();
-        currentMode = appMode::Nor;
+        currentMode = appMode::kNor;
         db_.saveAll();
         refreshViews();
         pushNotification("Deleted selected entries.");
@@ -1830,7 +1830,7 @@ void appTui::run() {
       return true;
     }
 
-    if (event == Event::Character('q') || config_.keybinds.matches(keyAction::Quit, event.character())) {
+    if (event == Event::Character('q') || config_.keybinds.matches(keyAction::kQuit, event.character())) {
       db_.saveAll();
       screen.ExitLoopClosure()();
       return true;
@@ -1844,11 +1844,11 @@ void appTui::run() {
 
     auto makeStatSection = [&](mediaType type, const std::string& title,
                                ftxui::Color accentColor) {
-      size_t cWatch = db_.countByStatus(type, watchStatus::Watching);
-      size_t cComp = db_.countByStatus(type, watchStatus::Completed);
-      size_t cHold = db_.countByStatus(type, watchStatus::OnHold);
-      size_t cDrop = db_.countByStatus(type, watchStatus::Dropped);
-      size_t cPlan = db_.countByStatus(type, watchStatus::PlanToWatch);
+      size_t cWatch = db_.countByStatus(type, watchStatus::kWatching);
+      size_t cComp = db_.countByStatus(type, watchStatus::kCompleted);
+      size_t cHold = db_.countByStatus(type, watchStatus::kOnHold);
+      size_t cDrop = db_.countByStatus(type, watchStatus::kDropped);
+      size_t cPlan = db_.countByStatus(type, watchStatus::kPlanToWatch);
       size_t cTotal = db_.getEntries(type).size();
 
       double days = db_.daysSpent(type);
@@ -1908,7 +1908,7 @@ void appTui::run() {
                hbox(
                    {vbox(
                         {hbox({text("● ") | color(theme.green),
-                               text(type == mediaType::Anime ? "Watching"
+                               text(type == mediaType::kAnime ? "Watching"
                                                              : "Reading") |
                                    color(theme.blue),
                                filler(),
@@ -1923,7 +1923,7 @@ void appTui::run() {
                                text("Dropped") | color(theme.blue), filler(),
                                text(formatCommas(cDrop)) | color(theme.text)}),
                          hbox({text("● ") | color(theme.overlay0),
-                               text(type == mediaType::Anime ? "Plan to Watch"
+                               text(type == mediaType::kAnime ? "Plan to Watch"
                                                              : "Plan to Read") |
                                    color(theme.blue),
                                filler(),
@@ -1935,23 +1935,23 @@ void appTui::run() {
                         {hbox({text("Total Entries") | color(theme.subtext),
                                filler(),
                                text(formatCommas(cTotal)) | color(theme.text)}),
-                         hbox({text(type == mediaType::Anime ? "Rewatched"
+                         hbox({text(type == mediaType::kAnime ? "Rewatched"
                                                              : "Reread") |
                                    color(theme.subtext),
                                filler(),
                                text(formatCommas(db_.totalRewatched(type))) |
                                    color(theme.text)}),
-                         hbox({text(type == mediaType::Anime ? "Episodes"
+                         hbox({text(type == mediaType::kAnime ? "Episodes"
                                                              : "Chapters") |
                                    color(theme.subtext),
                                filler(),
                                text(formatCommas(db_.totalProgress(type))) |
                                    color(theme.text)}),
-                         (type == mediaType::Manga
+                         (type == mediaType::kManga
                               ? hbox({text("Volumes") | color(theme.subtext),
                                       filler(),
                                       text(formatCommas(
-                                          db_.totalVolumes(mediaType::Manga))) |
+                                          db_.totalVolumes(mediaType::kManga))) |
                                           color(theme.text)})
                               : text(""))}) |
                         size(WIDTH, EQUAL, 20)})}) |
@@ -1960,11 +1960,11 @@ void appTui::run() {
       auto recentList = db_.getRecentActivity(type, 3);
       Elements recentBoxes;
       recentBoxes.push_back(hbox(
-          {text(type == mediaType::Anime ? "Last Anime Updates"
+          {text(type == mediaType::kAnime ? "Last Anime Updates"
                                          : "Last Manga Updates") |
                bold | color(theme.text),
            filler(),
-           text(type == mediaType::Anime ? "Anime History" : "Manga History") |
+           text(type == mediaType::kAnime ? "Anime History" : "Manga History") |
                color(theme.blue)}));
       recentBoxes.push_back(text(""));
 
@@ -1983,7 +1983,7 @@ void appTui::run() {
 
           auto miniBar = hbox(
               {text(std::string(filled, ' ')) |
-                   bgcolor(act.status == watchStatus::Completed ? theme.blue
+                   bgcolor(act.status == watchStatus::kCompleted ? theme.blue
                                                                 : theme.green),
                text(std::string(std::max(0, gWidth - filled), ' ')) |
                    bgcolor(theme.surface1)});
@@ -2009,10 +2009,10 @@ void appTui::run() {
     };
 
     return vbox({text("Statistics") | bold | color(theme.text), text(""),
-                 makeStatSection(mediaType::Anime, "Anime Stats",
+                 makeStatSection(mediaType::kAnime, "Anime Stats",
                                  theme.lavender),
                  text(""),
-                 makeStatSection(mediaType::Manga, "Manga Stats", theme.peach),
+                 makeStatSection(mediaType::kManga, "Manga Stats", theme.peach),
                  filler()}) |
            size(WIDTH, EQUAL, 102) | center | flex;
   };
@@ -2036,9 +2036,9 @@ void appTui::run() {
               text(""), text(" Your watchlist is saved locally on"),
               text(" your computer in simple CSV files."), text(""),
               text("  • Total Anime : " +
-                   std::to_string(db_.getEntries(mediaType::Anime).size())),
+                   std::to_string(db_.getEntries(mediaType::kAnime).size())),
               text("  • Total Manga : " +
-                   std::to_string(db_.getEntries(mediaType::Manga).size())),
+                   std::to_string(db_.getEntries(mediaType::kManga).size())),
               text(""), text(" Location:"),
               text(" ~/.config/catalist/") | color(theme.subtext), text(""),
               text(" No accounts or tracking required.") | color(theme.green),
@@ -2233,8 +2233,8 @@ void appTui::run() {
 
   auto mainRenderer = Renderer(globalHandler, [&]() {
     const auto& theme = themeRegistry::active();
-    size_t aCount = db_.getEntries(mediaType::Anime).size();
-    size_t mCount = db_.getEntries(mediaType::Manga).size();
+    size_t aCount = db_.getEntries(mediaType::kAnime).size();
+    size_t mCount = db_.getEntries(mediaType::kManga).size();
 
     auto nowMs = static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -2264,24 +2264,24 @@ void appTui::run() {
           std::string ic = item.getPropString("icon", "");
           bool showCount = item.getPropBool("show-count", false);
 
-          viewTab vTab = viewTab::Anime;
+          viewTab vTab = viewTab::kAnime;
           std::string cnt = "";
           if (tid == "about")
-            vTab = viewTab::About;
+            vTab = viewTab::kAbout;
           else if (tid == "anime") {
-            vTab = viewTab::Anime;
+            vTab = viewTab::kAnime;
             if (showCount)
               cnt = std::to_string(aCount);
           } else if (tid == "manga") {
-            vTab = viewTab::Manga;
+            vTab = viewTab::kManga;
             if (showCount)
               cnt = std::to_string(mCount);
           } else if (tid == "overview" || tid == "stats")
-            vTab = viewTab::Overview;
+            vTab = viewTab::kOverview;
           else if (tid == "sync")
-            vTab = viewTab::Sync;
+            vTab = viewTab::kSync;
           else if (tid == "settings")
-            vTab = viewTab::Settings;
+            vTab = viewTab::kSettings;
 
           tabElements.push_back(makeTabItem(vTab, ic, label, cnt));
           tabElements.push_back(text("│") | color(theme.surface0));
@@ -2293,19 +2293,19 @@ void appTui::run() {
         }
       }
     } else {
-      tabElements = {makeTabItem(viewTab::About, icon::AppLogo, "Catalist"),
+      tabElements = {makeTabItem(viewTab::kAbout, icon::AppLogo, "Catalist"),
                      text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::Anime, icon::Anime, "Anime",
+                     makeTabItem(viewTab::kAnime, icon::Anime, "Anime",
                                  std::to_string(aCount)),
                      text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::Manga, icon::Manga, "Manga",
+                     makeTabItem(viewTab::kManga, icon::Manga, "Manga",
                                  std::to_string(mCount)),
                      text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::Overview, icon::Stats, "Overview"),
+                     makeTabItem(viewTab::kOverview, icon::Stats, "Overview"),
                      text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::Sync, icon::Sync, "Sync"),
+                     makeTabItem(viewTab::kSync, icon::Sync, "Sync"),
                      text("│") | color(theme.surface0),
-                     makeTabItem(viewTab::Settings, "󰒓", "Settings"),
+                     makeTabItem(viewTab::kSettings, "󰒓", "Settings"),
                      filler(),
                      text("v0.2.0 ") | color(theme.overlay0)};
     }
@@ -2315,13 +2315,13 @@ void appTui::run() {
 
     Element contentPane;
 
-    if (currentTab == viewTab::Overview) {
+    if (currentTab == viewTab::kOverview) {
       contentPane = buildOverviewStatisticsSection();
-    } else if (currentTab == viewTab::About) {
+    } else if (currentTab == viewTab::kAbout) {
       contentPane = buildAboutSection();
-    } else if (currentTab == viewTab::Sync) {
+    } else if (currentTab == viewTab::kSync) {
       contentPane = buildSyncSection();
-    } else if (currentTab == viewTab::Settings) {
+    } else if (currentTab == viewTab::kSettings) {
       contentPane = buildSettingsSection();
     } else {
       Element details = text("No record selected.") | color(theme.subtext);
@@ -2333,11 +2333,11 @@ void appTui::run() {
                 ? std::clamp(static_cast<float>(e.progress) / e.totalUnits,
                              0.0f, 1.0f)
                 : 0.0f;
-        auto gaugeColor = (ratio >= 1.0f || e.status == watchStatus::Completed)
+        auto gaugeColor = (ratio >= 1.0f || e.status == watchStatus::kCompleted)
                               ? theme.green
                               : theme.blue;
 
-        bool onDetails = (currentFocus == focusedCard::Details);
+        bool onDetails = (currentFocus == focusedCard::kDetails);
 
         auto fieldRow = [&](int idx, const std::string& label,
                             Element content) {
@@ -2374,7 +2374,7 @@ void appTui::run() {
                 : e.startDate;
         std::string finishDisplay =
             (e.finishDate.empty() || e.finishDate.find("0000") == 0)
-                ? (e.status == watchStatus::Completed ? "Completed"
+                ? (e.status == watchStatus::kCompleted ? "Completed"
                                                       : "In progress")
                 : e.finishDate;
 
@@ -2423,7 +2423,7 @@ void appTui::run() {
         // Card 2: Tracking Card (Status + Metrics together, highlights when
         // index <= 2)
         bool isTrackingSelected =
-            (currentMode != appMode::Sch) && onDetails && (detailsCursorIndex <= 2);
+            (currentMode != appMode::kSch) && onDetails && (detailsCursorIndex <= 2);
         auto trackingCard =
             vbox({hbox({text("  TRACKING") | bold | color(theme.lavender),
                         filler(),
@@ -2444,7 +2444,7 @@ void appTui::run() {
                                        (e.totalUnits > 0
                                             ? std::to_string(e.totalUnits)
                                             : "?") +
-                                       (e.type == mediaType::Anime ? " eps"
+                                       (e.type == mediaType::kAnime ? " eps"
                                                                    : " chs")) |
                                       color(theme.text),
                                   filler(),
@@ -2459,7 +2459,7 @@ void appTui::run() {
 
         // Card 3: Notes Card (Highlights when index == 3)
         bool isNotesSelected =
-            (currentMode != appMode::Sch) && onDetails && (detailsCursorIndex == 3);
+            (currentMode != appMode::kSch) && onDetails && (detailsCursorIndex == 3);
         auto notesCard =
             vbox(
                 {hbox({text("  NOTES") | bold | color(theme.lavender), filler(),
@@ -2509,23 +2509,23 @@ void appTui::run() {
 
       auto headerRibbon = hbox(
           {text("   ") | size(WIDTH, EQUAL, 3),
-           makeHeaderCell("Date", sortKey::Date, 10, headerDateBox), text(" "),
-           makeHeaderCell("Title", sortKey::Title, 28, headerTitleBox, true),
+           makeHeaderCell("Date", sortKey::kDate, 10, headerDateBox), text(" "),
+           makeHeaderCell("Title", sortKey::kTitle, 28, headerTitleBox, true),
            text(" "),
-           makeHeaderCell("Status", sortKey::Status, 14, headerStatusBox),
+           makeHeaderCell("Status", sortKey::kStatus, 14, headerStatusBox),
            text(" "),
-           makeHeaderCell("Rating", sortKey::Score, 12, headerRatingBox),
+           makeHeaderCell("Rating", sortKey::kScore, 12, headerRatingBox),
            text(" "),
-           makeHeaderCell("Progress", sortKey::Progress, 12, headerProgressBox),
+           makeHeaderCell("Progress", sortKey::kProgress, 12, headerProgressBox),
            text(" ")});
 
-      bool inSearchMode = (currentMode == appMode::Sch);
+      bool inSearchMode = (currentMode == appMode::kSch);
 
       auto sidebarCard =
           vbox({text("  Categories") | bold | color(theme.lavender), text(""),
                 sidebarMenu->Render() | vscroll_indicator | frame | flex}) |
           border |
-          color((!inSearchMode && currentFocus == focusedCard::Sidebar)
+          color((!inSearchMode && currentFocus == focusedCard::kSidebar)
                     ? theme.mauve
                     : theme.surface0) |
           size(WIDTH, EQUAL, 28);
@@ -2538,7 +2538,7 @@ void appTui::run() {
                     color(theme.subtext),
                 text(" ")}) |
           border |
-          color(currentMode == appMode::Sch ? theme.peach : theme.surface0) |
+          color(currentMode == appMode::kSch ? theme.peach : theme.surface0) |
           size(HEIGHT, EQUAL, 3) | reflect(searchBarBox);
 
       auto catalogCard =
@@ -2549,7 +2549,7 @@ void appTui::run() {
                     : (catalogMenu->Render() | vscroll_indicator | frame |
                        flex)}) |
           border |
-          color((!inSearchMode && currentFocus == focusedCard::Catalog)
+          color((!inSearchMode && currentFocus == focusedCard::kCatalog)
                     ? theme.mauve
                     : theme.surface0) |
           flex;
@@ -2573,12 +2573,12 @@ void appTui::run() {
     };
 
     Elements hints;
-    if (currentFocus == focusedCard::Details && currentMode != appMode::Edt) {
+    if (currentFocus == focusedCard::kDetails && currentMode != appMode::kEdt) {
       hints = {hintItem("j/k", "field"),   text("  "),
                hintItem("h/l", "adjust"),  text("  "),
                hintItem("e/ret", "notes"), text("  "),
                hintItem("Esc", "catalog")};
-    } else if (currentMode == appMode::Nor || currentMode == appMode::Vis) {
+    } else if (currentMode == appMode::kNor || currentMode == appMode::kVis) {
       hints = {hintItem("Tab", "tabs"),       text("  "),
                hintItem("h/l", "panes"),      text("  "),
                hintItem("e/ret", "edit"),     text("  "),
@@ -2590,10 +2590,10 @@ void appTui::run() {
                hintItem("d", "del"),          text("  "),
                hintItem("/", "find"),         text("  "),
                hintItem(":", "cmd")};
-    } else if (currentMode == appMode::Edt) {
+    } else if (currentMode == appMode::kEdt) {
       hints = {hintItem("ret", "commit"), text("  "),
                hintItem("Esc", "cancel")};
-    } else if (currentMode == appMode::Sch) {
+    } else if (currentMode == appMode::kSch) {
       hints = {hintItem("ret", "apply"), text("  "), hintItem("Esc", "clear")};
     }
 

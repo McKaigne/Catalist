@@ -8,23 +8,23 @@
 namespace catalist::kdl {
 
 std::string value::asString() const {
-  if (valueType == type::String)
+  if (valueType == type::kString)
     return stringVal;
-  if (valueType == type::Number) {
+  if (valueType == type::kNumber) {
     if (numberVal == static_cast<long long>(numberVal)) {
       return std::to_string(static_cast<long long>(numberVal));
     }
     return std::to_string(numberVal);
   }
-  if (valueType == type::Boolean)
+  if (valueType == type::kBoolean)
     return boolVal ? "true" : "false";
   return "";
 }
 
 int value::asInt(int defaultVal) const {
-  if (valueType == type::Number)
+  if (valueType == type::kNumber)
     return static_cast<int>(numberVal);
-  if (valueType == type::String) {
+  if (valueType == type::kString) {
     try {
       return std::stoi(stringVal);
     } catch (...) {
@@ -34,9 +34,9 @@ int value::asInt(int defaultVal) const {
 }
 
 double value::asDouble(double defaultVal) const {
-  if (valueType == type::Number)
+  if (valueType == type::kNumber)
     return numberVal;
-  if (valueType == type::String) {
+  if (valueType == type::kString) {
     try {
       return std::stod(stringVal);
     } catch (...) {
@@ -46,9 +46,9 @@ double value::asDouble(double defaultVal) const {
 }
 
 bool value::asBool(bool defaultVal) const {
-  if (valueType == type::Boolean)
+  if (valueType == type::kBoolean)
     return boolVal;
-  if (valueType == type::String) {
+  if (valueType == type::kString) {
     std::string s = stringVal;
     std::transform(s.begin(), s.end(), s.begin(), ::tolower);
     if (s == "true" || s == "1" || s == "yes")
@@ -144,19 +144,19 @@ public:
   explicit tokenizer(std::string src) : src_(std::move(src)), pos_(0) {}
 
   enum class tokenType {
-    Ident,
-    String,
-    Number,
-    Equals,
-    LBrace,
-    RBrace,
-    Semicolon,
-    Newline,
-    Eof
+    kIdent,
+    kString,
+    kNumber,
+    kEquals,
+    kLBrace,
+    kRBrace,
+    kSemicolon,
+    kNewline,
+    kEof
   };
 
   struct token {
-    tokenType type = tokenType::Eof;
+    tokenType type = tokenType::kEof;
     std::string text;
     double numberVal = 0.0;
   };
@@ -164,30 +164,30 @@ public:
   token next() {
     skipWhitespaceAndComments();
     if (pos_ >= src_.size())
-      return {tokenType::Eof, "", 0.0};
+      return {tokenType::kEof, "", 0.0};
 
     char c = src_[pos_];
 
     if (c == '\n' || c == '\r') {
       while (pos_ < src_.size() && (src_[pos_] == '\n' || src_[pos_] == '\r'))
         pos_++;
-      return {tokenType::Newline, "\n", 0.0};
+      return {tokenType::kNewline, "\n", 0.0};
     }
     if (c == ';') {
       pos_++;
-      return {tokenType::Semicolon, ";", 0.0};
+      return {tokenType::kSemicolon, ";", 0.0};
     }
     if (c == '=') {
       pos_++;
-      return {tokenType::Equals, "=", 0.0};
+      return {tokenType::kEquals, "=", 0.0};
     }
     if (c == '{') {
       pos_++;
-      return {tokenType::LBrace, "{", 0.0};
+      return {tokenType::kLBrace, "{", 0.0};
     }
     if (c == '}') {
       pos_++;
-      return {tokenType::RBrace, "}", 0.0};
+      return {tokenType::kRBrace, "}", 0.0};
     }
 
     if (c == '"')
@@ -259,7 +259,7 @@ private:
         s += c;
       }
     }
-    return {tokenType::String, s, 0.0};
+    return {tokenType::kString, s, 0.0};
   }
 
   token parseNumber() {
@@ -277,7 +277,7 @@ private:
       val = std::stod(str);
     } catch (...) {
     }
-    return {tokenType::Number, str, val};
+    return {tokenType::kNumber, str, val};
   }
 
   token parseIdent() {
@@ -290,7 +290,7 @@ private:
       }
       pos_++;
     }
-    return {tokenType::Ident, src_.substr(start, pos_ - start), 0.0};
+    return {tokenType::kIdent, src_.substr(start, pos_ - start), 0.0};
   }
 };
 
@@ -302,7 +302,7 @@ document document::parse(const std::string& content, std::string& outErr) {
   while (true) {
     auto tok = lexer.next();
     tokens.push_back(tok);
-    if (tok.type == tokenizer::tokenType::Eof)
+    if (tok.type == tokenizer::tokenType::kEof)
       break;
   }
 
@@ -310,17 +310,17 @@ document document::parse(const std::string& content, std::string& outErr) {
 
   auto parseNode = [&](auto& self) -> std::optional<node> {
     while (idx < tokens.size() &&
-           (tokens[idx].type == tokenizer::tokenType::Newline ||
-            tokens[idx].type == tokenizer::tokenType::Semicolon)) {
+           (tokens[idx].type == tokenizer::tokenType::kNewline ||
+            tokens[idx].type == tokenizer::tokenType::kSemicolon)) {
       idx++;
     }
-    if (idx >= tokens.size() || tokens[idx].type == tokenizer::tokenType::Eof ||
-        tokens[idx].type == tokenizer::tokenType::RBrace) {
+    if (idx >= tokens.size() || tokens[idx].type == tokenizer::tokenType::kEof ||
+        tokens[idx].type == tokenizer::tokenType::kRBrace) {
       return std::nullopt;
     }
 
-    if (tokens[idx].type != tokenizer::tokenType::Ident &&
-        tokens[idx].type != tokenizer::tokenType::String) {
+    if (tokens[idx].type != tokenizer::tokenType::kIdent &&
+        tokens[idx].type != tokenizer::tokenType::kString) {
       idx++;
       return std::nullopt;
     }
@@ -330,52 +330,52 @@ document document::parse(const std::string& content, std::string& outErr) {
 
     while (idx < tokens.size()) {
       auto t = tokens[idx];
-      if (t.type == tokenizer::tokenType::Newline ||
-          t.type == tokenizer::tokenType::Semicolon ||
-          t.type == tokenizer::tokenType::Eof ||
-          t.type == tokenizer::tokenType::RBrace) {
+      if (t.type == tokenizer::tokenType::kNewline ||
+          t.type == tokenizer::tokenType::kSemicolon ||
+          t.type == tokenizer::tokenType::kEof ||
+          t.type == tokenizer::tokenType::kRBrace) {
         idx++;
         break;
       }
 
-      if (t.type == tokenizer::tokenType::LBrace) {
+      if (t.type == tokenizer::tokenType::kLBrace) {
         idx++;
         while (idx < tokens.size() &&
-               tokens[idx].type != tokenizer::tokenType::RBrace &&
-               tokens[idx].type != tokenizer::tokenType::Eof) {
+               tokens[idx].type != tokenizer::tokenType::kRBrace &&
+               tokens[idx].type != tokenizer::tokenType::kEof) {
           auto child = self(self);
           if (child.has_value()) {
             currentNode.children.push_back(child.value());
           }
         }
         if (idx < tokens.size() &&
-            tokens[idx].type == tokenizer::tokenType::RBrace) {
+            tokens[idx].type == tokenizer::tokenType::kRBrace) {
           idx++;
         }
         break;
       }
 
       // Check if property: ident = value
-      if (t.type == tokenizer::tokenType::Ident && idx + 1 < tokens.size() &&
-          tokens[idx + 1].type == tokenizer::tokenType::Equals) {
+      if (t.type == tokenizer::tokenType::kIdent && idx + 1 < tokens.size() &&
+          tokens[idx + 1].type == tokenizer::tokenType::kEquals) {
         std::string propKey = t.text;
         idx += 2;
         if (idx < tokens.size()) {
           auto valTok = tokens[idx++];
           value v;
-          if (valTok.type == tokenizer::tokenType::String) {
-            v.valueType = value::type::String;
+          if (valTok.type == tokenizer::tokenType::kString) {
+            v.valueType = value::type::kString;
             v.stringVal = valTok.text;
-          } else if (valTok.type == tokenizer::tokenType::Number) {
-            v.valueType = value::type::Number;
+          } else if (valTok.type == tokenizer::tokenType::kNumber) {
+            v.valueType = value::type::kNumber;
             v.numberVal = valTok.numberVal;
             v.stringVal = valTok.text;
-          } else if (valTok.type == tokenizer::tokenType::Ident) {
+          } else if (valTok.type == tokenizer::tokenType::kIdent) {
             if (valTok.text == "true" || valTok.text == "false") {
-              v.valueType = value::type::Boolean;
+              v.valueType = value::type::kBoolean;
               v.boolVal = (valTok.text == "true");
             } else {
-              v.valueType = value::type::String;
+              v.valueType = value::type::kString;
               v.stringVal = valTok.text;
             }
           }
@@ -386,19 +386,19 @@ document document::parse(const std::string& content, std::string& outErr) {
 
       // Positional argument
       value v;
-      if (t.type == tokenizer::tokenType::String) {
-        v.valueType = value::type::String;
+      if (t.type == tokenizer::tokenType::kString) {
+        v.valueType = value::type::kString;
         v.stringVal = t.text;
-      } else if (t.type == tokenizer::tokenType::Number) {
-        v.valueType = value::type::Number;
+      } else if (t.type == tokenizer::tokenType::kNumber) {
+        v.valueType = value::type::kNumber;
         v.numberVal = t.numberVal;
         v.stringVal = t.text;
-      } else if (t.type == tokenizer::tokenType::Ident) {
+      } else if (t.type == tokenizer::tokenType::kIdent) {
         if (t.text == "true" || t.text == "false") {
-          v.valueType = value::type::Boolean;
+          v.valueType = value::type::kBoolean;
           v.boolVal = (t.text == "true");
         } else {
-          v.valueType = value::type::String;
+          v.valueType = value::type::kString;
           v.stringVal = t.text;
         }
       }
@@ -409,7 +409,7 @@ document document::parse(const std::string& content, std::string& outErr) {
     return currentNode;
   };
 
-  while (idx < tokens.size() && tokens[idx].type != tokenizer::tokenType::Eof) {
+  while (idx < tokens.size() && tokens[idx].type != tokenizer::tokenType::kEof) {
     auto n = parseNode(parseNode);
     if (n.has_value()) {
       doc.rootNodes.push_back(n.value());
@@ -427,9 +427,9 @@ static void serializeNode(std::ostringstream& ss, const node& currentNode,
 
   for (const auto& arg : currentNode.args) {
     ss << " ";
-    if (arg.valueType == value::type::String)
+    if (arg.valueType == value::type::kString)
       ss << "\"" << arg.stringVal << "\"";
-    else if (arg.valueType == value::type::Boolean)
+    else if (arg.valueType == value::type::kBoolean)
       ss << (arg.boolVal ? "true" : "false");
     else
       ss << arg.asString();
@@ -437,9 +437,9 @@ static void serializeNode(std::ostringstream& ss, const node& currentNode,
 
   for (const auto& [k, v] : currentNode.props) {
     ss << " " << k << "=";
-    if (v.valueType == value::type::String)
+    if (v.valueType == value::type::kString)
       ss << "\"" << v.stringVal << "\"";
-    else if (v.valueType == value::type::Boolean)
+    else if (v.valueType == value::type::kBoolean)
       ss << (v.boolVal ? "true" : "false");
     else
       ss << v.asString();

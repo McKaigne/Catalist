@@ -8,7 +8,7 @@
 namespace catalist::kdl {
 
 struct value {
-  enum class type { String, Number, Boolean, Null } valueType = type::Null;
+  enum class type { kString, kNumber, kBoolean, kNull } valueType = type::kNull;
   std::string stringVal;
   double numberVal = 0.0;
   bool boolVal = false;

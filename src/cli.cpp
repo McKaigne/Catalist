@@ -180,7 +180,7 @@ std::string cliDispatcher::formatJsonEntry(const entry& e) {
      << "\"malId\":" << e.malId << ","
      << "\"anilistId\":" << e.anilistId << ","
      << "\"title\":\"" << escapeJsonString(e.title) << "\","
-     << "\"type\":\"" << (e.type == mediaType::Anime ? "anime" : "manga")
+     << "\"type\":\"" << (e.type == mediaType::kAnime ? "anime" : "manga")
      << "\","
      << "\"status\":\"" << statusToString(e.status, e.type) << "\","
      << "\"rating\":" << e.score << ","
@@ -313,14 +313,14 @@ static bool parseCommonFilters(const std::vector<std::string>& args,
     const std::string& arg = args[i];
 
     if (arg == "--json") {
-      opts.format = outputFormat::Json;
+      opts.format = outputFormat::kJson;
       jsonMode = true;
     } else if (arg == "--plain") {
-      opts.format = outputFormat::Plain;
+      opts.format = outputFormat::kPlain;
     } else if (arg == "--ids") {
-      opts.format = outputFormat::Ids;
+      opts.format = outputFormat::kIds;
     } else if (arg == "--csv") {
-      opts.format = outputFormat::Csv;
+      opts.format = outputFormat::kCsv;
     } else if (arg == "--reverse" || arg == "-R") {
       opts.reverseSort = true;
     } else if (arg == "--unrated") {
@@ -335,9 +335,9 @@ static bool parseCommonFilters(const std::vector<std::string>& args,
       std::string t = args[i];
       std::transform(t.begin(), t.end(), t.begin(), ::tolower);
       if (t == "anime" || t == "a")
-        opts.type = mediaType::Anime;
+        opts.type = mediaType::kAnime;
       else if (t == "manga" || t == "m")
-        opts.type = mediaType::Manga;
+        opts.type = mediaType::kManga;
       else {
         err = "invalid media type '" + args[i] +
               "'. Expected 'anime' or 'manga'.";
@@ -395,17 +395,17 @@ static bool parseCommonFilters(const std::vector<std::string>& args,
       std::string s = args[i];
       std::transform(s.begin(), s.end(), s.begin(), ::tolower);
       if (s == "score" || s == "rating")
-        opts.sortBy = sortKey::Score;
+        opts.sortBy = sortKey::kScore;
       else if (s == "title")
-        opts.sortBy = sortKey::Title;
+        opts.sortBy = sortKey::kTitle;
       else if (s == "status")
-        opts.sortBy = sortKey::Status;
+        opts.sortBy = sortKey::kStatus;
       else if (s == "progress")
-        opts.sortBy = sortKey::Progress;
+        opts.sortBy = sortKey::kProgress;
       else if (s == "date" || s == "started" || s == "chrono")
-        opts.sortBy = sortKey::Date;
+        opts.sortBy = sortKey::kDate;
       else if (s == "id")
-        opts.sortBy = sortKey::Id;
+        opts.sortBy = sortKey::kId;
       else {
         err = "unknown sort key '" + args[i] +
               "'. Expected: rating, title, status, progress, date, id.";
@@ -452,8 +452,8 @@ static std::vector<entry> collectAndFilterEntries(
   };
 
   if (!opts.type.has_value()) {
-    appendType(mediaType::Anime);
-    appendType(mediaType::Manga);
+    appendType(mediaType::kAnime);
+    appendType(mediaType::kManga);
   } else {
     appendType(opts.type.value());
   }
@@ -481,31 +481,31 @@ int cliDispatcher::executeLs(const std::vector<std::string>& args, database& db,
 
   auto entries = collectAndFilterEntries(db, opts);
 
-  if (opts.format == outputFormat::Json) {
+  if (opts.format == outputFormat::kJson) {
     std::cout << formatJsonEntries(entries);
     return 0;
   }
 
-  if (opts.format == outputFormat::Plain) {
+  if (opts.format == outputFormat::kPlain) {
     for (const auto& e : entries) {
       std::cout << e.title << "\n";
     }
     return 0;
   }
 
-  if (opts.format == outputFormat::Ids) {
+  if (opts.format == outputFormat::kIds) {
     for (const auto& e : entries) {
       std::cout << e.id << "\n";
     }
     return 0;
   }
 
-  if (opts.format == outputFormat::Csv) {
+  if (opts.format == outputFormat::kCsv) {
     std::cout
         << "id,mal_id,type,title,status,score,progress,total_units,start_date,finish_date\n";
     for (const auto& e : entries) {
       std::cout << e.id << "," << e.malId << ","
-                << (e.type == mediaType::Anime ? "anime" : "manga") << ","
+                << (e.type == mediaType::kAnime ? "anime" : "manga") << ","
                 << escapeCsv(e.title) << ","
                 << escapeCsv(statusToString(e.status, e.type)) << "," << e.score
                 << "," << e.progress << "," << e.totalUnits << ","
@@ -560,7 +560,7 @@ int cliDispatcher::executeLs(const std::vector<std::string>& args, database& db,
 
     out << std::right << std::setw(maxIdLen + 2) << e.id << "  " << std::left
         << std::setw(30) << titleDisplay << "  " << std::setw(7)
-        << (e.type == mediaType::Anime ? "anime" : "manga") << "  "
+        << (e.type == mediaType::kAnime ? "anime" : "manga") << "  "
         << std::setw(12) << statusToString(e.status, e.type) << "  "
         << std::right << std::setw(7) << scoreStr << "  " << std::setw(9)
         << progStr << "\n";
@@ -618,7 +618,7 @@ static void printSingleDetail(const entry& e, bool jsonMode) {
   std::cout << (color ? ansi::Bold : "") << e.title
             << (color ? ansi::Reset : "") << "\n";
   tag("Type:");
-  std::cout << (e.type == mediaType::Anime ? "Anime" : "Manga") << "\n";
+  std::cout << (e.type == mediaType::kAnime ? "Anime" : "Manga") << "\n";
   tag("Status:");
   std::cout << statusToString(e.status, e.type) << "\n";
   tag("Rating:");
@@ -628,7 +628,7 @@ static void printSingleDetail(const entry& e, bool jsonMode) {
   std::cout << e.progress << " / "
             << (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?")
             << " units\n";
-  if (e.type == mediaType::Manga && (e.volumes > 0 || e.totalVolumes > 0)) {
+  if (e.type == mediaType::kManga && (e.volumes > 0 || e.totalVolumes > 0)) {
     tag("Volumes:");
     std::cout << e.volumes << " / "
               << (e.totalVolumes > 0 ? std::to_string(e.totalVolumes) : "?")
@@ -695,9 +695,9 @@ int cliDispatcher::executeShow(const std::vector<std::string>& args,
     bool isInt = !q.empty() && std::all_of(q.begin(), q.end(), ::isdigit);
     if (isInt) {
       int id = std::stoi(q);
-      match = db.getById(mediaType::Anime, id);
+      match = db.getById(mediaType::kAnime, id);
       if (!match.has_value()) {
-        match = db.getById(mediaType::Manga, id);
+        match = db.getById(mediaType::kManga, id);
       }
     }
 
@@ -723,8 +723,8 @@ int cliDispatcher::executeShow(const std::vector<std::string>& args,
         return false;
       };
 
-      if (!searchType(mediaType::Anime)) {
-        searchType(mediaType::Manga);
+      if (!searchType(mediaType::kAnime)) {
+        searchType(mediaType::kManga);
       }
 
       if (candidates.size() == 1) {
@@ -734,7 +734,7 @@ int cliDispatcher::executeShow(const std::vector<std::string>& args,
             "ambiguous query '" + q + "'. Matches multiple entries:\n";
         for (const auto& c : candidates) {
           msg += "  - [" + std::to_string(c.id) + "] " + c.title + " (" +
-                 (c.type == mediaType::Anime ? "anime" : "manga") + ")\n";
+                 (c.type == mediaType::kAnime ? "anime" : "manga") + ")\n";
         }
         emitError("ambiguous", msg, jsonMode);
         exitCode = 1;
@@ -764,8 +764,8 @@ int cliDispatcher::executeAdd(const std::vector<std::string>& args,
   }
 
   std::string title;
-  mediaType type = mediaType::Anime;
-  watchStatus status = watchStatus::Watching;
+  mediaType type = mediaType::kAnime;
+  watchStatus status = watchStatus::kWatching;
   int score = 0;
   int progress = 0;
   int totalUnits = 0;
@@ -788,9 +788,9 @@ int cliDispatcher::executeAdd(const std::vector<std::string>& args,
       std::string t = args[i];
       std::transform(t.begin(), t.end(), t.begin(), ::tolower);
       if (t == "anime" || t == "a")
-        type = mediaType::Anime;
+        type = mediaType::kAnime;
       else if (t == "manga" || t == "m")
-        type = mediaType::Manga;
+        type = mediaType::kManga;
       else {
         emitError(
             "usage",
@@ -918,7 +918,7 @@ int cliDispatcher::executeAdd(const std::vector<std::string>& args,
   } else {
     bool color = shouldColor();
     std::cout << (color ? ansi::Green + ansi::Bold : "") << "Added "
-              << (type == mediaType::Anime ? "anime" : "manga") << " '" << title
+              << (type == mediaType::kAnime ? "anime" : "manga") << " '" << title
               << "' [ID " << assignedId << "]" << (color ? ansi::Reset : "")
               << "\n";
   }
@@ -1111,9 +1111,9 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
     bool isInt = !q.empty() && std::all_of(q.begin(), q.end(), ::isdigit);
     if (isInt) {
       int id = std::stoi(q);
-      match = db.getById(mediaType::Anime, id);
+      match = db.getById(mediaType::kAnime, id);
       if (!match.has_value()) {
-        match = db.getById(mediaType::Manga, id);
+        match = db.getById(mediaType::kManga, id);
       }
     }
 
@@ -1139,8 +1139,8 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
         return false;
       };
 
-      if (!searchType(mediaType::Anime)) {
-        searchType(mediaType::Manga);
+      if (!searchType(mediaType::kAnime)) {
+        searchType(mediaType::kManga);
       }
 
       if (candidates.size() == 1) {
@@ -1168,7 +1168,7 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
 
     if (e.totalUnits > 0 && e.progress >= e.totalUnits) {
       e.progress = e.totalUnits;
-      e.status = watchStatus::Completed;
+      e.status = watchStatus::kCompleted;
     }
 
     if (setScore.has_value())
@@ -1270,9 +1270,9 @@ int cliDispatcher::executeRm(const std::vector<std::string>& args,
     bool isInt = !q.empty() && std::all_of(q.begin(), q.end(), ::isdigit);
     if (isInt) {
       int id = std::stoi(q);
-      match = db.getById(mediaType::Anime, id);
+      match = db.getById(mediaType::kAnime, id);
       if (!match.has_value()) {
-        match = db.getById(mediaType::Manga, id);
+        match = db.getById(mediaType::kManga, id);
       }
     }
 
@@ -1298,8 +1298,8 @@ int cliDispatcher::executeRm(const std::vector<std::string>& args,
         return false;
       };
 
-      if (!searchType(mediaType::Anime)) {
-        searchType(mediaType::Manga);
+      if (!searchType(mediaType::kAnime)) {
+        searchType(mediaType::kManga);
       }
 
       if (candidates.size() == 1) {
@@ -1380,17 +1380,17 @@ int cliDispatcher::executeRandom(const std::vector<std::string>& args,
   std::uniform_int_distribution<size_t> dist(0, entries.size() - 1);
   const auto& picked = entries[dist(gen)];
 
-  if (opts.format == outputFormat::Plain) {
+  if (opts.format == outputFormat::kPlain) {
     std::cout << picked.title << "\n";
     return 0;
   }
 
-  if (opts.format == outputFormat::Ids) {
+  if (opts.format == outputFormat::kIds) {
     std::cout << picked.id << "\n";
     return 0;
   }
 
-  if (opts.format == outputFormat::Json) {
+  if (opts.format == outputFormat::kJson) {
     std::cout << formatJsonEntry(picked) << "\n";
     return 0;
   }
@@ -1412,9 +1412,9 @@ int cliDispatcher::executeStats(const std::vector<std::string>& args,
         std::string t = args[i];
         std::transform(t.begin(), t.end(), t.begin(), ::tolower);
         if (t == "anime" || t == "a")
-          filterType = mediaType::Anime;
+          filterType = mediaType::kAnime;
         else if (t == "manga" || t == "m")
-          filterType = mediaType::Manga;
+          filterType = mediaType::kManga;
       }
     }
   }
@@ -1429,15 +1429,15 @@ int cliDispatcher::executeStats(const std::vector<std::string>& args,
        << "\"completedPercent\":" << db.completedPercentage(type) << ","
        << "\"progressUnits\":" << db.totalProgress(type) << ","
        << "\"rewatched\":" << db.totalRewatched(type) << ","
-       << "\"watching\":" << db.countByStatus(type, watchStatus::Watching)
+       << "\"watching\":" << db.countByStatus(type, watchStatus::kWatching)
        << ","
-       << "\"completed\":" << db.countByStatus(type, watchStatus::Completed)
+       << "\"completed\":" << db.countByStatus(type, watchStatus::kCompleted)
        << ","
-       << "\"onHold\":" << db.countByStatus(type, watchStatus::OnHold) << ","
-       << "\"dropped\":" << db.countByStatus(type, watchStatus::Dropped) << ","
-       << "\"planned\":" << db.countByStatus(type, watchStatus::PlanToWatch);
-    if (type == mediaType::Manga) {
-      ss << ",\"volumes\":" << db.totalVolumes(mediaType::Manga);
+       << "\"onHold\":" << db.countByStatus(type, watchStatus::kOnHold) << ","
+       << "\"dropped\":" << db.countByStatus(type, watchStatus::kDropped) << ","
+       << "\"planned\":" << db.countByStatus(type, watchStatus::kPlanToWatch);
+    if (type == mediaType::kManga) {
+      ss << ",\"volumes\":" << db.totalVolumes(mediaType::kManga);
     }
     ss << "}";
     return ss.str();
@@ -1447,8 +1447,8 @@ int cliDispatcher::executeStats(const std::vector<std::string>& args,
     if (filterType.has_value()) {
       std::cout << getStatsObj(filterType.value()) << "\n";
     } else {
-      std::cout << "{\"anime\":" << getStatsObj(mediaType::Anime)
-                << ",\"manga\":" << getStatsObj(mediaType::Manga) << "}\n";
+      std::cout << "{\"anime\":" << getStatsObj(mediaType::kAnime)
+                << ",\"manga\":" << getStatsObj(mediaType::kManga) << "}\n";
     }
     return 0;
   }
@@ -1456,17 +1456,17 @@ int cliDispatcher::executeStats(const std::vector<std::string>& args,
   bool color = shouldColor();
 
   auto printMediaStats = [&](mediaType type) {
-    std::string name = (type == mediaType::Anime ? "Anime" : "Manga");
+    std::string name = (type == mediaType::kAnime ? "Anime" : "Manga");
     size_t tot = db.getEntries(type).size();
-    size_t cWatch = db.countByStatus(type, watchStatus::Watching);
-    size_t cComp = db.countByStatus(type, watchStatus::Completed);
-    size_t cHold = db.countByStatus(type, watchStatus::OnHold);
-    size_t cDrop = db.countByStatus(type, watchStatus::Dropped);
-    size_t cPlan = db.countByStatus(type, watchStatus::PlanToWatch);
+    size_t cWatch = db.countByStatus(type, watchStatus::kWatching);
+    size_t cComp = db.countByStatus(type, watchStatus::kCompleted);
+    size_t cHold = db.countByStatus(type, watchStatus::kOnHold);
+    size_t cDrop = db.countByStatus(type, watchStatus::kDropped);
+    size_t cPlan = db.countByStatus(type, watchStatus::kPlanToWatch);
 
     if (color)
       std::cout << ansi::Bold
-                << (type == mediaType::Anime ? ansi::Lavender : ansi::Peach)
+                << (type == mediaType::kAnime ? ansi::Lavender : ansi::Peach)
                 << "=== " << name << " Telemetry ===" << ansi::Reset << "\n";
     else
       std::cout << "=== " << name << " Telemetry ===\n";
@@ -1478,15 +1478,15 @@ int cliDispatcher::executeStats(const std::vector<std::string>& args,
               << db.averageScore(type) << " / 10\n";
     std::cout << "  Completed:          " << std::fixed << std::setprecision(1)
               << db.completedPercentage(type) << "%\n";
-    std::cout << "  " << (type == mediaType::Anime ? "Episodes" : "Chapters")
+    std::cout << "  " << (type == mediaType::kAnime ? "Episodes" : "Chapters")
               << " Logged:   " << db.totalProgress(type) << "\n";
-    if (type == mediaType::Manga) {
-      std::cout << "  Volumes Logged:     " << db.totalVolumes(mediaType::Manga)
+    if (type == mediaType::kManga) {
+      std::cout << "  Volumes Logged:     " << db.totalVolumes(mediaType::kManga)
                 << "\n";
     }
     std::cout << "  Status Breakdown:   " << (color ? ansi::Green : "")
               << cWatch << " "
-              << (type == mediaType::Anime ? "watching" : "reading") << ", "
+              << (type == mediaType::kAnime ? "watching" : "reading") << ", "
               << (color ? ansi::Blue : "") << cComp << " completed, "
               << (color ? ansi::Yellow : "") << cHold << " on-hold, "
               << (color ? ansi::Red : "") << cDrop << " dropped, "
@@ -1494,11 +1494,11 @@ int cliDispatcher::executeStats(const std::vector<std::string>& args,
               << (color ? ansi::Reset : "") << "\n\n";
   };
 
-  if (!filterType.has_value() || filterType.value() == mediaType::Anime) {
-    printMediaStats(mediaType::Anime);
+  if (!filterType.has_value() || filterType.value() == mediaType::kAnime) {
+    printMediaStats(mediaType::kAnime);
   }
-  if (!filterType.has_value() || filterType.value() == mediaType::Manga) {
-    printMediaStats(mediaType::Manga);
+  if (!filterType.has_value() || filterType.value() == mediaType::kManga) {
+    printMediaStats(mediaType::kManga);
   }
 
   return 0;
@@ -1524,9 +1524,9 @@ int cliDispatcher::executeExport(const std::vector<std::string>& args,
         std::string t = args[i];
         std::transform(t.begin(), t.end(), t.begin(), ::tolower);
         if (t == "anime" || t == "a")
-          filterType = mediaType::Anime;
+          filterType = mediaType::kAnime;
         else if (t == "manga" || t == "m")
-          filterType = mediaType::Manga;
+          filterType = mediaType::kManga;
       }
     }
   }
@@ -1536,9 +1536,9 @@ int cliDispatcher::executeExport(const std::vector<std::string>& args,
       std::cout << formatJsonEntries(db.getEntries(filterType.value()));
     } else {
       std::cout << "{\n  \"anime\": "
-                << formatJsonEntries(db.getEntries(mediaType::Anime))
+                << formatJsonEntries(db.getEntries(mediaType::kAnime))
                 << ",\n  \"manga\": "
-                << formatJsonEntries(db.getEntries(mediaType::Manga))
+                << formatJsonEntries(db.getEntries(mediaType::kManga))
                 << "\n}\n";
     }
     return 0;
@@ -1550,7 +1550,7 @@ int cliDispatcher::executeExport(const std::vector<std::string>& args,
     auto dumpList = [](const std::vector<entry>& list) {
       for (const auto& e : list) {
         std::cout << e.id << "," << e.malId << "," << e.anilistId << ","
-                  << (e.type == mediaType::Anime ? "anime" : "manga") << ","
+                  << (e.type == mediaType::kAnime ? "anime" : "manga") << ","
                   << escapeCsv(e.title) << ","
                   << escapeCsv(statusToString(e.status, e.type)) << ","
                   << e.score << "," << e.progress << "," << e.totalUnits << ","
@@ -1561,11 +1561,11 @@ int cliDispatcher::executeExport(const std::vector<std::string>& args,
       }
     };
 
-    if (!filterType.has_value() || filterType.value() == mediaType::Anime) {
-      dumpList(db.getEntries(mediaType::Anime));
+    if (!filterType.has_value() || filterType.value() == mediaType::kAnime) {
+      dumpList(db.getEntries(mediaType::kAnime));
     }
-    if (!filterType.has_value() || filterType.value() == mediaType::Manga) {
-      dumpList(db.getEntries(mediaType::Manga));
+    if (!filterType.has_value() || filterType.value() == mediaType::kManga) {
+      dumpList(db.getEntries(mediaType::kManga));
     }
     return 0;
   }
@@ -1624,25 +1624,25 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
   }
 
   std::string queryStr;
-  mediaType type = mediaType::Anime;
+  mediaType type = mediaType::kAnime;
   size_t limit = 10;
-  outputFormat format = outputFormat::Table;
+  outputFormat format = outputFormat::kTable;
   bool jsonMode = false;
 
   for (size_t i = 0; i < args.size(); ++i) {
     if (args[i] == "--json") {
-      format = outputFormat::Json;
+      format = outputFormat::kJson;
       jsonMode = true;
     } else if (args[i] == "--plain") {
-      format = outputFormat::Plain;
+      format = outputFormat::kPlain;
     } else if (args[i] == "--type" || args[i] == "-t") {
       if (++i < args.size()) {
         std::string t = args[i];
         std::transform(t.begin(), t.end(), t.begin(), ::tolower);
         if (t == "anime" || t == "a")
-          type = mediaType::Anime;
+          type = mediaType::kAnime;
         else if (t == "manga" || t == "m")
-          type = mediaType::Manga;
+          type = mediaType::kManga;
       }
     } else if (args[i] == "--limit" || args[i] == "-l") {
       if (++i < args.size()) {
@@ -1672,13 +1672,13 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
     return 1;
   }
 
-  if (format == outputFormat::Plain) {
+  if (format == outputFormat::kPlain) {
     for (const auto& r : results)
       std::cout << r.title << "\n";
     return 0;
   }
 
-  if (format == outputFormat::Json) {
+  if (format == outputFormat::kJson) {
     std::cout << "[\n";
     for (size_t i = 0; i < results.size(); ++i) {
       const auto& r = results[i];
@@ -1686,7 +1686,7 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
                 << "\"malId\":" << r.malId << ","
                 << "\"title\":\"" << escapeJsonString(r.title) << "\","
                 << "\"type\":\""
-                << (r.type == mediaType::Anime ? "anime" : "manga") << "\","
+                << (r.type == mediaType::kAnime ? "anime" : "manga") << "\","
                 << "\"episodes\":" << r.totalUnits << ","
                 << "\"year\":\"" << r.year << "\","
                 << "\"score\":" << r.score << "}"
@@ -1725,7 +1725,7 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
 
     std::cout << " " << std::right << std::setw(2) << (i + 1) << "  "
               << std::left << std::setw(38) << tDisplay << "  " << std::setw(7)
-              << (r.type == mediaType::Anime ? "anime" : "manga") << "  "
+              << (r.type == mediaType::kAnime ? "anime" : "manga") << "  "
               << std::setw(9) << epStr << "  " << std::setw(6)
               << (r.year.empty() ? "-" : r.year) << "  " << std::setw(6)
               << std::fixed << std::setprecision(2) << r.score << "  "
@@ -1761,12 +1761,12 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
       << "Select status [1: Watching, 2: Completed, 3: Plan to Watch] (default: 1): "
       << std::flush;
   std::string stChoice;
-  watchStatus st = watchStatus::Watching;
+  watchStatus st = watchStatus::kWatching;
   if (std::getline(std::cin, stChoice) && !stChoice.empty()) {
     if (stChoice == "2")
-      st = watchStatus::Completed;
+      st = watchStatus::kCompleted;
     else if (stChoice == "3")
-      st = watchStatus::PlanToWatch;
+      st = watchStatus::kPlanToWatch;
   }
 
   entry e;
@@ -1776,7 +1776,7 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
   e.title = selected.title;
   e.status = st;
   e.score = 0;
-  e.progress = (st == watchStatus::Completed) ? selected.totalUnits : 0;
+  e.progress = (st == watchStatus::kCompleted) ? selected.totalUnits : 0;
   e.totalUnits = selected.totalUnits;
   e.startDate =
       selected.year.empty() ? "0000-00-00" : (selected.year + "-01-01");
@@ -1786,7 +1786,7 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
 
   if (color)
     std::cout << ansi::Green << ansi::Bold;
-  std::cout << "Added " << (e.type == mediaType::Anime ? "anime" : "manga")
+  std::cout << "Added " << (e.type == mediaType::kAnime ? "anime" : "manga")
             << " '" << e.title << "' [MAL ID " << e.malId
             << "] to watchlist.\n";
   if (color)

@@ -8,17 +8,17 @@
 
 namespace catalist {
 
-enum class mediaType { Anime, Manga };
+enum class mediaType { kAnime, kManga };
 
-enum class watchStatus { Watching, Completed, OnHold, Dropped, PlanToWatch };
+enum class watchStatus { kWatching, kCompleted, kOnHold, kDropped, kPlanToWatch };
 
 struct entry {
   int id = 0;
   int malId = 0;
   int anilistId = 0;
   std::string title;
-  mediaType type = mediaType::Anime;
-  watchStatus status = watchStatus::Watching;
+  mediaType type = mediaType::kAnime;
+  watchStatus status = watchStatus::kWatching;
   int score = 0;
   int progress = 0;
   int totalUnits = 0;
@@ -38,7 +38,7 @@ struct entry {
 };
 
 std::string statusToString(watchStatus status,
-                           mediaType type = mediaType::Anime);
+                           mediaType type = mediaType::kAnime);
 std::string statusToIcon(watchStatus status);
 ftxui::Color statusToColor(watchStatus status);
 watchStatus stringToStatus(const std::string& str);

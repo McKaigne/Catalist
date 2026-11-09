@@ -283,7 +283,7 @@ bool malAuth::authenticate(std::string& outMsg) {
 size_t metadataSync::syncOngoing(database& db, std::string& outMsg) {
   size_t updated = 0;
 
-  for (auto e : db.getEntries(mediaType::Anime)) {
+  for (auto e : db.getEntries(mediaType::kAnime)) {
     if (e.totalUnits == 0 && e.malId > 0) {
       std::string cmd = "curl -s -m 3 \"https://api.jikan.moe/v4/anime/" +
                         std::to_string(e.malId) + "\" 2>/dev/null";

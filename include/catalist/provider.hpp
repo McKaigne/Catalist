@@ -15,7 +15,7 @@ struct providerSearchResult {
   std::string providerKey;
   std::string remoteId;
   std::string title;
-  mediaType type = mediaType::Anime;
+  mediaType type = mediaType::kAnime;
   int totalUnits = 0;
   double score = 0.0;
   std::string year;

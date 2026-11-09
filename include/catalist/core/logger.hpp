@@ -10,10 +10,10 @@
 namespace catalist {
 
 enum class logLevel {
-  Debug,
-  Info,
-  Warn,
-  Error
+  kDebug,
+  kInfo,
+  kWarn,
+  kError
 };
 
 class logger {

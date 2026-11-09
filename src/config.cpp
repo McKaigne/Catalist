@@ -151,13 +151,13 @@ bool appConfig::save(const std::filesystem::path& path) const {
   };
   auto S = [](const std::string& s) {
     kdl::value v;
-    v.valueType = kdl::value::type::String;
+    v.valueType = kdl::value::type::kString;
     v.stringVal = s;
     return v;
   };
   auto B = [](bool b) {
     kdl::value v;
-    v.valueType = kdl::value::type::Boolean;
+    v.valueType = kdl::value::type::kBoolean;
     v.boolVal = b;
     return v;
   };

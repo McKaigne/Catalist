@@ -33,7 +33,7 @@ struct setFixture : tempDirFixture {
   }
 
   catalist::entry anime(int id) const {
-    auto found = db.getById(mediaType::Anime, id);
+    auto found = db.getById(mediaType::kAnime, id);
     REQUIRE(found.has_value());
     return *found;
   }
@@ -44,7 +44,7 @@ struct setFixture : tempDirFixture {
 TEST_CASE_FIXTURE(setFixture, "cli set progress at total completes the entry") {
   CHECK(set({"44265", "-p", "13"}) == 0);
   CHECK(anime(44265).progress == 13);
-  CHECK(anime(44265).status == watchStatus::Completed);
+  CHECK(anime(44265).status == watchStatus::kCompleted);
   CHECK(out == "Updated [44265] 'Odd Taxi': Progress 13/13, Rating 8/10, "
                "Status Completed\n");
 }
@@ -52,18 +52,18 @@ TEST_CASE_FIXTURE(setFixture, "cli set progress at total completes the entry") {
 TEST_CASE_FIXTURE(setFixture, "cli set progress above total clamps and completes") {
   CHECK(set({"44265", "-p", "+50"}) == 0);
   CHECK(anime(44265).progress == 13);
-  CHECK(anime(44265).status == watchStatus::Completed);
+  CHECK(anime(44265).status == watchStatus::kCompleted);
 }
 
 TEST_CASE_FIXTURE(setFixture, "cli set explicit status wins over auto completion") {
   CHECK(set({"44265", "-p", "13", "-s", "on-hold"}) == 0);
-  CHECK(anime(44265).status == watchStatus::OnHold);
+  CHECK(anime(44265).status == watchStatus::kOnHold);
 }
 
 TEST_CASE_FIXTURE(setFixture, "cli set negative delta stops at zero") {
   CHECK(set({"44265", "-p", "sub", "99"}) == 0);
   CHECK(anime(44265).progress == 0);
-  CHECK(anime(44265).status == watchStatus::Watching);
+  CHECK(anime(44265).status == watchStatus::kWatching);
 
   CHECK(set({"10002", "-p", "-7"}) == 0);
   CHECK(anime(10002).progress == 0);
@@ -86,7 +86,7 @@ TEST_CASE_FIXTURE(setFixture, "cli set targets by unique substring") {
 
 TEST_CASE_FIXTURE(setFixture, "cli set falls through to manga") {
   CHECK(set({"berserk", "-p", "a"}) == 0);
-  auto berserk = db.getById(mediaType::Manga, 2);
+  auto berserk = db.getById(mediaType::kManga, 2);
   REQUIRE(berserk.has_value());
   CHECK(berserk->progress == 365);
 }

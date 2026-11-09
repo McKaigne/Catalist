@@ -33,8 +33,8 @@ top-bar height=3 border=true {
   CHECK(config.defaultMedia == "manga");
   CHECK(config.defaultSort == "title");
   CHECK(config.reverseSort == false);
-  CHECK(config.keybinds.getKey(keyAction::MoveUp) == "w");
-  CHECK(config.keybinds.getKey(keyAction::MoveDown) == "s");
+  CHECK(config.keybinds.getKey(keyAction::kMoveUp) == "w");
+  CHECK(config.keybinds.getKey(keyAction::kMoveDown) == "s");
 
   auto topBar = config.kdlDoc.getNode("top-bar");
   REQUIRE(topBar.has_value());
@@ -48,7 +48,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig ignores dashed keybind names") {
   writeTextFile(configPath, "keybinds {\n    move-up \"w\"\n}\n");
   appConfig config;
   REQUIRE(config.load(configPath));
-  CHECK(config.keybinds.getKey(keyAction::MoveUp) == "k");
+  CHECK(config.keybinds.getKey(keyAction::kMoveUp) == "k");
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "appConfig loads child style general block") {

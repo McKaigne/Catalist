@@ -11,13 +11,13 @@
 
 namespace catalist {
 
-enum class sortKey { Score, Status, Title, Progress, Date, Id };
+enum class sortKey { kScore, kStatus, kTitle, kProgress, kDate, kId };
 
 struct activityRecord {
   std::string timestamp;
-  mediaType type = mediaType::Anime;
+  mediaType type = mediaType::kAnime;
   std::string title;
-  watchStatus status = watchStatus::Watching;
+  watchStatus status = watchStatus::kWatching;
   int progress = 0;
   int totalUnits = 0;
   int score = 0;

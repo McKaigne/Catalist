@@ -11,7 +11,7 @@ struct remoteSearchResult {
   int malId = 0;
   std::string title;
   std::string titleEnglish;
-  mediaType type = mediaType::Anime;
+  mediaType type = mediaType::kAnime;
   int totalUnits = 0;
   double score = 0.0;
   std::string year;

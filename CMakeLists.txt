@@ -73,6 +73,7 @@ add_executable(catalistTests
   tests/cliSetTest.cpp
   tests/cliTest.cpp
   tests/databaseTest.cpp
+  tests/entryTest.cpp
   tests/dateTest.cpp
   tests/loggerTest.cpp
   tests/malParserTest.cpp

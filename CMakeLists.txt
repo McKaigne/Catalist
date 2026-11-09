@@ -68,6 +68,8 @@ endif()
 add_executable(catalistTests
   tests/testMain.cpp
   tests/support/testSupport.cpp
+  tests/support/sampleLibrary.cpp
+  tests/cliGoldenTest.cpp
   tests/cliTest.cpp
   tests/databaseTest.cpp
   tests/dateTest.cpp

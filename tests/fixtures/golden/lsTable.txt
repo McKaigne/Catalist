@@ -1,0 +1,7 @@
+      ID  TITLE                           TYPE     STATUS         RATING   PROGRESS
+   10001  A Very Long Title That Wi...    anime    Plan to Watch        -        0/?
+   10002  Ghost, "in" the Shell           anime    Dropped          6/10        3/?
+   44265  Odd Taxi                        anime    Watching         8/10       5/13
+  116778  Chainsaw Man                    manga    On-Hold          9/10      97/97
+   52991  Sousou no Frieren               anime    Completed       10/10      28/28
+       2  Berserk                         manga    Reading         10/10      364/?

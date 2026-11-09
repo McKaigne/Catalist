@@ -155,7 +155,6 @@ private:
     return quits;
   }
 
-  // Digit N selects the N-th tab in the top bar.
   bool switchByHotkey(const Event& event) {
     if (!event.is_character() || event.character().size() != 1)
       return false;

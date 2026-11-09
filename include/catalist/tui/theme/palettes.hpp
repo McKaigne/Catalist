@@ -25,29 +25,27 @@ const auto kRed = ftxui::Color::RGB(0xf3, 0x8b, 0xa8);
 }  // namespace theme
 
 namespace icon {
-const std::string kAppLogo = "󰄛";     // Cat logo
-const std::string kLibrary = "󰓹";     // Bookshelf
-const std::string kInProgress = "󰐌";  // Play circle
-const std::string kSearch = "";       // Search glass
-const std::string kStats = "󰄫";       // Dashboard / chart
-const std::string kSync = "󰓦";        // Sync arrows
-const std::string kOffline = "";     // Offline icon
+const std::string kAppLogo = "󰄛";
+const std::string kLibrary = "󰓹";
+const std::string kInProgress = "󰐌";
+const std::string kSearch = "";
+const std::string kStats = "󰄫";
+const std::string kSync = "󰓦";
+const std::string kOffline = "";
 
-const std::string kAnime = "󰴙";  // Anime icon
-const std::string kManga = "󱥬";  // Manga icon
+const std::string kAnime = "󰴙";
+const std::string kManga = "󱥬";
 
-const std::string kWatching = "󰐌";   // Play circle
-const std::string kCompleted = "󰗠";  // Checked circle icon
-const std::string kOnHold = "󰏥";     // Pause circle
-const std::string kDropped = "󰅙";    // Dropped icon
-const std::string kPlan = "󰥔";       // Clock outline
+const std::string kWatching = "󰐌";
+const std::string kCompleted = "󰗠";
+const std::string kOnHold = "󰏥";
+const std::string kDropped = "󰅙";
+const std::string kPlan = "󰥔";
 
-// Selection Checkbox Glyphs
-const std::string kCheckSingle = "󰄲";  // Single-select checked icon
-const std::string kCheckMulti = "󰄸";   // Multi-select checked icon
-const std::string kCheckBlank = "󰄮";   // Unchecked outline
+const std::string kCheckSingle = "󰄲";
+const std::string kCheckMulti = "󰄸";
+const std::string kCheckBlank = "󰄮";
 
-// 5-Star Glyphs
 const std::string kStarFull = "";
 const std::string kStarHalf = "";
 const std::string kStarEmpty = "";

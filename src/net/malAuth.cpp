@@ -15,9 +15,9 @@
 
 namespace catalist {
 
-const std::string kMalClientId =
-    "6114d00ca681b7701d1e15fe11a4987e";  // Standard open-source fallback client
-                                         // ID
+// A public PKCE client id registered for this open-source app; PKCE clients
+// have no secret, so shipping the id is expected.
+const std::string kMalClientId = "6114d00ca681b7701d1e15fe11a4987e";
 
 namespace {
 
@@ -31,10 +31,6 @@ long long integerField(const std::string& json, const char* key) {
 }
 
 }  // namespace
-
-// -----------------------------------------------------------------------------
-// OAuth 2.0 PKCE & Loopback Server Implementation
-// -----------------------------------------------------------------------------
 
 malAuth::malAuth(iFileSystem& fileSystem, iHttpClient& http,
                  iProcessLauncher& launcher,

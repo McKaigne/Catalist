@@ -15,6 +15,44 @@ namespace {
 // Enough for years of daily logging while keeping history.csv small.
 constexpr size_t kHistoryLimit = 5000;
 
+bool isSameTitle(const entry& existing, const entry& incoming) {
+  if (existing.id == incoming.id)
+    return true;
+  if (incoming.malId > 0 && existing.malId == incoming.malId)
+    return true;
+  std::string incomingMal = incoming.getRemoteId("mal");
+  return !incomingMal.empty() && existing.getRemoteId("mal") == incomingMal;
+}
+
+// Re-imports and syncs may correct totals and provider links...
+void refreshUpstreamMetadata(entry& existing, const entry& incoming) {
+  if (incoming.totalUnits > 0)
+    existing.totalUnits = incoming.totalUnits;
+  if (incoming.totalVolumes > 0)
+    existing.totalVolumes = incoming.totalVolumes;
+  for (const auto& [provider, remoteId] : incoming.remoteIds)
+    existing.setRemoteId(provider, remoteId);
+  if (incoming.malId > 0 && existing.malId <= 0)
+    existing.malId = incoming.malId;
+  if (incoming.anilistId > 0 && existing.anilistId <= 0)
+    existing.anilistId = incoming.anilistId;
+}
+
+// ...but the user's own score, progress, notes and dates always win; imported
+// values only fill fields the user never set.
+void backfillUntouchedUserFields(entry& existing, const entry& incoming) {
+  if (existing.notes.empty() && !incoming.notes.empty())
+    existing.notes = incoming.notes;
+  if (existing.score == 0 && incoming.score > 0)
+    existing.score = incoming.score;
+  if (existing.progress == 0 && incoming.progress > 0)
+    existing.progress = incoming.progress;
+  if (!existing.startDate && incoming.startDate)
+    existing.startDate = incoming.startDate;
+  if (!existing.finishDate && incoming.finishDate)
+    existing.finishDate = incoming.finishDate;
+}
+
 }  // namespace
 
 std::filesystem::path database::getDefaultConfigDir() {
@@ -100,42 +138,11 @@ int database::addEntry(entry mediaEntry) {
 
   auto& list = getList(mediaEntry.type);
   for (auto& existing : list) {
-    bool idMatch = (existing.id == mediaEntry.id);
-    bool malMatch = (mediaEntry.malId > 0 && existing.malId == mediaEntry.malId);
-    bool remoteMatch = false;
-    std::string incMal = mediaEntry.getRemoteId("mal");
-    if (!incMal.empty() && existing.getRemoteId("mal") == incMal) {
-      remoteMatch = true;
-    }
-
-    if (idMatch || malMatch || remoteMatch) {
-      // Tier 2 (Upstream metadata)
-      if (mediaEntry.totalUnits > 0)
-        existing.totalUnits = mediaEntry.totalUnits;
-      if (mediaEntry.totalVolumes > 0)
-        existing.totalVolumes = mediaEntry.totalVolumes;
-      for (const auto& [prov, rId] : mediaEntry.remoteIds) {
-        existing.setRemoteId(prov, rId);
-      }
-      if (mediaEntry.malId > 0 && existing.malId <= 0)
-        existing.malId = mediaEntry.malId;
-      if (mediaEntry.anilistId > 0 && existing.anilistId <= 0)
-        existing.anilistId = mediaEntry.anilistId;
-
-      // Tier 1 (User Authority): Only backfill untouched local records
-      if (existing.notes.empty() && !mediaEntry.notes.empty())
-        existing.notes = mediaEntry.notes;
-      if (existing.score == 0 && mediaEntry.score > 0)
-        existing.score = mediaEntry.score;
-      if (existing.progress == 0 && mediaEntry.progress > 0)
-        existing.progress = mediaEntry.progress;
-      if (!existing.startDate && mediaEntry.startDate)
-        existing.startDate = mediaEntry.startDate;
-      if (!existing.finishDate && mediaEntry.finishDate)
-        existing.finishDate = mediaEntry.finishDate;
-
-      return existing.id;
-    }
+    if (!isSameTitle(existing, mediaEntry))
+      continue;
+    refreshUpstreamMetadata(existing, mediaEntry);
+    backfillUntouchedUserFields(existing, mediaEntry);
+    return existing.id;
   }
 
   list.push_back(mediaEntry);
@@ -150,12 +157,11 @@ const std::vector<entry>& database::getEntries(mediaType type) const {
 std::optional<entry> database::getById(mediaType type, int id) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   const auto& list = getList(type);
-  // Prioritize exact ID match
+  // A local id always wins over an entry that merely shares that MAL id.
   for (const auto& item : list) {
     if (item.id == id)
       return item;
   }
-  // Fall back to matching upstream provider MAL ID
   for (const auto& item : list) {
     if (item.malId > 0 && item.malId == id)
       return item;

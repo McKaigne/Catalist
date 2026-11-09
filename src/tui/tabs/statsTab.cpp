@@ -178,7 +178,6 @@ Element mediaSection(const database& db, mediaType type,
                text("    "), recentActivity(db, type, theme)});
 }
 
-// One horizontal bar per label, scaled to the largest count.
 Element barChart(const std::vector<std::pair<std::string, size_t>>& rows,
                  Color tint, const themePalette& theme) {
   const int barWidth = 30;

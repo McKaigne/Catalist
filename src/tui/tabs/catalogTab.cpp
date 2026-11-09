@@ -290,8 +290,6 @@ std::vector<hint> catalogTab::hints() const {
           {"/", "find"},         {":", "cmd"}};
 }
 
-// --- events -----------------------------------------------------------------
-
 bool catalogTab::onEvent(const Event& event, appContext& ctx) {
   if (handleMouse(event, ctx))
     return true;
@@ -596,8 +594,6 @@ bool catalogTab::handleEntryCommands(const Event& event, appContext& ctx) {
   return false;
 }
 
-// --- actions ----------------------------------------------------------------
-
 void catalogTab::applyChange(appContext& ctx, const entry& before,
                              const entryChange& change,
                              const std::string& status) {
@@ -783,8 +779,6 @@ void catalogTab::redoLast(appContext& ctx) {
   ctx.notices.push("Action redone successfully.");
   refresh(ctx);
 }
-
-// --- rendering --------------------------------------------------------------
 
 Element catalogTab::renderSidebarRow(int row) const {
   const auto& theme = themeRegistry::active();

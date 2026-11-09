@@ -235,7 +235,7 @@ private:
   }
 
   token parseString() {
-    pos_++;  // skip initial '"'
+    pos_++;
     std::string s;
     while (pos_ < src_.size()) {
       char c = src_[pos_++];

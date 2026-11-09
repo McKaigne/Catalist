@@ -29,7 +29,6 @@ public:
   virtual bool onEvent(const ftxui::Event& event, appContext& ctx) = 0;
   [[nodiscard]] virtual std::vector<hint> hints() const = 0;
 
-  // Optional hooks with neutral defaults.
   virtual void onActivate(appContext&) {}
   virtual void onDeactivate(appContext&) {}
   // FTXUI children (menus, inputs) that need focus and default handling.

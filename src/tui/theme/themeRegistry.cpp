@@ -24,25 +24,25 @@ ftxui::Color themeRegistry::hexToColor(const std::string& hex) {
 }
 
 static themePalette makeCatppuccinMocha() {
-  return {
-      "catppuccin-mocha",
-      ftxui::Color::RGB(0x1e, 0x1e, 0x2e),  // base
-      ftxui::Color::RGB(0x18, 0x18, 0x25),  // mantle
-      ftxui::Color::RGB(0x11, 0x11, 0x1b),  // crust
-      ftxui::Color::RGB(0x31, 0x32, 0x44),  // surface0
-      ftxui::Color::RGB(0x45, 0x47, 0x5a),  // surface1
-      ftxui::Color::RGB(0x58, 0x5b, 0x70),  // surface2
-      ftxui::Color::RGB(0xcd, 0xd6, 0xf4),  // text
-      ftxui::Color::RGB(0xa6, 0xad, 0xc8),  // subtext
-      ftxui::Color::RGB(0x6c, 0x70, 0x86),  // overlay0
-      ftxui::Color::RGB(0xcb, 0xa6, 0xf7),  // mauve
-      ftxui::Color::RGB(0xb4, 0xbe, 0xfe),  // lavender
-      ftxui::Color::RGB(0x89, 0xb4, 0xfa),  // blue
-      ftxui::Color::RGB(0xa6, 0xe3, 0xa1),  // green
-      ftxui::Color::RGB(0xf9, 0xe2, 0xaf),  // yellow
-      ftxui::Color::RGB(0xfa, 0xb3, 0x87),  // peach
-      ftxui::Color::RGB(0xf3, 0x8b, 0xa8)   // red
-  };
+  themePalette palette;
+  palette.name = "catppuccin-mocha";
+  palette.base = ftxui::Color::RGB(0x1e, 0x1e, 0x2e);
+  palette.mantle = ftxui::Color::RGB(0x18, 0x18, 0x25);
+  palette.crust = ftxui::Color::RGB(0x11, 0x11, 0x1b);
+  palette.surface0 = ftxui::Color::RGB(0x31, 0x32, 0x44);
+  palette.surface1 = ftxui::Color::RGB(0x45, 0x47, 0x5a);
+  palette.surface2 = ftxui::Color::RGB(0x58, 0x5b, 0x70);
+  palette.text = ftxui::Color::RGB(0xcd, 0xd6, 0xf4);
+  palette.subtext = ftxui::Color::RGB(0xa6, 0xad, 0xc8);
+  palette.overlay0 = ftxui::Color::RGB(0x6c, 0x70, 0x86);
+  palette.mauve = ftxui::Color::RGB(0xcb, 0xa6, 0xf7);
+  palette.lavender = ftxui::Color::RGB(0xb4, 0xbe, 0xfe);
+  palette.blue = ftxui::Color::RGB(0x89, 0xb4, 0xfa);
+  palette.green = ftxui::Color::RGB(0xa6, 0xe3, 0xa1);
+  palette.yellow = ftxui::Color::RGB(0xf9, 0xe2, 0xaf);
+  palette.peach = ftxui::Color::RGB(0xfa, 0xb3, 0x87);
+  palette.red = ftxui::Color::RGB(0xf3, 0x8b, 0xa8);
+  return palette;
 }
 
 static themePalette makeDark() {

@@ -36,7 +36,8 @@ void safeWrite(const char* str) {
 }
 
 void signalCrashHandler(int signum) {
-  // Pure async-signal-safe recovery to prevent deadlocks
+  // Only async-signal-safe calls here: the crash may have happened while a
+  // lock or the allocator was in use.
   safeWrite("\033[?1049l\033[?25h\033[0m\n");
   safeWrite("\n===============================================================\n");
   safeWrite("                      CATALIST CRASHED                         \n");

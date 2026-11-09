@@ -32,7 +32,6 @@ private:
   int cursor_ = 0;
 };
 
-// Watching and Plan to Watch entries of both media in queue order.
 [[nodiscard]] std::vector<entry> queuedEntries(const database& db);
 
 }  // namespace catalist

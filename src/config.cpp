@@ -1,9 +1,54 @@
 #include "catalist/config.hpp"
 
+#include <cctype>
 #include <fstream>
 #include <sstream>
 
 namespace catalist {
+
+namespace {
+
+bool isDigits(const std::string& text) {
+  if (text.empty())
+    return false;
+  for (char c : text) {
+    if (!std::isdigit(static_cast<unsigned char>(c)))
+      return false;
+  }
+  return true;
+}
+
+bool isLegacyVersionLabel(const std::string& label) {
+  if (label.size() < 2 || label[0] != 'v')
+    return false;
+  std::stringstream parts(label.substr(1));
+  std::string part;
+  int partCount = 0;
+  while (std::getline(parts, part, '.')) {
+    if (!isDigits(part))
+      return false;
+    ++partCount;
+  }
+  return partCount == 3;
+}
+
+// Older configs hard-coded the release as a `text "vX.Y.Z"` node in
+// the top bar; turning those into `version` nodes makes old files show the
+// running version instead of a stale string.
+void upgradeLegacyVersionNodes(kdl::document& doc) {
+  for (auto& root : doc.rootNodes) {
+    if (root.name != "top-bar")
+      continue;
+    for (auto& child : root.children) {
+      if (child.name != "text" || !isLegacyVersionLabel(child.getArgString(0)))
+        continue;
+      child.name = "version";
+      child.args.clear();
+    }
+  }
+}
+
+}  // namespace
 
 static const char* kDefaultKdl =
     R"kdl(// ==============================================================================
@@ -39,7 +84,7 @@ top-bar height=3 border=true {
     tab "sync"     label="Sync"      icon="󰓦"
     tab "settings" label="Settings"  icon="󰒓"
     spacer
-    text "v0.2.0" color="overlay0"
+    version color="overlay0"
 }
 
 bottom-bar height=3 border=true {
@@ -104,6 +149,7 @@ bool appConfig::load(const std::filesystem::path& path) {
                       std::istreambuf_iterator<char>());
   std::string err;
   kdlDoc = kdl::document::parse(content, err);
+  upgradeLegacyVersionNodes(kdlDoc);
 
   auto gen = kdlDoc.getNode("general");
   if (gen.has_value()) {

@@ -8,6 +8,7 @@
 #include <random>
 #include <sstream>
 
+#include "catalist/core/version.hpp"
 #include "catalist/malParser.hpp"
 #include "catalist/remoteSearch.hpp"
 #include "catalist/theme.hpp"
@@ -259,7 +260,7 @@ int cliDispatcher::dispatch(int argc, char* argv[], database& db,
   std::string command = argv[1];
 
   if (command == "--version" || command == "-v") {
-    std::cout << "Catalist v0.2.0 (C++17 / FTXUI)\n";
+    std::cout << "Catalist v" << kVersionString << " (C++17 / FTXUI)\n";
     return 0;
   }
   if (command == "--help" || command == "-h") {

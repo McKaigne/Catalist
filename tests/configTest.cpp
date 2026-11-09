@@ -38,7 +38,33 @@ top-bar height=3 border=true {
 
   auto topBar = config.kdlDoc.getNode("top-bar");
   REQUIRE(topBar.has_value());
-  CHECK(topBar->children.back().getArgString(0) == "v0.1.0");
+  CHECK(topBar->children.back().name == "version");
+  CHECK(topBar->children.back().args.empty());
+  CHECK(topBar->children.back().getPropString("color") == "overlay0");
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "appConfig keeps top-bar text that is not a version label") {
+  auto configPath = tempDir() / "catalist.kdl";
+  writeTextFile(configPath, "top-bar {\n    text \"v1.2\"\n    text \"hello\"\n"
+                            "    text \"v1.2.x\"\n}\n");
+  appConfig config;
+  REQUIRE(config.load(configPath));
+  auto topBar = config.kdlDoc.getNode("top-bar");
+  REQUIRE(topBar.has_value());
+  REQUIRE(topBar->children.size() == 3);
+  for (const auto& child : topBar->children)
+    CHECK(child.name == "text");
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "appConfig default top bar uses a version node") {
+  appConfig config;
+  REQUIRE(config.load(tempDir() / "catalist.kdl"));
+  auto topBar = config.kdlDoc.getNode("top-bar");
+  REQUIRE(topBar.has_value());
+  bool hasVersionNode = false;
+  for (const auto& child : topBar->children)
+    hasVersionNode = hasVersionNode || child.name == "version";
+  CHECK(hasVersionNode);
 }
 
 // Characterization: dashed keybind names (as written in the default config)

@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
-project(catalist VERSION 0.2.0 LANGUAGES CXX)
+
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" CATALIST_VERSION)
+string(STRIP "${CATALIST_VERSION}" CATALIST_VERSION)
+project(catalist VERSION ${CATALIST_VERSION} LANGUAGES CXX)
+
+include(GNUInstallDirs)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,7 +20,15 @@ if(NOT ftxui_FOUND)
   FetchContent_MakeAvailable(ftxui)
 endif()
 
-include_directories(include)
+set(CATALIST_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
+configure_file(
+  include/catalist/core/version.hpp.in
+  "${CATALIST_GENERATED_INCLUDE_DIR}/catalist/core/version.hpp"
+  @ONLY
+)
+configure_file(doc/catalist.1.in "${CMAKE_CURRENT_BINARY_DIR}/doc/catalist.1" @ONLY)
+
+include_directories(include "${CATALIST_GENERATED_INCLUDE_DIR}")
 
 set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 
@@ -51,7 +64,9 @@ target_link_libraries(catalist PRIVATE
 
 target_compile_options(catalist PRIVATE ${CATALIST_WARNING_FLAGS})
 
-install(TARGETS catalist DESTINATION bin)
+install(TARGETS catalist DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/doc/catalist.1"
+  DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 
 enable_testing()
 
@@ -86,6 +101,7 @@ add_executable(catalistTests
   tests/malParserTest.cpp
   tests/providerTest.cpp
   tests/resultTest.cpp
+  tests/versionTest.cpp
   ${CATALIST_SOURCES}
 )
 

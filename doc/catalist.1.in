@@ -1,4 +1,4 @@
-.TH CATALIST 1 "November 2026" "v0.2.0" "User Commands"
+.TH CATALIST 1 "November 2026" "v@PROJECT_VERSION@" "User Commands"
 .SH NAME
 catalist \- keyboard-driven anime and manga watchlist manager
 .SH SYNOPSIS

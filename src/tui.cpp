@@ -1,3 +1,4 @@
+#include "catalist/core/version.hpp"
 #include "catalist/tui.hpp"
 #include "catalist/core/logger.hpp"
 
@@ -2027,7 +2028,8 @@ void appTui::run() {
               text(" Log watched episodes and read chapters,"),
               text(" rate your favorite series, and browse"),
               text(" your library with zero clutter or ads."), text(""),
-              text(" Version: v0.2.0") | color(theme.overlay0), filler()}) |
+              text(std::string(" Version: v") + kVersionString) |
+                  color(theme.overlay0), filler()}) |
         border | color(aboutActiveCard == 0 ? theme.mauve : theme.surface0) |
         size(WIDTH, EQUAL, 34);
 
@@ -2290,6 +2292,9 @@ void appTui::run() {
         } else if (item.name == "text") {
           tabElements.push_back(text(item.getArgString(0)) |
                                 color(theme.overlay0));
+        } else if (item.name == "version") {
+          tabElements.push_back(text(std::string("v") + kVersionString) |
+                                color(theme.overlay0));
         }
       }
     } else {
@@ -2307,7 +2312,8 @@ void appTui::run() {
                      text("│") | color(theme.surface0),
                      makeTabItem(viewTab::kSettings, "󰒓", "Settings"),
                      filler(),
-                     text("v0.2.0 ") | color(theme.overlay0)};
+                     text(std::string("v") + kVersionString + " ") |
+                         color(theme.overlay0)};
     }
 
     auto topCard = hbox(std::move(tabElements)) | border |

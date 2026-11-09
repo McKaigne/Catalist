@@ -31,6 +31,16 @@ jobs:
       - name: Verify CLI argument dispatcher
         run: ./build/catalist --version
 
+      - name: Verify reported version matches VERSION
+        run: |
+          expected="$(tr -d '[:space:]' < VERSION)"
+          actual="$(./build/catalist --version)"
+          echo "VERSION=$expected  --version=$actual"
+          case "$actual" in
+            *"$expected"*) ;;
+            *) echo "catalist --version does not report $expected"; exit 1 ;;
+          esac
+
   sanitizers:
     runs-on: ubuntu-latest
 

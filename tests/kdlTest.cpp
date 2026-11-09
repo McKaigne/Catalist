@@ -42,7 +42,7 @@ general {
 top-bar height=3 border=true {
     tab "anime" label="Anime" show-count=true
     spacer
-    text "v0.2.0" color="overlay0"
+    text "v1.2.3" color="overlay0"
 }
 ratio 1.5
 )kdl";
@@ -66,7 +66,7 @@ TEST_CASE("kdl parses nodes args props and children") {
   CHECK(topBar->getPropBool("border") == true);
   REQUIRE(topBar->children.size() == 3);
   CHECK(topBar->children[0].getPropString("label") == "Anime");
-  CHECK(topBar->children[2].getArgString(0) == "v0.2.0");
+  CHECK(topBar->children[2].getArgString(0) == "v1.2.3");
 
   CHECK(doc.getNode("ratio")->getArg(0).asDouble() == doctest::Approx(1.5));
 }

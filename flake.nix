@@ -25,7 +25,7 @@
         {
           default = pkgs.stdenv.mkDerivation {
             pname = "catalist";
-            version = "0.2.0";
+            version = pkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
             src = ./.;
 
             nativeBuildInputs = with pkgs; [
@@ -42,9 +42,6 @@
             ];
 
             postInstall = ''
-              if [ -f doc/catalist.1 ]; then
-                installManPage doc/catalist.1
-              fi
               if [ -f completions/catalist.bash ]; then
                 installShellCompletion --bash completions/catalist.bash
               fi

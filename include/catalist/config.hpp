@@ -5,6 +5,7 @@
 #include <string>
 
 #include "catalist/kdl.hpp"
+#include "catalist/platform/fileSystem.hpp"
 #include "catalist/keybindManager.hpp"
 
 namespace catalist {
@@ -19,9 +20,10 @@ struct appConfig {
   keybindManager keybinds;
   kdl::document kdlDoc;
 
-  bool load(const std::filesystem::path& path);
-  bool save(const std::filesystem::path& path) const;
-  bool generateDefault(const std::filesystem::path& path);
+  bool load(iFileSystem& fileSystem, const std::filesystem::path& path);
+  bool save(iFileSystem& fileSystem, const std::filesystem::path& path) const;
+  bool generateDefault(iFileSystem& fileSystem,
+                       const std::filesystem::path& path);
 };
 
 }  // namespace catalist

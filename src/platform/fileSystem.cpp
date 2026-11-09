@@ -70,8 +70,10 @@ std::vector<iFileSystem::path> realFileSystem::listDirectory(
     const path& directory) const {
   std::vector<path> entries;
   std::error_code ec;
-  for (const auto& item : std::filesystem::directory_iterator(directory, ec))
-    entries.push_back(item.path());
+  for (const auto& item : std::filesystem::directory_iterator(directory, ec)) {
+    if (item.is_regular_file(ec))
+      entries.push_back(item.path());
+  }
   return entries;
 }
 

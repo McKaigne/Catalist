@@ -27,7 +27,7 @@ top-bar height=3 border=true {
 )kdl");
 
   appConfig config;
-  REQUIRE(config.load(configPath));
+  REQUIRE(config.load(fileSystem(), configPath));
   CHECK(config.theme == "nord");
   CHECK(config.mouse == false);
   CHECK(config.defaultMedia == "manga");
@@ -48,7 +48,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig keeps top-bar text that is not a ve
   writeTextFile(configPath, "top-bar {\n    text \"v1.2\"\n    text \"hello\"\n"
                             "    text \"v1.2.x\"\n}\n");
   appConfig config;
-  REQUIRE(config.load(configPath));
+  REQUIRE(config.load(fileSystem(), configPath));
   auto topBar = config.kdlDoc.getNode("top-bar");
   REQUIRE(topBar.has_value());
   REQUIRE(topBar->children.size() == 3);
@@ -58,7 +58,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig keeps top-bar text that is not a ve
 
 TEST_CASE_FIXTURE(tempDirFixture, "appConfig default top bar uses a version node") {
   appConfig config;
-  REQUIRE(config.load(tempDir() / "catalist.kdl"));
+  REQUIRE(config.load(fileSystem(), tempDir() / "catalist.kdl"));
   auto topBar = config.kdlDoc.getNode("top-bar");
   REQUIRE(topBar.has_value());
   bool hasVersionNode = false;
@@ -73,7 +73,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig ignores dashed keybind names") {
   auto configPath = tempDir() / "catalist.kdl";
   writeTextFile(configPath, "keybinds {\n    move-up \"w\"\n}\n");
   appConfig config;
-  REQUIRE(config.load(configPath));
+  REQUIRE(config.load(fileSystem(), configPath));
   CHECK(config.keybinds.getKey(keyAction::kMoveUp) == "k");
 }
 
@@ -83,7 +83,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig loads child style general block") {
                 "general {\n    theme \"dracula\"\n    mouse false\n"
                 "    reverse-sort false\n}\n");
   appConfig config;
-  REQUIRE(config.load(configPath));
+  REQUIRE(config.load(fileSystem(), configPath));
   CHECK(config.theme == "dracula");
   CHECK(config.mouse == false);
   CHECK(config.reverseSort == false);
@@ -93,7 +93,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig loads child style general block") {
 TEST_CASE_FIXTURE(tempDirFixture, "appConfig generates the default file when missing") {
   auto configPath = tempDir() / "nested" / "catalist.kdl";
   appConfig config;
-  REQUIRE(config.load(configPath));
+  REQUIRE(config.load(fileSystem(), configPath));
   CHECK(std::filesystem::exists(configPath));
   CHECK(config.kdlDoc.getNode("top-bar").has_value());
   CHECK(config.theme == "catppuccin-mocha");
@@ -105,10 +105,10 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig save then load keeps general settin
   original.theme = "gruvbox";
   original.mouse = false;
   original.defaultSort = "progress";
-  REQUIRE(original.save(configPath));
+  REQUIRE(original.save(fileSystem(), configPath));
 
   appConfig reloaded;
-  REQUIRE(reloaded.load(configPath));
+  REQUIRE(reloaded.load(fileSystem(), configPath));
   CHECK(reloaded.theme == "gruvbox");
   CHECK(reloaded.mouse == false);
   CHECK(reloaded.defaultSort == "progress");

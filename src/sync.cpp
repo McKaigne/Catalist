@@ -13,7 +13,7 @@
 
 #include "catalist/core/jsonLite.hpp"
 #include "catalist/core/url.hpp"
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 
 namespace catalist {
 

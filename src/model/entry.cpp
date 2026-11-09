@@ -63,28 +63,6 @@ std::string formatDate(const std::optional<isoDate>& date) {
   return date ? date->toString() : "";
 }
 
-std::string escapeCsv(const std::string& field) {
-  bool needsQuotes = false;
-  for (char c : field) {
-    if (c == ',' || c == '"' || c == '\n' || c == '\r') {
-      needsQuotes = true;
-      break;
-    }
-  }
-  if (!needsQuotes)
-    return field;
-
-  std::string escaped = "\"";
-  for (char c : field) {
-    if (c == '"')
-      escaped += "\"\"";
-    else
-      escaped += c;
-  }
-  escaped += "\"";
-  return escaped;
-}
-
 std::string entry::getRemoteId(const std::string& provider) const {
   auto it = remoteIds.find(provider);
   if (it != remoteIds.end())
@@ -147,24 +125,6 @@ std::unordered_map<std::string, std::string> deserializeRemoteIds(
     start = semi + 1;
   }
   return res;
-}
-
-std::string unescapeCsv(const std::string& field) {
-  if (field.size() >= 2 && field.front() == '"' && field.back() == '"') {
-    std::string unquoted = field.substr(1, field.size() - 2);
-    std::string res = "";
-    for (size_t i = 0; i < unquoted.size(); ++i) {
-      if (unquoted[i] == '"' && i + 1 < unquoted.size() &&
-          unquoted[i + 1] == '"') {
-        res += '"';
-        ++i;
-      } else {
-        res += unquoted[i];
-      }
-    }
-    return res;
-  }
-  return field;
 }
 
 }  // namespace catalist

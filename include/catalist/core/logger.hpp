@@ -2,12 +2,12 @@
 #define CATALIST_CORE_LOGGER_HPP_
 
 #include <filesystem>
-#include <fstream>
 #include <mutex>
 #include <string>
 #include <string_view>
 
 #include "catalist/core/clock.hpp"
+#include "catalist/platform/fileSystem.hpp"
 
 namespace catalist {
 
@@ -18,11 +18,15 @@ enum class logLevel {
   kError
 };
 
+// Process-wide log sink. main() wires it to a file through init(); until
+// then messages are dropped, so library code and tests never create log
+// files on their own.
 class logger {
  public:
   static logger& get();
 
-  void init(const std::filesystem::path& logPath, const iClock& clock);
+  void init(const std::filesystem::path& logPath, iFileSystem& fileSystem,
+            const iClock& clock);
   void log(logLevel level, std::string_view message);
 
   static void debug(std::string_view message);
@@ -33,16 +37,13 @@ class logger {
   [[nodiscard]] std::filesystem::path getLogPath() const;
 
  private:
-  logger();
-  ~logger();
+  logger() = default;
 
-  std::filesystem::path logPath_;
-  std::ofstream logFile_;
+  // Guards all fields: the TUI logs from its background sync thread too.
   mutable std::mutex mutex_;
-  bool initialized_ = false;
+  std::filesystem::path logPath_;
+  iFileSystem* fileSystem_ = nullptr;
   const iClock* clock_ = nullptr;
-
-  void ensureOpen();
 };
 
 #define LOG_DEBUG(msg) ::catalist::logger::debug(msg)

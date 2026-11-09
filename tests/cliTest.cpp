@@ -3,7 +3,7 @@
 #include <iostream>
 
 #include "catalist/cli.hpp"
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 #include "support/testSupport.hpp"
 
 using catalist::cliDispatcher;
@@ -47,22 +47,21 @@ TEST_CASE("formatJsonEntry includes id and title") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "cli add then step progress then rm") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   streamCapture out(std::cout);
 
   std::vector<std::string> addArgs = {"Dungeon Meshi", "-t", "anime", "-s",
                                       "watching", "-e", "24", "-p", "10",
                                       "-r", "9"};
-  auto clock = catalist::test::makeTestClock();
-  REQUIRE(cliDispatcher::executeAdd(addArgs, db, clock) == 0);
+  REQUIRE(cliDispatcher::executeAdd(addArgs, db, clock()) == 0);
 
-  auto entries = db.filterEntries(mediaType::kAnime, std::nullopt, -1,
+  auto entries = db.filterEntries(mediaType::kAnime, std::nullopt, std::nullopt,
                                   "Dungeon Meshi", sortKey::kTitle, false);
   REQUIRE(entries.size() == 1);
   int id = entries[0].id;
 
   REQUIRE(cliDispatcher::executeSet({std::to_string(id), "-p", "a", "2"}, db,
-                                    clock) ==
+                                    clock()) ==
           0);
   auto stepped = db.getById(mediaType::kAnime, id);
   REQUIRE(stepped.has_value());
@@ -74,10 +73,11 @@ TEST_CASE_FIXTURE(tempDirFixture, "cli add then step progress then rm") {
   CHECK_FALSE(db.getById(mediaType::kAnime, id).has_value());
 }
 
-TEST_CASE("cli config list and completion generators succeed") {
+TEST_CASE_FIXTURE(tempDirFixture, "cli config list and completion generators succeed") {
   catalist::appConfig config;
   streamCapture out(std::cout);
-  CHECK(cliDispatcher::executeConfig({"list"}, config) == 0);
+  CHECK(cliDispatcher::executeConfig({"list"}, config, fileSystem(),
+                                     tempDir() / "catalist.kdl") == 0);
   CHECK(cliDispatcher::executeCompletion({"bash"}) == 0);
   CHECK(cliDispatcher::executeCompletion({"zsh"}) == 0);
   CHECK(cliDispatcher::executeCompletion({"fish"}) == 0);
@@ -166,19 +166,18 @@ TEST_CASE("parseRatingSpec rejects invalid input") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "cli add rejects a malformed date and set clears one") {
-  catalist::database db(tempDir());
-  auto clock = catalist::test::makeTestClock();
+  catalist::database db(fileSystem(), clock(), tempDir());
   streamCapture out(std::cout);
   streamCapture err(std::cerr);
 
-  CHECK(cliDispatcher::executeAdd({"X", "--start", "soon"}, db, clock) == 2);
+  CHECK(cliDispatcher::executeAdd({"X", "--start", "soon"}, db, clock()) == 2);
   CHECK(err.text() ==
         "error: invalid date 'soon' for '--start'. Expected YYYY-MM-DD.\n");
   CHECK(db.getEntries(mediaType::kAnime).empty());
 
   REQUIRE(cliDispatcher::executeAdd({"X", "--finish", "2026-01-02"}, db,
-                                    clock) == 0);
-  REQUIRE(cliDispatcher::executeSet({"X", "--finish", ""}, db, clock) == 0);
+                                    clock()) == 0);
+  REQUIRE(cliDispatcher::executeSet({"X", "--finish", ""}, db, clock()) == 0);
   auto updated = db.getEntries(mediaType::kAnime).at(0);
   CHECK_FALSE(updated.finishDate.has_value());
   CHECK(catalist::formatDate(updated.startDate) == "2026-10-20");

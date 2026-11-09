@@ -1,6 +1,5 @@
 #include "catalist/malParser.hpp"
 
-#include <fstream>
 #include <string>
 
 namespace catalist {
@@ -52,16 +51,15 @@ static std::string extractTag(const std::string& block,
   return decodeXmlEntities(val);
 }
 
-size_t malParser::importXml(const std::string& filepath, database& db,
+size_t malParser::importXml(const iFileSystem& fileSystem,
+                            const std::string& filepath, database& db,
                             bool clean) {
-  std::ifstream file(filepath);
-  if (!file.is_open())
+  auto fileContent = fileSystem.readFile(filepath);
+  if (!fileContent)
     return 0;
 
   db.createBackupSnapshot();
-
-  std::string content((std::istreambuf_iterator<char>(file)),
-                      std::istreambuf_iterator<char>());
+  const std::string& content = *fileContent;
 
   size_t imported = 0;
 

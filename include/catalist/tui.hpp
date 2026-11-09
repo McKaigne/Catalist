@@ -3,8 +3,9 @@
 #include "catalist/commandPalette.hpp"
 #include "catalist/config.hpp"
 #include "catalist/core/clock.hpp"
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 #include "catalist/model/undoStack.hpp"
+#include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
 #include "catalist/provider.hpp"
@@ -39,6 +40,7 @@ enum class focusedCard { kSidebar, kCatalog, kDetails };
 
 
 struct tuiServices {
+  iFileSystem& fileSystem;
   iProcessLauncher& launcher;
   const iClock& clock;
   iHttpClient& http;

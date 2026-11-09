@@ -7,26 +7,19 @@
 #include <string>
 #include <vector>
 
+#include "catalist/core/clock.hpp"
+#include "catalist/model/activity.hpp"
 #include "catalist/model/entry.hpp"
+#include "catalist/platform/fileSystem.hpp"
 
 namespace catalist {
 
 enum class sortKey { kScore, kStatus, kTitle, kProgress, kDate, kId };
 
-struct activityRecord {
-  std::string timestamp;
-  mediaType type = mediaType::kAnime;
-  std::string title;
-  watchStatus status = watchStatus::kWatching;
-  int progress = 0;
-  int totalUnits = 0;
-  int score = 0;
-};
-
 class database {
  public:
-  database();
-  explicit database(std::filesystem::path configDir);
+  database(iFileSystem& fileSystem, const iClock& clock,
+           std::filesystem::path configDir);
 
   int addEntry(entry mediaEntry);
   const std::vector<entry>& getEntries(mediaType type) const;
@@ -39,8 +32,9 @@ class database {
 
   std::vector<entry> filterEntries(mediaType type,
                                    std::optional<watchStatus> status,
-                                   int scoreFilter, const std::string& query,
-                                   sortKey sortBy, bool reverse) const;
+                                   std::optional<int> exactScore,
+                                   const std::string& query, sortKey sortBy,
+                                   bool reverse) const;
 
   size_t countByStatus(mediaType type, watchStatus status) const;
   size_t countByScore(mediaType type, int score) const;
@@ -51,8 +45,9 @@ class database {
   double daysSpent(mediaType type) const;
   double completedPercentage(mediaType type) const;
 
+  // CATALIST_DATA_DIR, then $XDG_CONFIG_HOME/catalist, then
+  // ~/.config/catalist.
   static std::filesystem::path getDefaultConfigDir();
-  static std::filesystem::path getConfigDir();
   std::filesystem::path getConfigPath() const;
   std::filesystem::path getCsvPath(mediaType type) const;
   std::filesystem::path getHistoryPath() const;
@@ -71,9 +66,12 @@ class database {
 
   void createBackupSnapshot();
   void autoHealIds();
-  void seedDefaults();
 
  private:
+  void trackLocalId(int id);
+
+  iFileSystem& fileSystem_;
+  const iClock& clock_;
   std::filesystem::path configDir_;
   mutable std::recursive_mutex mutex_;
   std::vector<entry> animeEntries_;

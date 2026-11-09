@@ -7,7 +7,7 @@
 #include "catalist/cli.hpp"
 #include "catalist/config.hpp"
 #include "catalist/core/version.hpp"
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 #include "support/testSupport.hpp"
 
 namespace {
@@ -45,15 +45,14 @@ TEST_CASE("kVersionString is major.minor.patch matching the numeric parts") {
 }
 
 TEST_CASE_FIXTURE(catalist::test::tempDirFixture, "cli --version prints kVersionString") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   catalist::appConfig config;
   catalist::test::streamCapture out(std::cout);
   char program[] = "catalist";
   char flag[] = "--version";
   char* argv[] = {program, flag};
-  auto clock = catalist::test::makeTestClock();
   catalist::mockHttpClient http;
-  catalist::cliServices services{clock, http};
+  catalist::cliServices services{clock(), http, fileSystem()};
   CHECK(catalist::cliDispatcher::dispatch(2, argv, db, config, services) == 0);
   CHECK(out.text() ==
         std::string("Catalist v") + catalist::kVersionString + " (C++17 / FTXUI)\n");

@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "catalist/core/result.hpp"
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 
 namespace catalist {
 

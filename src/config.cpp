@@ -1,7 +1,6 @@
 #include "catalist/config.hpp"
 
 #include <cctype>
-#include <fstream>
 #include <sstream>
 
 namespace catalist {
@@ -123,32 +122,27 @@ card "details" width=42 border=true {
 }
 )kdl";
 
-bool appConfig::generateDefault(const std::filesystem::path& path) {
-  std::filesystem::create_directories(path.parent_path());
-  std::ofstream file(path);
-  if (!file.is_open())
+bool appConfig::generateDefault(iFileSystem& fileSystem,
+                                const std::filesystem::path& path) {
+  if (!fileSystem.writeFileAtomic(path, kDefaultKdl))
     return false;
-  file << kDefaultKdl;
-  file.close();
 
   std::string err;
   kdlDoc = kdl::document::parse(kDefaultKdl, err);
   return true;
 }
 
-bool appConfig::load(const std::filesystem::path& path) {
-  if (!std::filesystem::exists(path)) {
-    return generateDefault(path);
-  }
+bool appConfig::load(iFileSystem& fileSystem,
+                     const std::filesystem::path& path) {
+  if (!fileSystem.exists(path))
+    return generateDefault(fileSystem, path);
 
-  std::ifstream file(path);
-  if (!file.is_open())
+  auto content = fileSystem.readFile(path);
+  if (!content)
     return false;
 
-  std::string content((std::istreambuf_iterator<char>(file)),
-                      std::istreambuf_iterator<char>());
   std::string err;
-  kdlDoc = kdl::document::parse(content, err);
+  kdlDoc = kdl::document::parse(*content, err);
   upgradeLegacyVersionNodes(kdlDoc);
 
   auto gen = kdlDoc.getNode("general");
@@ -186,7 +180,8 @@ bool appConfig::load(const std::filesystem::path& path) {
   return true;
 }
 
-bool appConfig::save(const std::filesystem::path& path) const {
+bool appConfig::save(iFileSystem& fileSystem,
+                     const std::filesystem::path& path) const {
   kdl::document doc = kdlDoc;
   auto mk = [](const std::string& name, kdl::value v) {
     kdl::node n;
@@ -229,12 +224,7 @@ bool appConfig::save(const std::filesystem::path& path) const {
     doc.rootNodes.insert(doc.rootNodes.begin(), gn);
   }
 
-  std::filesystem::create_directories(path.parent_path());
-  std::ofstream file(path);
-  if (!file.is_open())
-    return false;
-  file << doc.serialize();
-  return true;
+  return fileSystem.writeFileAtomic(path, doc.serialize());
 }
 
 }  // namespace catalist

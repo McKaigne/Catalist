@@ -13,6 +13,7 @@
 #include "catalist/core/version.hpp"
 #include "catalist/malParser.hpp"
 #include "catalist/model/entryOps.hpp"
+#include "catalist/storage/csvCodec.hpp"
 #include "catalist/remoteSearch.hpp"
 
 #if defined(_WIN32)
@@ -313,11 +314,12 @@ int cliDispatcher::dispatch(int argc, char* argv[], database& db,
   if (command == "export")
     return executeExport(args, db);
   if (command == "import")
-    return executeImport(args, db);
+    return executeImport(args, db, services.fileSystem);
   if (command == "search" || command == "find")
     return executeSearch(args, db, services.http);
   if (command == "config")
-    return executeConfig(args, config);
+    return executeConfig(args, config, services.fileSystem,
+                         db.getConfigPath() / "catalist.kdl");
   if (command == "completion")
     return executeCompletion(args);
 
@@ -528,10 +530,10 @@ int cliDispatcher::executeLs(const std::vector<std::string>& args, database& db,
     for (const auto& e : entries) {
       std::cout << e.id << "," << e.malId << ","
                 << (e.type == mediaType::kAnime ? "anime" : "manga") << ","
-                << escapeCsv(e.title) << ","
-                << escapeCsv(statusToString(e.status, e.type)) << "," << e.score
+                << csvCodec::escapeField(e.title) << ","
+                << csvCodec::escapeField(statusToString(e.status, e.type)) << "," << e.score
                 << "," << e.progress << "," << e.totalUnits << ","
-                << escapeCsv(formatDate(e.startDate)) << "," << escapeCsv(formatDate(e.finishDate))
+                << csvCodec::escapeField(formatDate(e.startDate)) << "," << csvCodec::escapeField(formatDate(e.finishDate))
                 << "\n";
     }
     return 0;
@@ -1393,13 +1395,13 @@ int cliDispatcher::executeExport(const std::vector<std::string>& args,
       for (const auto& e : list) {
         std::cout << e.id << "," << e.malId << "," << e.anilistId << ","
                   << (e.type == mediaType::kAnime ? "anime" : "manga") << ","
-                  << escapeCsv(e.title) << ","
-                  << escapeCsv(statusToString(e.status, e.type)) << ","
+                  << csvCodec::escapeField(e.title) << ","
+                  << csvCodec::escapeField(statusToString(e.status, e.type)) << ","
                   << e.score << "," << e.progress << "," << e.totalUnits << ","
                   << e.volumes << "," << e.totalVolumes << "," << e.rewatched
-                  << "," << escapeCsv(formatDate(e.startDate)) << ","
-                  << escapeCsv(formatDate(e.finishDate)) << "," << escapeCsv(e.notes) << ","
-                  << escapeCsv(formatDate(e.updatedAt)) << "\n";
+                  << "," << csvCodec::escapeField(formatDate(e.startDate)) << ","
+                  << csvCodec::escapeField(formatDate(e.finishDate)) << "," << csvCodec::escapeField(e.notes) << ","
+                  << csvCodec::escapeField(formatDate(e.updatedAt)) << "\n";
       }
     };
 
@@ -1420,7 +1422,7 @@ int cliDispatcher::executeExport(const std::vector<std::string>& args,
 }
 
 int cliDispatcher::executeImport(const std::vector<std::string>& args,
-                                 database& db) {
+                                 database& db, const iFileSystem& fileSystem) {
   if (args.empty()) {
     emitError("usage", "usage: catalist import [--clean] <file.xml ...>",
               false);
@@ -1444,7 +1446,7 @@ int cliDispatcher::executeImport(const std::vector<std::string>& args,
 
   size_t totalImported = 0;
   for (const auto& f : files) {
-    size_t count = malParser::importXml(f, db, clean);
+    size_t count = malParser::importXml(fileSystem, f, db, clean);
     std::cout << "Successfully ingested " << count << " records from: " << f
               << "\n";
     totalImported += count;
@@ -1637,8 +1639,8 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
 }
 
 int cliDispatcher::executeConfig(const std::vector<std::string>& args,
-                                 appConfig& config) {
-  auto configPath = database::getConfigDir() / "catalist.kdl";
+                                 appConfig& config, iFileSystem& fileSystem,
+                                 const std::filesystem::path& configPath) {
 
   if (args.empty() || args[0] == "list") {
     std::cout << "mouse = " << (config.mouse ? "true" : "false") << "\n"
@@ -1698,7 +1700,7 @@ int cliDispatcher::executeConfig(const std::vector<std::string>& args,
       return 1;
     }
 
-    config.save(configPath);
+    config.save(fileSystem, configPath);
     std::cout << "Set " << key << " = " << val << "\n";
     return 0;
   }

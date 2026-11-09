@@ -11,8 +11,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "logger writes exactly one formatted line") {
   auto logPath = tempDir() / "catalist.log";
   std::filesystem::remove(logPath);
 
-  auto clock = catalist::test::makeTestClock();
-  catalist::logger::get().init(logPath, clock);
+  catalist::logger::get().init(logPath, fileSystem(), clock());
   LOG_INFO("Testing logger output line");
 
   REQUIRE(std::filesystem::exists(logPath));

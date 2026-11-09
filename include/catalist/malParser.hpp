@@ -2,13 +2,15 @@
 
 #include <string>
 
-#include "catalist/database.hpp"
+#include "catalist/platform/fileSystem.hpp"
+#include "catalist/storage/database.hpp"
 
 namespace catalist {
 
 class malParser {
 public:
-  static size_t importXml(const std::string& filepath, database& db,
+  static size_t importXml(const iFileSystem& fileSystem,
+                          const std::string& filepath, database& db,
                           bool clean = false);
 };
 

@@ -8,7 +8,7 @@
 
 #include "catalist/cli.hpp"
 #include "catalist/config.hpp"
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"
 
@@ -37,7 +37,7 @@ cliRun runCli(commandFn&& command) {
 }
 
 struct sampleLibraryFixture : tempDirFixture {
-  sampleLibraryFixture() : db(tempDir()) {
+  sampleLibraryFixture() : db(fileSystem(), clock(), tempDir()) {
     catalist::test::seedSampleLibrary(db);
   }
   catalist::database db;

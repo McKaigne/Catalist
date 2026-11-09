@@ -1,5 +1,4 @@
 #include "catalist/core/logger.hpp"
-#include "catalist/database.hpp"
 
 #include <chrono>
 #include <ctime>
@@ -20,13 +19,6 @@ const char* levelToString(logLevel level) {
   return "INFO ";
 }
 
-// Messages logged before init() (or without a clock) still get a timestamp
-// from the real clock rather than being dropped.
-const iClock& fallbackClock() {
-  static const realClock clock;
-  return clock;
-}
-
 std::string formatTimestamp(const iClock& clock) {
   auto sinceEpoch = clock.now().time_since_epoch();
   auto millis =
@@ -44,55 +36,21 @@ logger& logger::get() {
   return instance;
 }
 
-logger::logger() = default;
-
-logger::~logger() {
+void logger::init(const std::filesystem::path& logPath,
+                  iFileSystem& fileSystem, const iClock& clock) {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (logFile_.is_open()) {
-    logFile_.flush();
-    logFile_.close();
-  }
-}
-
-void logger::init(const std::filesystem::path& logPath, const iClock& clock) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  clock_ = &clock;
-  if (logFile_.is_open()) {
-    logFile_.flush();
-    logFile_.close();
-  }
   logPath_ = logPath;
-  if (!logPath_.parent_path().empty()) {
-    std::error_code ec;
-    std::filesystem::create_directories(logPath_.parent_path(), ec);
-  }
-  logFile_.open(logPath_, std::ios::out | std::ios::app);
-  initialized_ = true;
-}
-
-void logger::ensureOpen() {
-  if (initialized_ && logFile_.is_open()) return;
-  if (logPath_.empty()) {
-    logPath_ = database::getConfigDir() / "catalist.log";
-  }
-  if (!logPath_.parent_path().empty()) {
-    std::error_code ec;
-    std::filesystem::create_directories(logPath_.parent_path(), ec);
-  }
-  logFile_.open(logPath_, std::ios::out | std::ios::app);
-  initialized_ = true;
+  fileSystem_ = &fileSystem;
+  clock_ = &clock;
 }
 
 void logger::log(logLevel level, std::string_view message) {
   std::lock_guard<std::mutex> lock(mutex_);
-  ensureOpen();
-  if (!logFile_.is_open()) return;
-
-  const iClock& clock = clock_ ? *clock_ : fallbackClock();
-  logFile_ << "[" << formatTimestamp(clock) << "] ["
-           << levelToString(level) << "] "
-           << message << "\n";
-  logFile_.flush();
+  if (!fileSystem_ || !clock_)
+    return;
+  std::string line = "[" + formatTimestamp(*clock_) + "] [" +
+                     levelToString(level) + "] " + std::string(message) + "\n";
+  [[maybe_unused]] bool written = fileSystem_->appendFile(logPath_, line);
 }
 
 void logger::debug(std::string_view message) {

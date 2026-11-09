@@ -1,5 +1,6 @@
 #include "catalist/core/version.hpp"
 #include "catalist/model/entryOps.hpp"
+#include "catalist/storage/backup.hpp"
 #include "catalist/tui/theme/palettes.hpp"
 #include "catalist/tui/theme/statusStyle.hpp"
 #include "catalist/tui.hpp"
@@ -595,7 +596,7 @@ void appTui::run() {
       if (themeRegistry::hasTheme(themeName)) {
         config_.theme = themeName;
         themeRegistry::setActive(themeName);
-        config_.save(database::getConfigDir() / "catalist.kdl");
+        config_.save(services_.fileSystem, db_.getConfigPath() / "catalist.kdl");
         statusMessage = "Applied theme: " + themeName;
       } else {
         statusMessage = "Unknown theme: " + themeName;
@@ -618,7 +619,7 @@ void appTui::run() {
     } else if (verb == "import") {
       std::string path = runZenityFilePicker(services_.launcher);
       if (!path.empty()) {
-        size_t count = malParser::importXml(path, db_, false);
+        size_t count = malParser::importXml(services_.fileSystem, path, db_, false);
         pushNotification("Ingested " + std::to_string(count) +
                          " entries from XML backup.");
         refreshViews();
@@ -1209,7 +1210,7 @@ void appTui::run() {
           } else if (syncActionCursor == 2) {
             std::string path = runZenityFilePicker(services_.launcher);
             if (!path.empty()) {
-              size_t count = malParser::importXml(path, db_, false);
+              size_t count = malParser::importXml(services_.fileSystem, path, db_, false);
               pushNotification("Ingested " + std::to_string(count) +
                                " entries from XML backup.");
               refreshViews();
@@ -1262,7 +1263,7 @@ void appTui::run() {
           std::string th = themes[settingsThemeCursor];
           config_.theme = th;
           themeRegistry::setActive(th);
-          config_.save(database::getConfigDir() / "catalist.kdl");
+          config_.save(services_.fileSystem, db_.getConfigPath() / "catalist.kdl");
           statusMessage = "Applied theme: " + th;
         } else {
           if (settingsPrefCursor == 0) {
@@ -1294,7 +1295,7 @@ void appTui::run() {
             config_.reverseSort = true;
             statusMessage = "Sort: Descending";
           }
-          config_.save(database::getConfigDir() / "catalist.kdl");
+          config_.save(services_.fileSystem, db_.getConfigPath() / "catalist.kdl");
         }
         return true;
       }
@@ -1943,16 +1944,8 @@ void appTui::run() {
   auto buildSyncSection = [&]() {
     const auto& theme = themeRegistry::active();
 
-    auto bDir = database::getConfigDir() / "backups";
-    std::vector<std::string> backupFiles;
-    if (std::filesystem::exists(bDir)) {
-      for (const auto& mediaEntry : std::filesystem::directory_iterator(bDir)) {
-        if (mediaEntry.is_regular_file()) {
-          backupFiles.push_back(mediaEntry.path().filename().string());
-        }
-      }
-    }
-    std::sort(backupFiles.rbegin(), backupFiles.rend());
+    auto backupFiles =
+        backup::listSnapshots(services_.fileSystem, db_.getConfigPath());
 
     Elements backupElements;
     if (backupFiles.empty()) {

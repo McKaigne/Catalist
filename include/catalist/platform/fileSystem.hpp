@@ -28,6 +28,7 @@ public:
   virtual bool createDirectories(const path& directory) = 0;
   [[nodiscard]] virtual bool copyFile(const path& from, const path& to) = 0;
   virtual bool removeFile(const path& file) = 0;
+  // Regular files directly inside the directory (no subdirectories).
   [[nodiscard]] virtual std::vector<path> listDirectory(
       const path& directory) const = 0;
   virtual bool restrictToOwner(const path& file) = 0;

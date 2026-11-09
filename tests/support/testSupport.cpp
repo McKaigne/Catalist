@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <cstdlib>
-#include <fstream>
 #include <iostream>
 #include <random>
 #include <stdexcept>
@@ -38,7 +37,7 @@ std::filesystem::path makeUniqueTempDir(const std::string& prefix) {
 }
 
 tempDirFixture::tempDirFixture()
-    : tempDir_(makeUniqueTempDir("catalist-test-")) {}
+    : tempDir_(makeUniqueTempDir("catalist-test-")), clock_(makeTestClock()) {}
 
 tempDirFixture::~tempDirFixture() {
   std::error_code ignored;
@@ -80,19 +79,13 @@ std::filesystem::path fixturePath(const std::string& relativePath) {
 }
 
 std::string readTextFile(const std::filesystem::path& path) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file.is_open())
-    return "";
-  return std::string((std::istreambuf_iterator<char>(file)),
-                     std::istreambuf_iterator<char>());
+  return realFileSystem().readFile(path).value_or("");
 }
 
 void writeTextFile(const std::filesystem::path& path,
                    const std::string& content) {
-  if (!path.parent_path().empty())
-    std::filesystem::create_directories(path.parent_path());
-  std::ofstream file(path, std::ios::binary | std::ios::trunc);
-  file << content;
+  if (!realFileSystem().writeFileAtomic(path, content))
+    throw std::runtime_error("could not write test file " + path.string());
 }
 
 std::string loadGolden(const std::string& name, const std::string& actual) {

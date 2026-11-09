@@ -48,7 +48,9 @@ set(CATALIST_SOURCES
   src/model/entryOps.cpp
   src/model/undoStack.cpp
   src/config.cpp
-  src/database.cpp
+  src/storage/backup.cpp
+  src/storage/csvCodec.cpp
+  src/storage/database.cpp
   src/malParser.cpp
   src/sync.cpp
   src/cli.cpp
@@ -103,6 +105,7 @@ add_executable(catalistTests
   tests/cliSetTest.cpp
   tests/cliTest.cpp
   tests/configTest.cpp
+  tests/csvCodecTest.cpp
   tests/databaseTest.cpp
   tests/entryOpsTest.cpp
   tests/entryTest.cpp

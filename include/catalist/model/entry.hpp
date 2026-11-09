@@ -49,8 +49,6 @@ std::string typeToString(mediaType type);
 [[nodiscard]] std::string formatDate(const std::optional<isoDate>& date);
 mediaType stringToType(const std::string& str);
 
-std::string escapeCsv(const std::string& field);
-std::string unescapeCsv(const std::string& field);
 std::string serializeRemoteIds(
     const std::unordered_map<std::string, std::string>& ids);
 std::unordered_map<std::string, std::string> deserializeRemoteIds(

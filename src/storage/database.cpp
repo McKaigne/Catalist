@@ -1,13 +1,12 @@
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 #include "catalist/core/logger.hpp"
 
 #include <algorithm>
-#include <chrono>
 #include <cstdlib>
-#include <fstream>
-#include <iomanip>
 #include <mutex>
-#include <sstream>
+
+#include "catalist/storage/backup.hpp"
+#include "catalist/storage/csvCodec.hpp"
 
 namespace catalist {
 
@@ -31,13 +30,9 @@ std::filesystem::path database::getDefaultConfigDir() {
   return std::filesystem::path("./config");
 }
 
-std::filesystem::path database::getConfigDir() {
-  return getDefaultConfigDir();
-}
-
-database::database() : configDir_(getDefaultConfigDir()) {}
-database::database(std::filesystem::path configDir)
-    : configDir_(std::move(configDir)) {}
+database::database(iFileSystem& fileSystem, const iClock& clock,
+                   std::filesystem::path configDir)
+    : fileSystem_(fileSystem), clock_(clock), configDir_(std::move(configDir)) {}
 
 std::filesystem::path database::getConfigPath() const {
   return configDir_;
@@ -207,8 +202,9 @@ bool database::changeMediaType(mediaType currentType, int id) {
 }
 
 std::vector<entry> database::filterEntries(
-    mediaType type, std::optional<watchStatus> status, int scoreFilter,
-    const std::string& query, sortKey sortBy, bool reverse) const {
+    mediaType type, std::optional<watchStatus> status,
+    std::optional<int> exactScore, const std::string& query, sortKey sortBy,
+    bool reverse) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<entry> results;
   const auto& list = getList(type);
@@ -220,7 +216,7 @@ std::vector<entry> database::filterEntries(
   for (const auto& e : list) {
     if (status.has_value() && e.status != status.value())
       continue;
-    if (scoreFilter >= 0 && scoreFilter <= 10 && e.score != scoreFilter)
+    if (exactScore && e.score != *exactScore)
       continue;
 
     if (!queryLower.empty()) {
@@ -318,257 +314,53 @@ double database::completedPercentage(mediaType type) const {
 }
 
 std::filesystem::path database::getCsvPath(mediaType type) const {
-  return configDir_ / (type == mediaType::kAnime ? "anime.csv" : "manga.csv");
+  return configDir_ / csvCodec::catalogFileName(type);
 }
 
 std::filesystem::path database::getHistoryPath() const {
-  return configDir_ / "history.csv";
+  return configDir_ / csvCodec::historyFileName();
 }
 
 std::filesystem::path database::getBackupDir() const {
-  return configDir_ / "backups";
+  return backup::backupDirectory(configDir_);
 }
 
 void database::createBackupSnapshot() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   LOG_INFO("Creating pre-mutation snapshot backup...");
-  auto bdir = getBackupDir();
-  std::filesystem::create_directories(bdir);
-
-  auto now = std::chrono::system_clock::now();
-  auto inTimeT = std::chrono::system_clock::to_time_t(now);
-  std::stringstream ss;
-  ss << std::put_time(std::localtime(&inTimeT), "%Y%m%d_%H%M%S");
-  std::string timestamp = ss.str();
-
-  if (std::filesystem::exists(getCsvPath(mediaType::kAnime))) {
-    std::filesystem::copy_file(
-        getCsvPath(mediaType::kAnime), bdir / ("anime_" + timestamp + ".csv"),
-        std::filesystem::copy_options::overwrite_existing);
-  }
-  if (std::filesystem::exists(getCsvPath(mediaType::kManga))) {
-    std::filesystem::copy_file(
-        getCsvPath(mediaType::kManga), bdir / ("manga_" + timestamp + ".csv"),
-        std::filesystem::copy_options::overwrite_existing);
-  }
+  backup::createSnapshot(fileSystem_, clock_, configDir_);
 }
 
-// Files written before dates became optional store "0000-00-00" (or an
-// empty field) for an unknown date; both load as absent.
-static std::optional<isoDate> parseStoredDate(const std::string& field) {
-  if (field.empty() || field == "0000-00-00")
-    return std::nullopt;
-  return isoDate::parse(field);
-}
-
-static std::vector<std::string> parseCsvRecord(const std::string& record) {
-  std::vector<std::string> fields;
-  std::string field;
-  bool inQuotes = false;
-
-  for (size_t i = 0; i < record.size(); ++i) {
-    char c = record[i];
-    if (inQuotes) {
-      if (c == '"') {
-        if (i + 1 < record.size() && record[i + 1] == '"') {
-          field += '"';
-          ++i;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += c;
-      }
-    } else {
-      if (c == '"') {
-        inQuotes = true;
-      } else if (c == ',') {
-        fields.push_back(field);
-        field.clear();
-      } else {
-        field += c;
-      }
-    }
-  }
-  fields.push_back(field);
-  return fields;
+void database::trackLocalId(int id) {
+  if (id >= nextLocalId_)
+    nextLocalId_ = id + 1;
 }
 
 void database::autoHealIds() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  for (const auto& e : animeEntries_) {
-    if (e.id >= nextLocalId_)
-      nextLocalId_ = e.id + 1;
-  }
-  for (const auto& e : mangaEntries_) {
-    if (e.id >= nextLocalId_)
-      nextLocalId_ = e.id + 1;
-  }
+  for (const auto& e : animeEntries_)
+    trackLocalId(e.id);
+  for (const auto& e : mangaEntries_)
+    trackLocalId(e.id);
 }
 
 bool database::loadCsv(mediaType type, const std::filesystem::path& path) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::ifstream file(path);
-  if (!file.is_open())
+  auto content = fileSystem_.readFile(path);
+  if (!content)
     return false;
-
   auto& list = getList(type);
-  list.clear();
-
-  std::string line;
-  std::string recordBuffer;
-  bool insideQuotes = false;
-
-  while (std::getline(file, line)) {
-    if (!line.empty() && line.back() == '\r') {
-      line.pop_back();
-    }
-    if (recordBuffer.empty() && (line.empty() || line[0] == '#'))
-      continue;
-
-    for (size_t i = 0; i < line.size(); ++i) {
-      if (line[i] == '"') {
-        if (insideQuotes && i + 1 < line.size() && line[i + 1] == '"') {
-          ++i;
-        } else {
-          insideQuotes = !insideQuotes;
-        }
-      }
-    }
-
-    recordBuffer += (recordBuffer.empty() ? "" : "\n") + line;
-
-    if (!insideQuotes) {
-      auto fields = parseCsvRecord(recordBuffer);
-      recordBuffer.clear();
-
-      if (fields.size() < 7)
-        continue;
-
-      entry e;
-      e.type = type;
-
-      try {
-        e.id = std::stoi(fields[0]);
-      } catch (...) {
-        continue;
-      }
-      try {
-        e.malId = std::stoi(fields[1]);
-      } catch (...) {
-        e.malId = 0;
-      }
-      if (fields.size() > 2 && !fields[2].empty()) {
-        try {
-          e.anilistId = std::stoi(fields[2]);
-        } catch (...) {
-          e.anilistId = 0;
-        }
-      }
-
-      size_t offset = 2;
-      if (fields.size() >= 4 &&
-          (fields[3] == "anime" || fields[3] == "manga")) {
-        offset = 4;
-      } else if (fields.size() >= 16) {
-        offset = 3;
-      }
-
-      e.title = fields[offset];
-      e.status = stringToStatus(fields[offset + 1]);
-      try {
-        e.score = std::stoi(fields[offset + 2]);
-      } catch (...) {
-        e.score = 0;
-      }
-      try {
-        e.progress = std::stoi(fields[offset + 3]);
-      } catch (...) {
-        e.progress = 0;
-      }
-      try {
-        e.totalUnits = std::stoi(fields[offset + 4]);
-      } catch (...) {
-        e.totalUnits = 0;
-      }
-
-      if (fields.size() > offset + 5) {
-        try {
-          e.volumes = std::stoi(fields[offset + 5]);
-        } catch (...) {
-        }
-      }
-      if (fields.size() > offset + 6) {
-        try {
-          e.totalVolumes = std::stoi(fields[offset + 6]);
-        } catch (...) {
-        }
-      }
-      if (fields.size() > offset + 7) {
-        try {
-          e.rewatched = std::stoi(fields[offset + 7]);
-        } catch (...) {
-        }
-      }
-      if (fields.size() > offset + 8)
-        e.startDate = parseStoredDate(fields[offset + 8]);
-      if (fields.size() > offset + 9)
-        e.finishDate = parseStoredDate(fields[offset + 9]);
-      if (fields.size() > offset + 10)
-        e.notes = fields[offset + 10];
-      if (fields.size() > offset + 11)
-        e.updatedAt = parseStoredDate(fields[offset + 11]);
-      if (fields.size() > offset + 12) {
-        e.dirty = (fields[offset + 12] == "1" || fields[offset + 12] == "true");
-      }
-      if (fields.size() > offset + 13 && !fields[offset + 13].empty()) {
-        e.remoteIds = deserializeRemoteIds(fields[offset + 13]);
-      }
-      if (e.malId > 0 && e.remoteIds.find("mal") == e.remoteIds.end()) {
-        e.remoteIds["mal"] = std::to_string(e.malId);
-      }
-      if (e.anilistId > 0 && e.remoteIds.find("anilist") == e.remoteIds.end()) {
-        e.remoteIds["anilist"] = std::to_string(e.anilistId);
-      }
-
-      if (e.id >= nextLocalId_) {
-        nextLocalId_ = e.id + 1;
-      }
-
-      list.push_back(e);
-    }
-  }
-
+  list = csvCodec::decodeEntries(*content, type);
+  for (const auto& e : list)
+    trackLocalId(e.id);
   return true;
 }
 
 bool database::saveCsv(mediaType type,
                        const std::filesystem::path& path) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::filesystem::create_directories(path.parent_path());
-  auto tmpPath = path.string() + ".tmp";
-  std::ofstream file(tmpPath);
-  if (!file.is_open())
-    return false;
-
-  file
-      << "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,dirty,external_ids\n";
-  for (const auto& e : getList(type)) {
-    file << e.id << "," << e.malId << "," << e.anilistId << ","
-         << (e.type == mediaType::kAnime ? "anime" : "manga") << ","
-         << escapeCsv(e.title) << ","
-         << escapeCsv(statusToString(e.status, e.type)) << "," << e.score << ","
-         << e.progress << "," << e.totalUnits << "," << e.volumes << ","
-         << e.totalVolumes << "," << e.rewatched << ","
-         << formatDate(e.startDate) << "," << formatDate(e.finishDate) << ","
-         << escapeCsv(e.notes) << "," << formatDate(e.updatedAt) << ","
-         << (e.dirty ? "1" : "0") << ","
-         << escapeCsv(serializeRemoteIds(e.remoteIds)) << "\n";
-  }
-  file.close();
-  std::error_code ec;
-  std::filesystem::rename(tmpPath, path, ec);
-  return !ec;
+  return fileSystem_.writeFileAtomic(path,
+                                     csvCodec::encodeEntries(getList(type)));
 }
 
 void database::logActivity(const activityRecord& record) {
@@ -596,69 +388,17 @@ std::vector<activityRecord> database::getRecentActivity(mediaType type,
 
 bool database::loadHistory() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  auto hPath = getHistoryPath();
-  std::ifstream file(hPath);
-  if (!file.is_open())
+  auto content = fileSystem_.readFile(getHistoryPath());
+  if (!content)
     return false;
-
-  historyRecords_.clear();
-  std::string line;
-  while (std::getline(file, line)) {
-    if (!line.empty() && line.back() == '\r') {
-      line.pop_back();
-    }
-    if (line.empty() || line[0] == '#')
-      continue;
-    auto fields = parseCsvRecord(line);
-    if (fields.size() < 7)
-      continue;
-
-    activityRecord r;
-    r.timestamp = fields[0];
-    r.type = (fields[1] == "anime" ? mediaType::kAnime : mediaType::kManga);
-    r.title = fields[2];
-    r.status = stringToStatus(fields[3]);
-    try {
-      r.progress = std::stoi(fields[4]);
-    } catch (...) {
-      r.progress = 0;
-    }
-    try {
-      r.totalUnits = std::stoi(fields[5]);
-    } catch (...) {
-      r.totalUnits = 0;
-    }
-    try {
-      r.score = std::stoi(fields[6]);
-    } catch (...) {
-      r.score = 0;
-    }
-    historyRecords_.push_back(r);
-  }
+  historyRecords_ = csvCodec::decodeHistory(*content);
   return true;
 }
 
 bool database::saveHistory() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::filesystem::create_directories(configDir_);
-  auto hPath = getHistoryPath();
-  auto tmpPath = hPath.string() + ".tmp";
-  std::ofstream file(tmpPath);
-  if (!file.is_open())
-    return false;
-
-  file << "#timestamp,type,title,status,progress,total_units,score\n";
-  for (const auto& h : historyRecords_) {
-    file << escapeCsv(h.timestamp) << ","
-         << (h.type == mediaType::kAnime ? "anime" : "manga") << ","
-         << escapeCsv(h.title) << ","
-         << escapeCsv(statusToString(h.status, h.type)) << "," << h.progress
-         << "," << h.totalUnits << "," << h.score << "\n";
-  }
-  file.close();
-  std::error_code ec;
-  std::filesystem::rename(tmpPath, hPath, ec);
-  return !ec;
+  return fileSystem_.writeFileAtomic(getHistoryPath(),
+                                     csvCodec::encodeHistory(historyRecords_));
 }
 
 bool database::loadAll() {
@@ -672,13 +412,11 @@ bool database::loadAll() {
 
 bool database::saveAll() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::filesystem::create_directories(configDir_);
+  fileSystem_.createDirectories(configDir_);
   bool a = saveCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
   bool m = saveCsv(mediaType::kManga, getCsvPath(mediaType::kManga));
   saveHistory();
   return a && m;
 }
-
-void database::seedDefaults() {}
 
 }  // namespace catalist

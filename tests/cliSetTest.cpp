@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "catalist/cli.hpp"
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"
 
@@ -18,16 +18,15 @@ using catalist::test::tempDirFixture;
 namespace {
 
 struct setFixture : tempDirFixture {
-  setFixture() : db(tempDir()) { catalist::test::seedSampleLibrary(db); }
+  setFixture() : db(fileSystem(), clock(), tempDir()) { catalist::test::seedSampleLibrary(db); }
   catalist::database db;
-  catalist::fixedClock clock = catalist::test::makeTestClock();
   std::string out;
   std::string err;
 
   int set(const std::vector<std::string>& args) {
     streamCapture outCapture(std::cout);
     streamCapture errCapture(std::cerr);
-    int exitCode = cliDispatcher::executeSet(args, db, clock);
+    int exitCode = cliDispatcher::executeSet(args, db, clock());
     out = outCapture.text();
     err = errCapture.text();
     return exitCode;

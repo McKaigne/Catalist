@@ -11,7 +11,7 @@
 #include "catalist/config.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/core/logger.hpp"
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
@@ -98,16 +98,16 @@ int main(int argc, char* argv[]) {
   catalist::realProcessLauncher launcher;
   auto http = std::make_shared<catalist::curlHttpClient>();
   catalist::providerRegistry providers(http);
+  const auto dataDir = catalist::database::getDefaultConfigDir();
 
-  auto logPath = catalist::database::getConfigDir() / "catalist.log";
-  catalist::logger::get().init(logPath, clock);
+  catalist::logger::get().init(dataDir / "catalist.log", fileSystem, clock);
   LOG_INFO("Catalist starting up...");
 
-  catalist::database db;
+  catalist::database db(fileSystem, clock, dataDir);
   catalist::appConfig config;
 
-  auto configPath = catalist::database::getConfigDir() / "catalist.kdl";
-  config.load(configPath);
+  auto configPath = dataDir / "catalist.kdl";
+  config.load(fileSystem, configPath);
   LOG_INFO("Loaded workspace config from: " + configPath.string());
 
   if (!db.loadAll()) {
@@ -117,7 +117,7 @@ int main(int argc, char* argv[]) {
 
   if (argc > 1) {
     LOG_INFO("Dispatching CLI command: " + std::string(argv[1]));
-    catalist::cliServices cliServices{clock, *http};
+    catalist::cliServices cliServices{clock, *http, fileSystem};
     return catalist::cliDispatcher::dispatch(argc, argv, db, config,
                                              cliServices);
   }
@@ -125,9 +125,9 @@ int main(int argc, char* argv[]) {
   LOG_INFO("Launching interactive TUI screen.");
   catalist::loopbackAuthServer authCallback(8080);
   catalist::malAuth auth(fileSystem, *http, launcher, authCallback, clock,
-                         catalist::database::getConfigDir() / "mal_auth.json");
+                         dataDir / "mal_auth.json");
   catalist::appTui app(db, config,
-                       {launcher, clock, *http, providers, auth});
+                       {fileSystem, launcher, clock, *http, providers, auth});
   app.run();
   LOG_INFO("Catalist session exited cleanly.");
 

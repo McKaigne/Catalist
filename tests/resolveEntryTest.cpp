@@ -16,7 +16,7 @@ using catalist::test::tempDirFixture;
 namespace {
 
 struct libraryFixture : tempDirFixture {
-  libraryFixture() : db(tempDir()) { catalist::test::seedSampleLibrary(db); }
+  libraryFixture() : db(fileSystem(), clock(), tempDir()) { catalist::test::seedSampleLibrary(db); }
   catalist::database db;
 };
 

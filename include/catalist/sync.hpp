@@ -8,7 +8,7 @@
 #include <string>
 
 #include "catalist/core/clock.hpp"
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"

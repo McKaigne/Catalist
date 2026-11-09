@@ -9,6 +9,7 @@
 
 #include "catalist/core/clock.hpp"
 #include "catalist/model/entry.hpp"
+#include "catalist/platform/fileSystem.hpp"
 
 namespace catalist::test {
 
@@ -24,9 +25,13 @@ public:
   [[nodiscard]] const std::filesystem::path& tempDir() const {
     return tempDir_;
   }
+  [[nodiscard]] realFileSystem& fileSystem() { return fileSystem_; }
+  [[nodiscard]] fixedClock& clock() { return clock_; }
 
 private:
   std::filesystem::path tempDir_;
+  realFileSystem fileSystem_;
+  fixedClock clock_;
 };
 
 class streamCapture {

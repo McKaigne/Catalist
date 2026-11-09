@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "catalist/database.hpp"
+#include "catalist/platform/fileSystem.hpp"
+#include "catalist/storage/database.hpp"
 #include "support/testSupport.hpp"
 
 using catalist::mediaType;
@@ -10,7 +11,7 @@ using catalist::test::makeEntry;
 using catalist::test::tempDirFixture;
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv round trip keeps quotes commas and newlines") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   auto csvPath = tempDir() / "multiline.csv";
 
   catalist::entry original =
@@ -31,7 +32,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv round trip keeps quotes commas and newlin
   db.addEntry(original);
   REQUIRE(db.saveCsv(mediaType::kAnime, csvPath));
 
-  catalist::database reloaded(tempDir());
+  catalist::database reloaded(fileSystem(), clock(), tempDir());
   REQUIRE(reloaded.loadCsv(mediaType::kAnime, csvPath));
 
   auto loaded = reloaded.getById(mediaType::kAnime, 9901);
@@ -73,10 +74,10 @@ void seedSortData(catalist::database& db) {
 }  // namespace
 
 TEST_CASE_FIXTURE(tempDirFixture, "filterEntries sorts by score descending") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   seedSortData(db);
 
-  auto byScore = db.filterEntries(mediaType::kAnime, std::nullopt, -1, "",
+  auto byScore = db.filterEntries(mediaType::kAnime, std::nullopt, std::nullopt, "",
                                   sortKey::kScore, false);
   REQUIRE(byScore.size() == 4);
   CHECK(byScore.front().title == "Sousou no Frieren");
@@ -84,10 +85,10 @@ TEST_CASE_FIXTURE(tempDirFixture, "filterEntries sorts by score descending") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "filterEntries matches title substring case insensitively") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   seedSortData(db);
 
-  auto searched = db.filterEntries(mediaType::kAnime, std::nullopt, -1,
+  auto searched = db.filterEntries(mediaType::kAnime, std::nullopt, std::nullopt,
                                    "frieren", sortKey::kTitle, false);
   REQUIRE(searched.size() == 1);
   CHECK(searched[0].id == 52991);
@@ -103,7 +104,7 @@ void loadFixture(catalist::database& db, mediaType type,
 }  // namespace
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads legacy seven column layout") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   loadFixture(db, mediaType::kAnime, "legacy7.csv");
   const auto& entries = db.getEntries(mediaType::kAnime);
   REQUIRE(entries.size() == 2);
@@ -124,7 +125,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads legacy seven column layout") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads offset three layout without type column") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   loadFixture(db, mediaType::kAnime, "offset3.csv");
   const auto& entries = db.getEntries(mediaType::kAnime);
   REQUIRE(entries.size() == 1);
@@ -141,7 +142,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads offset three layout without type co
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads current layout with external ids") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   loadFixture(db, mediaType::kManga, "current.csv");
   const auto& entries = db.getEntries(mediaType::kManga);
   REQUIRE(entries.size() == 1);
@@ -159,7 +160,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads current layout with external ids") 
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   loadFixture(db, mediaType::kAnime, "crlf.csv");
   const auto& entries = db.getEntries(mediaType::kAnime);
   REQUIRE(entries.size() == 1);
@@ -170,7 +171,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted multiline notes") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   loadFixture(db, mediaType::kAnime, "multiline.csv");
   const auto& entries = db.getEntries(mediaType::kAnime);
   REQUIRE(entries.size() == 2);
@@ -181,7 +182,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted multiline notes") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add keeps user fields and refreshes upstream metadata") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   db.addEntry(makeEntry().id(52991).malId(52991).title("Sousou no Frieren")
                   .score(8).progress(5).totalUnits(0).notes("mine")
                   .startDate("2023-09-29"));
@@ -207,7 +208,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add keeps user fields and refresh
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add backfills empty user fields") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   db.addEntry(makeEntry().id(100).title("Blank"));
   db.addEntry(makeEntry().id(100).title("Blank").score(7).progress(3)
                   .notes("filled").finishDate("2024-01-01").anilistId(55));
@@ -222,7 +223,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add backfills empty user fields")
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "addEntry matches an existing entry by mal remote id") {
-  catalist::database db(tempDir());
+  catalist::database db(fileSystem(), clock(), tempDir());
   db.addEntry(makeEntry().id(10001).title("Local").remoteId("mal", "777"));
   int mergedId = db.addEntry(makeEntry().id(0).title("Remote").totalUnits(12)
                                  .remoteId("mal", "777"));
@@ -231,21 +232,46 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry matches an existing entry by mal rem
   CHECK(db.getEntries(mediaType::kAnime)[0].totalUnits == 12);
 }
 
-TEST_CASE_FIXTURE(tempDirFixture, "csv reads the zero date sentinel as absent and writes it empty") {
-  auto csvPath = tempDir() / "legacy_dates.csv";
-  catalist::test::writeTextFile(
-      csvPath,
-      "1,1,0,anime,Old,Completed,7,1,1,0,0,0,0000-00-00,,n,0000-00-00,0,\n");
-  catalist::database db(tempDir());
-  REQUIRE(db.loadCsv(mediaType::kAnime, csvPath));
-  const auto& loaded = db.getEntries(mediaType::kAnime).at(0);
-  CHECK_FALSE(loaded.startDate.has_value());
-  CHECK_FALSE(loaded.finishDate.has_value());
-  CHECK_FALSE(loaded.updatedAt.has_value());
+TEST_CASE("database saves and reloads through an in-memory file system") {
+  catalist::memoryFileSystem fs;
+  auto clock = catalist::test::makeTestClock();
+  catalist::database db(fs, clock, "/data");
+  db.addEntry(makeEntry().id(7).title("Kept").notes("a, \"b\"\nc"));
+  db.logActivity({"Oct 20, 12:00 PM", mediaType::kAnime, "Kept",
+                  watchStatus::kWatching, 1, 2, 3});
+  REQUIRE(db.saveAll());
+  CHECK(fs.exists("/data/anime.csv"));
+  CHECK(fs.exists("/data/manga.csv"));
+  CHECK(fs.exists("/data/history.csv"));
 
-  REQUIRE(db.saveCsv(mediaType::kAnime, csvPath));
-  auto saved = catalist::test::readTextFile(csvPath);
-  CHECK(saved.find("0000-00-00") == std::string::npos);
-  CHECK(saved.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,0,") !=
-        std::string::npos);
+  catalist::database reloaded(fs, clock, "/data");
+  REQUIRE(reloaded.loadAll());
+  auto kept = reloaded.getById(mediaType::kAnime, 7);
+  REQUIRE(kept.has_value());
+  CHECK(kept->notes == "a, \"b\"\nc");
+  REQUIRE(reloaded.getRecentActivity(mediaType::kAnime).size() == 1);
+  CHECK(reloaded.getRecentActivity(mediaType::kAnime)[0].score == 3);
+}
+
+TEST_CASE("database reports a failed atomic write") {
+  catalist::memoryFileSystem fs;
+  auto clock = catalist::test::makeTestClock();
+  catalist::database db(fs, clock, "/data");
+  fs.failWritesTo("/data/anime.csv");
+  CHECK_FALSE(db.saveCsv(mediaType::kAnime, "/data/anime.csv"));
+  CHECK_FALSE(fs.exists("/data/anime.csv"));
+}
+
+TEST_CASE("database backup snapshot copies the catalogue with a clock stamp") {
+  catalist::memoryFileSystem fs;
+  auto clock = catalist::test::makeTestClock();
+  catalist::database db(fs, clock, "/data");
+  db.addEntry(makeEntry().id(1).title("Snap"));
+  REQUIRE(db.saveAll());
+
+  db.createBackupSnapshot();
+  auto copy = fs.readFile("/data/backups/anime_20261020_120000.csv");
+  REQUIRE(copy.has_value());
+  CHECK(*copy == fs.readFile("/data/anime.csv"));
+  CHECK(fs.exists("/data/backups/manga_20261020_120000.csv"));
 }

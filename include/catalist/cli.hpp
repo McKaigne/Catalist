@@ -6,8 +6,9 @@
 
 #include "catalist/config.hpp"
 #include "catalist/core/clock.hpp"
+#include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
-#include "catalist/database.hpp"
+#include "catalist/storage/database.hpp"
 #include "catalist/remoteSearch.hpp"
 
 namespace catalist {
@@ -32,6 +33,7 @@ struct cliFilterOptions {
 struct cliServices {
   const iClock& clock;
   iHttpClient& http;
+  iFileSystem& fileSystem;
 };
 
 class cliDispatcher {
@@ -59,11 +61,13 @@ public:
                           const database& db);
   static int executeExport(const std::vector<std::string>& args,
                            const database& db);
-  static int executeImport(const std::vector<std::string>& args, database& db);
+  static int executeImport(const std::vector<std::string>& args, database& db,
+                           const iFileSystem& fileSystem);
   static int executeSearch(const std::vector<std::string>& args, database& db,
                            iHttpClient& http);
   static int executeConfig(const std::vector<std::string>& args,
-                           appConfig& config);
+                           appConfig& config, iFileSystem& fileSystem,
+                           const std::filesystem::path& configPath);
   static int executeCompletion(const std::vector<std::string>& args);
 };
 

@@ -61,6 +61,7 @@ class database {
   void logActivity(const activityRecord& record);
   std::vector<activityRecord> getRecentActivity(mediaType type,
                                                 size_t limit = 3) const;
+  [[nodiscard]] std::vector<activityRecord> getHistory() const;
   bool loadHistory();
   bool saveHistory() const;
 

@@ -7,6 +7,7 @@
 #include <ftxui/screen/terminal.hpp>
 
 #include "catalist/core/logger.hpp"
+#include "catalist/model/activity.hpp"
 #include "catalist/model/entryOps.hpp"
 #include "catalist/tui/actions.hpp"
 #include "catalist/tui/keys.hpp"
@@ -64,10 +65,6 @@ std::optional<isoDate> catalogDate(const entry& e) {
 std::string formatCatalogDate(const entry& e) {
   auto shown = catalogDate(e);
   return shown ? shown->toString() : "    -     ";
-}
-
-std::string activityTimestamp(const iClock& clock) {
-  return formatLocalTime(clock, "%b %d, %I:%M %p");
 }
 
 Element styledText(const std::string& content, Color tint, bool emphasised) {

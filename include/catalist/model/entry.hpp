@@ -32,6 +32,8 @@ struct entry {
   std::string notes;
   std::optional<isoDate> updatedAt;
   bool dirty = false;
+  // Position in the user's watch queue; absent until the user orders it.
+  std::optional<int> queuePos;
 
   std::unordered_map<std::string, std::string> remoteIds = {};
 

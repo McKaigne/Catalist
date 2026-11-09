@@ -9,7 +9,7 @@ namespace {
 const char* kCatalogHeader =
     "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,"
     "volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,"
-    "dirty,external_ids\n";
+    "dirty,external_ids,queue_pos\n";
 const char* kHistoryHeader =
     "#timestamp,type,title,status,progress,total_units,score\n";
 
@@ -99,6 +99,8 @@ void fillOptionalColumns(entry& decoded, const std::vector<std::string>& fields,
     decoded.dirty = (*value == "1" || *value == "true");
   if (auto* value = column(13); value && !value->empty())
     decoded.remoteIds = deserializeRemoteIds(*value);
+  if (auto* value = column(14))
+    decoded.queuePos = parseInt(*value);
 }
 
 void backfillRemoteIds(entry& decoded) {
@@ -229,7 +231,8 @@ std::string encodeEntries(const std::vector<entry>& entries) {
         << formatDate(e.startDate) << "," << formatDate(e.finishDate) << ","
         << escapeField(e.notes) << "," << formatDate(e.updatedAt) << ","
         << (e.dirty ? "1" : "0") << ","
-        << escapeField(serializeRemoteIds(e.remoteIds)) << "\n";
+        << escapeField(serializeRemoteIds(e.remoteIds)) << ","
+        << (e.queuePos ? std::to_string(*e.queuePos) : "") << "\n";
   }
   return out.str();
 }

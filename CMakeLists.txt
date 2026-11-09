@@ -43,6 +43,7 @@ add_library(catalistCore STATIC
   src/core/logger.cpp
   src/core/shell.cpp
   src/core/url.cpp
+  src/model/activity.cpp
   src/model/entry.cpp
   src/model/entryOps.cpp
   src/model/undoStack.cpp
@@ -142,6 +143,7 @@ else()
 endif()
 
 add_executable(catalistTests
+  tests/activityTest.cpp
   tests/cliGoldenTest.cpp
   tests/cliSetTest.cpp
   tests/cliTest.cpp

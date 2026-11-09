@@ -10,6 +10,13 @@
 
 namespace catalist {
 
+namespace {
+
+// Enough for years of daily logging while keeping history.csv small.
+constexpr size_t kHistoryLimit = 5000;
+
+}  // namespace
+
 std::filesystem::path database::getDefaultConfigDir() {
   const char* custom = std::getenv("CATALIST_DATA_DIR");
   if (custom && *custom)
@@ -366,9 +373,8 @@ bool database::saveCsv(mediaType type,
 void database::logActivity(const activityRecord& record) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   historyRecords_.insert(historyRecords_.begin(), record);
-  if (historyRecords_.size() > 100) {
-    historyRecords_.resize(100);
-  }
+  if (historyRecords_.size() > kHistoryLimit)
+    historyRecords_.resize(kHistoryLimit);
   saveHistory();
 }
 
@@ -384,6 +390,11 @@ std::vector<activityRecord> database::getRecentActivity(mediaType type,
     }
   }
   return res;
+}
+
+std::vector<activityRecord> database::getHistory() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  return historyRecords_;
 }
 
 bool database::loadHistory() {

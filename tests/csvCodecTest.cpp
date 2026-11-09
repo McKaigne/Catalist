@@ -19,7 +19,7 @@ TEST_CASE("csvCodec reads the zero date sentinel as absent and writes it empty")
 
   auto encoded = csvCodec::encodeEntries(decoded);
   CHECK(encoded.find("0000-00-00") == std::string::npos);
-  CHECK(encoded.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,0,mal=1\n") !=
+  CHECK(encoded.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,0,mal=1,\n") !=
         std::string::npos);
 }
 
@@ -89,4 +89,18 @@ TEST_CASE("csvCodec history round trips and skips short rows") {
   CHECK(decoded[0].type == mediaType::kManga);
   CHECK(decoded[0].title == "A, b");
   CHECK(decoded[0].score == 8);
+}
+
+TEST_CASE("csvCodec queue position round trips and is absent in older files") {
+  catalist::entry queued = catalist::test::makeEntry().id(3).title("Q");
+  queued.queuePos = 4;
+  auto decoded = csvCodec::decodeEntries(csvCodec::encodeEntries({queued}),
+                                         mediaType::kAnime);
+  REQUIRE(decoded.size() == 1);
+  CHECK(decoded[0].queuePos == 4);
+
+  auto legacy = csvCodec::decodeEntries(
+      "3,0,0,anime,Q,Watching,0,0,0,0,0,0,,,,,0,\n", mediaType::kAnime);
+  REQUIRE(legacy.size() == 1);
+  CHECK_FALSE(legacy[0].queuePos.has_value());
 }

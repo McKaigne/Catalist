@@ -8,14 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
-- The TUI now has four tabs: Anime, Manga, Stats and Settings. Top bars in
-  `catalist.kdl` that list a removed tab are upgraded to the new set.
+- The TUI now has four tabs, always in this order: Anime, Manga, Stats and
+  Settings.
+- Preferences (theme, mouse, default media and sort, startup tab) are saved
+  to `settings.json`, which the app writes itself; `catalist config` reads
+  and changes that file and rejects values outside the allowed choices.
 - Metadata sync is a row in Settings → Data (`:sync` still works).
 
 ### Removed
 - The Queue, Search, Library, History and Help tabs, with `?` (help), `:help`
   and `a` (add, which opened Search) in the TUI. Add entries with
   `catalist add`. Stored `queue_pos` values are kept in the CSV files.
+- `catalist.kdl`: custom keybindings, top-bar layout and the KDL parser. Keys
+  are fixed; an existing `catalist.kdl` is ignored (set your theme again in
+  Settings).
 
 ## [0.3.0] - 2026-11-10
 

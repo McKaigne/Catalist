@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #include "catalist/cli/dispatcher.hpp"
-#include "catalist/config/config.hpp"
+#include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/core/logger.hpp"
 #include "catalist/storage/database.hpp"
@@ -108,11 +108,8 @@ int main(int argc, char* argv[]) {
   LOG_INFO("Catalist starting up...");
 
   catalist::database db(fileSystem, clock, dataDir);
-  catalist::appConfig config;
-
-  auto configPath = dataDir / "catalist.kdl";
-  config.load(fileSystem, configPath);
-  LOG_INFO("Loaded workspace config from: " + configPath.string());
+  const auto settingsPath = dataDir / "settings.json";
+  catalist::appSettings settings = catalist::loadSettings(fileSystem, settingsPath);
 
   if (!db.loadAll()) {
     LOG_WARN("No catalog databases found on disk, initializing defaults.");
@@ -138,8 +135,8 @@ int main(int argc, char* argv[]) {
   if (argc > 1 && !opensTab) {
     LOG_INFO("Dispatching CLI command: " + std::string(argv[1]));
     catalist::cli::commandContext cliContext{
-        db,         config,     clock,
-        *http,      fileSystem, configPath,
+        db,         settings,   clock,
+        *http,      fileSystem, settingsPath,
         catalist::cli::pickRandomIndex};
     return catalist::cli::dispatch(argc, argv, cliContext);
   }
@@ -148,7 +145,7 @@ int main(int argc, char* argv[]) {
   catalist::loopbackAuthServer authCallback(8080);
   catalist::malAuth auth(fileSystem, *http, launcher, authCallback, clock,
                          dataDir / "mal_auth.json");
-  catalist::appTui app(db, config,
+  catalist::appTui app(db, settings,
                        {fileSystem, launcher, clock, *http, providers, auth});
   app.run(startupTab);
   LOG_INFO("Catalist session exited cleanly.");

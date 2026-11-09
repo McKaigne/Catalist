@@ -46,22 +46,22 @@
 - **Decision:** Function bodies nest at most three levels. Preconditions and
   errors return early; loops skip with `continue`; each distinct subtask is a
   small, named helper (`handleSearchTyping`, `isRowFilterActive`,
-  `applyValue`). Declarative layout code (FTXUI element trees, KDL builders)
-  may nest for readability.
+  `applyValue`). Declarative layout code (FTXUI element trees) may nest for
+  readability.
 
 ## ADR-007: Tabs Behind `iTab`
 - **Context:** The TUI was one 2,600-line function whose event handling was a
   single 700-line `CatchEvent` chain.
 - **Decision:** Each tab implements `iTab` (`id`, `title`, `icon`,
   `render(appContext&)`, `onEvent(const Event&, appContext&)`, `hints()`)
-  and is its own FTXUI component inside `Container::Tab`. `tabRegistry`
-  owns them by id; the `top-bar` node of `catalist.kdl` chooses and orders
-  them, and the number keys follow that order. The shell's global handler
+  and is its own FTXUI component inside `Container::Tab`. The app shell owns
+  the four tabs in a fixed order, and the number keys follow it. The shell's
+  global handler
   only switches tabs, opens the command palette and quits, and yields while
   a tab `capturesInput()`. Shared pieces live in `tui/widgets` (pill,
-  marquee, notifier, commandPalette), `tui/keys` (movement predicates honouring
-  `keybindManager`) and `tui/actions` (browser, clipboard, import, backup).
-- **Layering:** `catalistCore` (core, platform, model, storage, net, config)
+  marquee, notifier, commandPalette), `tui/keys` (the fixed key map and
+  movement predicates) and `tui/actions` (browser, clipboard, import, backup).
+- **Layering:** `catalistCore` (core, platform, model, storage, net, settings)
   never includes FTXUI; `catalistCli` and `catalistTui` build on it.
 
 ## ADR-008: camelCase Everywhere
@@ -96,3 +96,14 @@
 - **Targets:** `catalistTests` links only `catalistCore` and `catalistCli`;
   tab, widget and theme tests need FTXUI and live in `catalistTuiTests`.
   CI also runs the suite under AddressSanitizer and UBSan.
+
+## ADR-011: Preferences in settings.json, No Config Language
+- **Context:** `catalist.kdl` let users rebind keys and lay out the top bar,
+  which needed a KDL parser and serializer, legacy-file upgrades and a key
+  table that every tab had to consult.
+- **Decision:** The handful of preferences the Settings tab changes live in
+  `settings.json`, which Catalist owns and rewrites atomically. Unknown keys,
+  wrong types and values outside the allowed choices fall back to the
+  defaults. Keys and tab order are fixed in code (`tui/keys`, the app shell).
+- **Consequences:** No user-facing config format to keep compatible; old
+  `catalist.kdl` files are ignored.

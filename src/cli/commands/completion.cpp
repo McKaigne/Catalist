@@ -87,7 +87,7 @@ _catalist() {
     'stats:Display analytics telemetry'
     'export:Dump database to stdout'
     'import:Ingest MyAnimeList XML export'
-    'config:Inspect or modify catalist.kdl'
+    'config:Inspect or change preferences'
     'completion:Generate shell autocompletions'
   )
 

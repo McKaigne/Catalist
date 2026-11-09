@@ -13,13 +13,13 @@ namespace {
 
 // Highest score first: Frieren (10), Odd Taxi (8), Ghost (6), Long Title (0).
 // Off a terminal the title column is 16 glyphs wide, hence the short names.
-const catalist::appConfig& descendingScores(catalist::appConfig& config) {
-  config.reverseSort = false;
-  return config;
+const catalist::appSettings& descendingScores(catalist::appSettings& settings) {
+  settings.reverseSort = false;
+  return settings;
 }
 
 struct catalogFixture : catalist::test::tuiHarness {
-  catalogFixture() : tab(mediaType::kAnime, descendingScores(config)) {
+  catalogFixture() : tab(mediaType::kAnime, descendingScores(settings)) {
     catalist::test::seedSampleLibrary(db);
     tab.onActivate(ctx);
   }

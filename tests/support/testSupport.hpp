@@ -8,7 +8,7 @@
 #include <unordered_map>
 
 #include "catalist/cli/commandContext.hpp"
-#include "catalist/config/config.hpp"
+#include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/storage/database.hpp"
@@ -136,7 +136,7 @@ public:
   cliHarness(database& db, iFileSystem& fileSystem, const iClock& clock,
              const std::filesystem::path& dataDir);
 
-  appConfig config;
+  appSettings settings;
   mockHttpClient http;
   cli::commandContext context;
 };

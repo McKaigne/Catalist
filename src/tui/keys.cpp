@@ -1,39 +1,75 @@
 #include "catalist/tui/keys.hpp"
 
+#include <string_view>
+
 namespace catalist::keys {
 
 using ftxui::Event;
 
-bool isBound(const Event& event, const keybindManager& keybinds,
-             keyAction action) {
-  return event.is_character() && keybinds.matches(action, event.character());
+namespace {
+
+std::string_view keyFor(keyAction action) {
+  switch (action) {
+    case keyAction::kMoveUp: return "k";
+    case keyAction::kMoveDown: return "j";
+    case keyAction::kJumpTop: return "g";
+    case keyAction::kJumpBottom: return "G";
+    case keyAction::kFocusLeft: return "h";
+    case keyAction::kFocusRight: return "l";
+    case keyAction::kIncrementProgress: return "+";
+    case keyAction::kDecrementProgress: return "-";
+    case keyAction::kEditNotes: return "e";
+    case keyAction::kDeleteEntry: return "d";
+    case keyAction::kSortDate: return "c";
+    case keyAction::kSortTitle: return "t";
+    case keyAction::kSortStatus: return "s";
+    case keyAction::kSortRating: return "r";
+    case keyAction::kSortProgress: return "p";
+    case keyAction::kSearchFilter: return "/";
+    case keyAction::kOpenBrowser: return "o";
+    case keyAction::kYankTitle: return "y";
+    case keyAction::kUndo: return "u";
+    case keyAction::kRedo: return "U";
+    case keyAction::kCommandPalette: return ":";
+    case keyAction::kQuit: return "q";
+    case keyAction::kToggleMedia: return "m";
+  }
+  return "";
 }
 
-bool isMoveUp(const Event& event, const keybindManager& keybinds) {
-  return event == Event::ArrowUp || isBound(event, keybinds, keyAction::kMoveUp);
+}  // namespace
+
+bool isBound(const Event& event, keyAction action) {
+  if (!event.is_character())
+    return false;
+  std::string_view key = keyFor(action);
+  // Unshifted '=' shares the '+' key on most layouts.
+  return event.character() == key ||
+         (key == "+" && event.character() == "=");
 }
 
-bool isMoveDown(const Event& event, const keybindManager& keybinds) {
-  return event == Event::ArrowDown ||
-         isBound(event, keybinds, keyAction::kMoveDown);
+bool isMoveUp(const Event& event) {
+  return event == Event::ArrowUp || isBound(event, keyAction::kMoveUp);
 }
 
-bool isMoveLeft(const Event& event, const keybindManager& keybinds) {
-  return event == Event::ArrowLeft ||
-         isBound(event, keybinds, keyAction::kFocusLeft);
+bool isMoveDown(const Event& event) {
+  return event == Event::ArrowDown || isBound(event, keyAction::kMoveDown);
 }
 
-bool isMoveRight(const Event& event, const keybindManager& keybinds) {
-  return event == Event::ArrowRight ||
-         isBound(event, keybinds, keyAction::kFocusRight);
+bool isMoveLeft(const Event& event) {
+  return event == Event::ArrowLeft || isBound(event, keyAction::kFocusLeft);
 }
 
-bool isJumpTop(const Event& event, const keybindManager& keybinds) {
-  return event == Event::Home || isBound(event, keybinds, keyAction::kJumpTop);
+bool isMoveRight(const Event& event) {
+  return event == Event::ArrowRight || isBound(event, keyAction::kFocusRight);
 }
 
-bool isJumpBottom(const Event& event, const keybindManager& keybinds) {
-  return event == Event::End || isBound(event, keybinds, keyAction::kJumpBottom);
+bool isJumpTop(const Event& event) {
+  return event == Event::Home || isBound(event, keyAction::kJumpTop);
+}
+
+bool isJumpBottom(const Event& event) {
+  return event == Event::End || isBound(event, keyAction::kJumpBottom);
 }
 
 bool isConfirm(const Event& event) {

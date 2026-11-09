@@ -114,11 +114,20 @@ TEST_CASE_FIXTURE(commandFixture, "cli import needs a file") {
 TEST_CASE_FIXTURE(commandFixture, "cli config set persists and get reads it back") {
   CHECK(run(catalist::cli::runConfig, {"set", "theme", "nord"}) == 0);
   CHECK(out == "Set theme = nord\n");
-  CHECK(catalist::test::readTextFile(tempDir() / "catalist.kdl")
-            .find("theme \"nord\"") != std::string::npos);
+  CHECK(catalist::loadSettings(fileSystem(), tempDir() / "settings.json").theme ==
+        "nord");
   CHECK(run(catalist::cli::runConfig, {"get", "theme"}) == 0);
   CHECK(out == "nord\n");
   CHECK(run(catalist::cli::runConfig, {"get", "colour"}) == 1);
+}
+
+TEST_CASE_FIXTURE(commandFixture, "cli config set rejects values outside the choices") {
+  CHECK(run(catalist::cli::runConfig, {"set", "default_media", "novels"}) == 1);
+  CHECK(err == "error: invalid value 'novels' for default_media.\n");
+  CHECK(run(catalist::cli::runConfig, {"set", "startup_tab", "stats"}) == 0);
+  CHECK(run(catalist::cli::runConfig, {"get", "startup_tab"}) == 0);
+  CHECK(out == "stats\n");
+  CHECK_FALSE(fileSystem().exists(tempDir() / "catalist.kdl"));
 }
 
 TEST_CASE_FIXTURE(commandFixture, "cli rm refuses to delete without --yes off a tty") {

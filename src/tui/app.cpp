@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <memory>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/event.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -16,7 +17,6 @@
 #include "catalist/tui/actions.hpp"
 #include "catalist/tui/appContext.hpp"
 #include "catalist/tui/keys.hpp"
-#include "catalist/tui/tabRegistry.hpp"
 #include "catalist/tui/tabs/catalogTab.hpp"
 #include "catalist/tui/tabs/settingsTab.hpp"
 #include "catalist/tui/tabs/statsTab.hpp"
@@ -93,7 +93,7 @@ public:
   bool onEvent(const Event& event) {
     if (event == Event::Custom)
       return true;
-    if (event.is_mouse() && !ctx_.config.mouse)
+    if (event.is_mouse() && !ctx_.settings.mouse)
       return true;
     if (ctx_.notices.hasPopup()) {
       if (isPopupDismissal(event))
@@ -135,12 +135,12 @@ private:
     }
     if (switchByHotkey(event))
       return true;
-    if (keys::isBound(event, ctx_.config.keybinds, keyAction::kCommandPalette)) {
+    if (keys::isBound(event, keyAction::kCommandPalette)) {
       palette_.open();
       return true;
     }
     bool quits = keys::isCharacter(event, 'q') ||
-                 keys::isBound(event, ctx_.config.keybinds, keyAction::kQuit);
+                 keys::isBound(event, keyAction::kQuit);
     if (quits)
       quit();
     return quits;
@@ -164,16 +164,16 @@ private:
 
   void applyTheme(const std::string& themeName) {
     if (themeName.empty()) {
-      ctx_.notices.setStatus("Current theme: " + ctx_.config.theme);
+      ctx_.notices.setStatus("Current theme: " + ctx_.settings.theme);
       return;
     }
     if (!themeRegistry::hasTheme(themeName)) {
       ctx_.notices.setStatus("Unknown theme: " + themeName);
       return;
     }
-    ctx_.config.theme = themeName;
+    ctx_.settings.theme = themeName;
     themeRegistry::setActive(themeName);
-    saveConfig(ctx_);
+    persistSettings(ctx_);
     ctx_.notices.setStatus("Applied theme: " + themeName);
   }
 
@@ -209,42 +209,17 @@ private:
 
   Element renderTopBar(const themePalette& theme) {
     Elements items;
-    auto addTab = [&](iTab& tab, const std::string& label,
-                      const std::string& glyph, bool showCount) {
+    for (size_t i = 0; i < tabs_.size(); ++i) {
+      iTab& tab = *tabs_[i];
       bool active = &tab == &activeTab();
-      int number = indexOf(tabs_, tab.id()) + 1;
-      std::string count = showCount ? tab.countBadge(ctx_).value_or("") : "";
-      items.push_back(tabLabel(number, active, label, glyph, count, theme));
+      std::string count = tab.countBadge(ctx_).value_or("");
+      items.push_back(tabLabel(static_cast<int>(i) + 1, active, tab.title(),
+                               tab.icon(), count, theme));
       items.push_back(text("│") | color(theme.surface0));
-    };
-    auto version = text(std::string("v") + kVersionString) | color(theme.overlay0);
-
-    auto topBar = ctx_.config.kdlDoc.getNode("top-bar");
-    bool configured = topBar && !topBar->children.empty();
-    for (const auto& item : configured ? topBar->children
-                                       : std::vector<kdl::node>{}) {
-      if (item.name == "tab") {
-        int index = indexOf(tabs_, item.getArgString(0));
-        if (index < 0)
-          continue;
-        iTab& tab = *tabs_[index];
-        addTab(tab, item.getPropString("label", tab.title()),
-               item.getPropString("icon", tab.icon()),
-               item.getPropBool("show-count", false));
-      } else if (item.name == "spacer") {
-        items.push_back(filler());
-      } else if (item.name == "text") {
-        items.push_back(text(item.getArgString(0)) | color(theme.overlay0));
-      } else if (item.name == "version") {
-        items.push_back(version);
-      }
     }
-    if (!configured) {
-      for (iTab* tab : tabs_)
-        addTab(*tab, tab->title(), tab->icon(), tab->countBadge(ctx_).has_value());
-      items.push_back(filler());
-      items.push_back(hbox({version, text(" ")}));
-    }
+    items.push_back(filler());
+    items.push_back(text(std::string("v") + kVersionString + " ") |
+                    color(theme.overlay0));
     return hbox(std::move(items)) | border | color(theme.surface0) |
            size(HEIGHT, EQUAL, 3);
   }
@@ -287,44 +262,46 @@ private:
   int activeIndex_ = 0;
 };
 
-void registerTabs(tabRegistry& registry, const appConfig& config) {
-  registry.add(std::make_unique<catalogTab>(mediaType::kAnime, config));
-  registry.add(std::make_unique<catalogTab>(mediaType::kManga, config));
-  registry.add(std::make_unique<statsTab>());
-  registry.add(std::make_unique<settingsTab>(builtInTabIds()));
+std::vector<std::unique_ptr<iTab>> makeTabs(const appSettings& settings) {
+  std::vector<std::unique_ptr<iTab>> made;
+  made.push_back(std::make_unique<catalogTab>(mediaType::kAnime, settings));
+  made.push_back(std::make_unique<catalogTab>(mediaType::kManga, settings));
+  made.push_back(std::make_unique<statsTab>());
+  made.push_back(std::make_unique<settingsTab>(builtInTabIds()));
+  return made;
 }
 
-std::string chooseStartupTab(const appConfig& config,
+std::string chooseStartupTab(const appSettings& settings,
                              const std::optional<std::string>& requested) {
   if (requested)
     return *requested;
-  return config.startupTab.value_or(config.defaultMedia);
+  return settings.startupTab.value_or(settings.defaultMedia);
 }
 
 void greetFirstRun(appContext& ctx) {
-  if (ctx.config.welcomeShown)
+  if (ctx.settings.welcomeShown)
     return;
   ctx.notices.push(
       "Welcome to Catalist! Number keys switch tabs and : opens commands.");
-  ctx.config.welcomeShown = true;
-  saveConfig(ctx);
+  ctx.settings.welcomeShown = true;
+  persistSettings(ctx);
 }
 
 }  // namespace
 
 std::vector<std::string> builtInTabIds() {
-  return {"anime", "manga", "stats", "settings"};
+  return tabChoices();
 }
 
-appTui::appTui(database& db, appConfig& config, tuiServices services)
-    : db_(db), config_(config), services_(services) {}
+appTui::appTui(database& db, appSettings& settings, tuiServices services)
+    : db_(db), settings_(settings), services_(services) {}
 
 void appTui::run(const std::optional<std::string>& startupTab) {
-  themeRegistry::setActive(config_.theme);
+  themeRegistry::setActive(settings_.theme);
   auto screen = ScreenInteractive::Fullscreen();
   jobRunner jobs(notices_, [&screen] { screen.PostEvent(Event::Custom); });
   appContext ctx{db_,
-                 config_,
+                 settings_,
                  undo_,
                  notices_,
                  services_.launcher,
@@ -335,15 +312,16 @@ void appTui::run(const std::optional<std::string>& startupTab) {
                  services_.auth,
                  jobs};
 
-  tabRegistry registry;
-  registerTabs(registry, config_);
-  auto tabs = registry.ordered(config_.kdlDoc);
+  auto ownedTabs = makeTabs(settings_);
+  std::vector<iTab*> tabs;
+  for (auto& tab : ownedTabs)
+    tabs.push_back(tab.get());
   Components tabComponents;
   for (iTab* tab : tabs)
     tabComponents.push_back(makeTabComponent(*tab, ctx));
 
   shell app(ctx, tabs, palette_, screen);
-  int startIndex = indexOf(tabs, chooseStartupTab(config_, startupTab));
+  int startIndex = indexOf(tabs, chooseStartupTab(settings_, startupTab));
   if (startIndex < 0)
     notices_.setStatus("Unknown startup tab; showing the first tab.");
   app.activate(std::max(0, startIndex));

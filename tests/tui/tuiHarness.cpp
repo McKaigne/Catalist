@@ -14,10 +14,10 @@ tuiHarness::tuiHarness()
       providers(http),
       auth(fs, *http, launcher, authServer, clock, "/data/mal_auth.json"),
       jobs(notices, [] {}),
-      ctx{db,    config, undo,  notices,   launcher,
+      ctx{db,    settings, undo,  notices,   launcher,
           clock, fs,     *http, providers, auth,
           jobs} {
-  themeRegistry::setActive(config.theme);
+  themeRegistry::setActive(settings.theme);
 }
 
 bool tuiHarness::press(iTab& tab, const ftxui::Event& event) {

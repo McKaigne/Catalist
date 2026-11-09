@@ -32,7 +32,7 @@ struct tuiHarness {
   memoryFileSystem fs;
   fixedClock clock;
   database db;
-  appConfig config;
+  appSettings settings;
   undoStack undo;
   notifier notices;
   fakeProcessLauncher launcher;

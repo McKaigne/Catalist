@@ -22,21 +22,20 @@ TEST_CASE("tui settings previews themes and reverts on leave") {
   auto tab = makeSettings();
   tab.onActivate(harness.ctx);
   REQUIRE(harness.press(tab, Event::Character('j')));
-  CHECK(themeRegistry::active().name != harness.config.theme);
+  CHECK(themeRegistry::active().name != harness.settings.theme);
   tab.onDeactivate(harness.ctx);
   CHECK(themeRegistry::active().name == themeRegistry::getTheme("catppuccin-mocha").name);
 }
 
-TEST_CASE("tui settings enter keeps the previewed theme and saves the config") {
+TEST_CASE("tui settings enter keeps the previewed theme and saves the settings") {
   catalist::test::tuiHarness harness;
   auto tab = makeSettings();
   tab.onActivate(harness.ctx);
   REQUIRE(harness.press(tab, Event::Character('j')));
   REQUIRE(harness.press(tab, Event::Return));
-  CHECK(harness.config.theme != "catppuccin-mocha");
-  auto saved = harness.fs.readFile("/data/catalist.kdl");
-  REQUIRE(saved.has_value());
-  CHECK(saved->find("theme \"" + harness.config.theme + "\"") != std::string::npos);
+  CHECK(harness.settings.theme != "catppuccin-mocha");
+  auto saved = catalist::loadSettings(harness.fs, "/data/settings.json");
+  CHECK(saved.theme == harness.settings.theme);
 }
 
 TEST_CASE("tui settings preferences toggle sort direction and startup tab") {
@@ -44,14 +43,14 @@ TEST_CASE("tui settings preferences toggle sort direction and startup tab") {
   auto tab = makeSettings();
   REQUIRE(harness.press(tab, Event::Character('l')));
   REQUIRE(harness.press(tab, Event::Return));
-  CHECK_FALSE(harness.config.mouse);
+  CHECK_FALSE(harness.settings.mouse);
   REQUIRE(harness.press(tab, Event::Character('j')));
   REQUIRE(harness.press(tab, Event::Return));
-  CHECK(harness.config.startupTab == "manga");
+  CHECK(harness.settings.startupTab == "manga");
   REQUIRE(harness.press(tab, Event::Character('G')));
-  bool wasDescending = harness.config.reverseSort;
+  bool wasDescending = harness.settings.reverseSort;
   REQUIRE(harness.press(tab, Event::Return));
-  CHECK(harness.config.reverseSort != wasDescending);
+  CHECK(harness.settings.reverseSort != wasDescending);
 }
 
 TEST_CASE("tui settings data panel backs up and restores after confirmation") {

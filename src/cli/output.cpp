@@ -134,7 +134,7 @@ void printUsage() {
       << "Management & Setup:\n"
       << "  export <json|csv>    Dump entire database to stdout\n"
       << "  import <file.xml>    Ingest MyAnimeList XML export\n"
-      << "  config [list|get|set] Inspect or modify ~/.config/catalist/catalist.kdl\n"
+      << "  config [list|get|set] Inspect or change preferences (settings.json)\n"
       << "  completion <shell>   Generate shell completion script (bash, zsh, fish)\n"
       << "  --tab <id>           Open the TUI on a tab (anime, manga, stats,\n"
       << "                       settings)\n"

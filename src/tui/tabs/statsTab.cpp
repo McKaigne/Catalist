@@ -273,11 +273,10 @@ Element statsTab::render(appContext& ctx) {
          size(WIDTH, EQUAL, 102) | center | flex;
 }
 
-bool statsTab::onEvent(const Event& event, appContext& ctx) {
-  const auto& keybinds = ctx.config.keybinds;
-  bool toggles = keys::isBound(event, keybinds, keyAction::kToggleMedia) ||
-                 keys::isMoveLeft(event, keybinds) ||
-                 keys::isMoveRight(event, keybinds);
+bool statsTab::onEvent(const Event& event, appContext&) {
+  bool toggles = keys::isBound(event, keyAction::kToggleMedia) ||
+                 keys::isMoveLeft(event) ||
+                 keys::isMoveRight(event);
   if (!toggles)
     return false;
   media_ = media_ == mediaType::kAnime ? mediaType::kManga : mediaType::kAnime;

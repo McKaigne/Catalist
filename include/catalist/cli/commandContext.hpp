@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <functional>
 
-#include "catalist/config/config.hpp"
+#include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
@@ -17,11 +17,11 @@ namespace catalist::cli {
 // reference, so commands never construct their own services.
 struct commandContext {
   database& db;
-  appConfig& config;
+  appSettings& settings;
   const iClock& clock;
   iHttpClient& http;
   iFileSystem& fileSystem;
-  std::filesystem::path configPath;
+  std::filesystem::path settingsPath;
   // Returns an index in [0, count); injectable so `random` is testable.
   std::function<size_t(size_t count)> randomIndex;
 };

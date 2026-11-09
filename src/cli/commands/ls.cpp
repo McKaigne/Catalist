@@ -13,9 +13,9 @@ namespace catalist::cli {
 
 int runLs(const commandArgs& args, commandContext& ctx) {
   database& db = ctx.db;
-  const appConfig& config = ctx.config;
+  const appSettings& settings = ctx.settings;
   cliFilterOptions defaults;
-  defaults.reverseSort = config.reverseSort;
+  defaults.reverseSort = settings.reverseSort;
   auto parsed = parseCommonFilters(args, defaults);
   if (!parsed.ok()) {
     emitError("usage", parsed.errorValue().message,

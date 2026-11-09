@@ -11,8 +11,9 @@ ftxui::Component makeTabComponent(iTab& tab, appContext& ctx) {
   });
 }
 
-void saveConfig(appContext& ctx) {
-  ctx.config.save(ctx.fileSystem, ctx.db.getConfigPath() / "catalist.kdl");
+void persistSettings(appContext& ctx) {
+  saveSettings(ctx.fileSystem, ctx.db.getConfigPath() / "settings.json",
+               ctx.settings);
 }
 
 }  // namespace catalist

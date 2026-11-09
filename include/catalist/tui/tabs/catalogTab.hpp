@@ -32,7 +32,7 @@ struct sidebarRow {
 // card and visual (batch) selection.
 class catalogTab : public iTab {
 public:
-  catalogTab(mediaType media, const appConfig& config);
+  catalogTab(mediaType media, const appSettings& settings);
 
   [[nodiscard]] std::string id() const override;
   [[nodiscard]] std::string title() const override;

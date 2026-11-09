@@ -69,9 +69,9 @@ isoDate requireDate(const std::string& text) {
 cliHarness::cliHarness(database& db, iFileSystem& fileSystem,
                        const iClock& clock,
                        const std::filesystem::path& dataDir)
-    : context{db,          config,
+    : context{db,          settings,
               clock,       http,
-              fileSystem,  dataDir / "catalist.kdl",
+              fileSystem,  dataDir / "settings.json",
               [](size_t) { return size_t{0}; }} {}
 
 entryBuilder makeEntry() {

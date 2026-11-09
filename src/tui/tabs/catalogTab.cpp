@@ -151,8 +151,8 @@ void toggleMembership(std::set<member>& members, const member& item) {
 
 }  // namespace
 
-catalogTab::catalogTab(mediaType media, const appConfig& config)
-    : media_(media), reverseSort_(config.reverseSort) {
+catalogTab::catalogTab(mediaType media, const appSettings& settings)
+    : media_(media), reverseSort_(settings.reverseSort) {
   buildComponents();
 }
 
@@ -405,15 +405,14 @@ bool catalogTab::handleBatchKeys(const Event& event, appContext& ctx) {
     return true;
   }
   bool increments = keys::isCharacter(event, 'P') ||
-                    keys::isBound(event, ctx.config.keybinds,
-                                  keyAction::kIncrementProgress);
+                    keys::isBound(event, keyAction::kIncrementProgress);
   if (increments) {
     applyToTargets(ctx, [](const entry& e, const isoDate& today) {
       return stepProgress(e, 1, today);
     }, "incremented progress");
     return true;
   }
-  if (keys::isBound(event, ctx.config.keybinds, keyAction::kDecrementProgress)) {
+  if (keys::isBound(event, keyAction::kDecrementProgress)) {
     applyToTargets(ctx, [](const entry& e, const isoDate& today) {
       return stepProgress(e, -1, today);
     }, "decremented progress");
@@ -439,14 +438,13 @@ bool catalogTab::handleSortKeys(const Event& event, appContext& ctx) {
 }
 
 bool catalogTab::handleCatalogFocus(const Event& event, appContext& ctx) {
-  const auto& keybinds = ctx.config.keybinds;
   int lastRow = static_cast<int>(displayed_.size()) - 1;
-  if (keys::isMoveLeft(event, keybinds)) {
+  if (keys::isMoveLeft(event)) {
     focus_ = focusedCard::kSidebar;
     sidebarMenu_->TakeFocus();
     return true;
   }
-  if (keys::isMoveRight(event, keybinds)) {
+  if (keys::isMoveRight(event)) {
     focus_ = focusedCard::kDetails;
     detailsCursor_ = detailsField::kStatus;
     return true;
@@ -462,19 +460,19 @@ bool catalogTab::handleCatalogFocus(const Event& event, appContext& ctx) {
         "Details: [j/k] Navigate properties, [h/l] Adjust, [e/ret] Notes");
     return true;
   }
-  if (keys::isMoveDown(event, keybinds)) {
+  if (keys::isMoveDown(event)) {
     catalogSelected_ = std::min(catalogSelected_ + 1, std::max(0, lastRow));
     return true;
   }
-  if (keys::isMoveUp(event, keybinds)) {
+  if (keys::isMoveUp(event)) {
     catalogSelected_ = std::max(catalogSelected_ - 1, 0);
     return true;
   }
-  if (keys::isJumpTop(event, keybinds)) {
+  if (keys::isJumpTop(event)) {
     catalogSelected_ = 0;
     return true;
   }
-  if (keys::isJumpBottom(event, keybinds)) {
+  if (keys::isJumpBottom(event)) {
     catalogSelected_ = std::max(0, lastRow);
     return true;
   }
@@ -482,17 +480,16 @@ bool catalogTab::handleCatalogFocus(const Event& event, appContext& ctx) {
 }
 
 bool catalogTab::handleSidebarFocus(const Event& event, appContext& ctx) {
-  const auto& keybinds = ctx.config.keybinds;
-  if (keys::isMoveRight(event, keybinds)) {
+  if (keys::isMoveRight(event)) {
     focus_ = focusedCard::kCatalog;
     catalogMenu_->TakeFocus();
     return true;
   }
-  if (keys::isMoveDown(event, keybinds)) {
+  if (keys::isMoveDown(event)) {
     moveSidebarCursor(1, ctx);
     return true;
   }
-  if (keys::isMoveUp(event, keybinds)) {
+  if (keys::isMoveUp(event)) {
     moveSidebarCursor(-1, ctx);
     return true;
   }
@@ -513,32 +510,31 @@ bool catalogTab::handleSidebarFocus(const Event& event, appContext& ctx) {
 }
 
 bool catalogTab::handleDetailsFocus(const Event& event, appContext& ctx) {
-  const auto& keybinds = ctx.config.keybinds;
   int cursor = static_cast<int>(detailsCursor_);
   if (event == Event::Escape) {
     focus_ = focusedCard::kCatalog;
     mode_ = appMode::kNor;
     return true;
   }
-  if (keys::isMoveDown(event, keybinds)) {
+  if (keys::isMoveDown(event)) {
     detailsCursor_ = static_cast<detailsField>(std::min(cursor + 1, 3));
     return true;
   }
-  if (keys::isMoveUp(event, keybinds)) {
+  if (keys::isMoveUp(event)) {
     detailsCursor_ = static_cast<detailsField>(std::max(cursor - 1, 0));
     return true;
   }
   if (!selectedEntry())
     return false;
 
-  if (keys::isMoveLeft(event, keybinds)) {
+  if (keys::isMoveLeft(event)) {
     if (detailsCursor_ == detailsField::kNotes)
       focus_ = focusedCard::kCatalog;
     else
       adjustDetailsField(ctx, -1);
     return true;
   }
-  if (keys::isMoveRight(event, keybinds)) {
+  if (keys::isMoveRight(event)) {
     if (detailsCursor_ != detailsField::kNotes)
       adjustDetailsField(ctx, 1);
     return true;
@@ -559,30 +555,29 @@ bool catalogTab::handleDetailsFocus(const Event& event, appContext& ctx) {
 }
 
 bool catalogTab::handleEntryCommands(const Event& event, appContext& ctx) {
-  const auto& keybinds = ctx.config.keybinds;
-  if (keys::isBound(event, keybinds, keyAction::kSearchFilter)) {
+  if (keys::isBound(event, keyAction::kSearchFilter)) {
     startSearch(ctx);
     return true;
   }
-  if (keys::isBound(event, keybinds, keyAction::kDeleteEntry)) {
+  if (keys::isBound(event, keyAction::kDeleteEntry)) {
     requestDelete(ctx);
     return true;
   }
-  if (keys::isBound(event, keybinds, keyAction::kUndo)) {
+  if (keys::isBound(event, keyAction::kUndo)) {
     undoLast(ctx);
     return true;
   }
-  if (keys::isBound(event, keybinds, keyAction::kRedo) ||
+  if (keys::isBound(event, keyAction::kRedo) ||
       event == Event::Special("\x12")) {
     redoLast(ctx);
     return true;
   }
-  if (keys::isBound(event, keybinds, keyAction::kOpenBrowser)) {
+  if (keys::isBound(event, keyAction::kOpenBrowser)) {
     if (const entry* current = selectedEntry())
       openInBrowser(ctx, *current);
     return true;
   }
-  if (keys::isBound(event, keybinds, keyAction::kYankTitle)) {
+  if (keys::isBound(event, keyAction::kYankTitle)) {
     if (const entry* current = selectedEntry())
       copyToClipboard(ctx, current->title);
     return true;

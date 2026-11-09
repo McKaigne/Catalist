@@ -19,17 +19,6 @@ constexpr int kPreferenceRows = 5;
 // account.
 constexpr int kDataActions = 5;
 
-const std::vector<std::string>& mediaCycle() {
-  static const std::vector<std::string> cycle = {"anime", "manga"};
-  return cycle;
-}
-
-const std::vector<std::string>& sortCycle() {
-  static const std::vector<std::string> cycle = {"score", "title", "date",
-                                                 "progress"};
-  return cycle;
-}
-
 std::string nextInCycle(const std::vector<std::string>& cycle,
                         const std::string& current) {
   auto found = std::find(cycle.begin(), cycle.end(), current);
@@ -76,7 +65,7 @@ std::string settingsTab::icon() const {
 
 void settingsTab::onActivate(appContext& ctx) {
   auto themes = themeRegistry::getAvailableThemes();
-  auto applied = std::find(themes.begin(), themes.end(), ctx.config.theme);
+  auto applied = std::find(themes.begin(), themes.end(), ctx.settings.theme);
   themeCursor_ = applied == themes.end()
                      ? 0
                      : static_cast<int>(applied - themes.begin());
@@ -94,46 +83,46 @@ void settingsTab::previewThemeUnderCursor() {
 }
 
 void settingsTab::revertPreview(appContext& ctx) {
-  themeRegistry::setActive(ctx.config.theme);
+  themeRegistry::setActive(ctx.settings.theme);
 }
 
 void settingsTab::applySelectedTheme(appContext& ctx) {
   auto themes = themeRegistry::getAvailableThemes();
   if (themeCursor_ < 0 || themeCursor_ >= static_cast<int>(themes.size()))
     return;
-  ctx.config.theme = themes[themeCursor_];
-  themeRegistry::setActive(ctx.config.theme);
-  saveConfig(ctx);
-  ctx.notices.setStatus("Applied theme: " + ctx.config.theme);
+  ctx.settings.theme = themes[themeCursor_];
+  themeRegistry::setActive(ctx.settings.theme);
+  persistSettings(ctx);
+  ctx.notices.setStatus("Applied theme: " + ctx.settings.theme);
 }
 
 void settingsTab::cyclePreference(appContext& ctx) {
-  auto& config = ctx.config;
+  auto& settings = ctx.settings;
   switch (preferenceCursor_) {
     case 0:
-      config.mouse = !config.mouse;
-      ctx.notices.setStatus(config.mouse ? "Mouse enabled." : "Mouse disabled.");
+      settings.mouse = !settings.mouse;
+      ctx.notices.setStatus(settings.mouse ? "Mouse enabled." : "Mouse disabled.");
       break;
     case 1:
-      config.startupTab =
-          nextInCycle(tabIds_, config.startupTab.value_or(config.defaultMedia));
-      ctx.notices.setStatus("Startup tab: " + *config.startupTab);
+      settings.startupTab =
+          nextInCycle(tabIds_, settings.startupTab.value_or(settings.defaultMedia));
+      ctx.notices.setStatus("Startup tab: " + *settings.startupTab);
       break;
     case 2:
-      config.defaultMedia = nextInCycle(mediaCycle(), config.defaultMedia);
-      ctx.notices.setStatus("Default media: " + config.defaultMedia);
+      settings.defaultMedia = nextInCycle(mediaChoices(), settings.defaultMedia);
+      ctx.notices.setStatus("Default media: " + settings.defaultMedia);
       break;
     case 3:
-      config.defaultSort = nextInCycle(sortCycle(), config.defaultSort);
-      ctx.notices.setStatus("Default sort: " + config.defaultSort);
+      settings.defaultSort = nextInCycle(sortChoices(), settings.defaultSort);
+      ctx.notices.setStatus("Default sort: " + settings.defaultSort);
       break;
     default:
-      config.reverseSort = !config.reverseSort;
-      ctx.notices.setStatus(config.reverseSort ? "Sort: Descending"
+      settings.reverseSort = !settings.reverseSort;
+      ctx.notices.setStatus(settings.reverseSort ? "Sort: Descending"
                                                : "Sort: Ascending");
       break;
   }
-  saveConfig(ctx);
+  persistSettings(ctx);
 }
 
 void settingsTab::runDataAction(appContext& ctx) {
@@ -194,20 +183,19 @@ void settingsTab::moveCursor(int delta, appContext& ctx) {
 bool settingsTab::onEvent(const Event& event, appContext& ctx) {
   if (pendingRestore_)
     return handlePendingRestore(event, ctx);
-  const auto& keybinds = ctx.config.keybinds;
   int panelIndex = static_cast<int>(activePanel_);
-  if (keys::isMoveLeft(event, keybinds) || keys::isMoveRight(event, keybinds)) {
-    int step = keys::isMoveLeft(event, keybinds) ? -1 : 1;
+  if (keys::isMoveLeft(event) || keys::isMoveRight(event)) {
+    int step = keys::isMoveLeft(event) ? -1 : 1;
     revertPreview(ctx);
     activePanel_ = static_cast<panel>(std::clamp(panelIndex + step, 0, 2));
     return true;
   }
-  if (keys::isMoveDown(event, keybinds) || keys::isMoveUp(event, keybinds)) {
-    moveCursor(keys::isMoveDown(event, keybinds) ? 1 : -1, ctx);
+  if (keys::isMoveDown(event) || keys::isMoveUp(event)) {
+    moveCursor(keys::isMoveDown(event) ? 1 : -1, ctx);
     return true;
   }
-  if (keys::isJumpTop(event, keybinds) || keys::isJumpBottom(event, keybinds)) {
-    moveCursor(keys::isJumpTop(event, keybinds) ? -1000 : 1000, ctx);
+  if (keys::isJumpTop(event) || keys::isJumpBottom(event)) {
+    moveCursor(keys::isJumpTop(event) ? -1000 : 1000, ctx);
     return true;
   }
   if (!keys::isConfirmOrSpace(event))
@@ -227,7 +215,7 @@ Element settingsTab::renderThemes(appContext& ctx) const {
   Elements rows;
   auto themes = themeRegistry::getAvailableThemes();
   for (size_t i = 0; i < themes.size(); ++i) {
-    bool applied = ctx.config.theme == themes[i];
+    bool applied = ctx.settings.theme == themes[i];
     bool cursorHere = focused && themeCursor_ == static_cast<int>(i);
     Color nameColor = cursorHere ? theme.peach : (applied ? theme.mauve : theme.text);
     rows.push_back(
@@ -246,22 +234,22 @@ Element settingsTab::renderThemes(appContext& ctx) const {
 
 Element settingsTab::renderPreferences(appContext& ctx) const {
   const auto& theme = themeRegistry::active();
-  const auto& config = ctx.config;
+  const auto& settings = ctx.settings;
   bool focused = activePanel_ == panel::kPreferences;
   auto row = [&](int index, const std::string& name, const std::string& value) {
     return cursorRow(focused && preferenceCursor_ == index, name, value, theme);
   };
   auto body = vbox(
       {row(0, "Mouse Support:",
-           checkbox(config.mouse, config.mouse ? "Enabled" : "Disabled")),
-       row(1, "Startup Tab:", config.startupTab.value_or(config.defaultMedia)),
-       row(2, "Default Media:", config.defaultMedia),
-       row(3, "Default Sort:", config.defaultSort),
+           checkbox(settings.mouse, settings.mouse ? "Enabled" : "Disabled")),
+       row(1, "Startup Tab:", settings.startupTab.value_or(settings.defaultMedia)),
+       row(2, "Default Media:", settings.defaultMedia),
+       row(3, "Default Sort:", settings.defaultSort),
        row(4, "Sort Direction:",
-           config.reverseSort ? "Descending ▼" : "Ascending ▲"),
+           settings.reverseSort ? "Descending ▼" : "Ascending ▲"),
        filler(),
        text(" [ret]/[spc] cycles the value.") | color(theme.overlay0),
-       text(" Saved to catalist.kdl") | color(theme.overlay0)});
+       text(" Saved to settings.json") | color(theme.overlay0)});
   return panelCard("Preferences", theme.peach, body, focused, theme) |
          size(WIDTH, EQUAL, 44);
 }

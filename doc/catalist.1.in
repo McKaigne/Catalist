@@ -53,7 +53,8 @@ Dump database to standard output.
 Ingest MyAnimeList XML archives.
 .TP
 .BR config " [" \fIlist\fR | \fIget\fR | \fIset\fR ]
-Inspect or modify settings in \fBcatalist.kdl\fR.
+Inspect or change preferences (mouse, theme, default_media, default_sort,
+reverse_sort, startup_tab).
 .TP
 .BR completion " <" \fIbash\fR | \fIzsh\fR | \fIfish\fR >
 Emit shell completion definitions.
@@ -91,8 +92,8 @@ Command palette, save and quit, next tab.
 Catalogue and activity history (override the directory with
 \fBCATALIST_DATA_DIR\fR).
 .TP
-.I ~/.config/catalist/catalist.kdl
-Theme, preferences, startup tab, tab order and keybindings.
+.I ~/.config/catalist/settings.json
+Theme, mouse, default media and sort, and startup tab; written by Catalist.
 .TP
 .I ~/.config/catalist/backups/
 Snapshot backups.

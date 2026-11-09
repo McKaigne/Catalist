@@ -64,8 +64,8 @@ The number keys follow the order shown in the top bar.
 | `3` | Stats | Totals, score histogram and entries per year (`m` toggles anime/manga) |
 | `4` | Settings | Themes (live preview), preferences, backups, import/export, MyAnimeList sync and login |
 
-The tab list, its order and the startup tab are configured in `catalist.kdl`
-(`top-bar` and `general { startup-tab "stats" }`).
+The startup tab is set in Settings → Preferences, or with
+`catalist config set startup_tab stats`.
 
 ## Core Keybindings
 
@@ -134,7 +134,7 @@ catalist import --clean myanimelist.xml  # Ingest MAL export with safe merging
 - **Local-First & Offline**: Your library is stored in `~/.config/catalist/anime.csv` and `manga.csv`. No background daemon or database setup required.
 - **Atomic File Operations**: All disk writes write to a `.tmp` file before an atomic `rename`, preventing database corruption during power cuts or unexpected exits.
 - **Tier 1 / Tier 2 Merge Hierarchy**: Re-importing MyAnimeList XML archives never overwrites local progress, scores, or notes. Upstream metadata updates refresh total episodes and provider IDs without clobbering user edits.
-- **KDL Workspace Configuration**: Declaratively customize theme, mouse support, default sorting, startup tab, tab order and keybindings via `~/.config/catalist/catalist.kdl`. Files from older versions load as-is.
+- **Preferences**: Theme, mouse support, default media and sort, and the startup tab are changed in Settings (or with `catalist config`) and saved to `~/.config/catalist/settings.json`. Keybindings are fixed.
 - **Backups**: `Settings → Data` (or `:backup`) writes timestamped copies to `~/.config/catalist/backups/`; restoring one first backs up the current data.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.

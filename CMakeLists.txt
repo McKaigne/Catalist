@@ -34,15 +34,14 @@ configure_file(doc/catalist.1.in "${CMAKE_CURRENT_BINARY_DIR}/doc/catalist.1" @O
 # Domain, storage, networking and configuration. Must stay free of FTXUI so
 # the CLI and the tests can be built and run without a terminal UI.
 add_library(catalistCore STATIC
-  src/config/config.cpp
-  src/config/kdl.cpp
-  src/config/keybindManager.cpp
   src/core/clock.cpp
   src/core/date.cpp
+  src/core/json.cpp
   src/core/jsonLite.cpp
   src/core/logger.cpp
   src/core/shell.cpp
   src/core/url.cpp
+  src/settings/settings.cpp
   src/model/activity.cpp
   src/model/entry.cpp
   src/model/entryOps.cpp
@@ -97,7 +96,6 @@ add_library(catalistTui STATIC
   src/tui/keys.cpp
   src/tui/jobRunner.cpp
   src/tui/tab.cpp
-  src/tui/tabRegistry.cpp
   src/tui/tabs/catalogTab.cpp
   src/tui/tabs/settingsTab.cpp
   src/tui/tabs/statsTab.cpp
@@ -146,7 +144,6 @@ add_executable(catalistTests
   tests/cliGoldenTest.cpp
   tests/cliSetTest.cpp
   tests/cliTest.cpp
-  tests/configTest.cpp
   tests/csvCodecTest.cpp
   tests/databaseTest.cpp
   tests/dateTest.cpp
@@ -154,8 +151,8 @@ add_executable(catalistTests
   tests/entryTest.cpp
   tests/fileSystemTest.cpp
   tests/jsonLiteTest.cpp
-  tests/kdlTest.cpp
-  tests/keybindManagerTest.cpp
+  tests/jsonTest.cpp
+  tests/settingsTest.cpp
   tests/loggerTest.cpp
   tests/malAuthTest.cpp
   tests/malParserTest.cpp
@@ -196,7 +193,6 @@ add_executable(catalistTuiTests
   tests/tui/commandPaletteTest.cpp
   tests/tui/settingsTabTest.cpp
   tests/tui/statsTabTest.cpp
-  tests/tui/tabRegistryTest.cpp
   tests/tui/themeRegistryTest.cpp
   tests/tui/tuiHarness.cpp
   tests/tui/widgetsTest.cpp

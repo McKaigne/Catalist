@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "catalist/config/config.hpp"
+#include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/model/undoStack.hpp"
 #include "catalist/net/malAuth.hpp"
@@ -33,13 +33,13 @@ struct tuiServices {
 
 class appTui {
  public:
-  appTui(database& db, appConfig& config, tuiServices services);
+  appTui(database& db, appSettings& settings, tuiServices services);
   // startupTab overrides the configured startup tab (from --tab).
   void run(const std::optional<std::string>& startupTab = std::nullopt);
 
  private:
   database& db_;
-  appConfig& config_;
+  appSettings& settings_;
   tuiServices services_;
   undoStack undo_;
   notifier notices_;

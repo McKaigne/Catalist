@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 #include "catalist/cli/commands/commands.hpp"
-#include "catalist/config/config.hpp"
+#include "catalist/settings/settings.hpp"
 #include "catalist/storage/database.hpp"
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"

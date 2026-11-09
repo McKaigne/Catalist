@@ -67,8 +67,8 @@ TEST_CASE_FIXTURE(tempDirFixture, "cli add then step progress then rm") {
   auto stepped = db.getById(mediaType::kAnime, id);
   REQUIRE(stepped.has_value());
   CHECK(stepped->progress == 12);
-  CHECK(stepped->startDate == "2026-10-20");
-  CHECK(stepped->updatedAt == "2026-10-20");
+  CHECK(catalist::formatDate(stepped->startDate) == "2026-10-20");
+  CHECK(catalist::formatDate(stepped->updatedAt) == "2026-10-20");
 
   REQUIRE(cliDispatcher::executeRm({std::to_string(id), "-y"}, db) == 0);
   CHECK_FALSE(db.getById(mediaType::kAnime, id).has_value());
@@ -163,4 +163,23 @@ TEST_CASE("parseRatingSpec rejects invalid input") {
   CHECK_FALSE(parseRating("9..7").accepted);
   CHECK_FALSE(parseRating("7..").accepted);
   CHECK_FALSE(parseRating(">=x").accepted);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "cli add rejects a malformed date and set clears one") {
+  catalist::database db(tempDir());
+  auto clock = catalist::test::makeTestClock();
+  streamCapture out(std::cout);
+  streamCapture err(std::cerr);
+
+  CHECK(cliDispatcher::executeAdd({"X", "--start", "soon"}, db, clock) == 2);
+  CHECK(err.text() ==
+        "error: invalid date 'soon' for '--start'. Expected YYYY-MM-DD.\n");
+  CHECK(db.getEntries(mediaType::kAnime).empty());
+
+  REQUIRE(cliDispatcher::executeAdd({"X", "--finish", "2026-01-02"}, db,
+                                    clock) == 0);
+  REQUIRE(cliDispatcher::executeSet({"X", "--finish", ""}, db, clock) == 0);
+  auto updated = db.getEntries(mediaType::kAnime).at(0);
+  CHECK_FALSE(updated.finishDate.has_value());
+  CHECK(catalist::formatDate(updated.startDate) == "2026-10-20");
 }

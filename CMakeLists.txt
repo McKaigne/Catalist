@@ -45,6 +45,8 @@ set(CATALIST_SOURCES
   src/platform/processLauncher.cpp
   src/kdl.cpp
   src/model/entry.cpp
+  src/model/entryOps.cpp
+  src/model/undoStack.cpp
   src/config.cpp
   src/database.cpp
   src/malParser.cpp
@@ -102,6 +104,7 @@ add_executable(catalistTests
   tests/cliTest.cpp
   tests/configTest.cpp
   tests/databaseTest.cpp
+  tests/entryOpsTest.cpp
   tests/entryTest.cpp
   tests/fileSystemTest.cpp
   tests/jsonLiteTest.cpp
@@ -116,6 +119,7 @@ add_executable(catalistTests
   tests/resolveEntryTest.cpp
   tests/resultTest.cpp
   tests/shellTest.cpp
+  tests/undoStackTest.cpp
   tests/urlTest.cpp
   tests/versionTest.cpp
   ${CATALIST_SOURCES}

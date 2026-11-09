@@ -18,7 +18,6 @@ public:
   [[nodiscard]] int year() const { return year_; }
   [[nodiscard]] int month() const { return month_; }
   [[nodiscard]] int day() const { return day_; }
-  [[nodiscard]] bool isEmpty() const { return year_ == 0; }
 
   bool operator==(const isoDate& other) const {
     return year_ == other.year_ && month_ == other.month_ && day_ == other.day_;
@@ -36,6 +35,8 @@ public:
   bool operator>=(const isoDate& other) const { return !(*this < other); }
 
 private:
+  isoDate() = default;
+
   int year_ = 0;
   int month_ = 0;
   int day_ = 0;

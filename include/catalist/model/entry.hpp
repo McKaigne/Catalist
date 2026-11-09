@@ -1,8 +1,11 @@
 #ifndef CATALIST_ENTRY_HPP_
 #define CATALIST_ENTRY_HPP_
 
+#include <optional>
 #include <string>
 #include <unordered_map>
+
+#include "catalist/core/date.hpp"
 
 
 namespace catalist {
@@ -24,10 +27,10 @@ struct entry {
   int volumes = 0;
   int totalVolumes = 0;
   int rewatched = 0;
-  std::string startDate;
-  std::string finishDate;
+  std::optional<isoDate> startDate;
+  std::optional<isoDate> finishDate;
   std::string notes;
-  std::string updatedAt;
+  std::optional<isoDate> updatedAt;
   bool dirty = false;
 
   std::unordered_map<std::string, std::string> remoteIds = {};
@@ -41,6 +44,9 @@ std::string statusToString(watchStatus status,
 watchStatus stringToStatus(const std::string& str);
 
 std::string typeToString(mediaType type);
+
+// The display and file form of an optional date: ISO text, or empty.
+[[nodiscard]] std::string formatDate(const std::optional<isoDate>& date);
 mediaType stringToType(const std::string& str);
 
 std::string escapeCsv(const std::string& field);

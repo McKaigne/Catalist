@@ -1,4 +1,5 @@
 #include "catalist/core/version.hpp"
+#include "catalist/model/entryOps.hpp"
 #include "catalist/tui/theme/palettes.hpp"
 #include "catalist/tui/theme/statusStyle.hpp"
 #include "catalist/tui.hpp"
@@ -113,27 +114,18 @@ static std::string formatDays(double days) {
   return formatCommas(whole) + "." + std::to_string(frac);
 }
 
-static std::string getTodayDateStr(const iClock& clock) {
-  return localDate(clock).toString();
+static std::optional<isoDate> catalogDate(const entry& e) {
+  bool showsFinish = e.status == watchStatus::kCompleted && e.finishDate;
+  if (showsFinish)
+    return e.finishDate;
+  if (e.startDate)
+    return e.startDate;
+  return e.updatedAt;
 }
 
 static std::string formatCatalogDate(const entry& e) {
-  std::string d;
-  if (e.status == watchStatus::kCompleted && !e.finishDate.empty() &&
-      e.finishDate.find("0000") != 0) {
-    d = e.finishDate;
-  } else if (!e.startDate.empty() && e.startDate.find("0000") != 0) {
-    d = e.startDate;
-  } else if (!e.updatedAt.empty() && e.updatedAt.find("0000") != 0) {
-    d = e.updatedAt;
-  } else {
-    return "    -     ";
-  }
-  if (d.size() > 10)
-    d = d.substr(0, 10);
-  while (d.size() < 10)
-    d += " ";
-  return d;
+  auto shown = catalogDate(e);
+  return shown ? shown->toString() : "    -     ";
 }
 
 static std::string getFormattedTimestamp(const iClock& clock) {
@@ -330,44 +322,37 @@ void appTui::run() {
 
   auto recordAction = [&](historyAction::type type, mediaType media,
                           const entry& before, const entry& after) {
-    undoStack_.push_back({type, media, before, after});
-    redoStack_.clear();
+    undo_.record({type, media, before, after});
   };
 
   auto performUndo = [&]() {
-    if (undoStack_.empty()) {
+    auto action = undo_.takeUndo();
+    if (!action) {
       pushNotification("Nothing left to undo.");
       return;
     }
-    auto act = undoStack_.back();
-    undoStack_.pop_back();
-    redoStack_.push_back(act);
-
-    if (act.actionType == historyAction::kMutate)
-      db_.updateEntry(act.before);
-    else if (act.actionType == historyAction::kDelete)
-      db_.addEntry(act.before);
-    else if (act.actionType == historyAction::kAdd)
-      db_.removeEntry(act.media, act.after.id);
+    if (action->actionType == historyAction::kMutate)
+      db_.updateEntry(action->before);
+    else if (action->actionType == historyAction::kDelete)
+      db_.addEntry(action->before);
+    else if (action->actionType == historyAction::kAdd)
+      db_.removeEntry(action->media, action->after.id);
     db_.saveAll();
     pushNotification("Action undone successfully.");
   };
 
   auto performRedo = [&]() {
-    if (redoStack_.empty()) {
+    auto action = undo_.takeRedo();
+    if (!action) {
       pushNotification("Nothing left to redo.");
       return;
     }
-    auto act = redoStack_.back();
-    redoStack_.pop_back();
-    undoStack_.push_back(act);
-
-    if (act.actionType == historyAction::kMutate)
-      db_.updateEntry(act.after);
-    else if (act.actionType == historyAction::kDelete)
-      db_.removeEntry(act.media, act.before.id);
-    else if (act.actionType == historyAction::kAdd)
-      db_.addEntry(act.after);
+    if (action->actionType == historyAction::kMutate)
+      db_.updateEntry(action->after);
+    else if (action->actionType == historyAction::kDelete)
+      db_.removeEntry(action->media, action->before.id);
+    else if (action->actionType == historyAction::kAdd)
+      db_.addEntry(action->after);
     db_.saveAll();
     pushNotification("Action redone successfully.");
   };
@@ -516,136 +501,40 @@ void appTui::run() {
     }
   };
 
-  auto mutateProgress = [&](entry e, int dir) {
-    LOG_INFO("Mutating progress for ID " + std::to_string(e.id) + " (\"" + e.title + "\") dir=" + std::to_string(dir));
-    entry before = e;
-    int newProg = std::max(0, e.progress + dir);
-    std::string today = getTodayDateStr(services_.clock);
-
-    if (dir > 0) {
-      if (e.startDate.empty() || e.startDate.find("0000") == 0) {
-        e.startDate = today;
-      }
-      if (e.status == watchStatus::kPlanToWatch ||
-          e.status == watchStatus::kOnHold || e.status == watchStatus::kDropped) {
-        e.status = watchStatus::kWatching;
-      }
-      e.progress = newProg;
-      if (e.totalUnits > 0 && e.progress >= e.totalUnits) {
-        e.progress = e.totalUnits;
-        e.status = watchStatus::kCompleted;
-        e.finishDate = today;
-      }
-    } else if (dir < 0) {
-      if (e.totalUnits > 0 && e.progress >= e.totalUnits &&
-          newProg < e.totalUnits) {
-        e.status = watchStatus::kWatching;
-        e.finishDate = "0000-00-00";
-      }
-      e.progress = newProg;
-    }
-
-    e.updatedAt = today;
-    recordAction(historyAction::kMutate, e.type, before, e);
-    db_.updateEntry(e);
-    db_.logActivity({getFormattedTimestamp(services_.clock), e.type, e.title, e.status,
-                     e.progress, e.totalUnits, e.score});
+  auto commitMutation = [&](const entry& before, const entry& after) {
+    undo_.record({historyAction::kMutate, after.type, before, after});
+    db_.updateEntry(after);
+    db_.logActivity({getFormattedTimestamp(services_.clock), after.type,
+                     after.title, after.status, after.progress,
+                     after.totalUnits, after.score});
     db_.saveAll();
     refreshViews();
-    statusMessage = "Progress: " + std::to_string(e.progress) + "/" +
-                    (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?");
   };
 
-  auto mutateStatus = [&](entry e, int dir) {
-    LOG_INFO("Cycling status for ID " + std::to_string(e.id) + " (\"" + e.title + "\") dir=" + std::to_string(dir));
-    entry before = e;
-    watchStatus oldStatus = e.status;
-    std::string today = getTodayDateStr(services_.clock);
-
-    if (dir > 0) {
-      switch (e.status) {
-        case watchStatus::kWatching:
-          e.status = watchStatus::kCompleted;
-          break;
-        case watchStatus::kCompleted:
-          e.status = watchStatus::kOnHold;
-          break;
-        case watchStatus::kOnHold:
-          e.status = watchStatus::kDropped;
-          break;
-        case watchStatus::kDropped:
-          e.status = watchStatus::kPlanToWatch;
-          break;
-        case watchStatus::kPlanToWatch:
-          e.status = watchStatus::kWatching;
-          break;
-      }
-    } else {
-      switch (e.status) {
-        case watchStatus::kWatching:
-          e.status = watchStatus::kPlanToWatch;
-          break;
-        case watchStatus::kCompleted:
-          e.status = watchStatus::kWatching;
-          break;
-        case watchStatus::kOnHold:
-          e.status = watchStatus::kCompleted;
-          break;
-        case watchStatus::kDropped:
-          e.status = watchStatus::kOnHold;
-          break;
-        case watchStatus::kPlanToWatch:
-          e.status = watchStatus::kDropped;
-          break;
-      }
-    }
-
-    if (e.status == watchStatus::kWatching) {
-      if (e.startDate.empty() || e.startDate.find("0000") == 0) {
-        e.startDate = today;
-      }
-      if (oldStatus == watchStatus::kCompleted) {
-        e.finishDate = "0000-00-00";
-      }
-    } else if (e.status == watchStatus::kCompleted) {
-      if (e.startDate.empty() || e.startDate.find("0000") == 0) {
-        e.startDate = today;
-      }
-      e.finishDate = today;
-      if (e.totalUnits > 0 && e.progress < e.totalUnits) {
-        e.progress = e.totalUnits;
-      }
-    } else if (e.status == watchStatus::kDropped ||
-               e.status == watchStatus::kOnHold) {
-      if (e.finishDate.empty() || e.finishDate.find("0000") == 0) {
-        e.finishDate = today;
-      }
-    } else if (e.status == watchStatus::kPlanToWatch) {
-      e.finishDate = "0000-00-00";
-    }
-
-    e.updatedAt = today;
-    recordAction(historyAction::kMutate, e.type, before, e);
-    db_.updateEntry(e);
-    db_.logActivity({getFormattedTimestamp(services_.clock), e.type, e.title, e.status,
-                     e.progress, e.totalUnits, e.score});
-    db_.saveAll();
-    refreshViews();
-    statusMessage = "Status: " + statusToString(e.status, e.type);
+  auto mutateProgress = [&](const entry& before, int dir) {
+    LOG_INFO("Mutating progress for ID " + std::to_string(before.id) + " (\"" +
+             before.title + "\") dir=" + std::to_string(dir));
+    entry after = stepProgress(before, dir, localDate(services_.clock));
+    commitMutation(before, after);
+    statusMessage = "Progress: " + std::to_string(after.progress) + "/" +
+                    (after.totalUnits > 0 ? std::to_string(after.totalUnits)
+                                          : "?");
   };
 
-  auto mutateRating = [&](entry e, int dir) {
-    LOG_INFO("Adjusting rating for ID " + std::to_string(e.id) + " (\"" + e.title + "\") dir=" + std::to_string(dir));
-    entry before = e;
-    e.score = std::clamp(e.score + dir, 0, 10);
-    e.updatedAt = getTodayDateStr(services_.clock);
-    recordAction(historyAction::kMutate, e.type, before, e);
-    db_.updateEntry(e);
-    db_.logActivity({getFormattedTimestamp(services_.clock), e.type, e.title, e.status,
-                     e.progress, e.totalUnits, e.score});
-    db_.saveAll();
-    refreshViews();
-    statusMessage = "Rating: " + renderStarMeter(e.score);
+  auto mutateStatus = [&](const entry& before, int dir) {
+    LOG_INFO("Cycling status for ID " + std::to_string(before.id) + " (\"" +
+             before.title + "\") dir=" + std::to_string(dir));
+    entry after = cycleStatus(before, dir, localDate(services_.clock));
+    commitMutation(before, after);
+    statusMessage = "Status: " + statusToString(after.status, after.type);
+  };
+
+  auto mutateRating = [&](const entry& before, int dir) {
+    LOG_INFO("Adjusting rating for ID " + std::to_string(before.id) + " (\"" +
+             before.title + "\") dir=" + std::to_string(dir));
+    entry after = adjustRating(before, dir, localDate(services_.clock));
+    commitMutation(before, after);
+    statusMessage = "Rating: " + renderStarMeter(after.score);
   };
 
   auto toggleColumnSort = [&](sortKey targetKey, const std::string& name) {
@@ -1124,9 +1013,9 @@ void appTui::run() {
           e.score = 0;
           e.progress = 0;
           e.totalUnits = sel.totalUnits;
-          e.startDate =
-              sel.year.empty() ? getTodayDateStr(services_.clock) : (sel.year + "-01-01");
-          e.updatedAt = getTodayDateStr(services_.clock);
+          isoDate today = localDate(services_.clock);
+          e.startDate = isoDate::parse(sel.year + "-01-01").value_or(today);
+          e.updatedAt = today;
           db_.addEntry(e);
           recordAction(historyAction::kAdd, e.type, entry{}, e);
           db_.saveAll();
@@ -1195,7 +1084,7 @@ void appTui::run() {
           auto& e = displayedEntries[catalogSelected];
           entry before = e;
           e.notes = inspectorNotesBuffer;
-          e.updatedAt = getTodayDateStr(services_.clock);
+          e.updatedAt = localDate(services_.clock);
           recordAction(historyAction::kMutate, e.type, before, e);
           db_.updateEntry(e);
           db_.saveAll();
@@ -2354,19 +2243,13 @@ void appTui::run() {
             e.title, maxDetailChars, elapsedSinceSelect, 2000, 250);
 
         std::string startDisplay =
-            (e.startDate.empty() || e.startDate.find("0000") == 0)
-                ? "Not started"
-                : e.startDate;
+            e.startDate ? e.startDate->toString() : "Not started";
+        std::string unfinishedLabel =
+            e.status == watchStatus::kCompleted ? "Completed" : "In progress";
         std::string finishDisplay =
-            (e.finishDate.empty() || e.finishDate.find("0000") == 0)
-                ? (e.status == watchStatus::kCompleted ? "Completed"
-                                                      : "In progress")
-                : e.finishDate;
-
+            e.finishDate ? e.finishDate->toString() : unfinishedLabel;
         std::string updatedDisplay =
-            (e.updatedAt.empty() || e.updatedAt.find("0000") == 0)
-                ? "-"
-                : e.updatedAt;
+            e.updatedAt ? e.updatedAt->toString() : "-";
 
         // Construct dynamic provider text links (plain text, no pill)
         Elements providerBadges;

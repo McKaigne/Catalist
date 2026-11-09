@@ -59,6 +59,10 @@ mediaType stringToType(const std::string& str) {
   return mediaType::kAnime;
 }
 
+std::string formatDate(const std::optional<isoDate>& date) {
+  return date ? date->toString() : "";
+}
+
 std::string escapeCsv(const std::string& field) {
   bool needsQuotes = false;
   for (char c : field) {

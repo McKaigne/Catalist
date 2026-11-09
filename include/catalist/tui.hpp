@@ -4,6 +4,7 @@
 #include "catalist/config.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/database.hpp"
+#include "catalist/model/undoStack.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
 #include "catalist/provider.hpp"
@@ -36,12 +37,6 @@ enum class viewTab {
 
 enum class focusedCard { kSidebar, kCatalog, kDetails };
 
-struct historyAction {
-  enum type { kMutate, kDelete, kAdd } actionType;
-  mediaType media;
-  entry before;
-  entry after;
-};
 
 struct tuiServices {
   iProcessLauncher& launcher;
@@ -61,8 +56,7 @@ class appTui {
   appConfig& config_;
   tuiServices services_;
   commandPalette commandPalette_;
-  std::vector<historyAction> undoStack_;
-  std::vector<historyAction> redoStack_;
+  undoStack undo_;
 };
 
 }  // namespace catalist

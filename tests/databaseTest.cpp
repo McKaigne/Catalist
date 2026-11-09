@@ -57,8 +57,7 @@ void seedSortData(catalist::database& db) {
                   .notes("Farmland arc.").updatedAt("2026-10-17"));
   db.addEntry(makeEntry().id(457).malId(457).anilistId(457).title("Mushishi")
                   .status(watchStatus::kCompleted).score(9).progress(26)
-                  .totalUnits(26).startDate("0000-00-00")
-                  .finishDate("0000-00-00").notes("Atmospheric.")
+                  .totalUnits(26).notes("Atmospheric.")
                   .updatedAt("2026-10-17"));
   db.addEntry(makeEntry().id(44265).malId(44265).anilistId(128547)
                   .title("Odd Taxi").status(watchStatus::kCompleted).score(8)
@@ -68,7 +67,6 @@ void seedSortData(catalist::database& db) {
   db.addEntry(makeEntry().id(2).malId(2).anilistId(30002).title("Berserk")
                   .type(mediaType::kManga).status(watchStatus::kWatching)
                   .score(10).progress(364).volumes(42)
-                  .startDate("0000-00-00").finishDate("0000-00-00")
                   .notes("Dark fantasy pinnacle.").updatedAt("2026-10-17"));
 }
 
@@ -135,10 +133,10 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads offset three layout without type co
   CHECK(loaded.title == "Sousou no Frieren");
   CHECK(loaded.status == watchStatus::kCompleted);
   CHECK(loaded.rewatched == 1);
-  CHECK(loaded.startDate == "2023-09-29");
-  CHECK(loaded.finishDate == "2024-03-22");
+  CHECK(catalist::formatDate(loaded.startDate) == "2023-09-29");
+  CHECK(catalist::formatDate(loaded.finishDate) == "2024-03-22");
   CHECK(loaded.notes == "Masterpiece.");
-  CHECK(loaded.updatedAt == "2026-10-17");
+  CHECK(catalist::formatDate(loaded.updatedAt) == "2026-10-17");
   CHECK(loaded.dirty);
 }
 
@@ -153,7 +151,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads current layout with external ids") 
   CHECK(loaded.status == watchStatus::kWatching);
   CHECK(loaded.progress == 364);
   CHECK(loaded.volumes == 42);
-  CHECK(loaded.finishDate == "");
+  CHECK(catalist::formatDate(loaded.finishDate) == "");
   CHECK_FALSE(loaded.dirty);
   CHECK(loaded.getRemoteId("kitsu") == "1234");
   CHECK(loaded.getRemoteId("mal") == "2");
@@ -167,7 +165,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
   REQUIRE(entries.size() == 1);
   CHECK(entries[0].title == "Odd Taxi");
   CHECK(entries[0].notes == "Crlf notes");
-  CHECK(entries[0].updatedAt == "2026-10-17");
+  CHECK(catalist::formatDate(entries[0].updatedAt) == "2026-10-17");
   CHECK(entries[0].remoteIds.size() == 1);
 }
 
@@ -201,7 +199,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add keeps user fields and refresh
   CHECK(merged->score == 8);
   CHECK(merged->progress == 5);
   CHECK(merged->notes == "mine");
-  CHECK(merged->startDate == "2023-09-29");
+  CHECK(catalist::formatDate(merged->startDate) == "2023-09-29");
   CHECK(merged->title == "Sousou no Frieren");
   CHECK(merged->totalUnits == 28);
   CHECK(merged->totalVolumes == 4);
@@ -219,7 +217,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add backfills empty user fields")
   CHECK(merged->score == 7);
   CHECK(merged->progress == 3);
   CHECK(merged->notes == "filled");
-  CHECK(merged->finishDate == "2024-01-01");
+  CHECK(catalist::formatDate(merged->finishDate) == "2024-01-01");
   CHECK(merged->anilistId == 55);
 }
 
@@ -231,4 +229,23 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry matches an existing entry by mal rem
   CHECK(mergedId == 10001);
   REQUIRE(db.getEntries(mediaType::kAnime).size() == 1);
   CHECK(db.getEntries(mediaType::kAnime)[0].totalUnits == 12);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "csv reads the zero date sentinel as absent and writes it empty") {
+  auto csvPath = tempDir() / "legacy_dates.csv";
+  catalist::test::writeTextFile(
+      csvPath,
+      "1,1,0,anime,Old,Completed,7,1,1,0,0,0,0000-00-00,,n,0000-00-00,0,\n");
+  catalist::database db(tempDir());
+  REQUIRE(db.loadCsv(mediaType::kAnime, csvPath));
+  const auto& loaded = db.getEntries(mediaType::kAnime).at(0);
+  CHECK_FALSE(loaded.startDate.has_value());
+  CHECK_FALSE(loaded.finishDate.has_value());
+  CHECK_FALSE(loaded.updatedAt.has_value());
+
+  REQUIRE(db.saveCsv(mediaType::kAnime, csvPath));
+  auto saved = catalist::test::readTextFile(csvPath);
+  CHECK(saved.find("0000-00-00") == std::string::npos);
+  CHECK(saved.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,0,") !=
+        std::string::npos);
 }

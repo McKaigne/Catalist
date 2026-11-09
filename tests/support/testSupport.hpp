@@ -59,6 +59,10 @@ private:
   std::streambuf* original_;
 };
 
+// Test data must spell dates correctly; a typo should fail loudly instead
+// of silently becoming "no date".
+isoDate requireDate(const std::string& text);
+
 class entryBuilder {
 public:
   entryBuilder& id(int value) { built_.id = value; return *this; }
@@ -85,20 +89,20 @@ public:
     return *this;
   }
   entryBuilder& rewatched(int value) { built_.rewatched = value; return *this; }
-  entryBuilder& startDate(std::string value) {
-    built_.startDate = std::move(value);
+  entryBuilder& startDate(const std::string& value) {
+    built_.startDate = requireDate(value);
     return *this;
   }
-  entryBuilder& finishDate(std::string value) {
-    built_.finishDate = std::move(value);
+  entryBuilder& finishDate(const std::string& value) {
+    built_.finishDate = requireDate(value);
     return *this;
   }
   entryBuilder& notes(std::string value) {
     built_.notes = std::move(value);
     return *this;
   }
-  entryBuilder& updatedAt(std::string value) {
-    built_.updatedAt = std::move(value);
+  entryBuilder& updatedAt(const std::string& value) {
+    built_.updatedAt = requireDate(value);
     return *this;
   }
   entryBuilder& dirty(bool value) { built_.dirty = value; return *this; }

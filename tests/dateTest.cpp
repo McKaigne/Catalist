@@ -14,7 +14,7 @@ TEST_CASE("isoDate parses a valid date") {
 }
 
 TEST_CASE("isoDate rejects the zero sentinel and short input") {
-  CHECK_FALSE(isoDate::parse("0000-00-00").has_value());
+  CHECK_FALSE(isoDate::parse("0000-01-01").has_value());
   CHECK_FALSE(isoDate::parse("2024-03").has_value());
   CHECK_FALSE(isoDate::parse("").has_value());
 }

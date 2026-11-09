@@ -126,8 +126,8 @@ size_t malParser::importXml(const std::string& filepath, database& db,
     std::string statusStr = extractTag(block, "my_status");
     e.status = stringToStatus(statusStr);
 
-    e.startDate = extractTag(block, "my_start_date");
-    e.finishDate = extractTag(block, "my_finish_date");
+    e.startDate = isoDate::parse(extractTag(block, "my_start_date"));
+    e.finishDate = isoDate::parse(extractTag(block, "my_finish_date"));
     e.notes = extractTag(block, "my_comments");
 
     db.addEntry(e);
@@ -209,8 +209,8 @@ size_t malParser::importXml(const std::string& filepath, database& db,
     std::string statusStr = extractTag(block, "my_status");
     e.status = stringToStatus(statusStr);
 
-    e.startDate = extractTag(block, "my_start_date");
-    e.finishDate = extractTag(block, "my_finish_date");
+    e.startDate = isoDate::parse(extractTag(block, "my_start_date"));
+    e.finishDate = isoDate::parse(extractTag(block, "my_finish_date"));
     e.notes = extractTag(block, "my_comments");
 
     db.addEntry(e);

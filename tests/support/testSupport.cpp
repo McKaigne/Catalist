@@ -60,6 +60,13 @@ stdinFeed::~stdinFeed() {
   std::cin.clear();
 }
 
+isoDate requireDate(const std::string& text) {
+  auto parsed = isoDate::parse(text);
+  if (!parsed)
+    throw std::invalid_argument("bad test date: " + text);
+  return *parsed;
+}
+
 entryBuilder makeEntry() {
   return entryBuilder{};
 }

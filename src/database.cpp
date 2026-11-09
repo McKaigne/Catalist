@@ -127,9 +127,9 @@ int database::addEntry(entry mediaEntry) {
         existing.score = mediaEntry.score;
       if (existing.progress == 0 && mediaEntry.progress > 0)
         existing.progress = mediaEntry.progress;
-      if (existing.startDate.empty() && !mediaEntry.startDate.empty())
+      if (!existing.startDate && mediaEntry.startDate)
         existing.startDate = mediaEntry.startDate;
-      if (existing.finishDate.empty() && !mediaEntry.finishDate.empty())
+      if (!existing.finishDate && mediaEntry.finishDate)
         existing.finishDate = mediaEntry.finishDate;
 
       return existing.id;
@@ -353,6 +353,14 @@ void database::createBackupSnapshot() {
   }
 }
 
+// Files written before dates became optional store "0000-00-00" (or an
+// empty field) for an unknown date; both load as absent.
+static std::optional<isoDate> parseStoredDate(const std::string& field) {
+  if (field.empty() || field == "0000-00-00")
+    return std::nullopt;
+  return isoDate::parse(field);
+}
+
 static std::vector<std::string> parseCsvRecord(const std::string& record) {
   std::vector<std::string> fields;
   std::string field;
@@ -503,13 +511,13 @@ bool database::loadCsv(mediaType type, const std::filesystem::path& path) {
         }
       }
       if (fields.size() > offset + 8)
-        e.startDate = fields[offset + 8];
+        e.startDate = parseStoredDate(fields[offset + 8]);
       if (fields.size() > offset + 9)
-        e.finishDate = fields[offset + 9];
+        e.finishDate = parseStoredDate(fields[offset + 9]);
       if (fields.size() > offset + 10)
         e.notes = fields[offset + 10];
       if (fields.size() > offset + 11)
-        e.updatedAt = fields[offset + 11];
+        e.updatedAt = parseStoredDate(fields[offset + 11]);
       if (fields.size() > offset + 12) {
         e.dirty = (fields[offset + 12] == "1" || fields[offset + 12] == "true");
       }
@@ -552,8 +560,8 @@ bool database::saveCsv(mediaType type,
          << escapeCsv(statusToString(e.status, e.type)) << "," << e.score << ","
          << e.progress << "," << e.totalUnits << "," << e.volumes << ","
          << e.totalVolumes << "," << e.rewatched << ","
-         << escapeCsv(e.startDate) << "," << escapeCsv(e.finishDate) << ","
-         << escapeCsv(e.notes) << "," << escapeCsv(e.updatedAt) << ","
+         << formatDate(e.startDate) << "," << formatDate(e.finishDate) << ","
+         << escapeCsv(e.notes) << "," << formatDate(e.updatedAt) << ","
          << (e.dirty ? "1" : "0") << ","
          << escapeCsv(serializeRemoteIds(e.remoteIds)) << "\n";
   }

@@ -12,6 +12,7 @@
 #include "catalist/core/jsonLite.hpp"
 #include "catalist/core/version.hpp"
 #include "catalist/malParser.hpp"
+#include "catalist/model/entryOps.hpp"
 #include "catalist/remoteSearch.hpp"
 
 #if defined(_WIN32)
@@ -96,6 +97,21 @@ static void reportResolveError(const resolveError& failure, bool jsonMode,
   else
     message += ".";
   emitError("ambiguous", message, jsonMode);
+}
+
+// An empty value clears the date; anything else must be YYYY-MM-DD.
+static std::optional<std::optional<isoDate>> parseDateArgument(
+    const std::string& raw, const std::string& flag, bool jsonMode) {
+  if (raw.empty())
+    return std::optional<isoDate>{};
+  auto parsed = isoDate::parse(raw);
+  if (parsed)
+    return std::optional<isoDate>{parsed};
+  emitError("usage",
+            "invalid date '" + raw + "' for '" + flag +
+                "'. Expected YYYY-MM-DD.",
+            jsonMode);
+  return std::nullopt;
 }
 
 bool cliDispatcher::parseRatingSpec(const std::string& spec, int& minScore,
@@ -195,10 +211,10 @@ std::string cliDispatcher::formatJsonEntry(const entry& e) {
      << "\"volumes\":" << e.volumes << ","
      << "\"totalVolumes\":" << e.totalVolumes << ","
      << "\"rewatched\":" << e.rewatched << ","
-     << "\"startDate\":\"" << escapeJsonString(e.startDate) << "\","
-     << "\"finishDate\":\"" << escapeJsonString(e.finishDate) << "\","
+     << "\"startDate\":\"" << escapeJsonString(formatDate(e.startDate)) << "\","
+     << "\"finishDate\":\"" << escapeJsonString(formatDate(e.finishDate)) << "\","
      << "\"notes\":\"" << escapeJsonString(e.notes) << "\","
-     << "\"updatedAt\":\"" << escapeJsonString(e.updatedAt) << "\""
+     << "\"updatedAt\":\"" << escapeJsonString(formatDate(e.updatedAt)) << "\""
      << "}";
   return ss.str();
 }
@@ -441,7 +457,7 @@ static std::vector<entry> collectAndFilterEntries(
           continue;
       }
       if (!opts.year.empty()) {
-        if (e.startDate.size() < 4 || e.startDate.substr(0, 4) != opts.year)
+        if (!e.startDate || formatDate(e.startDate).substr(0, 4) != opts.year)
           continue;
       }
       if (!opts.search.empty()) {
@@ -515,7 +531,7 @@ int cliDispatcher::executeLs(const std::vector<std::string>& args, database& db,
                 << escapeCsv(e.title) << ","
                 << escapeCsv(statusToString(e.status, e.type)) << "," << e.score
                 << "," << e.progress << "," << e.totalUnits << ","
-                << escapeCsv(e.startDate) << "," << escapeCsv(e.finishDate)
+                << escapeCsv(formatDate(e.startDate)) << "," << escapeCsv(formatDate(e.finishDate))
                 << "\n";
     }
     return 0;
@@ -641,8 +657,8 @@ static void printSingleDetail(const entry& e, bool jsonMode) {
               << "\n";
   }
   tag("Dates:");
-  std::cout << (e.startDate.empty() ? "-" : e.startDate) << " -> "
-            << (e.finishDate.empty() ? "-" : e.finishDate) << "\n";
+  std::cout << (e.startDate ? e.startDate->toString() : "-") << " -> "
+            << (e.finishDate ? e.finishDate->toString() : "-") << "\n";
   tag("MAL ID:");
   std::cout << (e.malId > 0 ? std::to_string(e.malId) : "Local") << "\n";
   tag("Local ID:");
@@ -715,8 +731,8 @@ int cliDispatcher::executeAdd(const std::vector<std::string>& args,
   int progress = 0;
   int totalUnits = 0;
   int volumes = 0;
-  std::string startDate;
-  std::string finishDate;
+  std::optional<isoDate> startDate;
+  std::optional<isoDate> finishDate;
   std::string notes;
   bool jsonMode = false;
 
@@ -803,13 +819,19 @@ int cliDispatcher::executeAdd(const std::vector<std::string>& args,
         emitError("usage", "missing date for '--start'", jsonMode);
         return 2;
       }
-      startDate = args[i];
+      auto parsedDate = parseDateArgument(args[i], "--start", jsonMode);
+      if (!parsedDate)
+        return 2;
+      startDate = *parsedDate;
     } else if (arg == "--finish" || arg == "--finished") {
       if (++i >= args.size()) {
         emitError("usage", "missing date for '--finish'", jsonMode);
         return 2;
       }
-      finishDate = args[i];
+      auto parsedDate = parseDateArgument(args[i], "--finish", jsonMode);
+      if (!parsedDate)
+        return 2;
+      finishDate = *parsedDate;
     } else if (arg == "--notes" || arg == "-n") {
       if (++i >= args.size()) {
         emitError("usage", "missing text for '--notes'", jsonMode);
@@ -831,8 +853,8 @@ int cliDispatcher::executeAdd(const std::vector<std::string>& args,
     return 2;
   }
 
-  if (startDate.empty())
-    startDate = localDate(clock).toString();
+  if (!startDate)
+    startDate = localDate(clock);
 
   entry e;
   e.type = type;
@@ -875,15 +897,14 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
 
   std::string target;
   bool jsonMode = false;
-  std::optional<int> setProgress;
+  std::optional<int> absoluteProgress;
   int deltaProgress = 0;
-  bool hasDelta = false;
   std::optional<int> setScore;
   std::optional<watchStatus> setStatus;
   std::optional<int> setTotal;
   std::optional<int> setVolumes;
-  std::optional<std::string> setStart;
-  std::optional<std::string> setFinish;
+  std::optional<std::optional<isoDate>> setStart;
+  std::optional<std::optional<isoDate>> setFinish;
   std::optional<std::string> setNotes;
   std::optional<std::string> setTitle;
 
@@ -909,7 +930,6 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
           }
         }
         deltaProgress = delta;
-        hasDelta = true;
       } else if (val == "sub" || val == "s" || val == "dec") {
         int delta = 1;
         if (i + 1 < args.size()) {
@@ -921,11 +941,9 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
           }
         }
         deltaProgress = -delta;
-        hasDelta = true;
       } else if (!val.empty() && (val.front() == '+' || val.front() == '-')) {
         try {
           deltaProgress = std::stoi(val);
-          hasDelta = true;
         } catch (...) {
           emitError("usage", "invalid delta for '--progress': " + val,
                     jsonMode);
@@ -933,7 +951,7 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
         }
       } else {
         try {
-          setProgress = std::max(0, std::stoi(val));
+          absoluteProgress = std::max(0, std::stoi(val));
         } catch (...) {
           emitError("usage", "invalid integer for '--progress': " + val,
                     jsonMode);
@@ -988,13 +1006,19 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
         emitError("usage", "missing date for '--start'", jsonMode);
         return 2;
       }
-      setStart = args[i];
+      auto parsedDate = parseDateArgument(args[i], "--start", jsonMode);
+      if (!parsedDate)
+        return 2;
+      setStart = *parsedDate;
     } else if (arg == "--finish" || arg == "--finished") {
       if (++i >= args.size()) {
         emitError("usage", "missing date for '--finish'", jsonMode);
         return 2;
       }
-      setFinish = args[i];
+      auto parsedDate = parseDateArgument(args[i], "--finish", jsonMode);
+      if (!parsedDate)
+        return 2;
+      setFinish = *parsedDate;
     } else if (arg == "--notes" || arg == "-n") {
       if (++i >= args.size()) {
         emitError("usage", "missing text for '--notes'", jsonMode);
@@ -1042,18 +1066,12 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
     }
     const entry& match = resolved.value();
 
-    auto e = match;
-
-    if (setProgress.has_value()) {
-      e.progress = setProgress.value();
-    } else if (hasDelta) {
-      e.progress = std::max(0, e.progress + deltaProgress);
-    }
-
-    if (e.totalUnits > 0 && e.progress >= e.totalUnits) {
-      e.progress = e.totalUnits;
-      e.status = watchStatus::kCompleted;
-    }
+    isoDate today = localDate(clock);
+    // The completion rule runs even without a progress flag, so an entry
+    // already at its total is marked completed by any edit.
+    auto e = setProgress(match,
+                         absoluteProgress.value_or(match.progress + deltaProgress),
+                         today);
 
     if (setScore.has_value())
       e.score = setScore.value();
@@ -1072,7 +1090,7 @@ int cliDispatcher::executeSet(const std::vector<std::string>& args,
     if (setTitle.has_value())
       e.title = setTitle.value();
 
-    e.updatedAt = localDate(clock).toString();
+    e.updatedAt = today;
 
     db.updateEntry(e);
     successCount++;
@@ -1379,9 +1397,9 @@ int cliDispatcher::executeExport(const std::vector<std::string>& args,
                   << escapeCsv(statusToString(e.status, e.type)) << ","
                   << e.score << "," << e.progress << "," << e.totalUnits << ","
                   << e.volumes << "," << e.totalVolumes << "," << e.rewatched
-                  << "," << escapeCsv(e.startDate) << ","
-                  << escapeCsv(e.finishDate) << "," << escapeCsv(e.notes) << ","
-                  << escapeCsv(e.updatedAt) << "\n";
+                  << "," << escapeCsv(formatDate(e.startDate)) << ","
+                  << escapeCsv(formatDate(e.finishDate)) << "," << escapeCsv(e.notes) << ","
+                  << escapeCsv(formatDate(e.updatedAt)) << "\n";
       }
     };
 
@@ -1602,8 +1620,7 @@ int cliDispatcher::executeSearch(const std::vector<std::string>& args,
   e.score = 0;
   e.progress = (st == watchStatus::kCompleted) ? selected.totalUnits : 0;
   e.totalUnits = selected.totalUnits;
-  e.startDate =
-      selected.year.empty() ? "0000-00-00" : (selected.year + "-01-01");
+  e.startDate = isoDate::parse(selected.year + "-01-01");
 
   db.addEntry(e);
   db.saveAll();

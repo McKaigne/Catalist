@@ -50,7 +50,8 @@ std::optional<remoteSearchResult> parseAnilistMedia(const std::string& block,
   remoteSearchResult parsed;
   parsed.type = type;
   parsed.malId = intField(block, "idMal");
-  if (parsed.malId <= 0 && intField(block, "id") <= 0)
+  parsed.anilistId = intField(block, "id");
+  if (parsed.malId <= 0 && parsed.anilistId <= 0)
     return std::nullopt;
 
   parsed.title = decodedField(block, "romaji");

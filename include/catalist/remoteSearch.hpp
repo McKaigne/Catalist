@@ -10,6 +10,7 @@ namespace catalist {
 
 struct remoteSearchResult {
   int malId = 0;
+  int anilistId = 0;
   std::string title;
   std::string titleEnglish;
   mediaType type = mediaType::kAnime;

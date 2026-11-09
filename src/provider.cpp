@@ -14,20 +14,33 @@ namespace {
 using jsonLite::extractJsonNumber;
 using jsonLite::extractJsonString;
 
+// Each engine-backed provider reports the id from its own catalogue; results
+// that lack one (e.g. Jikan fallbacks for AniList) cannot be linked and are
+// dropped.
+using remoteIdOf = int (*)(const remoteSearchResult&);
+
 std::vector<providerSearchResult> searchViaEngine(
     iHttpClient& http, const std::string& providerKey, mediaType type,
-    const std::string& query, size_t limit, bool requireMalId) {
+    const std::string& query, size_t limit, remoteIdOf remoteId) {
   std::string err;
   auto rawResults = remoteSearchEngine(http).query(type, query, err, limit);
   std::vector<providerSearchResult> results;
   for (const auto& raw : rawResults) {
-    if (requireMalId && raw.malId <= 0)
+    int id = remoteId(raw);
+    if (id <= 0)
       continue;
-    results.push_back({providerKey, std::to_string(raw.malId), raw.title,
-                       raw.type, raw.totalUnits, raw.score, raw.year,
-                       raw.synopsis});
+    results.push_back({providerKey, std::to_string(id), raw.title, raw.type,
+                       raw.totalUnits, raw.score, raw.year, raw.synopsis});
   }
   return results;
+}
+
+int malIdOf(const remoteSearchResult& raw) {
+  return raw.malId;
+}
+
+int anilistIdOf(const remoteSearchResult& raw) {
+  return raw.anilistId;
 }
 
 std::optional<providerSearchResult> parseKitsuItem(const std::string& block,
@@ -81,7 +94,7 @@ public:
   std::vector<providerSearchResult> search(mediaType type,
                                            const std::string& query,
                                            size_t limit) override {
-    return searchViaEngine(*client_, getKey(), type, query, limit, true);
+    return searchViaEngine(*client_, getKey(), type, query, limit, malIdOf);
   }
 
 private:
@@ -111,7 +124,8 @@ public:
   std::vector<providerSearchResult> search(mediaType type,
                                            const std::string& query,
                                            size_t limit) override {
-    return searchViaEngine(*client_, getKey(), type, query, limit, false);
+    return searchViaEngine(*client_, getKey(), type, query, limit,
+                           anilistIdOf);
   }
 
 private:

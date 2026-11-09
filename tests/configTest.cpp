@@ -121,7 +121,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig upgrades a pre 0.3 top bar to the n
     tab "anime" label="Anime" show-count=true
     tab "sync" label="Sync"
     spacer
-    text "v0.2.0" color="overlay0"
+    text "v0.1.9" color="overlay0"
 }
 )kdl");
   appConfig config;

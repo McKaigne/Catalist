@@ -1,6 +1,5 @@
 #include "catalist/core/date.hpp"
 
-#include <chrono>
 #include <iomanip>
 #include <sstream>
 
@@ -24,14 +23,11 @@ std::optional<isoDate> isoDate::parse(std::string_view dateStr) {
   }
 }
 
-isoDate isoDate::today() {
-  auto now = std::chrono::system_clock::now();
-  auto inTimeT = std::chrono::system_clock::to_time_t(now);
-  std::tm tm = *std::localtime(&inTimeT);
+isoDate isoDate::fromLocalTm(const std::tm& local) {
   isoDate date;
-  date.year_ = tm.tm_year + 1900;
-  date.month_ = tm.tm_mon + 1;
-  date.day_ = tm.tm_mday;
+  date.year_ = local.tm_year + 1900;
+  date.month_ = local.tm_mon + 1;
+  date.day_ = local.tm_mday;
   return date;
 }
 

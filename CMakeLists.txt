@@ -33,9 +33,14 @@ include_directories(include "${CATALIST_GENERATED_INCLUDE_DIR}")
 set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 
 set(CATALIST_SOURCES
+  src/core/clock.cpp
   src/core/date.cpp
+  src/core/jsonLite.cpp
   src/core/logger.cpp
+  src/core/shell.cpp
+  src/platform/fileSystem.cpp
   src/platform/httpClient.cpp
+  src/platform/processLauncher.cpp
   src/kdl.cpp
   src/entry.cpp
   src/config.cpp
@@ -94,6 +99,8 @@ add_executable(catalistTests
   tests/configTest.cpp
   tests/databaseTest.cpp
   tests/entryTest.cpp
+  tests/fileSystemTest.cpp
+  tests/jsonLiteTest.cpp
   tests/kdlTest.cpp
   tests/keybindManagerTest.cpp
   tests/dateTest.cpp
@@ -101,6 +108,7 @@ add_executable(catalistTests
   tests/malParserTest.cpp
   tests/providerTest.cpp
   tests/resultTest.cpp
+  tests/shellTest.cpp
   tests/versionTest.cpp
   ${CATALIST_SOURCES}
 )

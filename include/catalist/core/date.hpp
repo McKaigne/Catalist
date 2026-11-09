@@ -1,6 +1,7 @@
 #ifndef CATALIST_CORE_DATE_HPP_
 #define CATALIST_CORE_DATE_HPP_
 
+#include <ctime>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -10,7 +11,7 @@ namespace catalist {
 class isoDate {
 public:
   static std::optional<isoDate> parse(std::string_view dateStr);
-  static isoDate today();
+  static isoDate fromLocalTm(const std::tm& local);
 
   [[nodiscard]] std::string toString() const;
 

@@ -2,10 +2,23 @@
 
 #include <vector>
 
+#include "catalist/model/activity.hpp"
+#include "catalist/net/metadataSync.hpp"
+#include "catalist/storage/backup.hpp"
 #include "catalist/storage/malParser.hpp"
 #include "catalist/tui/widgets/marquee.hpp"
 
 namespace catalist {
+
+void commitEntryChange(appContext& ctx, const entry& before,
+                       const entry& after) {
+  ctx.undo.record({historyAction::kMutate, after.type, before, after});
+  ctx.db.updateEntry(after);
+  ctx.db.logActivity({activityTimestamp(ctx.clock), after.type, after.title,
+                      after.status, after.progress, after.totalUnits,
+                      after.score});
+  ctx.db.saveAll();
+}
 
 void openInBrowser(appContext& ctx, const entry& target) {
   std::string url = ctx.providers.resolveUrl(target);
@@ -59,11 +72,52 @@ void createBackup(appContext& ctx) {
 }
 
 void startBackgroundSync(appContext& ctx) {
-  if (!ctx.sync.start()) {
-    ctx.notices.push("Sync already active in background...");
+  bool started = ctx.jobs.start("sync", [&ctx]() {
+    std::string outcome;
+    metadataSync::syncOngoing(ctx.db, ctx.http, outcome);
+    return outcome;
+  });
+  if (!started) {
+    ctx.notices.push("Another background task is still running...");
     return;
   }
   ctx.notices.setStatus("Reconciling ongoing titles with MyAnimeList...");
+}
+
+void startMalLogin(appContext& ctx) {
+  bool started = ctx.jobs.start("login", [&ctx]() {
+    std::string outcome;
+    ctx.auth.authenticate(outcome);
+    return outcome;
+  });
+  if (!started) {
+    ctx.notices.push("Another background task is still running...");
+    return;
+  }
+  ctx.notices.setStatus("Waiting for MyAnimeList login in your browser...");
+}
+
+void restoreBackup(appContext& ctx, const std::string& snapshotName) {
+  ctx.db.createBackupSnapshot();
+  if (!backup::restoreSnapshot(ctx.fileSystem, ctx.db.getConfigPath(),
+                               snapshotName)) {
+    ctx.notices.push("Could not restore " + snapshotName + ".");
+    return;
+  }
+  ctx.db.loadAll();
+  ctx.undo.clear();
+  ctx.notices.push("Restored " + snapshotName +
+                   " (the previous data was backed up first).");
+}
+
+void exportCatalog(appContext& ctx) {
+  auto written = backup::exportCatalog(ctx.fileSystem, ctx.clock, ctx.db);
+  if (written.empty()) {
+    ctx.notices.push("Export failed.");
+    return;
+  }
+  ctx.notices.push("Exported " + std::to_string(written.size()) +
+                   " CSV files to " + written.front().parent_path().string());
 }
 
 }  // namespace catalist

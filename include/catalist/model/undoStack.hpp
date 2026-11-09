@@ -25,6 +25,8 @@ public:
   // Returns the action to re-apply and moves it back onto the undo stack.
   [[nodiscard]] std::optional<historyAction> takeRedo();
 
+  void clear();
+
   [[nodiscard]] bool canUndo() const { return !undo_.empty(); }
   [[nodiscard]] bool canRedo() const { return !redo_.empty(); }
 

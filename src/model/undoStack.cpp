@@ -7,6 +7,11 @@ void undoStack::record(historyAction action) {
   redo_.clear();
 }
 
+void undoStack::clear() {
+  undo_.clear();
+  redo_.clear();
+}
+
 std::optional<historyAction> undoStack::takeUndo() {
   if (undo_.empty())
     return std::nullopt;

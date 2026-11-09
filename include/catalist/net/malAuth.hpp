@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -69,6 +70,9 @@ class malAuth {
   iAuthCallbackServer& callbackServer_;
   const iClock& clock_;
   std::filesystem::path credentialsPath_;
+  // Guards creds_: login runs on a worker thread while the UI reads the
+  // authentication state.
+  mutable std::mutex mutex_;
   malCredentials creds_;
 };
 

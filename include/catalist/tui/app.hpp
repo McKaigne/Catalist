@@ -1,6 +1,7 @@
 #ifndef CATALIST_TUI_APP_HPP_
 #define CATALIST_TUI_APP_HPP_
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,10 +28,14 @@ struct tuiServices {
   malAuth& auth;
 };
 
+// Ids of the tabs this build provides, in default order.
+[[nodiscard]] std::vector<std::string> builtInTabIds();
+
 class appTui {
  public:
   appTui(database& db, appConfig& config, tuiServices services);
-  void run();
+  // startupTab overrides the configured startup tab (from --tab).
+  void run(const std::optional<std::string>& startupTab = std::nullopt);
 
  private:
   database& db_;

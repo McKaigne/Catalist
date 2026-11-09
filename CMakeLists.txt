@@ -46,6 +46,7 @@ add_library(catalistCore STATIC
   src/model/activity.cpp
   src/model/entry.cpp
   src/model/entryOps.cpp
+  src/model/queueOrder.cpp
   src/model/undoStack.cpp
   src/net/malAuth.cpp
   src/net/metadataSync.cpp
@@ -95,14 +96,17 @@ add_library(catalistTui STATIC
   src/tui/actions.cpp
   src/tui/app.cpp
   src/tui/keys.cpp
-  src/tui/syncRunner.cpp
+  src/tui/jobRunner.cpp
   src/tui/tab.cpp
   src/tui/tabRegistry.cpp
-  src/tui/tabs/aboutTab.cpp
   src/tui/tabs/catalogTab.cpp
-  src/tui/tabs/overviewTab.cpp
+  src/tui/tabs/helpTab.cpp
+  src/tui/tabs/historyTab.cpp
+  src/tui/tabs/libraryTab.cpp
+  src/tui/tabs/queueTab.cpp
+  src/tui/tabs/searchTab.cpp
   src/tui/tabs/settingsTab.cpp
-  src/tui/tabs/syncTab.cpp
+  src/tui/tabs/statsTab.cpp
   src/tui/theme/statusStyle.cpp
   src/tui/theme/themeRegistry.cpp
   src/tui/widgets/commandPalette.cpp
@@ -161,6 +165,7 @@ add_executable(catalistTests
   tests/malAuthTest.cpp
   tests/malParserTest.cpp
   tests/providerTest.cpp
+  tests/queueOrderTest.cpp
   tests/remoteSearchTest.cpp
   tests/resolveEntryTest.cpp
   tests/resultTest.cpp

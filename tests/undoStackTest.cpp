@@ -50,3 +50,13 @@ TEST_CASE("undoStack recording a new action clears redo") {
   history.record(mutation(3));
   CHECK_FALSE(history.canRedo());
 }
+
+TEST_CASE("undoStack clear forgets both directions") {
+  undoStack history;
+  history.record(mutation(1));
+  history.record(mutation(2));
+  (void)history.takeUndo();
+  history.clear();
+  CHECK_FALSE(history.canUndo());
+  CHECK_FALSE(history.canRedo());
+}

@@ -31,6 +31,7 @@ public:
 
   // Optional hooks with neutral defaults.
   virtual void onActivate(appContext&) {}
+  virtual void onDeactivate(appContext&) {}
   // FTXUI children (menus, inputs) that need focus and default handling.
   // FTXUI only routes keys to focusable components, so tabs without children
   // get a focusable placeholder.

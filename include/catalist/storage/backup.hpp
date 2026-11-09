@@ -7,6 +7,7 @@
 
 #include "catalist/core/clock.hpp"
 #include "catalist/platform/fileSystem.hpp"
+#include "catalist/storage/database.hpp"
 
 namespace catalist::backup {
 
@@ -22,6 +23,18 @@ std::vector<std::filesystem::path> createSnapshot(
 // Snapshot file names, newest first.
 [[nodiscard]] std::vector<std::string> listSnapshots(
     const iFileSystem& fileSystem, const std::filesystem::path& dataDir);
+
+// Copies backups/<snapshotName> over the catalogue file it was taken from
+// (anime_* or manga_*). Returns false for unknown names or failed copies.
+[[nodiscard]] bool restoreSnapshot(iFileSystem& fileSystem,
+                                   const std::filesystem::path& dataDir,
+                                   const std::string& snapshotName);
+
+// Writes exports/<kind>_<YYYYmmdd_HHMMSS>.csv for both catalogues and
+// returns the files written.
+std::vector<std::filesystem::path> exportCatalog(iFileSystem& fileSystem,
+                                                 const iClock& clock,
+                                                 const database& db);
 
 }  // namespace catalist::backup
 

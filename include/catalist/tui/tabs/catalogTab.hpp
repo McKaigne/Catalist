@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "catalist/net/remoteSearch.hpp"
 #include "catalist/tui/tab.hpp"
 #include "catalist/tui/widgets/marquee.hpp"
 
@@ -30,7 +29,7 @@ struct sidebarRow {
 };
 
 // The anime or manga catalogue: sidebar filters, searchable table, details
-// card, visual (batch) selection and the online add dialog.
+// card and visual (batch) selection. Adding goes through the Search tab.
 class catalogTab : public iTab {
 public:
   catalogTab(mediaType media, const appConfig& config);
@@ -45,7 +44,6 @@ public:
 
   void onActivate(appContext& ctx) override;
   ftxui::Component focusRoot() override { return root_; }
-  std::optional<ftxui::Element> overlay(appContext& ctx) override;
   [[nodiscard]] bool capturesInput() const override;
   [[nodiscard]] std::optional<std::string> countBadge(
       appContext& ctx) const override;
@@ -62,8 +60,6 @@ private:
 
   bool handleMouse(const ftxui::Event& event, appContext& ctx);
   bool handlePendingDelete(const ftxui::Event& event, appContext& ctx);
-  bool handleRemoteDialog(const ftxui::Event& event, appContext& ctx);
-  bool handleRemoteResults(const ftxui::Event& event, appContext& ctx);
   bool handleSearchTyping(const ftxui::Event& event, appContext& ctx);
   bool handleNotesEditing(const ftxui::Event& event, appContext& ctx);
   bool handleBatchKeys(const ftxui::Event& event, appContext& ctx);
@@ -83,9 +79,6 @@ private:
   void toggleSidebarMultiFilter();
   void moveSidebarCursor(int direction, appContext& ctx);
   void startSearch(appContext& ctx);
-  void openRemoteDialog();
-  void runRemoteSearch(appContext& ctx);
-  void addRemoteSelection(appContext& ctx);
   void commitNotes(appContext& ctx);
   void requestDelete(appContext& ctx);
   void confirmDelete(appContext& ctx);
@@ -94,7 +87,6 @@ private:
 
   ftxui::Element renderSidebarRow(int row) const;
   ftxui::Element renderCatalogRow(int row);
-  ftxui::Element renderRemoteRow(int row) const;
   ftxui::Element renderHeaderCell(const std::string& name, sortKey key,
                                   int width, ftxui::Box& box,
                                   bool stretches) const;
@@ -120,13 +112,6 @@ private:
   bool editingNotes_ = false;
   std::optional<int> pendingDeleteId_;
 
-  bool remoteDialogOpen_ = false;
-  std::string remoteQuery_;
-  std::vector<remoteSearchResult> remoteResults_;
-  std::vector<std::string> remoteLabels_;
-  int remoteSelected_ = 0;
-  std::string remoteStatus_;
-
   std::vector<sidebarRow> sidebarRows_;
   std::vector<std::string> sidebarLabels_;
   std::vector<std::string> catalogLabels_;
@@ -141,8 +126,6 @@ private:
   ftxui::Component searchInput_;
   ftxui::Component catalogMenu_;
   ftxui::Component notesInput_;
-  ftxui::Component remoteInput_;
-  ftxui::Component remoteMenu_;
   ftxui::Component root_;
 };
 

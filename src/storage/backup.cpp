@@ -1,6 +1,7 @@
 #include "catalist/storage/backup.hpp"
 
 #include <algorithm>
+#include <optional>
 
 #include "catalist/storage/csvCodec.hpp"
 
@@ -37,6 +38,42 @@ std::vector<std::string> listSnapshots(const iFileSystem& fileSystem,
     names.push_back(file.filename().string());
   std::sort(names.rbegin(), names.rend());
   return names;
+}
+
+bool restoreSnapshot(iFileSystem& fileSystem,
+                     const std::filesystem::path& dataDir,
+                     const std::string& snapshotName) {
+  bool isPlainName = snapshotName.find('/') == std::string::npos &&
+                     snapshotName.find("..") == std::string::npos;
+  if (!isPlainName)
+    return false;
+  std::optional<mediaType> kind;
+  if (snapshotName.rfind("anime_", 0) == 0)
+    kind = mediaType::kAnime;
+  else if (snapshotName.rfind("manga_", 0) == 0)
+    kind = mediaType::kManga;
+  if (!kind)
+    return false;
+  auto source = backupDirectory(dataDir) / snapshotName;
+  return fileSystem.exists(source) &&
+         fileSystem.copyFile(source, dataDir / csvCodec::catalogFileName(*kind));
+}
+
+std::vector<std::filesystem::path> exportCatalog(iFileSystem& fileSystem,
+                                                 const iClock& clock,
+                                                 const database& db) {
+  auto directory = db.getConfigPath() / "exports";
+  fileSystem.createDirectories(directory);
+  std::string stamp = formatLocalTime(clock, "%Y%m%d_%H%M%S");
+  std::vector<std::filesystem::path> written;
+  for (auto type : {mediaType::kAnime, mediaType::kManga}) {
+    std::string kind = type == mediaType::kAnime ? "anime" : "manga";
+    auto target = directory / (kind + "_" + stamp + ".csv");
+    if (fileSystem.writeFileAtomic(target,
+                                   csvCodec::encodeEntries(db.getEntries(type))))
+      written.push_back(target);
+  }
+  return written;
 }
 
 }  // namespace catalist::backup

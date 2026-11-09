@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "catalist/platform/fileSystem.hpp"
+#include "catalist/storage/backup.hpp"
 #include "catalist/storage/database.hpp"
 #include "support/testSupport.hpp"
 
@@ -274,4 +275,35 @@ TEST_CASE("database backup snapshot copies the catalogue with a clock stamp") {
   REQUIRE(copy.has_value());
   CHECK(*copy == fs.readFile("/data/anime.csv"));
   CHECK(fs.exists("/data/backups/manga_20261020_120000.csv"));
+}
+
+TEST_CASE("backup restore copies a snapshot back over its catalogue file") {
+  catalist::memoryFileSystem fs;
+  auto clock = catalist::test::makeTestClock();
+  catalist::database db(fs, clock, "/data");
+  db.addEntry(makeEntry().id(1).title("Original"));
+  REQUIRE(db.saveAll());
+  db.createBackupSnapshot();
+  db.addEntry(makeEntry().id(2).title("Added later"));
+  REQUIRE(db.saveAll());
+
+  REQUIRE(catalist::backup::restoreSnapshot(fs, "/data",
+                                            "anime_20261020_120000.csv"));
+  REQUIRE(db.loadAll());
+  CHECK(db.getEntries(mediaType::kAnime).size() == 1);
+  CHECK_FALSE(catalist::backup::restoreSnapshot(fs, "/data", "../anime.csv"));
+  CHECK_FALSE(catalist::backup::restoreSnapshot(fs, "/data", "notes_1.csv"));
+  CHECK_FALSE(catalist::backup::restoreSnapshot(fs, "/data", "anime_missing.csv"));
+}
+
+TEST_CASE("backup exportCatalog writes both catalogues to exports") {
+  catalist::memoryFileSystem fs;
+  auto clock = catalist::test::makeTestClock();
+  catalist::database db(fs, clock, "/data");
+  db.addEntry(makeEntry().id(1).title("Exported"));
+  auto written = catalist::backup::exportCatalog(fs, clock, db);
+  REQUIRE(written.size() == 2);
+  auto anime = fs.readFile("/data/exports/anime_20261020_120000.csv");
+  REQUIRE(anime.has_value());
+  CHECK(anime->find("Exported") != std::string::npos);
 }

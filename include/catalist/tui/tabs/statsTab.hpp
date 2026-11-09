@@ -1,11 +1,13 @@
-#ifndef CATALIST_TUI_TABS_SYNC_TAB_HPP_
-#define CATALIST_TUI_TABS_SYNC_TAB_HPP_
+#ifndef CATALIST_TUI_TABS_STATS_TAB_HPP_
+#define CATALIST_TUI_TABS_STATS_TAB_HPP_
 
 #include "catalist/tui/tab.hpp"
 
 namespace catalist {
 
-class syncTab : public iTab {
+// Totals, status breakdown, recent activity, score histogram and a per-year
+// chart for one media type at a time.
+class statsTab : public iTab {
 public:
   [[nodiscard]] std::string id() const override;
   [[nodiscard]] std::string title() const override;
@@ -16,14 +18,9 @@ public:
   [[nodiscard]] std::vector<hint> hints() const override;
 
 private:
-  enum class panel { kActions, kBackups };
-  void runSelectedAction(appContext& ctx);
-
-  panel activePanel_ = panel::kActions;
-  int actionCursor_ = 0;
-  int backupCursor_ = 0;
+  mediaType media_ = mediaType::kAnime;
 };
 
 }  // namespace catalist
 
-#endif  // CATALIST_TUI_TABS_SYNC_TAB_HPP_
+#endif  // CATALIST_TUI_TABS_STATS_TAB_HPP_

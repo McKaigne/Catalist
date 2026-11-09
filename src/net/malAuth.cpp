@@ -50,16 +50,22 @@ malAuth::malAuth(iFileSystem& fileSystem, iHttpClient& http,
 }
 
 bool malAuth::isAuthenticated() const {
+  std::lock_guard<std::mutex> lock(mutex_);
   return !creds_.accessToken.empty();
 }
 
 void malAuth::logout() {
-  creds_ = malCredentials();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    creds_ = malCredentials();
+  }
   save();
 }
 
+// Access tokens are not refreshed yet; an expired token simply fails the
+// request and the user logs in again.
 std::string malAuth::getAccessToken() const {
-  // TODO: Add refresh token rotation check here before returning
+  std::lock_guard<std::mutex> lock(mutex_);
   return creds_.accessToken;
 }
 
@@ -67,16 +73,22 @@ void malAuth::load() {
   auto content = fileSystem_.readFile(credentialsPath_);
   if (!content)
     return;
+  std::lock_guard<std::mutex> lock(mutex_);
   creds_.accessToken = stringField(*content, "access_token");
   creds_.refreshToken = stringField(*content, "refresh_token");
   creds_.expiresAt = integerField(*content, "expires_at");
 }
 
 void malAuth::save() {
-  std::string content = "{\n  \"access_token\": \"" + creds_.accessToken +
+  malCredentials snapshot;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    snapshot = creds_;
+  }
+  std::string content = "{\n  \"access_token\": \"" + snapshot.accessToken +
                         "\",\n  \"refresh_token\": \"" +
-                        creds_.refreshToken + "\",\n  \"expires_at\": " +
-                        std::to_string(creds_.expiresAt) + "\n}\n";
+                        snapshot.refreshToken + "\",\n  \"expires_at\": " +
+                        std::to_string(snapshot.expiresAt) + "\n}\n";
   if (!fileSystem_.writeFileAtomic(credentialsPath_, content))
     return;
   // Tokens grant account access, so the file must not be world-readable.
@@ -225,13 +237,16 @@ bool malAuth::exchangeToken(const std::string& code,
     return false;
   }
 
-  creds_.accessToken = stringField(json, "access_token");
-  creds_.refreshToken = stringField(json, "refresh_token");
   long long expiresIn = integerField(json, "expires_in");
   auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
                         clock_.now().time_since_epoch())
                         .count();
-  creds_.expiresAt = nowSeconds + expiresIn;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    creds_.accessToken = stringField(json, "access_token");
+    creds_.refreshToken = stringField(json, "refresh_token");
+    creds_.expiresAt = nowSeconds + expiresIn;
+  }
 
   save();
   outMsg = "Successfully authenticated with MyAnimeList.";

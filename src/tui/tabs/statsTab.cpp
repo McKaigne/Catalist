@@ -1,10 +1,13 @@
-#include "catalist/tui/tabs/overviewTab.hpp"
+#include "catalist/tui/tabs/statsTab.hpp"
+
+#include <map>
 
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
 
+#include "catalist/tui/keys.hpp"
 #include "catalist/tui/theme/palettes.hpp"
 #include "catalist/tui/theme/themeRegistry.hpp"
 #include "catalist/tui/widgets/marquee.hpp"
@@ -175,38 +178,115 @@ Element mediaSection(const database& db, mediaType type,
                text("    "), recentActivity(db, type, theme)});
 }
 
+// One horizontal bar per label, scaled to the largest count.
+Element barChart(const std::vector<std::pair<std::string, size_t>>& rows,
+                 Color tint, const themePalette& theme) {
+  const int barWidth = 30;
+  size_t largest = 1;
+  for (const auto& row : rows)
+    largest = std::max(largest, row.second);
+  Elements lines;
+  for (const auto& [label, count] : rows) {
+    int filled = static_cast<int>((count * barWidth) / largest);
+    if (count > 0 && filled == 0)
+      filled = 1;
+    lines.push_back(hbox({text(label) | size(WIDTH, EQUAL, 7) |
+                              color(theme.subtext),
+                          text(std::string(filled, ' ')) | bgcolor(tint),
+                          text(" " + formatCommas(static_cast<long long>(count))) |
+                              color(theme.text)}));
+  }
+  return vbox(std::move(lines));
+}
+
+std::vector<std::pair<std::string, size_t>> scoreHistogram(const database& db,
+                                                           mediaType type) {
+  std::vector<std::pair<std::string, size_t>> rows;
+  for (int score = 10; score >= 1; --score)
+    rows.emplace_back(std::to_string(score) + " ★", db.countByScore(type, score));
+  return rows;
+}
+
+std::vector<std::pair<std::string, size_t>> entriesPerYear(const database& db,
+                                                           mediaType type) {
+  const size_t shownYears = 10;
+  std::map<int, size_t> perYear;
+  size_t undated = 0;
+  for (const auto& e : db.getEntries(type)) {
+    if (e.startDate)
+      perYear[e.startDate->year()]++;
+    else
+      undated++;
+  }
+  std::vector<std::pair<std::string, size_t>> rows;
+  for (auto year = perYear.rbegin();
+       year != perYear.rend() && rows.size() < shownYears; ++year)
+    rows.emplace_back(std::to_string(year->first), year->second);
+  if (undated > 0)
+    rows.emplace_back("none", undated);
+  return rows;
+}
+
+Element chartCard(const std::string& heading, Element chart,
+                  const themePalette& theme) {
+  return vbox({text(" " + heading) | bold | color(theme.lavender), text(""),
+               chart}) |
+         border | color(theme.surface0) | flex;
+}
+
 }  // namespace
 
-std::string overviewTab::id() const {
-  return "overview";
+std::string statsTab::id() const {
+  return "stats";
 }
 
-std::string overviewTab::title() const {
-  return "Overview";
+std::string statsTab::title() const {
+  return "Stats";
 }
 
-std::string overviewTab::icon() const {
+std::string statsTab::icon() const {
   return icon::kStats;
 }
 
-Element overviewTab::render(appContext& ctx) {
+Element statsTab::render(appContext& ctx) {
   const auto& theme = themeRegistry::active();
-  return vbox({text("Statistics") | bold | color(theme.text), text(""),
-               mediaSection(ctx.db, mediaType::kAnime, "Anime Stats",
-                            theme.lavender, theme),
+  bool isAnime = media_ == mediaType::kAnime;
+  auto toggle = hbox({text(" Anime ") | (isAnime ? bold | color(theme.mauve)
+                                                 : color(theme.subtext)),
+                      text("│") | color(theme.surface1),
+                      text(" Manga ") | (isAnime ? color(theme.subtext)
+                                                 : bold | color(theme.mauve))});
+  auto charts =
+      hbox({chartCard("Score Histogram",
+                      barChart(scoreHistogram(ctx.db, media_), theme.yellow, theme),
+                      theme),
+            text(" "),
+            chartCard("Entries per Start Year",
+                      barChart(entriesPerYear(ctx.db, media_), theme.blue, theme),
+                      theme)});
+  return vbox({hbox({text("Statistics") | bold | color(theme.text), filler(),
+                     toggle}),
                text(""),
-               mediaSection(ctx.db, mediaType::kManga, "Manga Stats",
-                            theme.peach, theme),
-               filler()}) |
+               mediaSection(ctx.db, media_,
+                            isAnime ? "Anime Stats" : "Manga Stats",
+                            isAnime ? theme.lavender : theme.peach, theme),
+               text(""), charts, filler()}) |
          size(WIDTH, EQUAL, 102) | center | flex;
 }
 
-bool overviewTab::onEvent(const Event&, appContext&) {
-  return false;
+bool statsTab::onEvent(const Event& event, appContext& ctx) {
+  const auto& keybinds = ctx.config.keybinds;
+  bool toggles = keys::isBound(event, keybinds, keyAction::kToggleMedia) ||
+                 keys::isMoveLeft(event, keybinds) ||
+                 keys::isMoveRight(event, keybinds);
+  if (!toggles)
+    return false;
+  media_ = media_ == mediaType::kAnime ? mediaType::kManga : mediaType::kAnime;
+  return true;
 }
 
-std::vector<hint> overviewTab::hints() const {
-  return {{"Tab", "tabs"}, {":", "cmd"}, {"q", "quit"}};
+std::vector<hint> statsTab::hints() const {
+  return {{"m/h/l", "anime/manga"}, {":", "cmd"}, {"q", "quit"}};
 }
 
 }  // namespace catalist

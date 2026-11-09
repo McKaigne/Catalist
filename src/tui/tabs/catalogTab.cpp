@@ -7,7 +7,6 @@
 #include <ftxui/screen/terminal.hpp>
 
 #include "catalist/core/logger.hpp"
-#include "catalist/model/activity.hpp"
 #include "catalist/model/entryOps.hpp"
 #include "catalist/tui/actions.hpp"
 #include "catalist/tui/keys.hpp"
@@ -184,8 +183,6 @@ void catalogTab::buildComponents() {
     return state.focused ? field | color(theme.peach) : field;
   };
   searchInput_ = Input(&searchQuery_, "Press '/' to search...", inputOption);
-  remoteInput_ =
-      Input(&remoteQuery_, "Search title and press [ret]...", inputOption);
 
   MenuOption catalogOption;
   catalogOption.entries_option.transform = [this](const EntryState& state) {
@@ -193,16 +190,9 @@ void catalogTab::buildComponents() {
   };
   catalogMenu_ = Menu(&catalogLabels_, &catalogSelected_, catalogOption);
 
-  MenuOption remoteOption;
-  remoteOption.entries_option.transform = [this](const EntryState& state) {
-    return renderRemoteRow(labelIndex(state.label));
-  };
-  remoteMenu_ = Menu(&remoteLabels_, &remoteSelected_, remoteOption);
   notesInput_ = Input(&notesBuffer_, "Write notes here...");
 
-  root_ = Container::Horizontal(
-      {sidebarMenu_, catalogMenu_, notesInput_,
-       Container::Vertical({remoteInput_, remoteMenu_})});
+  root_ = Container::Horizontal({sidebarMenu_, catalogMenu_, notesInput_});
 }
 
 void catalogTab::onActivate(appContext& ctx) {
@@ -270,8 +260,8 @@ const entry* catalogTab::selectedEntry() const {
 }
 
 bool catalogTab::capturesInput() const {
-  return pendingDeleteId_.has_value() || remoteDialogOpen_ ||
-         mode_ == appMode::kSch || editingNotes_;
+  return pendingDeleteId_.has_value() || mode_ == appMode::kSch ||
+         editingNotes_;
 }
 
 std::optional<std::string> catalogTab::countBadge(appContext& ctx) const {
@@ -307,8 +297,6 @@ bool catalogTab::onEvent(const Event& event, appContext& ctx) {
     return true;
   if (pendingDeleteId_)
     return handlePendingDelete(event, ctx);
-  if (remoteDialogOpen_)
-    return handleRemoteDialog(event, ctx);
   if (mode_ == appMode::kSch)
     return handleSearchTyping(event, ctx);
   if (editingNotes_)
@@ -366,57 +354,6 @@ bool catalogTab::handlePendingDelete(const Event& event, appContext& ctx) {
     pendingDeleteId_.reset();
     ctx.notices.setStatus("Deletion canceled.");
   }
-  return true;
-}
-
-bool catalogTab::handleRemoteDialog(const Event& event, appContext& ctx) {
-  if (event == Event::Escape) {
-    remoteDialogOpen_ = false;
-    mode_ = appMode::kNor;
-    catalogMenu_->TakeFocus();
-    return true;
-  }
-  if (event == Event::Tab) {
-    if (remoteInput_->Focused())
-      remoteMenu_->TakeFocus();
-    else
-      remoteInput_->TakeFocus();
-    return true;
-  }
-  if (!remoteInput_->Focused())
-    return handleRemoteResults(event, ctx);
-
-  if (keys::isConfirm(event)) {
-    runRemoteSearch(ctx);
-    remoteMenu_->TakeFocus();
-    return true;
-  }
-  if (event == Event::ArrowDown) {
-    remoteMenu_->TakeFocus();
-    return true;
-  }
-  remoteInput_->OnEvent(event);
-  return true;
-}
-
-bool catalogTab::handleRemoteResults(const Event& event, appContext& ctx) {
-  if (!remoteMenu_->Focused())
-    return true;
-  int lastResult = static_cast<int>(remoteResults_.size()) - 1;
-  if (keys::isConfirm(event) && remoteSelected_ >= 0 &&
-      remoteSelected_ <= lastResult) {
-    addRemoteSelection(ctx);
-    return true;
-  }
-  if (keys::isMoveUp(event, ctx.config.keybinds)) {
-    if (remoteSelected_ > 0)
-      remoteSelected_--;
-    else
-      remoteInput_->TakeFocus();
-    return true;
-  }
-  if (keys::isMoveDown(event, ctx.config.keybinds) && remoteSelected_ < lastResult)
-    remoteSelected_++;
   return true;
 }
 
@@ -630,8 +567,7 @@ bool catalogTab::handleEntryCommands(const Event& event, appContext& ctx) {
     return true;
   }
   if (keys::isBound(event, keybinds, keyAction::kAddEntry)) {
-    openRemoteDialog();
-    remoteInput_->TakeFocus();
+    ctx.openTab("search");
     return true;
   }
   if (keys::isBound(event, keybinds, keyAction::kDeleteEntry)) {
@@ -666,12 +602,7 @@ void catalogTab::applyChange(appContext& ctx, const entry& before,
                              const entryChange& change,
                              const std::string& status) {
   entry after = change(before, localDate(ctx.clock));
-  ctx.undo.record({historyAction::kMutate, after.type, before, after});
-  ctx.db.updateEntry(after);
-  ctx.db.logActivity({activityTimestamp(ctx.clock), after.type, after.title,
-                      after.status, after.progress, after.totalUnits,
-                      after.score});
-  ctx.db.saveAll();
+  commitEntryChange(ctx, before, after);
   refresh(ctx);
   if (!status.empty())
     ctx.notices.setStatus(status);
@@ -769,60 +700,6 @@ void catalogTab::startSearch(appContext& ctx) {
   mode_ = appMode::kSch;
   searchInput_->TakeFocus();
   ctx.notices.setStatus("Search title... [ret] Apply  [Esc] Clear");
-}
-
-void catalogTab::openRemoteDialog() {
-  remoteDialogOpen_ = true;
-  mode_ = appMode::kSch;
-  remoteQuery_ = searchQuery_;
-  remoteResults_.clear();
-  remoteLabels_.clear();
-  remoteSelected_ = 0;
-  remoteStatus_.clear();
-}
-
-void catalogTab::runRemoteSearch(appContext& ctx) {
-  if (remoteQuery_.empty())
-    return;
-  std::string err;
-  remoteResults_ =
-      remoteSearchEngine(ctx.http).query(media_, remoteQuery_, err, 10);
-  remoteLabels_.clear();
-  for (size_t i = 0; i < remoteResults_.size(); ++i)
-    remoteLabels_.push_back(std::to_string(i));
-  remoteSelected_ = 0;
-  if (remoteResults_.empty())
-    remoteStatus_ = err.empty() ? "No results found." : err;
-  else
-    remoteStatus_ =
-        std::to_string(remoteResults_.size()) + " matches from MyAnimeList.";
-}
-
-void catalogTab::addRemoteSelection(appContext& ctx) {
-  const auto& picked = remoteResults_[remoteSelected_];
-  isoDate today = localDate(ctx.clock);
-  entry added;
-  added.id = picked.malId;
-  added.malId = picked.malId;
-  added.type = picked.type;
-  added.title = picked.title;
-  added.status = watchStatus::kWatching;
-  added.totalUnits = picked.totalUnits;
-  added.startDate = isoDate::parse(picked.year + "-01-01").value_or(today);
-  added.updatedAt = today;
-  ctx.db.addEntry(added);
-  ctx.undo.record({historyAction::kAdd, added.type, entry{}, added});
-  ctx.db.saveAll();
-  refresh(ctx);
-
-  auto shown = std::find_if(displayed_.begin(), displayed_.end(),
-                            [&](const entry& e) { return e.id == added.id; });
-  if (shown != displayed_.end())
-    catalogSelected_ = static_cast<int>(shown - displayed_.begin());
-  remoteDialogOpen_ = false;
-  mode_ = appMode::kNor;
-  catalogMenu_->TakeFocus();
-  ctx.notices.push("Successfully added '" + added.title + "'.");
 }
 
 void catalogTab::commitNotes(appContext& ctx) {
@@ -986,37 +863,6 @@ Element catalogTab::renderCatalogRow(int row) {
   if (rowActive)
     return line | bgcolor(theme.surface0) | focus;
   return selected ? line | bgcolor(theme.surface0) : line;
-}
-
-Element catalogTab::renderRemoteRow(int row) const {
-  const auto& theme = themeRegistry::active();
-  if (row < 0 || row >= static_cast<int>(remoteResults_.size()))
-    return text("");
-  const auto& result = remoteResults_[row];
-  bool active = row == remoteSelected_;
-  std::string score = result.score > 0.0
-                          ? std::to_string(result.score).substr(0, 4)
-                          : " -  ";
-
-  auto line = hbox(
-      {text(active ? "▌ " : "  ") | color(theme.mauve) | bold,
-       text("[" + std::to_string(row + 1) + "] ") | size(WIDTH, EQUAL, 5) |
-           color(theme.peach) | bold,
-       text(marquee::clip(result.title, 34)) | size(WIDTH, EQUAL, 34) |
-           color(theme.text) | (active ? bold : nothing),
-       text(" "),
-       text(result.year.empty() ? " -  " : result.year) |
-           size(WIDTH, EQUAL, 6) | color(theme.subtext),
-       text(" "),
-       text(result.totalUnits > 0 ? std::to_string(result.totalUnits) + " eps"
-                                  : "ongoing") |
-           size(WIDTH, EQUAL, 9) | color(theme.subtext),
-       text(" "),
-       text("★ " + score) | size(WIDTH, EQUAL, 8) | color(theme.yellow),
-       text(" "),
-       text("MAL " + std::to_string(result.malId)) | size(WIDTH, EQUAL, 10) |
-           color(theme.overlay0)});
-  return active ? line | bgcolor(theme.surface0) | focus : line;
 }
 
 Element catalogTab::renderHeaderCell(const std::string& name, sortKey key,
@@ -1203,37 +1049,6 @@ Element catalogTab::render(appContext& ctx) {
   return hbox({renderSidebarCard(),
                vbox({renderSearchCard(), renderCatalogCard() | flex}) | flex,
                vbox({renderDetails(ctx) | flex}) | size(WIDTH, EQUAL, 42)});
-}
-
-std::optional<Element> catalogTab::overlay(appContext&) {
-  if (!remoteDialogOpen_)
-    return std::nullopt;
-  const auto& theme = themeRegistry::active();
-  Element results =
-      text(" Type query above and press [ret] to query MyAnimeList.") |
-      color(theme.subtext) | center | flex;
-  if (!remoteResults_.empty())
-    results = remoteMenu_->Render() | vscroll_indicator | frame | flex;
-  else if (!remoteStatus_.empty())
-    results = text(" " + remoteStatus_) | color(theme.red) | center | flex;
-
-  return vbox({hbox({text("  󰖟 Online Search & Add ") | bold |
-                         color(theme.mauve),
-                     filler(), text(" [Esc] Close ") | color(theme.subtext)}),
-               text(""),
-               remoteInput_->Render() | border |
-                   color(remoteInput_->Focused() ? theme.peach
-                                                 : theme.surface0),
-               text(""),
-               vbox({results}) | border |
-                   color(remoteMenu_->Focused() ? theme.mauve : theme.surface0) |
-                   size(HEIGHT, EQUAL, 14),
-               text(""),
-               text(" [ret] Add/Search  │  [Tab] Switch Input/Results  │  "
-                    "[j/k] Select  │  [Esc] Close ") |
-                   color(theme.subtext)}) |
-         border | color(theme.mauve) | bgcolor(theme.base) |
-         size(WIDTH, EQUAL, 86) | clear_under | center;
 }
 
 }  // namespace catalist

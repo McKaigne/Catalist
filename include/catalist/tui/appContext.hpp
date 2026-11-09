@@ -1,6 +1,9 @@
 #ifndef CATALIST_TUI_APP_CONTEXT_HPP_
 #define CATALIST_TUI_APP_CONTEXT_HPP_
 
+#include <functional>
+#include <string>
+
 #include "catalist/config/config.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/model/undoStack.hpp"
@@ -10,7 +13,7 @@
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
 #include "catalist/storage/database.hpp"
-#include "catalist/tui/syncRunner.hpp"
+#include "catalist/tui/jobRunner.hpp"
 #include "catalist/tui/widgets/notifier.hpp"
 
 namespace catalist {
@@ -28,7 +31,9 @@ struct appContext {
   iHttpClient& http;
   providerRegistry& providers;
   malAuth& auth;
-  syncRunner& sync;
+  jobRunner& jobs;
+  // Switches the shell to another tab by id (e.g. Catalog 'a' -> Search).
+  std::function<void(const std::string& tabId)> openTab;
 };
 
 void saveConfig(appContext& ctx);

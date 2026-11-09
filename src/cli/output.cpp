@@ -136,6 +136,8 @@ void printUsage() {
       << "  import <file.xml>    Ingest MyAnimeList XML export\n"
       << "  config [list|get|set] Inspect or modify ~/.config/catalist/catalist.kdl\n"
       << "  completion <shell>   Generate shell completion script (bash, zsh, fish)\n"
+      << "  --tab <id>           Open the TUI on a tab (anime, manga, queue,\n"
+      << "                       search, library, history, stats, settings, help)\n"
       << "  --version, -v        Display version info\n"
       << "  --help, -h           Show this message\n\n"
       << "Listing & Filtering Flags:\n"

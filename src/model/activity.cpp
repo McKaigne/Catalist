@@ -1,6 +1,7 @@
 #include "catalist/model/activity.hpp"
 
 #include <array>
+#include <map>
 #include <cstdio>
 
 namespace catalist {
@@ -48,6 +49,22 @@ std::optional<isoDate> activityDay(const activityRecord& record,
   if (auto isoDay = isoDate::parse(record.timestamp.substr(0, 10)))
     return isoDay;
   return legacyDay(record.timestamp, today);
+}
+
+std::vector<historyDay> groupHistoryByDay(
+    const std::vector<activityRecord>& records, const isoDate& today) {
+  std::map<long, historyDay> byDay;
+  for (const auto& record : records) {
+    auto day = activityDay(record, today);
+    if (!day)
+      continue;
+    auto [slot, inserted] = byDay.emplace(day->dayNumber(), historyDay{*day, {}});
+    slot->second.records.push_back(record);
+  }
+  std::vector<historyDay> grouped;
+  for (auto day = byDay.rbegin(); day != byDay.rend(); ++day)
+    grouped.push_back(std::move(day->second));
+  return grouped;
 }
 
 std::string activityTimestamp(const iClock& clock) {

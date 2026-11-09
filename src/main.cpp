@@ -3,7 +3,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <algorithm>
 #include <iostream>
+#include <optional>
+#include <string>
 #include <memory>
 #include <unistd.h>
 
@@ -115,7 +118,23 @@ int main(int argc, char* argv[]) {
     db.saveAll();
   }
 
-  if (argc > 1) {
+  std::optional<std::string> startupTab;
+  bool opensTab = argc > 1 && std::string(argv[1]) == "--tab";
+  if (opensTab) {
+    auto known = catalist::builtInTabIds();
+    bool valid = argc == 3 &&
+                 std::find(known.begin(), known.end(), argv[2]) != known.end();
+    if (!valid) {
+      std::string expected;
+      for (const auto& tabId : known)
+        expected += (expected.empty() ? "" : ", ") + tabId;
+      std::cerr << "error: --tab needs one of: " << expected << "\n";
+      return 2;
+    }
+    startupTab = argv[2];
+  }
+
+  if (argc > 1 && !opensTab) {
     LOG_INFO("Dispatching CLI command: " + std::string(argv[1]));
     catalist::cli::commandContext cliContext{
         db,         config,     clock,
@@ -130,7 +149,7 @@ int main(int argc, char* argv[]) {
                          dataDir / "mal_auth.json");
   catalist::appTui app(db, config,
                        {fileSystem, launcher, clock, *http, providers, auth});
-  app.run();
+  app.run(startupTab);
   LOG_INFO("Catalist session exited cleanly.");
 
   return 0;

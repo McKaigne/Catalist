@@ -41,3 +41,15 @@ TEST_CASE("activityTimestamp writes iso minutes from the clock") {
   auto clock = catalist::test::makeTestClock();
   CHECK(catalist::activityTimestamp(clock) == "2026-10-20 12:00");
 }
+
+TEST_CASE("groupHistoryByDay groups newest day first and skips undated records") {
+  std::vector<activityRecord> records = {
+      stamped("2026-10-19 08:00"), stamped("Oct 20, 09:00 AM"),
+      stamped("2026-10-20 10:00"), stamped("garbage")};
+  auto days = catalist::groupHistoryByDay(records, requireDate("2026-10-20"));
+  REQUIRE(days.size() == 2);
+  CHECK(days[0].day.toString() == "2026-10-20");
+  CHECK(days[0].records.size() == 2);
+  CHECK(days[1].day.toString() == "2026-10-19");
+  CHECK(days[1].records.size() == 1);
+}

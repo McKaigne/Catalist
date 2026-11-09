@@ -3,6 +3,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "catalist/core/clock.hpp"
 #include "catalist/model/entry.hpp"
@@ -26,6 +27,16 @@ struct activityRecord {
                                                  const isoDate& today);
 
 [[nodiscard]] std::string activityTimestamp(const iClock& clock);
+
+struct historyDay {
+  isoDate day;
+  std::vector<activityRecord> records;
+};
+
+// Groups history records by calendar day, newest day first. Records whose
+// timestamp cannot be dated are left out.
+[[nodiscard]] std::vector<historyDay> groupHistoryByDay(
+    const std::vector<activityRecord>& records, const isoDate& today);
 
 }  // namespace catalist
 

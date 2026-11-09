@@ -181,3 +181,54 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted multiline notes") {
         "Line one\nLine \"two\", with comma\n\nafter blank");
   CHECK(entries[1].title == "Next");
 }
+
+TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add keeps user fields and refreshes upstream metadata") {
+  catalist::Database db(tempDir());
+  db.addEntry(makeEntry().id(52991).malId(52991).title("Sousou no Frieren")
+                  .score(8).progress(5).totalUnits(0).notes("mine")
+                  .startDate("2023-09-29"));
+
+  int mergedId = db.addEntry(makeEntry().id(52991).malId(52991)
+                                 .title("Frieren (remote)").score(3)
+                                 .progress(20).totalUnits(28).totalVolumes(4)
+                                 .notes("remote notes").startDate("1999-01-01")
+                                 .remoteId("kitsu", "46474"));
+
+  CHECK(mergedId == 52991);
+  REQUIRE(db.getEntries(MediaType::Anime).size() == 1);
+  auto merged = db.getById(MediaType::Anime, 52991);
+  REQUIRE(merged.has_value());
+  CHECK(merged->score == 8);
+  CHECK(merged->progress == 5);
+  CHECK(merged->notes == "mine");
+  CHECK(merged->startDate == "2023-09-29");
+  CHECK(merged->title == "Sousou no Frieren");
+  CHECK(merged->totalUnits == 28);
+  CHECK(merged->totalVolumes == 4);
+  CHECK(merged->getRemoteId("kitsu") == "46474");
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add backfills empty user fields") {
+  catalist::Database db(tempDir());
+  db.addEntry(makeEntry().id(100).title("Blank"));
+  db.addEntry(makeEntry().id(100).title("Blank").score(7).progress(3)
+                  .notes("filled").finishDate("2024-01-01").anilistId(55));
+
+  auto merged = db.getById(MediaType::Anime, 100);
+  REQUIRE(merged.has_value());
+  CHECK(merged->score == 7);
+  CHECK(merged->progress == 3);
+  CHECK(merged->notes == "filled");
+  CHECK(merged->finishDate == "2024-01-01");
+  CHECK(merged->anilistId == 55);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "addEntry matches an existing entry by mal remote id") {
+  catalist::Database db(tempDir());
+  db.addEntry(makeEntry().id(10001).title("Local").remoteId("mal", "777"));
+  int mergedId = db.addEntry(makeEntry().id(0).title("Remote").totalUnits(12)
+                                 .remoteId("mal", "777"));
+  CHECK(mergedId == 10001);
+  REQUIRE(db.getEntries(MediaType::Anime).size() == 1);
+  CHECK(db.getEntries(MediaType::Anime)[0].totalUnits == 12);
+}

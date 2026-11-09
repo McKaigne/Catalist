@@ -50,14 +50,43 @@ target_link_libraries(catalist PRIVATE
 install(TARGETS catalist DESTINATION bin)
 
 enable_testing()
+
+find_package(doctest CONFIG QUIET)
+if(doctest_FOUND)
+  include(doctest)
+else()
+  include(FetchContent)
+  FetchContent_Declare(
+    doctest
+    GIT_REPOSITORY https://github.com/doctest/doctest.git
+    GIT_TAG v2.4.11
+  )
+  FetchContent_MakeAvailable(doctest)
+  include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
+endif()
+
 add_executable(catalistTests
   tests/testMain.cpp
+  tests/support/testSupport.cpp
+  tests/cliTest.cpp
+  tests/databaseTest.cpp
+  tests/dateTest.cpp
+  tests/loggerTest.cpp
+  tests/malParserTest.cpp
+  tests/providerTest.cpp
+  tests/resultTest.cpp
   ${CATALIST_SOURCES}
 )
 
+target_include_directories(catalistTests PRIVATE tests)
+target_compile_definitions(catalistTests PRIVATE
+  CATALIST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
+)
+
 target_link_libraries(catalistTests PRIVATE
+  doctest::doctest
   ftxui::screen
   ftxui::dom
 )
 
-add_test(NAME unitTests COMMAND catalistTests)
+doctest_discover_tests(catalistTests)

@@ -38,6 +38,7 @@
 
             buildInputs = with pkgs; [
               ftxui
+              doctest
             ];
 
             postInstall = ''
@@ -94,6 +95,7 @@
               pkg-config
               git
               ftxui
+              doctest
               curl
               wl-clipboard
               xclip

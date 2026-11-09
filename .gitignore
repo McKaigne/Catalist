@@ -19,3 +19,6 @@ watchlist.tsv
 
 # Academic Submission Documentation (kept local, hidden from public repo)
 ACADEMIC_DOCUMENTATION.md
+
+# Local agent planning notes (never committed)
+.agent/

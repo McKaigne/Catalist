@@ -94,6 +94,7 @@ void mockHttpClient::setResponse(const std::string& urlPattern,
 }
 
 result<httpResponse> mockHttpClient::execute(const httpRequest& request) {
+  requests_.push_back(request);
   for (const auto& [pattern, resp] : responses_) {
     if (request.url.find(pattern) != std::string::npos) {
       return result<httpResponse>::success(resp);

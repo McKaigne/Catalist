@@ -38,6 +38,7 @@ set(CATALIST_SOURCES
   src/core/jsonLite.cpp
   src/core/logger.cpp
   src/core/shell.cpp
+  src/core/url.cpp
   src/platform/fileSystem.cpp
   src/platform/httpClient.cpp
   src/platform/processLauncher.cpp
@@ -105,11 +106,13 @@ add_executable(catalistTests
   tests/keybindManagerTest.cpp
   tests/dateTest.cpp
   tests/loggerTest.cpp
+  tests/malAuthTest.cpp
   tests/malParserTest.cpp
   tests/providerTest.cpp
   tests/remoteSearchTest.cpp
   tests/resultTest.cpp
   tests/shellTest.cpp
+  tests/urlTest.cpp
   tests/versionTest.cpp
   ${CATALIST_SOURCES}
 )

@@ -2,16 +2,17 @@
 
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
+#include <array>
 #include <chrono>
 #include <optional>
 #include <random>
-#include <regex>
+#include <sstream>
 #include <thread>
 
 #include "catalist/core/jsonLite.hpp"
+#include "catalist/core/url.hpp"
 #include "catalist/database.hpp"
 
 namespace catalist {
@@ -38,11 +39,13 @@ long long integerField(const std::string& json, const char* key) {
 // -----------------------------------------------------------------------------
 
 malAuth::malAuth(iFileSystem& fileSystem, iHttpClient& http,
-                 iProcessLauncher& launcher, const iClock& clock,
+                 iProcessLauncher& launcher,
+                 iAuthCallbackServer& callbackServer, const iClock& clock,
                  std::filesystem::path credentialsPath)
     : fileSystem_(fileSystem),
       http_(http),
       launcher_(launcher),
+      callbackServer_(callbackServer),
       clock_(clock),
       credentialsPath_(std::move(credentialsPath)) {
   load();
@@ -95,73 +98,114 @@ static std::string generateCodeVerifier() {
   return verifier;
 }
 
-static std::string waitForAuthCode() {
-  int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (server_fd < 0)
-    return "";
+namespace {
 
-  int opt = 1;
-  setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+constexpr auto kAuthTimeout = std::chrono::seconds(60);
 
-  struct sockaddr_in address;
+class socketHandle {
+ public:
+  explicit socketHandle(int descriptor) : descriptor_(descriptor) {}
+  ~socketHandle() {
+    if (descriptor_ >= 0)
+      close(descriptor_);
+  }
+  socketHandle(const socketHandle&) = delete;
+  socketHandle& operator=(const socketHandle&) = delete;
+
+  [[nodiscard]] int get() const { return descriptor_; }
+  [[nodiscard]] bool valid() const { return descriptor_ >= 0; }
+
+ private:
+  int descriptor_;
+};
+
+bool bindLoopback(int descriptor, std::uint16_t port) {
+  int reuse = 1;
+  setsockopt(descriptor, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+  sockaddr_in address{};
   address.sin_family = AF_INET;
-  address.sin_addr.s_addr = INADDR_ANY;
-  address.sin_port = htons(8080);
+  address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  address.sin_port = htons(port);
+  auto* generic = reinterpret_cast<sockaddr*>(&address);
+  return bind(descriptor, generic, sizeof(address)) == 0 &&
+         listen(descriptor, 1) == 0;
+}
 
-  if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
-    close(server_fd);
+bool waitReadable(int descriptor, std::chrono::seconds timeout) {
+  fd_set readable;
+  FD_ZERO(&readable);
+  FD_SET(descriptor, &readable);
+  timeval limit{};
+  limit.tv_sec = static_cast<time_t>(timeout.count());
+  return select(descriptor + 1, &readable, nullptr, nullptr, &limit) > 0 &&
+         FD_ISSET(descriptor, &readable);
+}
+
+std::string readRequest(int descriptor) {
+  std::array<char, 2048> buffer{};
+  ssize_t received = read(descriptor, buffer.data(), buffer.size() - 1);
+  if (received <= 0)
     return "";
-  }
+  return std::string(buffer.data(), static_cast<size_t>(received));
+}
 
-  if (listen(server_fd, 1) < 0) {
-    close(server_fd);
-    return "";
-  }
-
-  fd_set readfds;
-  FD_ZERO(&readfds);
-  FD_SET(server_fd, &readfds);
-  struct timeval timeout;
-  timeout.tv_sec =
-      60;  // 60-second timeout to prevent permanently blocking thread
-  timeout.tv_usec = 0;
-
-  int activity = select(server_fd + 1, &readfds, nullptr, nullptr, &timeout);
-  if (activity <= 0 || !FD_ISSET(server_fd, &readfds)) {
-    close(server_fd);
-    return "";
-  }
-
-  int new_socket = accept(server_fd, nullptr, nullptr);
-  if (new_socket < 0) {
-    close(server_fd);
-    return "";
-  }
-
-  char buffer[2048] = {0};
-  if (read(new_socket, buffer, 2047) < 0) { /* ignore */
-  }
-  std::string request(buffer);
-
-  std::string code;
-  std::regex codeRegex(R"(code=([^&\s]+))");
-  std::smatch match;
-  if (std::regex_search(request, match, codeRegex)) {
-    code = match[1].str();
-  }
-
-  std::string response =
+void sendSuccessPage(int descriptor) {
+  const std::string page =
       "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
-      "<html><body style='font-family: sans-serif; text-align: center; margin-top: 10%;'>"
+      "<html><body style='font-family: sans-serif; text-align: center; "
+      "margin-top: 10%;'>"
       "<h2>Authentication Successful!</h2>"
       "<p>You can securely close this tab and return to your terminal.</p>"
       "</body></html>";
-  if (write(new_socket, response.c_str(), response.length()) < 0) { /* ignore */
+  // The browser tab is cosmetic; a failed write does not affect the login.
+  [[maybe_unused]] ssize_t written = write(descriptor, page.data(), page.size());
+}
+
+std::string requestTarget(const std::string& httpRequestText) {
+  size_t lineEnd = httpRequestText.find_first_of("\r\n");
+  std::string requestLine = httpRequestText.substr(0, lineEnd);
+  size_t targetStart = requestLine.find(' ');
+  if (targetStart == std::string::npos)
+    return "";
+  size_t targetEnd = requestLine.find(' ', targetStart + 1);
+  return requestLine.substr(targetStart + 1, targetEnd - targetStart - 1);
+}
+
+}  // namespace
+
+std::optional<std::string> parseAuthCode(const std::string& httpRequestText) {
+  std::string target = requestTarget(httpRequestText);
+  size_t queryStart = target.find('?');
+  if (queryStart == std::string::npos)
+    return std::nullopt;
+
+  std::stringstream query(target.substr(queryStart + 1));
+  std::string parameter;
+  while (std::getline(query, parameter, '&')) {
+    if (parameter.rfind("code=", 0) != 0)
+      continue;
+    auto code = url::decode(parameter.substr(5));
+    if (!code || code->empty())
+      return std::nullopt;
+    return code;
   }
+  return std::nullopt;
+}
 
-  close(new_socket);
-  close(server_fd);
+std::optional<std::string> loopbackAuthServer::waitForCode(
+    std::chrono::seconds timeout) {
+  socketHandle server(socket(AF_INET, SOCK_STREAM, 0));
+  if (!server.valid() || !bindLoopback(server.get(), port_))
+    return std::nullopt;
+  if (!waitReadable(server.get(), timeout))
+    return std::nullopt;
 
+  socketHandle client(accept(server.get(), nullptr, nullptr));
+  if (!client.valid())
+    return std::nullopt;
+
+  auto code = parseAuthCode(readRequest(client.get()));
+  sendSuccessPage(client.get());
   return code;
 }
 
@@ -171,8 +215,9 @@ bool malAuth::exchangeToken(const std::string& code,
   request.url = "https://myanimelist.net/v1/oauth2/token";
   request.method = "POST";
   request.headers["Content-Type"] = "application/x-www-form-urlencoded";
-  request.body = "client_id=" + kMalClientId + "&code=" + code +
-                 "&code_verifier=" + verifier +
+  request.body = "client_id=" + url::encode(kMalClientId) +
+                 "&code=" + url::encode(code) +
+                 "&code_verifier=" + url::encode(verifier) +
                  "&grant_type=authorization_code";
 
   auto response = http_.execute(request);
@@ -204,13 +249,13 @@ bool malAuth::authenticate(std::string& outMsg) {
       "&code_challenge_method=plain";
   launcher_.spawnDetached(browserOpenCommand(authUrl));
 
-  std::string code = waitForAuthCode();
-  if (code.empty()) {
+  auto code = callbackServer_.waitForCode(kAuthTimeout);
+  if (!code) {
     outMsg = "Authentication timed out or failed. Did you close the browser?";
     return false;
   }
 
-  return exchangeToken(code, verifier, outMsg);
+  return exchangeToken(*code, verifier, outMsg);
 }
 
 namespace {

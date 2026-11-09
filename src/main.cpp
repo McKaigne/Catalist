@@ -123,7 +123,8 @@ int main(int argc, char* argv[]) {
   }
 
   LOG_INFO("Launching interactive TUI screen.");
-  catalist::malAuth auth(fileSystem, *http, launcher, clock,
+  catalist::loopbackAuthServer authCallback(8080);
+  catalist::malAuth auth(fileSystem, *http, launcher, authCallback, clock,
                          catalist::database::getConfigDir() / "mal_auth.json");
   catalist::appTui app(db, config,
                        {launcher, clock, *http, providers, auth});

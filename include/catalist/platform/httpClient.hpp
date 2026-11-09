@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "catalist/core/result.hpp"
 
@@ -41,8 +42,13 @@ public:
   void setResponse(const std::string& urlPattern, const httpResponse& response);
   result<httpResponse> execute(const httpRequest& request) override;
 
+  [[nodiscard]] const std::vector<httpRequest>& requests() const {
+    return requests_;
+  }
+
 private:
   std::unordered_map<std::string, httpResponse> responses_;
+  std::vector<httpRequest> requests_;
 };
 
 }  // namespace catalist

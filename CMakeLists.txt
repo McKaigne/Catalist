@@ -17,6 +17,8 @@ endif()
 
 include_directories(include)
 
+set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
+
 set(CATALIST_SOURCES
   src/core/date.cpp
   src/core/logger.cpp
@@ -46,6 +48,8 @@ target_link_libraries(catalist PRIVATE
   ftxui::dom
   ftxui::component
 )
+
+target_compile_options(catalist PRIVATE ${CATALIST_WARNING_FLAGS})
 
 install(TARGETS catalist DESTINATION bin)
 
@@ -95,5 +99,7 @@ target_link_libraries(catalistTests PRIVATE
   ftxui::screen
   ftxui::dom
 )
+
+target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 
 doctest_discover_tests(catalistTests)

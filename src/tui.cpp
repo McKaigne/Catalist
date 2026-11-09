@@ -867,9 +867,10 @@ void AppTui::run() {
 
     int termWidth = Terminal::Size().dimx;
     size_t maxChars = static_cast<size_t>(std::max(16, termWidth - 134));
-    auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                     std::chrono::steady_clock::now().time_since_epoch())
-                     .count();
+    auto nowMs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count());
     if (catalogSelected != lastTrackedSelected) {
       lastTrackedSelected = catalogSelected;
       lastSelectionChangeMs = nowMs;
@@ -2235,10 +2236,10 @@ void AppTui::run() {
     size_t aCount = db_.getEntries(MediaType::Anime).size();
     size_t mCount = db_.getEntries(MediaType::Manga).size();
 
-    auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                     std::chrono::steady_clock::now().time_since_epoch())
-                     .count();
-    size_t marqueeOffset = static_cast<size_t>(nowMs / 250);
+    auto nowMs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count());
 
     auto topBarNode = config_.kdlDoc.getNode("top-bar");
     Elements tabElements;

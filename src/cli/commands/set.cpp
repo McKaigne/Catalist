@@ -11,6 +11,53 @@
 
 namespace catalist::cli {
 
+namespace {
+
+struct progressChange {
+  std::optional<int> absolute;
+  int delta = 0;
+};
+
+bool isCount(const std::string& text) {
+  return !text.empty() && std::all_of(text.begin(), text.end(), ::isdigit);
+}
+
+// "add"/"a" and "sub"/"s"/"dec" step by one, or by the count that follows
+// them ("-p add 3"), which is then consumed.
+int stepCount(const commandArgs& args, size_t& index) {
+  if (index + 1 >= args.size() || !isCount(args[index + 1]))
+    return 1;
+  return std::stoi(args[++index]);
+}
+
+// Parses the value of --progress at args[index]: an absolute count, a signed
+// delta (+N/-N) or a step word. Prints the usage error and returns nullopt
+// on a malformed value.
+std::optional<progressChange> parseProgressArgument(const commandArgs& args,
+                                                    size_t& index,
+                                                    bool jsonMode) {
+  const std::string& value = args[index];
+  if (value == "add" || value == "a")
+    return progressChange{std::nullopt, stepCount(args, index)};
+  if (value == "sub" || value == "s" || value == "dec")
+    return progressChange{std::nullopt, -stepCount(args, index)};
+
+  bool isSigned = !value.empty() && (value.front() == '+' || value.front() == '-');
+  try {
+    if (isSigned)
+      return progressChange{std::nullopt, std::stoi(value)};
+    return progressChange{std::max(0, std::stoi(value)), 0};
+  } catch (...) {
+    emitError("usage",
+              std::string(isSigned ? "invalid delta" : "invalid integer") +
+                  " for '--progress': " + value,
+              jsonMode);
+    return std::nullopt;
+  }
+}
+
+}  // namespace
+
 int runSet(const commandArgs& args, commandContext& ctx) {
   database& db = ctx.db;
   const iClock& clock = ctx.clock;
@@ -42,46 +89,13 @@ int runSet(const commandArgs& args, commandContext& ctx) {
         emitError("usage", "missing value for '--progress'", jsonMode);
         return 2;
       }
-      std::string val = args[i];
-      if (val == "add" || val == "a") {
-        int delta = 1;
-        if (i + 1 < args.size()) {
-          const std::string& next = args[i + 1];
-          if (!next.empty() &&
-              std::all_of(next.begin(), next.end(), ::isdigit)) {
-            delta = std::stoi(next);
-            ++i;
-          }
-        }
-        deltaProgress = delta;
-      } else if (val == "sub" || val == "s" || val == "dec") {
-        int delta = 1;
-        if (i + 1 < args.size()) {
-          const std::string& next = args[i + 1];
-          if (!next.empty() &&
-              std::all_of(next.begin(), next.end(), ::isdigit)) {
-            delta = std::stoi(next);
-            ++i;
-          }
-        }
-        deltaProgress = -delta;
-      } else if (!val.empty() && (val.front() == '+' || val.front() == '-')) {
-        try {
-          deltaProgress = std::stoi(val);
-        } catch (...) {
-          emitError("usage", "invalid delta for '--progress': " + val,
-                    jsonMode);
-          return 2;
-        }
-      } else {
-        try {
-          absoluteProgress = std::max(0, std::stoi(val));
-        } catch (...) {
-          emitError("usage", "invalid integer for '--progress': " + val,
-                    jsonMode);
-          return 2;
-        }
-      }
+      auto change = parseProgressArgument(args, i, jsonMode);
+      if (!change)
+        return 2;
+      if (change->absolute)
+        absoluteProgress = change->absolute;
+      else
+        deltaProgress = change->delta;
     } else if (arg == "--rating" || arg == "-r" || arg == "--score") {
       if (++i >= args.size()) {
         emitError("usage", "missing argument for '--rating'", jsonMode);

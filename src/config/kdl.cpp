@@ -294,130 +294,133 @@ private:
   }
 };
 
-document document::parse(const std::string& content, std::string& outErr) {
-  document doc;
-  tokenizer lexer(content);
+namespace {
 
+using tokenType = tokenizer::tokenType;
+
+value toValue(const tokenizer::token& source) {
+  value converted;
+  if (source.type == tokenType::kString) {
+    converted.valueType = value::type::kString;
+    converted.stringVal = source.text;
+  } else if (source.type == tokenType::kNumber) {
+    converted.valueType = value::type::kNumber;
+    converted.numberVal = source.numberVal;
+    converted.stringVal = source.text;
+  } else if (source.type == tokenType::kIdent) {
+    bool isBoolean = source.text == "true" || source.text == "false";
+    converted.valueType = isBoolean ? value::type::kBoolean : value::type::kString;
+    converted.boolVal = source.text == "true";
+    if (!isBoolean)
+      converted.stringVal = source.text;
+  }
+  return converted;
+}
+
+// Recursive-descent reader over the token stream. Lenient by design: tokens
+// it cannot place are skipped so a typo never discards the whole config.
+class nodeParser {
+public:
+  explicit nodeParser(std::vector<tokenizer::token> tokens)
+      : tokens_(std::move(tokens)) {}
+
+  document parseDocument() {
+    document doc;
+    while (!isAt(tokenType::kEof)) {
+      if (auto parsed = parseNode())
+        doc.rootNodes.push_back(std::move(*parsed));
+    }
+    return doc;
+  }
+
+private:
+  [[nodiscard]] bool hasMore() const { return index_ < tokens_.size(); }
+
+  [[nodiscard]] bool isAt(tokenType type) const {
+    return !hasMore() || tokens_[index_].type == type;
+  }
+
+  [[nodiscard]] bool isSeparator() const {
+    return hasMore() && (tokens_[index_].type == tokenType::kNewline ||
+                         tokens_[index_].type == tokenType::kSemicolon);
+  }
+
+  [[nodiscard]] bool endsNode(tokenType type) const {
+    return type == tokenType::kNewline || type == tokenType::kSemicolon ||
+           type == tokenType::kEof || type == tokenType::kRBrace;
+  }
+
+  [[nodiscard]] bool isPropertyStart() const {
+    return tokens_[index_].type == tokenType::kIdent &&
+           index_ + 1 < tokens_.size() &&
+           tokens_[index_ + 1].type == tokenType::kEquals;
+  }
+
+  std::optional<node> parseNode() {
+    while (isSeparator())
+      index_++;
+    if (isAt(tokenType::kEof) || isAt(tokenType::kRBrace))
+      return std::nullopt;
+    const auto& head = tokens_[index_++];
+    if (head.type != tokenType::kIdent && head.type != tokenType::kString)
+      return std::nullopt;
+
+    node parsed;
+    parsed.name = head.text;
+    while (hasMore() && parseNodeItem(parsed))
+      ;
+    return parsed;
+  }
+
+  // Consumes one argument, property or child block; returns false once the
+  // node is complete.
+  bool parseNodeItem(node& parsed) {
+    const auto& current = tokens_[index_];
+    if (endsNode(current.type)) {
+      index_++;
+      return false;
+    }
+    if (current.type == tokenType::kLBrace) {
+      index_++;
+      parseChildren(parsed);
+      return false;
+    }
+    if (isPropertyStart()) {
+      std::string key = current.text;
+      index_ += 2;
+      if (hasMore())
+        parsed.props[key] = toValue(tokens_[index_++]);
+      return true;
+    }
+    parsed.args.push_back(toValue(current));
+    index_++;
+    return true;
+  }
+
+  void parseChildren(node& parent) {
+    while (!isAt(tokenType::kRBrace) && !isAt(tokenType::kEof)) {
+      if (auto child = parseNode())
+        parent.children.push_back(std::move(*child));
+    }
+    if (hasMore() && tokens_[index_].type == tokenType::kRBrace)
+      index_++;
+  }
+
+  std::vector<tokenizer::token> tokens_;
+  size_t index_ = 0;
+};
+
+}  // namespace
+
+document document::parse(const std::string& content, std::string&) {
+  tokenizer lexer(content);
   std::vector<tokenizer::token> tokens;
-  while (true) {
-    auto tok = lexer.next();
-    tokens.push_back(tok);
-    if (tok.type == tokenizer::tokenType::kEof)
+  for (auto next = lexer.next();; next = lexer.next()) {
+    tokens.push_back(next);
+    if (next.type == tokenType::kEof)
       break;
   }
-
-  size_t idx = 0;
-
-  auto parseNode = [&](auto& self) -> std::optional<node> {
-    while (idx < tokens.size() &&
-           (tokens[idx].type == tokenizer::tokenType::kNewline ||
-            tokens[idx].type == tokenizer::tokenType::kSemicolon)) {
-      idx++;
-    }
-    if (idx >= tokens.size() || tokens[idx].type == tokenizer::tokenType::kEof ||
-        tokens[idx].type == tokenizer::tokenType::kRBrace) {
-      return std::nullopt;
-    }
-
-    if (tokens[idx].type != tokenizer::tokenType::kIdent &&
-        tokens[idx].type != tokenizer::tokenType::kString) {
-      idx++;
-      return std::nullopt;
-    }
-
-    node currentNode;
-    currentNode.name = tokens[idx++].text;
-
-    while (idx < tokens.size()) {
-      auto t = tokens[idx];
-      if (t.type == tokenizer::tokenType::kNewline ||
-          t.type == tokenizer::tokenType::kSemicolon ||
-          t.type == tokenizer::tokenType::kEof ||
-          t.type == tokenizer::tokenType::kRBrace) {
-        idx++;
-        break;
-      }
-
-      if (t.type == tokenizer::tokenType::kLBrace) {
-        idx++;
-        while (idx < tokens.size() &&
-               tokens[idx].type != tokenizer::tokenType::kRBrace &&
-               tokens[idx].type != tokenizer::tokenType::kEof) {
-          auto child = self(self);
-          if (child.has_value()) {
-            currentNode.children.push_back(child.value());
-          }
-        }
-        if (idx < tokens.size() &&
-            tokens[idx].type == tokenizer::tokenType::kRBrace) {
-          idx++;
-        }
-        break;
-      }
-
-      // Check if property: ident = value
-      if (t.type == tokenizer::tokenType::kIdent && idx + 1 < tokens.size() &&
-          tokens[idx + 1].type == tokenizer::tokenType::kEquals) {
-        std::string propKey = t.text;
-        idx += 2;
-        if (idx < tokens.size()) {
-          auto valTok = tokens[idx++];
-          value v;
-          if (valTok.type == tokenizer::tokenType::kString) {
-            v.valueType = value::type::kString;
-            v.stringVal = valTok.text;
-          } else if (valTok.type == tokenizer::tokenType::kNumber) {
-            v.valueType = value::type::kNumber;
-            v.numberVal = valTok.numberVal;
-            v.stringVal = valTok.text;
-          } else if (valTok.type == tokenizer::tokenType::kIdent) {
-            if (valTok.text == "true" || valTok.text == "false") {
-              v.valueType = value::type::kBoolean;
-              v.boolVal = (valTok.text == "true");
-            } else {
-              v.valueType = value::type::kString;
-              v.stringVal = valTok.text;
-            }
-          }
-          currentNode.props[propKey] = v;
-        }
-        continue;
-      }
-
-      // Positional argument
-      value v;
-      if (t.type == tokenizer::tokenType::kString) {
-        v.valueType = value::type::kString;
-        v.stringVal = t.text;
-      } else if (t.type == tokenizer::tokenType::kNumber) {
-        v.valueType = value::type::kNumber;
-        v.numberVal = t.numberVal;
-        v.stringVal = t.text;
-      } else if (t.type == tokenizer::tokenType::kIdent) {
-        if (t.text == "true" || t.text == "false") {
-          v.valueType = value::type::kBoolean;
-          v.boolVal = (t.text == "true");
-        } else {
-          v.valueType = value::type::kString;
-          v.stringVal = t.text;
-        }
-      }
-      currentNode.args.push_back(v);
-      idx++;
-    }
-
-    return currentNode;
-  };
-
-  while (idx < tokens.size() && tokens[idx].type != tokenizer::tokenType::kEof) {
-    auto n = parseNode(parseNode);
-    if (n.has_value()) {
-      doc.rootNodes.push_back(n.value());
-    }
-  }
-
-  (void)outErr;
-  return doc;
+  return nodeParser(std::move(tokens)).parseDocument();
 }
 
 static void serializeNode(std::ostringstream& ss, const node& currentNode,

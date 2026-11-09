@@ -12,6 +12,20 @@
 
 namespace catalist::cli {
 
+namespace {
+
+// Remote APIs cap a page at 25 results; out-of-range values are clamped and
+// non-numbers ignored.
+std::optional<size_t> parseResultLimit(const std::string& raw) {
+  try {
+    return static_cast<size_t>(std::clamp(std::stoi(raw), 1, 25));
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+}  // namespace
+
 using jsonLite::escapeJsonString;
 
 int runSearch(const commandArgs& args, commandContext& ctx) {
@@ -41,12 +55,8 @@ int runSearch(const commandArgs& args, commandContext& ctx) {
       if (++i < args.size())
         type = parseMediaTypeArgument(args[i]).value_or(type);
     } else if (args[i] == "--limit" || args[i] == "-l") {
-      if (++i < args.size()) {
-        try {
-          limit = std::clamp(std::stoi(args[i]), 1, 25);
-        } catch (...) {
-        }
-      }
+      if (++i < args.size())
+        limit = parseResultLimit(args[i]).value_or(limit);
     } else if (queryStr.empty() && args[i].rfind("-", 0) != 0) {
       queryStr = args[i];
     }

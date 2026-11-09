@@ -94,3 +94,90 @@ TEST_CASE_FIXTURE(tempDirFixture, "filterEntries matches title substring case in
   REQUIRE(searched.size() == 1);
   CHECK(searched[0].id == 52991);
 }
+
+namespace {
+
+void loadFixture(catalist::Database& db, MediaType type,
+                 const std::string& name) {
+  REQUIRE(db.loadCsv(type, catalist::test::fixturePath("csv/" + name)));
+}
+
+}  // namespace
+
+TEST_CASE_FIXTURE(tempDirFixture, "csv loads legacy seven column layout") {
+  catalist::Database db(tempDir());
+  loadFixture(db, MediaType::Anime, "legacy7.csv");
+  const auto& entries = db.getEntries(MediaType::Anime);
+  REQUIRE(entries.size() == 2);
+
+  CHECK(entries[0].id == 52991);
+  CHECK(entries[0].malId == 52991);
+  CHECK(entries[0].title == "Sousou no Frieren");
+  CHECK(entries[0].status == WatchStatus::Completed);
+  CHECK(entries[0].score == 10);
+  CHECK(entries[0].progress == 28);
+  CHECK(entries[0].totalUnits == 28);
+  CHECK(entries[0].anilistId == 0);
+  CHECK(entries[0].getRemoteId("mal") == "52991");
+
+  // Characterization: a numeric title is also parsed as the AniList id.
+  CHECK(entries[1].title == "86");
+  CHECK(entries[1].anilistId == 86);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "csv loads offset three layout without type column") {
+  catalist::Database db(tempDir());
+  loadFixture(db, MediaType::Anime, "offset3.csv");
+  const auto& entries = db.getEntries(MediaType::Anime);
+  REQUIRE(entries.size() == 1);
+  const auto& loaded = entries[0];
+  CHECK(loaded.anilistId == 154587);
+  CHECK(loaded.title == "Sousou no Frieren");
+  CHECK(loaded.status == WatchStatus::Completed);
+  CHECK(loaded.rewatched == 1);
+  CHECK(loaded.startDate == "2023-09-29");
+  CHECK(loaded.finishDate == "2024-03-22");
+  CHECK(loaded.notes == "Masterpiece.");
+  CHECK(loaded.updatedAt == "2026-10-17");
+  CHECK(loaded.dirty);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "csv loads current layout with external ids") {
+  catalist::Database db(tempDir());
+  loadFixture(db, MediaType::Manga, "current.csv");
+  const auto& entries = db.getEntries(MediaType::Manga);
+  REQUIRE(entries.size() == 1);
+  const auto& loaded = entries[0];
+  CHECK(loaded.type == MediaType::Manga);
+  CHECK(loaded.title == "Berserk");
+  CHECK(loaded.status == WatchStatus::Watching);
+  CHECK(loaded.progress == 364);
+  CHECK(loaded.volumes == 42);
+  CHECK(loaded.finishDate == "");
+  CHECK_FALSE(loaded.dirty);
+  CHECK(loaded.getRemoteId("kitsu") == "1234");
+  CHECK(loaded.getRemoteId("mal") == "2");
+  CHECK(loaded.getRemoteId("anilist") == "30002");
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
+  catalist::Database db(tempDir());
+  loadFixture(db, MediaType::Anime, "crlf.csv");
+  const auto& entries = db.getEntries(MediaType::Anime);
+  REQUIRE(entries.size() == 1);
+  CHECK(entries[0].title == "Odd Taxi");
+  CHECK(entries[0].notes == "Crlf notes");
+  CHECK(entries[0].updatedAt == "2026-10-17");
+  CHECK(entries[0].remoteIds.size() == 1);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted multiline notes") {
+  catalist::Database db(tempDir());
+  loadFixture(db, MediaType::Anime, "multiline.csv");
+  const auto& entries = db.getEntries(MediaType::Anime);
+  REQUIRE(entries.size() == 2);
+  CHECK(entries[0].title == "Ghost, \"in\" the Shell");
+  CHECK(entries[0].notes ==
+        "Line one\nLine \"two\", with comma\n\nafter blank");
+  CHECK(entries[1].title == "Next");
+}

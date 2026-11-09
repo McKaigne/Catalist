@@ -1,0 +1,6 @@
+#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,dirty,external_ids
+10002,0,0,anime,"Ghost, ""in"" the Shell",Dropped,6,3,0,0,0,0,2020-01-01,,"Line one
+Line ""two"", with comma
+
+after blank",2026-10-18,0,
+10003,0,0,anime,Next,Watching,0,0,0,0,0,0,,,,2026-10-18,0,

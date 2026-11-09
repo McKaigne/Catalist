@@ -70,6 +70,7 @@ add_executable(catalistTests
   tests/support/testSupport.cpp
   tests/support/sampleLibrary.cpp
   tests/cliGoldenTest.cpp
+  tests/cliSetTest.cpp
   tests/cliTest.cpp
   tests/databaseTest.cpp
   tests/dateTest.cpp

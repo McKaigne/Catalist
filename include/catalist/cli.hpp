@@ -10,49 +10,49 @@
 
 namespace catalist {
 
-enum class OutputFormat { Table, Plain, Ids, Csv, Json };
+enum class outputFormat { Table, Plain, Ids, Csv, Json };
 
-struct CliFilterOptions {
-  std::optional<MediaType> type;
-  std::optional<WatchStatus> status;
+struct cliFilterOptions {
+  std::optional<mediaType> type;
+  std::optional<watchStatus> status;
   int minScore = -1;
   int maxScore = -1;
   bool unratedOnly = false;
   std::string year;
   std::string search;
   std::string tag;
-  SortKey sortKey = SortKey::Score;
+  sortKey sortBy = sortKey::Score;
   bool reverseSort = false;
   int limit = -1;
-  OutputFormat format = OutputFormat::Table;
+  outputFormat format = outputFormat::Table;
 };
 
-class CliDispatcher {
+class cliDispatcher {
 public:
-  static int dispatch(int argc, char* argv[], Database& db, AppConfig& config);
+  static int dispatch(int argc, char* argv[], database& db, appConfig& config);
 
   static bool parseRatingSpec(const std::string& spec, int& minScore,
                               int& maxScore, bool& unratedOnly);
-  static std::string formatJsonEntry(const Entry& e);
-  static std::string formatJsonEntries(const std::vector<Entry>& entries);
+  static std::string formatJsonEntry(const entry& e);
+  static std::string formatJsonEntries(const std::vector<entry>& entries);
   static void printUsage();
 
-  static int executeLs(const std::vector<std::string>& args, Database& db,
-                       const AppConfig& config);
-  static int executeCount(const std::vector<std::string>& args, Database& db);
-  static int executeShow(const std::vector<std::string>& args, Database& db);
-  static int executeAdd(const std::vector<std::string>& args, Database& db);
-  static int executeSet(const std::vector<std::string>& args, Database& db);
-  static int executeRm(const std::vector<std::string>& args, Database& db);
-  static int executeRandom(const std::vector<std::string>& args, Database& db);
+  static int executeLs(const std::vector<std::string>& args, database& db,
+                       const appConfig& config);
+  static int executeCount(const std::vector<std::string>& args, database& db);
+  static int executeShow(const std::vector<std::string>& args, database& db);
+  static int executeAdd(const std::vector<std::string>& args, database& db);
+  static int executeSet(const std::vector<std::string>& args, database& db);
+  static int executeRm(const std::vector<std::string>& args, database& db);
+  static int executeRandom(const std::vector<std::string>& args, database& db);
   static int executeStats(const std::vector<std::string>& args,
-                          const Database& db);
+                          const database& db);
   static int executeExport(const std::vector<std::string>& args,
-                           const Database& db);
-  static int executeImport(const std::vector<std::string>& args, Database& db);
-  static int executeSearch(const std::vector<std::string>& args, Database& db);
+                           const database& db);
+  static int executeImport(const std::vector<std::string>& args, database& db);
+  static int executeSearch(const std::vector<std::string>& args, database& db);
   static int executeConfig(const std::vector<std::string>& args,
-                           AppConfig& config);
+                           appConfig& config);
   static int executeCompletion(const std::vector<std::string>& args);
 };
 

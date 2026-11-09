@@ -7,24 +7,24 @@
 
 namespace catalist::kdl {
 
-std::string Value::asString() const {
-  if (type == Type::String)
+std::string value::asString() const {
+  if (valueType == type::String)
     return stringVal;
-  if (type == Type::Number) {
+  if (valueType == type::Number) {
     if (numberVal == static_cast<long long>(numberVal)) {
       return std::to_string(static_cast<long long>(numberVal));
     }
     return std::to_string(numberVal);
   }
-  if (type == Type::Boolean)
+  if (valueType == type::Boolean)
     return boolVal ? "true" : "false";
   return "";
 }
 
-int Value::asInt(int defaultVal) const {
-  if (type == Type::Number)
+int value::asInt(int defaultVal) const {
+  if (valueType == type::Number)
     return static_cast<int>(numberVal);
-  if (type == Type::String) {
+  if (valueType == type::String) {
     try {
       return std::stoi(stringVal);
     } catch (...) {
@@ -33,10 +33,10 @@ int Value::asInt(int defaultVal) const {
   return defaultVal;
 }
 
-double Value::asDouble(double defaultVal) const {
-  if (type == Type::Number)
+double value::asDouble(double defaultVal) const {
+  if (valueType == type::Number)
     return numberVal;
-  if (type == Type::String) {
+  if (valueType == type::String) {
     try {
       return std::stod(stringVal);
     } catch (...) {
@@ -45,10 +45,10 @@ double Value::asDouble(double defaultVal) const {
   return defaultVal;
 }
 
-bool Value::asBool(bool defaultVal) const {
-  if (type == Type::Boolean)
+bool value::asBool(bool defaultVal) const {
+  if (valueType == type::Boolean)
     return boolVal;
-  if (type == Type::String) {
+  if (valueType == type::String) {
     std::string s = stringVal;
     std::transform(s.begin(), s.end(), s.begin(), ::tolower);
     if (s == "true" || s == "1" || s == "yes")
@@ -59,18 +59,18 @@ bool Value::asBool(bool defaultVal) const {
   return defaultVal;
 }
 
-bool Node::hasProp(const std::string& key) const {
+bool node::hasProp(const std::string& key) const {
   return props.find(key) != props.end();
 }
 
-Value Node::getProp(const std::string& key, const Value& defaultVal) const {
+value node::getProp(const std::string& key, const value& defaultVal) const {
   auto it = props.find(key);
   if (it != props.end())
     return it->second;
   return defaultVal;
 }
 
-std::string Node::getPropString(const std::string& key,
+std::string node::getPropString(const std::string& key,
                                 const std::string& defaultVal) const {
   auto it = props.find(key);
   if (it != props.end())
@@ -78,35 +78,35 @@ std::string Node::getPropString(const std::string& key,
   return defaultVal;
 }
 
-int Node::getPropInt(const std::string& key, int defaultVal) const {
+int node::getPropInt(const std::string& key, int defaultVal) const {
   auto it = props.find(key);
   if (it != props.end())
     return it->second.asInt(defaultVal);
   return defaultVal;
 }
 
-bool Node::getPropBool(const std::string& key, bool defaultVal) const {
+bool node::getPropBool(const std::string& key, bool defaultVal) const {
   auto it = props.find(key);
   if (it != props.end())
     return it->second.asBool(defaultVal);
   return defaultVal;
 }
 
-Value Node::getArg(size_t index, const Value& defaultVal) const {
+value node::getArg(size_t index, const value& defaultVal) const {
   if (index < args.size())
     return args[index];
   return defaultVal;
 }
 
-std::string Node::getArgString(size_t index,
+std::string node::getArgString(size_t index,
                                const std::string& defaultVal) const {
   if (index < args.size())
     return args[index].asString();
   return defaultVal;
 }
 
-std::vector<Node> Node::getChildren(const std::string& childName) const {
-  std::vector<Node> res;
+std::vector<node> node::getChildren(const std::string& childName) const {
+  std::vector<node> res;
   for (const auto& child : children) {
     if (child.name == childName)
       res.push_back(child);
@@ -114,7 +114,7 @@ std::vector<Node> Node::getChildren(const std::string& childName) const {
   return res;
 }
 
-std::optional<Node> Node::getChild(const std::string& childName) const {
+std::optional<node> node::getChild(const std::string& childName) const {
   for (const auto& child : children) {
     if (child.name == childName)
       return child;
@@ -122,8 +122,8 @@ std::optional<Node> Node::getChild(const std::string& childName) const {
   return std::nullopt;
 }
 
-std::vector<Node> Document::getNodes(const std::string& name) const {
-  std::vector<Node> res;
+std::vector<node> document::getNodes(const std::string& name) const {
+  std::vector<node> res;
   for (const auto& n : rootNodes) {
     if (n.name == name)
       res.push_back(n);
@@ -131,7 +131,7 @@ std::vector<Node> Document::getNodes(const std::string& name) const {
   return res;
 }
 
-std::optional<Node> Document::getNode(const std::string& name) const {
+std::optional<node> document::getNode(const std::string& name) const {
   for (const auto& n : rootNodes) {
     if (n.name == name)
       return n;
@@ -139,11 +139,11 @@ std::optional<Node> Document::getNode(const std::string& name) const {
   return std::nullopt;
 }
 
-class Tokenizer {
+class tokenizer {
 public:
-  explicit Tokenizer(std::string src) : src_(std::move(src)), pos_(0) {}
+  explicit tokenizer(std::string src) : src_(std::move(src)), pos_(0) {}
 
-  enum class TokenType {
+  enum class tokenType {
     Ident,
     String,
     Number,
@@ -155,39 +155,39 @@ public:
     Eof
   };
 
-  struct Token {
-    TokenType type = TokenType::Eof;
+  struct token {
+    tokenType type = tokenType::Eof;
     std::string text;
     double numberVal = 0.0;
   };
 
-  Token next() {
+  token next() {
     skipWhitespaceAndComments();
     if (pos_ >= src_.size())
-      return {TokenType::Eof, "", 0.0};
+      return {tokenType::Eof, "", 0.0};
 
     char c = src_[pos_];
 
     if (c == '\n' || c == '\r') {
       while (pos_ < src_.size() && (src_[pos_] == '\n' || src_[pos_] == '\r'))
         pos_++;
-      return {TokenType::Newline, "\n", 0.0};
+      return {tokenType::Newline, "\n", 0.0};
     }
     if (c == ';') {
       pos_++;
-      return {TokenType::Semicolon, ";", 0.0};
+      return {tokenType::Semicolon, ";", 0.0};
     }
     if (c == '=') {
       pos_++;
-      return {TokenType::Equals, "=", 0.0};
+      return {tokenType::Equals, "=", 0.0};
     }
     if (c == '{') {
       pos_++;
-      return {TokenType::LBrace, "{", 0.0};
+      return {tokenType::LBrace, "{", 0.0};
     }
     if (c == '}') {
       pos_++;
-      return {TokenType::RBrace, "}", 0.0};
+      return {tokenType::RBrace, "}", 0.0};
     }
 
     if (c == '"')
@@ -234,7 +234,7 @@ private:
     }
   }
 
-  Token parseString() {
+  token parseString() {
     pos_++;  // skip initial '"'
     std::string s;
     while (pos_ < src_.size()) {
@@ -259,10 +259,10 @@ private:
         s += c;
       }
     }
-    return {TokenType::String, s, 0.0};
+    return {tokenType::String, s, 0.0};
   }
 
-  Token parseNumber() {
+  token parseNumber() {
     size_t start = pos_;
     if (src_[pos_] == '-')
       pos_++;
@@ -277,10 +277,10 @@ private:
       val = std::stod(str);
     } catch (...) {
     }
-    return {TokenType::Number, str, val};
+    return {tokenType::Number, str, val};
   }
 
-  Token parseIdent() {
+  token parseIdent() {
     size_t start = pos_;
     while (pos_ < src_.size()) {
       char c = src_[pos_];
@@ -290,126 +290,126 @@ private:
       }
       pos_++;
     }
-    return {TokenType::Ident, src_.substr(start, pos_ - start), 0.0};
+    return {tokenType::Ident, src_.substr(start, pos_ - start), 0.0};
   }
 };
 
-Document Document::parse(const std::string& content, std::string& outErr) {
-  Document doc;
-  Tokenizer tokenizer(content);
+document document::parse(const std::string& content, std::string& outErr) {
+  document doc;
+  tokenizer lexer(content);
 
-  std::vector<Tokenizer::Token> tokens;
+  std::vector<tokenizer::token> tokens;
   while (true) {
-    auto tok = tokenizer.next();
+    auto tok = lexer.next();
     tokens.push_back(tok);
-    if (tok.type == Tokenizer::TokenType::Eof)
+    if (tok.type == tokenizer::tokenType::Eof)
       break;
   }
 
   size_t idx = 0;
 
-  auto parseNode = [&](auto& self) -> std::optional<Node> {
+  auto parseNode = [&](auto& self) -> std::optional<node> {
     while (idx < tokens.size() &&
-           (tokens[idx].type == Tokenizer::TokenType::Newline ||
-            tokens[idx].type == Tokenizer::TokenType::Semicolon)) {
+           (tokens[idx].type == tokenizer::tokenType::Newline ||
+            tokens[idx].type == tokenizer::tokenType::Semicolon)) {
       idx++;
     }
-    if (idx >= tokens.size() || tokens[idx].type == Tokenizer::TokenType::Eof ||
-        tokens[idx].type == Tokenizer::TokenType::RBrace) {
+    if (idx >= tokens.size() || tokens[idx].type == tokenizer::tokenType::Eof ||
+        tokens[idx].type == tokenizer::tokenType::RBrace) {
       return std::nullopt;
     }
 
-    if (tokens[idx].type != Tokenizer::TokenType::Ident &&
-        tokens[idx].type != Tokenizer::TokenType::String) {
+    if (tokens[idx].type != tokenizer::tokenType::Ident &&
+        tokens[idx].type != tokenizer::tokenType::String) {
       idx++;
       return std::nullopt;
     }
 
-    Node node;
-    node.name = tokens[idx++].text;
+    node currentNode;
+    currentNode.name = tokens[idx++].text;
 
     while (idx < tokens.size()) {
       auto t = tokens[idx];
-      if (t.type == Tokenizer::TokenType::Newline ||
-          t.type == Tokenizer::TokenType::Semicolon ||
-          t.type == Tokenizer::TokenType::Eof ||
-          t.type == Tokenizer::TokenType::RBrace) {
+      if (t.type == tokenizer::tokenType::Newline ||
+          t.type == tokenizer::tokenType::Semicolon ||
+          t.type == tokenizer::tokenType::Eof ||
+          t.type == tokenizer::tokenType::RBrace) {
         idx++;
         break;
       }
 
-      if (t.type == Tokenizer::TokenType::LBrace) {
+      if (t.type == tokenizer::tokenType::LBrace) {
         idx++;
         while (idx < tokens.size() &&
-               tokens[idx].type != Tokenizer::TokenType::RBrace &&
-               tokens[idx].type != Tokenizer::TokenType::Eof) {
+               tokens[idx].type != tokenizer::tokenType::RBrace &&
+               tokens[idx].type != tokenizer::tokenType::Eof) {
           auto child = self(self);
           if (child.has_value()) {
-            node.children.push_back(child.value());
+            currentNode.children.push_back(child.value());
           }
         }
         if (idx < tokens.size() &&
-            tokens[idx].type == Tokenizer::TokenType::RBrace) {
+            tokens[idx].type == tokenizer::tokenType::RBrace) {
           idx++;
         }
         break;
       }
 
       // Check if property: ident = value
-      if (t.type == Tokenizer::TokenType::Ident && idx + 1 < tokens.size() &&
-          tokens[idx + 1].type == Tokenizer::TokenType::Equals) {
+      if (t.type == tokenizer::tokenType::Ident && idx + 1 < tokens.size() &&
+          tokens[idx + 1].type == tokenizer::tokenType::Equals) {
         std::string propKey = t.text;
         idx += 2;
         if (idx < tokens.size()) {
           auto valTok = tokens[idx++];
-          Value v;
-          if (valTok.type == Tokenizer::TokenType::String) {
-            v.type = Value::Type::String;
+          value v;
+          if (valTok.type == tokenizer::tokenType::String) {
+            v.valueType = value::type::String;
             v.stringVal = valTok.text;
-          } else if (valTok.type == Tokenizer::TokenType::Number) {
-            v.type = Value::Type::Number;
+          } else if (valTok.type == tokenizer::tokenType::Number) {
+            v.valueType = value::type::Number;
             v.numberVal = valTok.numberVal;
             v.stringVal = valTok.text;
-          } else if (valTok.type == Tokenizer::TokenType::Ident) {
+          } else if (valTok.type == tokenizer::tokenType::Ident) {
             if (valTok.text == "true" || valTok.text == "false") {
-              v.type = Value::Type::Boolean;
+              v.valueType = value::type::Boolean;
               v.boolVal = (valTok.text == "true");
             } else {
-              v.type = Value::Type::String;
+              v.valueType = value::type::String;
               v.stringVal = valTok.text;
             }
           }
-          node.props[propKey] = v;
+          currentNode.props[propKey] = v;
         }
         continue;
       }
 
       // Positional argument
-      Value v;
-      if (t.type == Tokenizer::TokenType::String) {
-        v.type = Value::Type::String;
+      value v;
+      if (t.type == tokenizer::tokenType::String) {
+        v.valueType = value::type::String;
         v.stringVal = t.text;
-      } else if (t.type == Tokenizer::TokenType::Number) {
-        v.type = Value::Type::Number;
+      } else if (t.type == tokenizer::tokenType::Number) {
+        v.valueType = value::type::Number;
         v.numberVal = t.numberVal;
         v.stringVal = t.text;
-      } else if (t.type == Tokenizer::TokenType::Ident) {
+      } else if (t.type == tokenizer::tokenType::Ident) {
         if (t.text == "true" || t.text == "false") {
-          v.type = Value::Type::Boolean;
+          v.valueType = value::type::Boolean;
           v.boolVal = (t.text == "true");
         } else {
-          v.type = Value::Type::String;
+          v.valueType = value::type::String;
           v.stringVal = t.text;
         }
       }
-      node.args.push_back(v);
+      currentNode.args.push_back(v);
       idx++;
     }
 
-    return node;
+    return currentNode;
   };
 
-  while (idx < tokens.size() && tokens[idx].type != Tokenizer::TokenType::Eof) {
+  while (idx < tokens.size() && tokens[idx].type != tokenizer::tokenType::Eof) {
     auto n = parseNode(parseNode);
     if (n.has_value()) {
       doc.rootNodes.push_back(n.value());
@@ -420,34 +420,34 @@ Document Document::parse(const std::string& content, std::string& outErr) {
   return doc;
 }
 
-static void serializeNode(std::ostringstream& ss, const Node& node,
+static void serializeNode(std::ostringstream& ss, const node& currentNode,
                           int indent) {
   std::string ind(indent * 4, ' ');
-  ss << ind << node.name;
+  ss << ind << currentNode.name;
 
-  for (const auto& arg : node.args) {
+  for (const auto& arg : currentNode.args) {
     ss << " ";
-    if (arg.type == Value::Type::String)
+    if (arg.valueType == value::type::String)
       ss << "\"" << arg.stringVal << "\"";
-    else if (arg.type == Value::Type::Boolean)
+    else if (arg.valueType == value::type::Boolean)
       ss << (arg.boolVal ? "true" : "false");
     else
       ss << arg.asString();
   }
 
-  for (const auto& [k, v] : node.props) {
+  for (const auto& [k, v] : currentNode.props) {
     ss << " " << k << "=";
-    if (v.type == Value::Type::String)
+    if (v.valueType == value::type::String)
       ss << "\"" << v.stringVal << "\"";
-    else if (v.type == Value::Type::Boolean)
+    else if (v.valueType == value::type::Boolean)
       ss << (v.boolVal ? "true" : "false");
     else
       ss << v.asString();
   }
 
-  if (!node.children.empty()) {
+  if (!currentNode.children.empty()) {
     ss << " {\n";
-    for (const auto& child : node.children) {
+    for (const auto& child : currentNode.children) {
       serializeNode(ss, child, indent + 1);
     }
     ss << ind << "}\n";
@@ -456,7 +456,7 @@ static void serializeNode(std::ostringstream& ss, const Node& node,
   }
 }
 
-std::string Document::serialize(int indent) const {
+std::string document::serialize(int indent) const {
   std::ostringstream ss;
   for (const auto& n : rootNodes) {
     serializeNode(ss, n, indent);

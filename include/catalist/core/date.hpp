@@ -7,15 +7,15 @@
 
 namespace catalist {
 
-class IsoDate {
+class isoDate {
 public:
-  static std::optional<IsoDate> parse(std::string_view dateStr);
-  static IsoDate today();
+  static std::optional<isoDate> parse(std::string_view dateStr);
+  static isoDate today();
 
-  static std::optional<IsoDate> Parse(std::string_view dateStr) {
+  static std::optional<isoDate> Parse(std::string_view dateStr) {
     return parse(dateStr);
   }
-  static IsoDate Today() { return today(); }
+  static isoDate Today() { return today(); }
 
   [[nodiscard]] std::string toString() const;
   [[nodiscard]] std::string ToString() const { return toString(); }
@@ -30,20 +30,20 @@ public:
   [[nodiscard]] int Day() const { return day(); }
   [[nodiscard]] bool IsEmpty() const { return isEmpty(); }
 
-  bool operator==(const IsoDate& other) const {
+  bool operator==(const isoDate& other) const {
     return year_ == other.year_ && month_ == other.month_ && day_ == other.day_;
   }
-  bool operator!=(const IsoDate& other) const { return !(*this == other); }
-  bool operator<(const IsoDate& other) const {
+  bool operator!=(const isoDate& other) const { return !(*this == other); }
+  bool operator<(const isoDate& other) const {
     if (year_ != other.year_)
       return year_ < other.year_;
     if (month_ != other.month_)
       return month_ < other.month_;
     return day_ < other.day_;
   }
-  bool operator<=(const IsoDate& other) const { return !(other < *this); }
-  bool operator>(const IsoDate& other) const { return other < *this; }
-  bool operator>=(const IsoDate& other) const { return !(*this < other); }
+  bool operator<=(const isoDate& other) const { return !(other < *this); }
+  bool operator>(const isoDate& other) const { return other < *this; }
+  bool operator>=(const isoDate& other) const { return !(*this < other); }
 
 private:
   int year_ = 0;

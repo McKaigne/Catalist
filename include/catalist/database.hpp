@@ -11,60 +11,60 @@
 
 namespace catalist {
 
-enum class SortKey { Score, Status, Title, Progress, Date, Id };
+enum class sortKey { Score, Status, Title, Progress, Date, Id };
 
-struct ActivityRecord {
+struct activityRecord {
   std::string timestamp;
-  MediaType type = MediaType::Anime;
+  mediaType type = mediaType::Anime;
   std::string title;
-  WatchStatus status = WatchStatus::Watching;
+  watchStatus status = watchStatus::Watching;
   int progress = 0;
   int totalUnits = 0;
   int score = 0;
 };
 
-class Database {
+class database {
  public:
-  Database();
-  explicit Database(std::filesystem::path configDir);
+  database();
+  explicit database(std::filesystem::path configDir);
 
-  int addEntry(Entry entry);
-  const std::vector<Entry>& getEntries(MediaType type) const;
-  std::optional<Entry> getById(MediaType type, int id) const;
-  bool updateEntry(const Entry& entry);
-  bool removeEntry(MediaType type, int id);
-  bool changeMediaType(MediaType currentType, int id);
-  void clear(MediaType type);
-  static void sortEntries(std::vector<Entry>& v, SortKey key, bool reverse);
+  int addEntry(entry mediaEntry);
+  const std::vector<entry>& getEntries(mediaType type) const;
+  std::optional<entry> getById(mediaType type, int id) const;
+  bool updateEntry(const entry& mediaEntry);
+  bool removeEntry(mediaType type, int id);
+  bool changeMediaType(mediaType currentType, int id);
+  void clear(mediaType type);
+  static void sortEntries(std::vector<entry>& v, sortKey key, bool reverse);
 
-  std::vector<Entry> filterEntries(MediaType type,
-                                   std::optional<WatchStatus> status,
+  std::vector<entry> filterEntries(mediaType type,
+                                   std::optional<watchStatus> status,
                                    int scoreFilter, const std::string& query,
-                                   SortKey sortKey, bool reverse) const;
+                                   sortKey sortBy, bool reverse) const;
 
-  size_t countByStatus(MediaType type, WatchStatus status) const;
-  size_t countByScore(MediaType type, int score) const;
-  double averageScore(MediaType type) const;
-  int totalProgress(MediaType type) const;
-  int totalVolumes(MediaType type) const;
-  int totalRewatched(MediaType type) const;
-  double daysSpent(MediaType type) const;
-  double completedPercentage(MediaType type) const;
+  size_t countByStatus(mediaType type, watchStatus status) const;
+  size_t countByScore(mediaType type, int score) const;
+  double averageScore(mediaType type) const;
+  int totalProgress(mediaType type) const;
+  int totalVolumes(mediaType type) const;
+  int totalRewatched(mediaType type) const;
+  double daysSpent(mediaType type) const;
+  double completedPercentage(mediaType type) const;
 
   static std::filesystem::path getDefaultConfigDir();
   static std::filesystem::path getConfigDir();
   std::filesystem::path getConfigPath() const;
-  std::filesystem::path getCsvPath(MediaType type) const;
+  std::filesystem::path getCsvPath(mediaType type) const;
   std::filesystem::path getHistoryPath() const;
   std::filesystem::path getBackupDir() const;
 
   bool loadAll();
   bool saveAll() const;
-  bool loadCsv(MediaType type, const std::filesystem::path& path);
-  bool saveCsv(MediaType type, const std::filesystem::path& path) const;
+  bool loadCsv(mediaType type, const std::filesystem::path& path);
+  bool saveCsv(mediaType type, const std::filesystem::path& path) const;
 
-  void logActivity(const ActivityRecord& record);
-  std::vector<ActivityRecord> getRecentActivity(MediaType type,
+  void logActivity(const activityRecord& record);
+  std::vector<activityRecord> getRecentActivity(mediaType type,
                                                 size_t limit = 3) const;
   bool loadHistory();
   bool saveHistory() const;
@@ -76,13 +76,13 @@ class Database {
  private:
   std::filesystem::path configDir_;
   mutable std::recursive_mutex mutex_;
-  std::vector<Entry> animeEntries_;
-  std::vector<Entry> mangaEntries_;
-  std::vector<ActivityRecord> historyRecords_;
+  std::vector<entry> animeEntries_;
+  std::vector<entry> mangaEntries_;
+  std::vector<activityRecord> historyRecords_;
   int nextLocalId_ = 10001;
 
-  std::vector<Entry>& getList(MediaType type);
-  const std::vector<Entry>& getList(MediaType type) const;
+  std::vector<entry>& getList(mediaType type);
+  const std::vector<entry>& getList(mediaType type) const;
 };
 
 }  // namespace catalist

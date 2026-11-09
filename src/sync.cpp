@@ -22,7 +22,7 @@ const std::string MAL_CLIENT_ID =
     "6114d00ca681b7701d1e15fe11a4987e";  // Standard open-source fallback client
                                          // ID
 
-struct PipeDeleter {
+struct pipeDeleter {
   void operator()(FILE* f) const {
     if (f)
       pclose(f);
@@ -31,15 +31,15 @@ struct PipeDeleter {
 
 static std::string execCommand(const std::string& cmd) {
   std::array<char, 256> buffer;
-  std::string result;
-  std::unique_ptr<FILE, PipeDeleter> pipe(popen(cmd.c_str(), "r"));
+  std::string commandOutput;
+  std::unique_ptr<FILE, pipeDeleter> pipe(popen(cmd.c_str(), "r"));
   if (!pipe)
     return "";
   while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) !=
          nullptr) {
-    result += buffer.data();
+    commandOutput += buffer.data();
   }
-  return result;
+  return commandOutput;
 }
 
 static std::string extractJsonString(const std::string& block,
@@ -91,31 +91,31 @@ static long long extractJsonNumber(const std::string& block,
 // OAuth 2.0 PKCE & Loopback Server Implementation
 // -----------------------------------------------------------------------------
 
-MalAuth& MalAuth::getInstance() {
-  static MalAuth instance;
+malAuth& malAuth::getInstance() {
+  static malAuth instance;
   return instance;
 }
 
-MalAuth::MalAuth() {
+malAuth::malAuth() {
   load();
 }
 
-bool MalAuth::isAuthenticated() const {
+bool malAuth::isAuthenticated() const {
   return !creds_.accessToken.empty();
 }
 
-void MalAuth::logout() {
-  creds_ = MalCredentials();
+void malAuth::logout() {
+  creds_ = malCredentials();
   save();
 }
 
-std::string MalAuth::getAccessToken() {
+std::string malAuth::getAccessToken() {
   // TODO: Add refresh token rotation check here before returning
   return creds_.accessToken;
 }
 
-void MalAuth::load() {
-  auto path = Database::getConfigDir() / "mal_auth.json";
+void malAuth::load() {
+  auto path = database::getConfigDir() / "mal_auth.json";
   std::ifstream file(path);
   if (!file.is_open())
     return;
@@ -126,8 +126,8 @@ void MalAuth::load() {
   creds_.expiresAt = extractJsonNumber(content, "expires_at");
 }
 
-void MalAuth::save() {
-  auto path = Database::getConfigDir() / "mal_auth.json";
+void malAuth::save() {
+  auto path = database::getConfigDir() / "mal_auth.json";
   std::ofstream file(path);
   if (file.is_open()) {
     file << "{\n"
@@ -224,7 +224,7 @@ static std::string waitForAuthCode() {
   return code;
 }
 
-bool MalAuth::exchangeToken(const std::string& code,
+bool malAuth::exchangeToken(const std::string& code,
                             const std::string& verifier, std::string& outMsg) {
   std::string cmd =
       "curl -s -X POST \"https://myanimelist.net/v1/oauth2/token\" "
@@ -252,7 +252,7 @@ bool MalAuth::exchangeToken(const std::string& code,
   return true;
 }
 
-bool MalAuth::authenticate(std::string& outMsg) {
+bool malAuth::authenticate(std::string& outMsg) {
   std::string verifier = generateCodeVerifier();
   std::string authUrl =
       "https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=" +
@@ -280,10 +280,10 @@ bool MalAuth::authenticate(std::string& outMsg) {
   return exchangeToken(code, verifier, outMsg);
 }
 
-size_t MetadataSync::syncOngoing(Database& db, std::string& outMsg) {
+size_t metadataSync::syncOngoing(database& db, std::string& outMsg) {
   size_t updated = 0;
 
-  for (auto e : db.getEntries(MediaType::Anime)) {
+  for (auto e : db.getEntries(mediaType::Anime)) {
     if (e.totalUnits == 0 && e.malId > 0) {
       std::string cmd = "curl -s -m 3 \"https://api.jikan.moe/v4/anime/" +
                         std::to_string(e.malId) + "\" 2>/dev/null";

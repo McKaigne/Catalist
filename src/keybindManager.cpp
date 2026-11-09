@@ -4,124 +4,124 @@
 
 namespace catalist {
 
-KeybindManager::KeybindManager() {
+keybindManager::keybindManager() {
   loadDefaults();
 }
 
-void KeybindManager::loadDefaults() {
-  primaryBindings_[KeyAction::MoveUp] = "k";
-  primaryBindings_[KeyAction::MoveDown] = "j";
-  primaryBindings_[KeyAction::JumpTop] = "g";
-  primaryBindings_[KeyAction::JumpBottom] = "G";
-  primaryBindings_[KeyAction::FocusLeft] = "h";
-  primaryBindings_[KeyAction::FocusRight] = "l";
-  primaryBindings_[KeyAction::CyclePaneNext] = "Tab";
-  primaryBindings_[KeyAction::CyclePanePrev] = "BackTab";
-  primaryBindings_[KeyAction::IncrementProgress] = "+";
-  primaryBindings_[KeyAction::DecrementProgress] = "-";
-  primaryBindings_[KeyAction::CycleStatus] = "Space";
-  primaryBindings_[KeyAction::TabAnime] = "1";
-  primaryBindings_[KeyAction::TabManga] = "2";
-  primaryBindings_[KeyAction::TabOverview] = "3";
-  primaryBindings_[KeyAction::InspectDetails] = "Enter";
-  primaryBindings_[KeyAction::EditNotes] = "e";
-  primaryBindings_[KeyAction::RenameTitle] = "t";
-  primaryBindings_[KeyAction::AddEntry] = "a";
-  primaryBindings_[KeyAction::DeleteEntry] = "d";
-  primaryBindings_[KeyAction::SortDate] = "c";
-  primaryBindings_[KeyAction::SortTitle] = "t";
-  primaryBindings_[KeyAction::SortStatus] = "s";
-  primaryBindings_[KeyAction::SortRating] = "r";
-  primaryBindings_[KeyAction::SortProgress] = "p";
-  primaryBindings_[KeyAction::SearchFilter] = "/";
-  primaryBindings_[KeyAction::OpenBrowser] = "o";
-  primaryBindings_[KeyAction::YankTitle] = "y";
-  primaryBindings_[KeyAction::Undo] = "u";
-  primaryBindings_[KeyAction::Redo] = "U";
-  primaryBindings_[KeyAction::CommandPalette] = ":";
-  primaryBindings_[KeyAction::OpenHelp] = "?";
-  primaryBindings_[KeyAction::Quit] = "q";
+void keybindManager::loadDefaults() {
+  primaryBindings_[keyAction::MoveUp] = "k";
+  primaryBindings_[keyAction::MoveDown] = "j";
+  primaryBindings_[keyAction::JumpTop] = "g";
+  primaryBindings_[keyAction::JumpBottom] = "G";
+  primaryBindings_[keyAction::FocusLeft] = "h";
+  primaryBindings_[keyAction::FocusRight] = "l";
+  primaryBindings_[keyAction::CyclePaneNext] = "Tab";
+  primaryBindings_[keyAction::CyclePanePrev] = "BackTab";
+  primaryBindings_[keyAction::IncrementProgress] = "+";
+  primaryBindings_[keyAction::DecrementProgress] = "-";
+  primaryBindings_[keyAction::CycleStatus] = "Space";
+  primaryBindings_[keyAction::TabAnime] = "1";
+  primaryBindings_[keyAction::TabManga] = "2";
+  primaryBindings_[keyAction::TabOverview] = "3";
+  primaryBindings_[keyAction::InspectDetails] = "Enter";
+  primaryBindings_[keyAction::EditNotes] = "e";
+  primaryBindings_[keyAction::RenameTitle] = "t";
+  primaryBindings_[keyAction::AddEntry] = "a";
+  primaryBindings_[keyAction::DeleteEntry] = "d";
+  primaryBindings_[keyAction::SortDate] = "c";
+  primaryBindings_[keyAction::SortTitle] = "t";
+  primaryBindings_[keyAction::SortStatus] = "s";
+  primaryBindings_[keyAction::SortRating] = "r";
+  primaryBindings_[keyAction::SortProgress] = "p";
+  primaryBindings_[keyAction::SearchFilter] = "/";
+  primaryBindings_[keyAction::OpenBrowser] = "o";
+  primaryBindings_[keyAction::YankTitle] = "y";
+  primaryBindings_[keyAction::Undo] = "u";
+  primaryBindings_[keyAction::Redo] = "U";
+  primaryBindings_[keyAction::commandPalette] = ":";
+  primaryBindings_[keyAction::OpenHelp] = "?";
+  primaryBindings_[keyAction::Quit] = "q";
 }
 
-void KeybindManager::setBinding(const std::string& actionName,
+void keybindManager::setBinding(const std::string& actionName,
                                 const std::string& key) {
   std::string lower = actionName;
   std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
   if (lower == "moveup")
-    primaryBindings_[KeyAction::MoveUp] = key;
+    primaryBindings_[keyAction::MoveUp] = key;
   else if (lower == "movedown")
-    primaryBindings_[KeyAction::MoveDown] = key;
+    primaryBindings_[keyAction::MoveDown] = key;
   else if (lower == "jumptop")
-    primaryBindings_[KeyAction::JumpTop] = key;
+    primaryBindings_[keyAction::JumpTop] = key;
   else if (lower == "jumpbottom")
-    primaryBindings_[KeyAction::JumpBottom] = key;
+    primaryBindings_[keyAction::JumpBottom] = key;
   else if (lower == "focusleft")
-    primaryBindings_[KeyAction::FocusLeft] = key;
+    primaryBindings_[keyAction::FocusLeft] = key;
   else if (lower == "focusright")
-    primaryBindings_[KeyAction::FocusRight] = key;
+    primaryBindings_[keyAction::FocusRight] = key;
   else if (lower == "cyclepanenext" || lower == "cyclepane")
-    primaryBindings_[KeyAction::CyclePaneNext] = key;
+    primaryBindings_[keyAction::CyclePaneNext] = key;
   else if (lower == "cyclepaneprev")
-    primaryBindings_[KeyAction::CyclePanePrev] = key;
+    primaryBindings_[keyAction::CyclePanePrev] = key;
   else if (lower == "increment" || lower == "incrementprogress")
-    primaryBindings_[KeyAction::IncrementProgress] = key;
+    primaryBindings_[keyAction::IncrementProgress] = key;
   else if (lower == "decrement" || lower == "decrementprogress")
-    primaryBindings_[KeyAction::DecrementProgress] = key;
+    primaryBindings_[keyAction::DecrementProgress] = key;
   else if (lower == "cyclestatus")
-    primaryBindings_[KeyAction::CycleStatus] = key;
+    primaryBindings_[keyAction::CycleStatus] = key;
   else if (lower == "tabanime")
-    primaryBindings_[KeyAction::TabAnime] = key;
+    primaryBindings_[keyAction::TabAnime] = key;
   else if (lower == "tabmanga")
-    primaryBindings_[KeyAction::TabManga] = key;
+    primaryBindings_[keyAction::TabManga] = key;
   else if (lower == "taboverview")
-    primaryBindings_[KeyAction::TabOverview] = key;
+    primaryBindings_[keyAction::TabOverview] = key;
   else if (lower == "inspect" || lower == "inspectdetails")
-    primaryBindings_[KeyAction::InspectDetails] = key;
+    primaryBindings_[keyAction::InspectDetails] = key;
   else if (lower == "editnotes")
-    primaryBindings_[KeyAction::EditNotes] = key;
+    primaryBindings_[keyAction::EditNotes] = key;
   else if (lower == "renametitle" || lower == "rename")
-    primaryBindings_[KeyAction::RenameTitle] = key;
+    primaryBindings_[keyAction::RenameTitle] = key;
   else if (lower == "add" || lower == "addentry")
-    primaryBindings_[KeyAction::AddEntry] = key;
+    primaryBindings_[keyAction::AddEntry] = key;
   else if (lower == "delete" || lower == "deleteentry")
-    primaryBindings_[KeyAction::DeleteEntry] = key;
+    primaryBindings_[keyAction::DeleteEntry] = key;
   else if (lower == "sortdate")
-    primaryBindings_[KeyAction::SortDate] = key;
+    primaryBindings_[keyAction::SortDate] = key;
   else if (lower == "sorttitle")
-    primaryBindings_[KeyAction::SortTitle] = key;
+    primaryBindings_[keyAction::SortTitle] = key;
   else if (lower == "sortstatus")
-    primaryBindings_[KeyAction::SortStatus] = key;
+    primaryBindings_[keyAction::SortStatus] = key;
   else if (lower == "sortrating")
-    primaryBindings_[KeyAction::SortRating] = key;
+    primaryBindings_[keyAction::SortRating] = key;
   else if (lower == "sortprogress")
-    primaryBindings_[KeyAction::SortProgress] = key;
+    primaryBindings_[keyAction::SortProgress] = key;
   else if (lower == "search" || lower == "searchfilter")
-    primaryBindings_[KeyAction::SearchFilter] = key;
+    primaryBindings_[keyAction::SearchFilter] = key;
   else if (lower == "openbrowser")
-    primaryBindings_[KeyAction::OpenBrowser] = key;
+    primaryBindings_[keyAction::OpenBrowser] = key;
   else if (lower == "yank" || lower == "yanktitle")
-    primaryBindings_[KeyAction::YankTitle] = key;
+    primaryBindings_[keyAction::YankTitle] = key;
   else if (lower == "undo")
-    primaryBindings_[KeyAction::Undo] = key;
+    primaryBindings_[keyAction::Undo] = key;
   else if (lower == "redo")
-    primaryBindings_[KeyAction::Redo] = key;
+    primaryBindings_[keyAction::Redo] = key;
   else if (lower == "commandpalette")
-    primaryBindings_[KeyAction::CommandPalette] = key;
+    primaryBindings_[keyAction::commandPalette] = key;
   else if (lower == "openhelp" || lower == "help")
-    primaryBindings_[KeyAction::OpenHelp] = key;
+    primaryBindings_[keyAction::OpenHelp] = key;
   else if (lower == "quit")
-    primaryBindings_[KeyAction::Quit] = key;
+    primaryBindings_[keyAction::Quit] = key;
 }
 
-std::string KeybindManager::getKey(KeyAction action) const {
+std::string keybindManager::getKey(keyAction action) const {
   auto it = primaryBindings_.find(action);
   if (it != primaryBindings_.end())
     return it->second;
   return "";
 }
 
-bool KeybindManager::matches(KeyAction action, const std::string& key) const {
+bool keybindManager::matches(keyAction action, const std::string& key) const {
   auto it = primaryBindings_.find(action);
   if (it != primaryBindings_.end()) {
     if (it->second == key)

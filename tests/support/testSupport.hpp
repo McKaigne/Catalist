@@ -67,8 +67,8 @@ public:
     built_.title = std::move(value);
     return *this;
   }
-  entryBuilder& type(MediaType value) { built_.type = value; return *this; }
-  entryBuilder& status(WatchStatus value) {
+  entryBuilder& type(mediaType value) { built_.type = value; return *this; }
+  entryBuilder& status(watchStatus value) {
     built_.status = value;
     return *this;
   }
@@ -106,11 +106,11 @@ public:
     return *this;
   }
 
-  [[nodiscard]] Entry build() const { return built_; }
-  operator Entry() const { return built_; }
+  [[nodiscard]] entry build() const { return built_; }
+  operator entry() const { return built_; }
 
 private:
-  Entry built_;
+  entry built_;
 };
 
 [[nodiscard]] entryBuilder makeEntry();

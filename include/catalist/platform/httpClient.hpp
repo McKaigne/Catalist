@@ -10,7 +10,7 @@
 
 namespace catalist {
 
-struct HttpRequest {
+struct httpRequest {
   std::string url;
   std::string method = "GET";
   std::unordered_map<std::string, std::string> headers;
@@ -18,7 +18,7 @@ struct HttpRequest {
   std::chrono::milliseconds timeout{8000};
 };
 
-struct HttpResponse {
+struct httpResponse {
   int statusCode = 0;
   std::string body;
   std::string errorMessage;
@@ -27,32 +27,32 @@ struct HttpResponse {
   std::string error_message;
 };
 
-class IHttpClient {
+class iHttpClient {
 public:
-  virtual ~IHttpClient() = default;
-  [[nodiscard]] virtual Result<HttpResponse> execute(
-      const HttpRequest& request) = 0;
-  [[nodiscard]] Result<HttpResponse> Execute(const HttpRequest& request) {
+  virtual ~iHttpClient() = default;
+  [[nodiscard]] virtual result<httpResponse> execute(
+      const httpRequest& request) = 0;
+  [[nodiscard]] result<httpResponse> Execute(const httpRequest& request) {
     return execute(request);
   }
 };
 
-class CurlHttpClient : public IHttpClient {
+class curlHttpClient : public iHttpClient {
 public:
-  Result<HttpResponse> execute(const HttpRequest& request) override;
+  result<httpResponse> execute(const httpRequest& request) override;
 };
 
-class MockHttpClient : public IHttpClient {
+class mockHttpClient : public iHttpClient {
 public:
-  void setResponse(const std::string& urlPattern, const HttpResponse& response);
+  void setResponse(const std::string& urlPattern, const httpResponse& response);
   void SetResponse(const std::string& urlPattern,
-                   const HttpResponse& response) {
+                   const httpResponse& response) {
     setResponse(urlPattern, response);
   }
-  Result<HttpResponse> execute(const HttpRequest& request) override;
+  result<httpResponse> execute(const httpRequest& request) override;
 
 private:
-  std::unordered_map<std::string, HttpResponse> responses_;
+  std::unordered_map<std::string, httpResponse> responses_;
 };
 
 }  // namespace catalist

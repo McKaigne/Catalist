@@ -6,7 +6,7 @@
 
 namespace catalist {
 
-enum class KeyAction {
+enum class keyAction {
   MoveUp,
   MoveDown,
   JumpTop,
@@ -36,21 +36,21 @@ enum class KeyAction {
   YankTitle,
   Undo,
   Redo,
-  CommandPalette,
+  commandPalette,
   OpenHelp,
   Quit
 };
 
-class KeybindManager {
+class keybindManager {
  public:
-  KeybindManager();
+  keybindManager();
 
   void setBinding(const std::string& actionName, const std::string& key);
-  std::string getKey(KeyAction action) const;
-  bool matches(KeyAction action, const std::string& key) const;
+  std::string getKey(keyAction action) const;
+  bool matches(keyAction action, const std::string& key) const;
 
  private:
-  std::unordered_map<KeyAction, std::string> primaryBindings_;
+  std::unordered_map<keyAction, std::string> primaryBindings_;
   void loadDefaults();
 };
 

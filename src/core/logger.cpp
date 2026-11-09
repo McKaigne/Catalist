@@ -10,12 +10,12 @@ namespace catalist {
 
 namespace {
 
-const char* levelToString(LogLevel level) {
+const char* levelToString(logLevel level) {
   switch (level) {
-    case LogLevel::Debug: return "DEBUG";
-    case LogLevel::Info:  return "INFO ";
-    case LogLevel::Warn:  return "WARN ";
-    case LogLevel::Error: return "ERROR";
+    case logLevel::Debug: return "DEBUG";
+    case logLevel::Info:  return "INFO ";
+    case logLevel::Warn:  return "WARN ";
+    case logLevel::Error: return "ERROR";
   }
   return "INFO ";
 }
@@ -41,14 +41,14 @@ std::string getFormattedTimestamp() {
 
 }  // namespace
 
-Logger& Logger::get() {
-  static Logger instance;
+logger& logger::get() {
+  static logger instance;
   return instance;
 }
 
-Logger::Logger() = default;
+logger::logger() = default;
 
-Logger::~Logger() {
+logger::~logger() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (logFile_.is_open()) {
     logFile_.flush();
@@ -56,7 +56,7 @@ Logger::~Logger() {
   }
 }
 
-void Logger::init(const std::filesystem::path& logPath) {
+void logger::init(const std::filesystem::path& logPath) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (logFile_.is_open()) {
     logFile_.flush();
@@ -71,10 +71,10 @@ void Logger::init(const std::filesystem::path& logPath) {
   initialized_ = true;
 }
 
-void Logger::ensureOpen() {
+void logger::ensureOpen() {
   if (initialized_ && logFile_.is_open()) return;
   if (logPath_.empty()) {
-    logPath_ = Database::getConfigDir() / "catalist.log";
+    logPath_ = database::getConfigDir() / "catalist.log";
   }
   if (!logPath_.parent_path().empty()) {
     std::error_code ec;
@@ -84,7 +84,7 @@ void Logger::ensureOpen() {
   initialized_ = true;
 }
 
-void Logger::log(LogLevel level, std::string_view message) {
+void logger::log(logLevel level, std::string_view message) {
   std::lock_guard<std::mutex> lock(mutex_);
   ensureOpen();
   if (!logFile_.is_open()) return;
@@ -95,23 +95,23 @@ void Logger::log(LogLevel level, std::string_view message) {
   logFile_.flush();
 }
 
-void Logger::debug(std::string_view message) {
-  get().log(LogLevel::Debug, message);
+void logger::debug(std::string_view message) {
+  get().log(logLevel::Debug, message);
 }
 
-void Logger::info(std::string_view message) {
-  get().log(LogLevel::Info, message);
+void logger::info(std::string_view message) {
+  get().log(logLevel::Info, message);
 }
 
-void Logger::warn(std::string_view message) {
-  get().log(LogLevel::Warn, message);
+void logger::warn(std::string_view message) {
+  get().log(logLevel::Warn, message);
 }
 
-void Logger::error(std::string_view message) {
-  get().log(LogLevel::Error, message);
+void logger::error(std::string_view message) {
+  get().log(logLevel::Error, message);
 }
 
-std::filesystem::path Logger::getLogPath() const {
+std::filesystem::path logger::getLogPath() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return logPath_;
 }

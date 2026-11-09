@@ -9,19 +9,19 @@
 
 namespace catalist {
 
-enum class LogLevel {
+enum class logLevel {
   Debug,
   Info,
   Warn,
   Error
 };
 
-class Logger {
+class logger {
  public:
-  static Logger& get();
+  static logger& get();
 
   void init(const std::filesystem::path& logPath);
-  void log(LogLevel level, std::string_view message);
+  void log(logLevel level, std::string_view message);
 
   static void debug(std::string_view message);
   static void info(std::string_view message);
@@ -31,8 +31,8 @@ class Logger {
   [[nodiscard]] std::filesystem::path getLogPath() const;
 
  private:
-  Logger();
-  ~Logger();
+  logger();
+  ~logger();
 
   std::filesystem::path logPath_;
   std::ofstream logFile_;
@@ -42,10 +42,10 @@ class Logger {
   void ensureOpen();
 };
 
-#define LOG_DEBUG(msg) ::catalist::Logger::debug(msg)
-#define LOG_INFO(msg)  ::catalist::Logger::info(msg)
-#define LOG_WARN(msg)  ::catalist::Logger::warn(msg)
-#define LOG_ERROR(msg) ::catalist::Logger::error(msg)
+#define LOG_DEBUG(msg) ::catalist::logger::debug(msg)
+#define LOG_INFO(msg)  ::catalist::logger::info(msg)
+#define LOG_WARN(msg)  ::catalist::logger::warn(msg)
+#define LOG_ERROR(msg) ::catalist::logger::error(msg)
 
 }  // namespace catalist
 

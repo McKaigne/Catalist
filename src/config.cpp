@@ -78,7 +78,7 @@ card "details" width=42 border=true {
 }
 )kdl";
 
-bool AppConfig::generateDefault(const std::filesystem::path& path) {
+bool appConfig::generateDefault(const std::filesystem::path& path) {
   std::filesystem::create_directories(path.parent_path());
   std::ofstream file(path);
   if (!file.is_open())
@@ -87,11 +87,11 @@ bool AppConfig::generateDefault(const std::filesystem::path& path) {
   file.close();
 
   std::string err;
-  kdlDoc = kdl::Document::parse(DEFAULT_KDL, err);
+  kdlDoc = kdl::document::parse(DEFAULT_KDL, err);
   return true;
 }
 
-bool AppConfig::load(const std::filesystem::path& path) {
+bool appConfig::load(const std::filesystem::path& path) {
   if (!std::filesystem::exists(path)) {
     return generateDefault(path);
   }
@@ -103,7 +103,7 @@ bool AppConfig::load(const std::filesystem::path& path) {
   std::string content((std::istreambuf_iterator<char>(file)),
                       std::istreambuf_iterator<char>());
   std::string err;
-  kdlDoc = kdl::Document::parse(content, err);
+  kdlDoc = kdl::document::parse(content, err);
 
   auto gen = kdlDoc.getNode("general");
   if (gen.has_value()) {
@@ -137,27 +137,27 @@ bool AppConfig::load(const std::filesystem::path& path) {
     }
   }
 
-  ThemeRegistry::setActive(theme);
+  themeRegistry::setActive(theme);
   return true;
 }
 
-bool AppConfig::save(const std::filesystem::path& path) const {
-  kdl::Document doc = kdlDoc;
-  auto mk = [](const std::string& name, kdl::Value v) {
-    kdl::Node n;
+bool appConfig::save(const std::filesystem::path& path) const {
+  kdl::document doc = kdlDoc;
+  auto mk = [](const std::string& name, kdl::value v) {
+    kdl::node n;
     n.name = name;
     n.args.push_back(v);
     return n;
   };
   auto S = [](const std::string& s) {
-    kdl::Value v;
-    v.type = kdl::Value::Type::String;
+    kdl::value v;
+    v.valueType = kdl::value::type::String;
     v.stringVal = s;
     return v;
   };
   auto B = [](bool b) {
-    kdl::Value v;
-    v.type = kdl::Value::Type::Boolean;
+    kdl::value v;
+    v.valueType = kdl::value::type::Boolean;
     v.boolVal = b;
     return v;
   };
@@ -175,7 +175,7 @@ bool AppConfig::save(const std::filesystem::path& path) const {
     }
   }
   if (!foundGeneral) {
-    kdl::Node gn;
+    kdl::node gn;
     gn.name = "general";
     gn.children = {mk("theme", S(theme)), mk("mouse", B(mouse)),
                    mk("default-media", S(defaultMedia)),

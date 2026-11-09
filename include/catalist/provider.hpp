@@ -11,48 +11,48 @@
 
 namespace catalist {
 
-struct ProviderSearchResult {
+struct providerSearchResult {
   std::string providerKey;
   std::string remoteId;
   std::string title;
-  MediaType type = MediaType::Anime;
+  mediaType type = mediaType::Anime;
   int totalUnits = 0;
   double score = 0.0;
   std::string year;
   std::string synopsis;
 };
 
-class IProvider {
+class iProvider {
 public:
-  virtual ~IProvider() = default;
+  virtual ~iProvider() = default;
   virtual std::string getKey() const = 0;
   virtual std::string getDisplayName() const = 0;
   virtual std::string getShortBadge() const = 0;
   virtual ftxui::Color getBrandColor() const = 0;
-  virtual std::string getWebUrl(MediaType type,
+  virtual std::string getWebUrl(mediaType type,
                                 const std::string& remoteId) const = 0;
-  virtual std::vector<ProviderSearchResult> search(MediaType type,
+  virtual std::vector<providerSearchResult> search(mediaType type,
                                                    const std::string& query,
                                                    size_t limit) = 0;
 };
 
-class ProviderRegistry {
+class providerRegistry {
 public:
-  static ProviderRegistry& get();
+  static providerRegistry& get();
 
-  ProviderRegistry();
-  explicit ProviderRegistry(std::shared_ptr<IHttpClient> client);
+  providerRegistry();
+  explicit providerRegistry(std::shared_ptr<iHttpClient> client);
 
-  void registerProvider(std::shared_ptr<IProvider> provider);
-  std::shared_ptr<IProvider> getProvider(const std::string& key) const;
-  std::vector<std::shared_ptr<IProvider>> getAllProviders() const;
+  void registerProvider(std::shared_ptr<iProvider> provider);
+  std::shared_ptr<iProvider> getProvider(const std::string& key) const;
+  std::vector<std::shared_ptr<iProvider>> getAllProviders() const;
 
-  std::string resolveUrl(const Entry& entry,
+  std::string resolveUrl(const entry& mediaEntry,
                          const std::string& preferredProvider = "") const;
 
 private:
-  std::shared_ptr<IHttpClient> httpClient_;
-  std::unordered_map<std::string, std::shared_ptr<IProvider>> providers_;
+  std::shared_ptr<iHttpClient> httpClient_;
+  std::unordered_map<std::string, std::shared_ptr<iProvider>> providers_;
   std::vector<std::string> providerOrder_;
 };
 

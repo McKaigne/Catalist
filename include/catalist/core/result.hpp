@@ -7,15 +7,15 @@
 namespace catalist {
 
 template <typename T>
-class Result {
+class result {
 public:
-  static Result success(T value) { return Result(std::move(value)); }
-  static Result failure(std::string error) {
-    return Result(Error{std::move(error)});
+  static result success(T value) { return result(std::move(value)); }
+  static result failure(std::string message) {
+    return result(error{std::move(message)});
   }
 
-  static Result Success(T value) { return success(std::move(value)); }
-  static Result Failure(std::string error) { return failure(std::move(error)); }
+  static result Success(T value) { return success(std::move(value)); }
+  static result Failure(std::string message) { return failure(std::move(message)); }
 
   [[nodiscard]] bool ok() const { return std::holds_alternative<T>(storage_); }
   [[nodiscard]] bool Ok() const { return ok(); }
@@ -27,20 +27,20 @@ public:
   [[nodiscard]] T& Value() { return value(); }
 
   [[nodiscard]] const std::string& errorMessage() const {
-    return std::get<Error>(storage_).message;
+    return std::get<error>(storage_).message;
   }
   [[nodiscard]] const std::string& ErrorMessage() const {
     return errorMessage();
   }
 
 private:
-  struct Error {
+  struct error {
     std::string message;
   };
-  std::variant<T, Error> storage_;
+  std::variant<T, error> storage_;
 
-  explicit Result(T val) : storage_(std::move(val)) {}
-  explicit Result(Error err) : storage_(std::move(err)) {}
+  explicit result(T val) : storage_(std::move(val)) {}
+  explicit result(error err) : storage_(std::move(err)) {}
 };
 
 }  // namespace catalist

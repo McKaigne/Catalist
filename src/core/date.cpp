@@ -6,7 +6,7 @@
 
 namespace catalist {
 
-std::optional<IsoDate> IsoDate::parse(std::string_view dateStr) {
+std::optional<isoDate> isoDate::parse(std::string_view dateStr) {
   if (dateStr.size() < 10 || dateStr.find("0000") == 0) {
     return std::nullopt;
   }
@@ -14,7 +14,7 @@ std::optional<IsoDate> IsoDate::parse(std::string_view dateStr) {
     int y = std::stoi(std::string(dateStr.substr(0, 4)));
     int m = std::stoi(std::string(dateStr.substr(5, 2)));
     int d = std::stoi(std::string(dateStr.substr(8, 2)));
-    IsoDate date;
+    isoDate date;
     date.year_ = y;
     date.month_ = m;
     date.day_ = d;
@@ -24,18 +24,18 @@ std::optional<IsoDate> IsoDate::parse(std::string_view dateStr) {
   }
 }
 
-IsoDate IsoDate::today() {
+isoDate isoDate::today() {
   auto now = std::chrono::system_clock::now();
   auto inTimeT = std::chrono::system_clock::to_time_t(now);
   std::tm tm = *std::localtime(&inTimeT);
-  IsoDate date;
+  isoDate date;
   date.year_ = tm.tm_year + 1900;
   date.month_ = tm.tm_mon + 1;
   date.day_ = tm.tm_mday;
   return date;
 }
 
-std::string IsoDate::toString() const {
+std::string isoDate::toString() const {
   if (year_ == 0) {
     return "0000-00-00";
   }

@@ -6,9 +6,9 @@
 
 namespace catalist {
 
-class MalParser {
+class malParser {
 public:
-  static size_t importXml(const std::string& filepath, Database& db,
+  static size_t importXml(const std::string& filepath, database& db,
                           bool clean = false);
 };
 

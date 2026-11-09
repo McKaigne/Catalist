@@ -64,7 +64,7 @@ double extractJsonNumber(const std::string& block, const std::string& key) {
 
 }  // namespace
 
-class MalProvider : public IProvider {
+class malProvider : public iProvider {
 public:
   std::string getKey() const override { return "mal"; }
   std::string getDisplayName() const override { return "MyAnimeList"; }
@@ -73,21 +73,21 @@ public:
     return ftxui::Color::RGB(46, 81, 162);
   }
 
-  std::string getWebUrl(MediaType type,
+  std::string getWebUrl(mediaType type,
                         const std::string& remoteId) const override {
     if (remoteId.empty())
       return "";
-    return (type == MediaType::Anime)
+    return (type == mediaType::Anime)
                ? "https://myanimelist.net/anime/" + remoteId
                : "https://myanimelist.net/manga/" + remoteId;
   }
 
-  std::vector<ProviderSearchResult> search(MediaType type,
+  std::vector<providerSearchResult> search(mediaType type,
                                            const std::string& query,
                                            size_t limit) override {
     std::string err;
-    auto rawResults = RemoteSearchEngine::query(type, query, err, limit);
-    std::vector<ProviderSearchResult> results;
+    auto rawResults = remoteSearchEngine::query(type, query, err, limit);
+    std::vector<providerSearchResult> results;
     for (const auto& r : rawResults) {
       if (r.malId > 0) {
         results.push_back({getKey(), std::to_string(r.malId), r.title, r.type,
@@ -98,7 +98,7 @@ public:
   }
 };
 
-class AnilistProvider : public IProvider {
+class anilistProvider : public iProvider {
 public:
   std::string getKey() const override { return "anilist"; }
   std::string getDisplayName() const override { return "AniList"; }
@@ -107,20 +107,20 @@ public:
     return ftxui::Color::RGB(2, 169, 255);
   }
 
-  std::string getWebUrl(MediaType type,
+  std::string getWebUrl(mediaType type,
                         const std::string& remoteId) const override {
     if (remoteId.empty())
       return "";
-    return (type == MediaType::Anime) ? "https://anilist.co/anime/" + remoteId
+    return (type == mediaType::Anime) ? "https://anilist.co/anime/" + remoteId
                                       : "https://anilist.co/manga/" + remoteId;
   }
 
-  std::vector<ProviderSearchResult> search(MediaType type,
+  std::vector<providerSearchResult> search(mediaType type,
                                            const std::string& query,
                                            size_t limit) override {
     std::string err;
-    auto rawResults = RemoteSearchEngine::query(type, query, err, limit);
-    std::vector<ProviderSearchResult> results;
+    auto rawResults = remoteSearchEngine::query(type, query, err, limit);
+    std::vector<providerSearchResult> results;
     for (const auto& r : rawResults) {
       results.push_back({getKey(), std::to_string(r.malId), r.title, r.type,
                          r.totalUnits, r.score, r.year, r.synopsis});
@@ -129,10 +129,10 @@ public:
   }
 };
 
-class KitsuProvider : public IProvider {
+class kitsuProvider : public iProvider {
 public:
-  explicit KitsuProvider(
-      std::shared_ptr<IHttpClient> client = std::make_shared<CurlHttpClient>())
+  explicit kitsuProvider(
+      std::shared_ptr<iHttpClient> client = std::make_shared<curlHttpClient>())
       : client_(std::move(client)) {}
 
   std::string getKey() const override { return "kitsu"; }
@@ -142,24 +142,24 @@ public:
     return ftxui::Color::RGB(224, 80, 43);
   }
 
-  std::string getWebUrl(MediaType type,
+  std::string getWebUrl(mediaType type,
                         const std::string& remoteId) const override {
     if (remoteId.empty())
       return "";
-    return (type == MediaType::Anime) ? "https://kitsu.app/anime/" + remoteId
+    return (type == mediaType::Anime) ? "https://kitsu.app/anime/" + remoteId
                                       : "https://kitsu.app/manga/" + remoteId;
   }
 
-  std::vector<ProviderSearchResult> search(MediaType type,
+  std::vector<providerSearchResult> search(mediaType type,
                                            const std::string& query,
                                            size_t limit) override {
     if (query.empty() || !client_)
       return {};
 
-    std::string path = (type == MediaType::Anime) ? "anime" : "manga";
-    HttpRequest req;
+    std::string path = (type == mediaType::Anime) ? "anime" : "manga";
+    httpRequest req;
     req.url = "https://kitsu.io/api/edge/" + path +
-              "?filter[text]=" + RemoteSearchEngine::urlEncode(query) +
+              "?filter[text]=" + remoteSearchEngine::urlEncode(query) +
               "&page[limit]=" + std::to_string(limit);
     req.headers["Accept"] = "application/vnd.api+json";
 
@@ -174,7 +174,7 @@ public:
     if (dataPos == std::string::npos)
       return {};
 
-    std::vector<ProviderSearchResult> results;
+    std::vector<providerSearchResult> results;
     size_t cur = dataPos + 7;
     while (cur < json.size() && results.size() < limit) {
       size_t objStart = json.find(char(123), cur);
@@ -214,13 +214,13 @@ public:
       if (title.empty())
         continue;
 
-      ProviderSearchResult item;
+      providerSearchResult item;
       item.providerKey = getKey();
       item.remoteId = id;
       item.title = title;
       item.type = type;
       item.totalUnits = static_cast<int>(extractJsonNumber(
-          block, type == MediaType::Anime ? "episodeCount" : "chapterCount"));
+          block, type == mediaType::Anime ? "episodeCount" : "chapterCount"));
       double rating = extractJsonNumber(block, "averageRating");
       item.score = rating > 0.0 ? rating / 10.0 : 0.0;
       results.push_back(std::move(item));
@@ -229,32 +229,32 @@ public:
   }
 
 private:
-  std::shared_ptr<IHttpClient> client_;
+  std::shared_ptr<iHttpClient> client_;
 };
 
-ProviderRegistry& ProviderRegistry::get() {
-  static ProviderRegistry instance;
+providerRegistry& providerRegistry::get() {
+  static providerRegistry instance;
   return instance;
 }
 
-ProviderRegistry::ProviderRegistry()
-    : httpClient_(std::make_shared<CurlHttpClient>()) {
-  registerProvider(std::make_shared<MalProvider>());
-  registerProvider(std::make_shared<AnilistProvider>());
-  registerProvider(std::make_shared<KitsuProvider>(httpClient_));
+providerRegistry::providerRegistry()
+    : httpClient_(std::make_shared<curlHttpClient>()) {
+  registerProvider(std::make_shared<malProvider>());
+  registerProvider(std::make_shared<anilistProvider>());
+  registerProvider(std::make_shared<kitsuProvider>(httpClient_));
 }
 
-ProviderRegistry::ProviderRegistry(std::shared_ptr<IHttpClient> client)
+providerRegistry::providerRegistry(std::shared_ptr<iHttpClient> client)
     : httpClient_(std::move(client)) {
   if (!httpClient_) {
-    httpClient_ = std::make_shared<CurlHttpClient>();
+    httpClient_ = std::make_shared<curlHttpClient>();
   }
-  registerProvider(std::make_shared<MalProvider>());
-  registerProvider(std::make_shared<AnilistProvider>());
-  registerProvider(std::make_shared<KitsuProvider>(httpClient_));
+  registerProvider(std::make_shared<malProvider>());
+  registerProvider(std::make_shared<anilistProvider>());
+  registerProvider(std::make_shared<kitsuProvider>(httpClient_));
 }
 
-void ProviderRegistry::registerProvider(std::shared_ptr<IProvider> provider) {
+void providerRegistry::registerProvider(std::shared_ptr<iProvider> provider) {
   if (!provider)
     return;
   std::string key = provider->getKey();
@@ -265,7 +265,7 @@ void ProviderRegistry::registerProvider(std::shared_ptr<IProvider> provider) {
   }
 }
 
-std::shared_ptr<IProvider> ProviderRegistry::getProvider(
+std::shared_ptr<iProvider> providerRegistry::getProvider(
     const std::string& key) const {
   auto it = providers_.find(key);
   if (it != providers_.end())
@@ -273,9 +273,9 @@ std::shared_ptr<IProvider> ProviderRegistry::getProvider(
   return nullptr;
 }
 
-std::vector<std::shared_ptr<IProvider>> ProviderRegistry::getAllProviders()
+std::vector<std::shared_ptr<iProvider>> providerRegistry::getAllProviders()
     const {
-  std::vector<std::shared_ptr<IProvider>> res;
+  std::vector<std::shared_ptr<iProvider>> res;
   for (const auto& key : providerOrder_) {
     auto it = providers_.find(key);
     if (it != providers_.end())
@@ -284,23 +284,23 @@ std::vector<std::shared_ptr<IProvider>> ProviderRegistry::getAllProviders()
   return res;
 }
 
-std::string ProviderRegistry::resolveUrl(
-    const Entry& entry, const std::string& preferredProvider) const {
+std::string providerRegistry::resolveUrl(
+    const entry& mediaEntry, const std::string& preferredProvider) const {
   if (!preferredProvider.empty()) {
-    std::string rid = entry.getRemoteId(preferredProvider);
+    std::string rid = mediaEntry.getRemoteId(preferredProvider);
     if (!rid.empty()) {
       auto p = getProvider(preferredProvider);
       if (p)
-        return p->getWebUrl(entry.type, rid);
+        return p->getWebUrl(mediaEntry.type, rid);
     }
   }
 
   for (const auto& key : providerOrder_) {
-    std::string rid = entry.getRemoteId(key);
+    std::string rid = mediaEntry.getRemoteId(key);
     if (!rid.empty()) {
       auto p = getProvider(key);
       if (p)
-        return p->getWebUrl(entry.type, rid);
+        return p->getWebUrl(mediaEntry.type, rid);
     }
   }
 

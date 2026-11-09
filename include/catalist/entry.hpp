@@ -8,17 +8,17 @@
 
 namespace catalist {
 
-enum class MediaType { Anime, Manga };
+enum class mediaType { Anime, Manga };
 
-enum class WatchStatus { Watching, Completed, OnHold, Dropped, PlanToWatch };
+enum class watchStatus { Watching, Completed, OnHold, Dropped, PlanToWatch };
 
-struct Entry {
+struct entry {
   int id = 0;
   int malId = 0;
   int anilistId = 0;
   std::string title;
-  MediaType type = MediaType::Anime;
-  WatchStatus status = WatchStatus::Watching;
+  mediaType type = mediaType::Anime;
+  watchStatus status = watchStatus::Watching;
   int score = 0;
   int progress = 0;
   int totalUnits = 0;
@@ -37,16 +37,16 @@ struct Entry {
   void setRemoteId(const std::string& provider, const std::string& remoteId);
 };
 
-std::string statusToString(WatchStatus status,
-                           MediaType type = MediaType::Anime);
-std::string statusToIcon(WatchStatus status);
-ftxui::Color statusToColor(WatchStatus status);
-WatchStatus stringToStatus(const std::string& str);
+std::string statusToString(watchStatus status,
+                           mediaType type = mediaType::Anime);
+std::string statusToIcon(watchStatus status);
+ftxui::Color statusToColor(watchStatus status);
+watchStatus stringToStatus(const std::string& str);
 
-std::string typeToString(MediaType type);
-std::string typeToIcon(MediaType type);
-ftxui::Color typeToColor(MediaType type);
-MediaType stringToType(const std::string& str);
+std::string typeToString(mediaType type);
+std::string typeToIcon(mediaType type);
+ftxui::Color typeToColor(mediaType type);
+mediaType stringToType(const std::string& str);
 
 std::string renderStarMeter(int score);
 

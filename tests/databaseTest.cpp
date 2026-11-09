@@ -3,23 +3,23 @@
 #include "catalist/database.hpp"
 #include "support/testSupport.hpp"
 
-using catalist::MediaType;
-using catalist::SortKey;
-using catalist::WatchStatus;
+using catalist::mediaType;
+using catalist::sortKey;
+using catalist::watchStatus;
 using catalist::test::makeEntry;
 using catalist::test::tempDirFixture;
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv round trip keeps quotes commas and newlines") {
-  catalist::Database db(tempDir());
+  catalist::database db(tempDir());
   auto csvPath = tempDir() / "multiline.csv";
 
-  catalist::Entry original =
+  catalist::entry original =
       makeEntry()
           .id(9901)
           .malId(9901)
-          .type(MediaType::Anime)
+          .type(mediaType::Anime)
           .title("Fate/stay night: Heavens Feel, Part \"1\"")
-          .status(WatchStatus::Completed)
+          .status(watchStatus::Completed)
           .score(10)
           .progress(3)
           .totalUnits(3)
@@ -29,12 +29,12 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv round trip keeps quotes commas and newlin
           .finishDate("2020-08-15");
 
   db.addEntry(original);
-  REQUIRE(db.saveCsv(MediaType::Anime, csvPath));
+  REQUIRE(db.saveCsv(mediaType::Anime, csvPath));
 
-  catalist::Database reloaded(tempDir());
-  REQUIRE(reloaded.loadCsv(MediaType::Anime, csvPath));
+  catalist::database reloaded(tempDir());
+  REQUIRE(reloaded.loadCsv(mediaType::Anime, csvPath));
 
-  auto loaded = reloaded.getById(MediaType::Anime, 9901);
+  auto loaded = reloaded.getById(mediaType::Anime, 9901);
   REQUIRE(loaded.has_value());
   CHECK(loaded->title == original.title);
   CHECK(loaded->notes == original.notes);
@@ -44,29 +44,29 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv round trip keeps quotes commas and newlin
 
 namespace {
 
-void seedSortData(catalist::Database& db) {
+void seedSortData(catalist::database& db) {
   db.addEntry(makeEntry().id(52991).malId(52991).anilistId(154587)
-                  .title("Sousou no Frieren").status(WatchStatus::Completed)
+                  .title("Sousou no Frieren").status(watchStatus::Completed)
                   .score(10).progress(28).totalUnits(28).rewatched(1)
                   .startDate("2023-09-29").finishDate("2024-03-22")
                   .notes("Masterpiece adaptation.").updatedAt("2026-10-17"));
   db.addEntry(makeEntry().id(49387).malId(49387).anilistId(136430)
-                  .title("Vinland Saga Season 2").status(WatchStatus::Completed)
+                  .title("Vinland Saga Season 2").status(watchStatus::Completed)
                   .score(9).progress(24).totalUnits(24)
                   .startDate("2023-01-10").finishDate("2023-06-20")
                   .notes("Farmland arc.").updatedAt("2026-10-17"));
   db.addEntry(makeEntry().id(457).malId(457).anilistId(457).title("Mushishi")
-                  .status(WatchStatus::Completed).score(9).progress(26)
+                  .status(watchStatus::Completed).score(9).progress(26)
                   .totalUnits(26).startDate("0000-00-00")
                   .finishDate("0000-00-00").notes("Atmospheric.")
                   .updatedAt("2026-10-17"));
   db.addEntry(makeEntry().id(44265).malId(44265).anilistId(128547)
-                  .title("Odd Taxi").status(WatchStatus::Completed).score(8)
+                  .title("Odd Taxi").status(watchStatus::Completed).score(8)
                   .progress(13).totalUnits(13).startDate("2021-04-06")
                   .finishDate("2021-06-29").notes("Original screenplay.")
                   .updatedAt("2026-10-17"));
   db.addEntry(makeEntry().id(2).malId(2).anilistId(30002).title("Berserk")
-                  .type(MediaType::Manga).status(WatchStatus::Watching)
+                  .type(mediaType::Manga).status(watchStatus::Watching)
                   .score(10).progress(364).volumes(42)
                   .startDate("0000-00-00").finishDate("0000-00-00")
                   .notes("Dark fantasy pinnacle.").updatedAt("2026-10-17"));
@@ -75,29 +75,29 @@ void seedSortData(catalist::Database& db) {
 }  // namespace
 
 TEST_CASE_FIXTURE(tempDirFixture, "filterEntries sorts by score descending") {
-  catalist::Database db(tempDir());
+  catalist::database db(tempDir());
   seedSortData(db);
 
-  auto byScore = db.filterEntries(MediaType::Anime, std::nullopt, -1, "",
-                                  SortKey::Score, false);
+  auto byScore = db.filterEntries(mediaType::Anime, std::nullopt, -1, "",
+                                  sortKey::Score, false);
   REQUIRE(byScore.size() == 4);
   CHECK(byScore.front().title == "Sousou no Frieren");
   CHECK(byScore.back().title == "Odd Taxi");
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "filterEntries matches title substring case insensitively") {
-  catalist::Database db(tempDir());
+  catalist::database db(tempDir());
   seedSortData(db);
 
-  auto searched = db.filterEntries(MediaType::Anime, std::nullopt, -1,
-                                   "frieren", SortKey::Title, false);
+  auto searched = db.filterEntries(mediaType::Anime, std::nullopt, -1,
+                                   "frieren", sortKey::Title, false);
   REQUIRE(searched.size() == 1);
   CHECK(searched[0].id == 52991);
 }
 
 namespace {
 
-void loadFixture(catalist::Database& db, MediaType type,
+void loadFixture(catalist::database& db, mediaType type,
                  const std::string& name) {
   REQUIRE(db.loadCsv(type, catalist::test::fixturePath("csv/" + name)));
 }
@@ -105,15 +105,15 @@ void loadFixture(catalist::Database& db, MediaType type,
 }  // namespace
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads legacy seven column layout") {
-  catalist::Database db(tempDir());
-  loadFixture(db, MediaType::Anime, "legacy7.csv");
-  const auto& entries = db.getEntries(MediaType::Anime);
+  catalist::database db(tempDir());
+  loadFixture(db, mediaType::Anime, "legacy7.csv");
+  const auto& entries = db.getEntries(mediaType::Anime);
   REQUIRE(entries.size() == 2);
 
   CHECK(entries[0].id == 52991);
   CHECK(entries[0].malId == 52991);
   CHECK(entries[0].title == "Sousou no Frieren");
-  CHECK(entries[0].status == WatchStatus::Completed);
+  CHECK(entries[0].status == watchStatus::Completed);
   CHECK(entries[0].score == 10);
   CHECK(entries[0].progress == 28);
   CHECK(entries[0].totalUnits == 28);
@@ -126,14 +126,14 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads legacy seven column layout") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads offset three layout without type column") {
-  catalist::Database db(tempDir());
-  loadFixture(db, MediaType::Anime, "offset3.csv");
-  const auto& entries = db.getEntries(MediaType::Anime);
+  catalist::database db(tempDir());
+  loadFixture(db, mediaType::Anime, "offset3.csv");
+  const auto& entries = db.getEntries(mediaType::Anime);
   REQUIRE(entries.size() == 1);
   const auto& loaded = entries[0];
   CHECK(loaded.anilistId == 154587);
   CHECK(loaded.title == "Sousou no Frieren");
-  CHECK(loaded.status == WatchStatus::Completed);
+  CHECK(loaded.status == watchStatus::Completed);
   CHECK(loaded.rewatched == 1);
   CHECK(loaded.startDate == "2023-09-29");
   CHECK(loaded.finishDate == "2024-03-22");
@@ -143,14 +143,14 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads offset three layout without type co
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads current layout with external ids") {
-  catalist::Database db(tempDir());
-  loadFixture(db, MediaType::Manga, "current.csv");
-  const auto& entries = db.getEntries(MediaType::Manga);
+  catalist::database db(tempDir());
+  loadFixture(db, mediaType::Manga, "current.csv");
+  const auto& entries = db.getEntries(mediaType::Manga);
   REQUIRE(entries.size() == 1);
   const auto& loaded = entries[0];
-  CHECK(loaded.type == MediaType::Manga);
+  CHECK(loaded.type == mediaType::Manga);
   CHECK(loaded.title == "Berserk");
-  CHECK(loaded.status == WatchStatus::Watching);
+  CHECK(loaded.status == watchStatus::Watching);
   CHECK(loaded.progress == 364);
   CHECK(loaded.volumes == 42);
   CHECK(loaded.finishDate == "");
@@ -161,9 +161,9 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads current layout with external ids") 
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
-  catalist::Database db(tempDir());
-  loadFixture(db, MediaType::Anime, "crlf.csv");
-  const auto& entries = db.getEntries(MediaType::Anime);
+  catalist::database db(tempDir());
+  loadFixture(db, mediaType::Anime, "crlf.csv");
+  const auto& entries = db.getEntries(mediaType::Anime);
   REQUIRE(entries.size() == 1);
   CHECK(entries[0].title == "Odd Taxi");
   CHECK(entries[0].notes == "Crlf notes");
@@ -172,9 +172,9 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted multiline notes") {
-  catalist::Database db(tempDir());
-  loadFixture(db, MediaType::Anime, "multiline.csv");
-  const auto& entries = db.getEntries(MediaType::Anime);
+  catalist::database db(tempDir());
+  loadFixture(db, mediaType::Anime, "multiline.csv");
+  const auto& entries = db.getEntries(mediaType::Anime);
   REQUIRE(entries.size() == 2);
   CHECK(entries[0].title == "Ghost, \"in\" the Shell");
   CHECK(entries[0].notes ==
@@ -183,7 +183,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted multiline notes") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add keeps user fields and refreshes upstream metadata") {
-  catalist::Database db(tempDir());
+  catalist::database db(tempDir());
   db.addEntry(makeEntry().id(52991).malId(52991).title("Sousou no Frieren")
                   .score(8).progress(5).totalUnits(0).notes("mine")
                   .startDate("2023-09-29"));
@@ -195,8 +195,8 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add keeps user fields and refresh
                                  .remoteId("kitsu", "46474"));
 
   CHECK(mergedId == 52991);
-  REQUIRE(db.getEntries(MediaType::Anime).size() == 1);
-  auto merged = db.getById(MediaType::Anime, 52991);
+  REQUIRE(db.getEntries(mediaType::Anime).size() == 1);
+  auto merged = db.getById(mediaType::Anime, 52991);
   REQUIRE(merged.has_value());
   CHECK(merged->score == 8);
   CHECK(merged->progress == 5);
@@ -209,12 +209,12 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add keeps user fields and refresh
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add backfills empty user fields") {
-  catalist::Database db(tempDir());
+  catalist::database db(tempDir());
   db.addEntry(makeEntry().id(100).title("Blank"));
   db.addEntry(makeEntry().id(100).title("Blank").score(7).progress(3)
                   .notes("filled").finishDate("2024-01-01").anilistId(55));
 
-  auto merged = db.getById(MediaType::Anime, 100);
+  auto merged = db.getById(mediaType::Anime, 100);
   REQUIRE(merged.has_value());
   CHECK(merged->score == 7);
   CHECK(merged->progress == 3);
@@ -224,11 +224,11 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add backfills empty user fields")
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "addEntry matches an existing entry by mal remote id") {
-  catalist::Database db(tempDir());
+  catalist::database db(tempDir());
   db.addEntry(makeEntry().id(10001).title("Local").remoteId("mal", "777"));
   int mergedId = db.addEntry(makeEntry().id(0).title("Remote").totalUnits(12)
                                  .remoteId("mal", "777"));
   CHECK(mergedId == 10001);
-  REQUIRE(db.getEntries(MediaType::Anime).size() == 1);
-  CHECK(db.getEntries(MediaType::Anime)[0].totalUnits == 12);
+  REQUIRE(db.getEntries(mediaType::Anime).size() == 1);
+  CHECK(db.getEntries(mediaType::Anime)[0].totalUnits == 12);
 }

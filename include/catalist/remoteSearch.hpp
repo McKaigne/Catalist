@@ -7,11 +7,11 @@
 
 namespace catalist {
 
-struct RemoteSearchResult {
+struct remoteSearchResult {
   int malId = 0;
   std::string title;
   std::string titleEnglish;
-  MediaType type = MediaType::Anime;
+  mediaType type = mediaType::Anime;
   int totalUnits = 0;
   double score = 0.0;
   std::string year;
@@ -19,9 +19,9 @@ struct RemoteSearchResult {
   std::string synopsis;
 };
 
-class RemoteSearchEngine {
+class remoteSearchEngine {
 public:
-  static std::vector<RemoteSearchResult> query(MediaType type,
+  static std::vector<remoteSearchResult> query(mediaType type,
                                                const std::string& searchQuery,
                                                std::string& outErr,
                                                size_t limit = 10);

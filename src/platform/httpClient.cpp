@@ -11,7 +11,7 @@ namespace catalist {
 
 namespace {
 
-struct PipeDeleter {
+struct pipeDeleter {
   void operator()(FILE* fp) const {
     if (fp)
       pclose(fp);
@@ -33,9 +33,9 @@ std::string escapeShellArg(std::string_view arg) {
 
 }  // namespace
 
-Result<HttpResponse> CurlHttpClient::execute(const HttpRequest& request) {
+result<httpResponse> curlHttpClient::execute(const httpRequest& request) {
   if (request.url.empty()) {
-    return Result<HttpResponse>::failure("HTTP request URL cannot be empty.");
+    return result<httpResponse>::failure("HTTP request URL cannot be empty.");
   }
 
   std::ostringstream cmd;
@@ -62,14 +62,14 @@ Result<HttpResponse> CurlHttpClient::execute(const HttpRequest& request) {
   cmd << " -w \"\\nCATALIST_HTTP_STATUS:%{http_code}\" "
       << escapeShellArg(request.url) << " 2>/dev/null";
 
-  std::unique_ptr<FILE, PipeDeleter> pipe(popen(cmd.str().c_str(), "r"));
+  std::unique_ptr<FILE, pipeDeleter> pipe(popen(cmd.str().c_str(), "r"));
   if (!tempBodyFile.empty()) {
     std::error_code ec;
     std::filesystem::remove(tempBodyFile, ec);
   }
 
   if (!pipe) {
-    return Result<HttpResponse>::failure("Failed to spawn curl subprocess.");
+    return result<httpResponse>::failure("Failed to spawn curl subprocess.");
   }
 
   std::array<char, 512> buffer;
@@ -79,7 +79,7 @@ Result<HttpResponse> CurlHttpClient::execute(const HttpRequest& request) {
     rawOutput += buffer.data();
   }
 
-  HttpResponse response;
+  httpResponse response;
   const std::string marker = "\nCATALIST_HTTP_STATUS:";
   size_t markerPos = rawOutput.rfind(marker);
 
@@ -97,21 +97,21 @@ Result<HttpResponse> CurlHttpClient::execute(const HttpRequest& request) {
   }
 
   response.status_code = response.statusCode;
-  return Result<HttpResponse>::success(response);
+  return result<httpResponse>::success(response);
 }
 
-void MockHttpClient::setResponse(const std::string& urlPattern,
-                                 const HttpResponse& response) {
+void mockHttpClient::setResponse(const std::string& urlPattern,
+                                 const httpResponse& response) {
   responses_[urlPattern] = response;
 }
 
-Result<HttpResponse> MockHttpClient::execute(const HttpRequest& request) {
+result<httpResponse> mockHttpClient::execute(const httpRequest& request) {
   for (const auto& [pattern, resp] : responses_) {
     if (request.url.find(pattern) != std::string::npos) {
-      return Result<HttpResponse>::success(resp);
+      return result<httpResponse>::success(resp);
     }
   }
-  return Result<HttpResponse>::failure("MockHttpClient: No fixture for " +
+  return result<httpResponse>::failure("MockHttpClient: No fixture for " +
                                        request.url);
 }
 

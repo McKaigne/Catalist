@@ -11,15 +11,15 @@
 
 namespace catalist {
 
-struct PaletteItem {
+struct paletteItem {
   std::string command;
   std::string description;
   std::string argsHint;
 };
 
-class CommandPalette {
+class commandPalette {
  public:
-  CommandPalette();
+  commandPalette();
 
   void open(const std::string& initialPrefix = "");
   void close();
@@ -29,14 +29,14 @@ class CommandPalette {
                    bool isTab, bool isUp, bool isDown);
   void execute(const std::function<void(const std::string&)>& onExecute);
 
-  ftxui::Element render(const ThemePalette& theme);
+  ftxui::Element render(const themePalette& theme);
 
  private:
   bool isOpen_ = false;
   std::string query_;
   int selectedIndex_ = 0;
-  std::vector<PaletteItem> catalog_;
-  std::vector<PaletteItem> filteredItems_;
+  std::vector<paletteItem> catalog_;
+  std::vector<paletteItem> filteredItems_;
 
   void updateFilter();
   void initCatalog();

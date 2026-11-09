@@ -52,7 +52,7 @@ static std::string extractTag(const std::string& block,
   return decodeXmlEntities(val);
 }
 
-size_t MalParser::importXml(const std::string& filepath, Database& db,
+size_t malParser::importXml(const std::string& filepath, database& db,
                             bool clean) {
   std::ifstream file(filepath);
   if (!file.is_open())
@@ -66,7 +66,7 @@ size_t MalParser::importXml(const std::string& filepath, Database& db,
   size_t imported = 0;
 
   if (clean && content.find("<anime>") != std::string::npos) {
-    db.clear(MediaType::Anime);
+    db.clear(mediaType::Anime);
   }
 
   size_t aPos = 0;
@@ -77,8 +77,8 @@ size_t MalParser::importXml(const std::string& filepath, Database& db,
     std::string block = content.substr(aPos, aEnd - aPos + 8);
     aPos = aEnd + 8;
 
-    Entry e;
-    e.type = MediaType::Anime;
+    entry e;
+    e.type = mediaType::Anime;
 
     std::string idStr = extractTag(block, "series_animedb_id");
     try {
@@ -135,7 +135,7 @@ size_t MalParser::importXml(const std::string& filepath, Database& db,
   }
 
   if (clean && content.find("<manga>") != std::string::npos) {
-    db.clear(MediaType::Manga);
+    db.clear(mediaType::Manga);
   }
 
   size_t mPos = 0;
@@ -146,8 +146,8 @@ size_t MalParser::importXml(const std::string& filepath, Database& db,
     std::string block = content.substr(mPos, mEnd - mPos + 8);
     mPos = mEnd + 8;
 
-    Entry e;
-    e.type = MediaType::Manga;
+    entry e;
+    e.type = mediaType::Manga;
 
     std::string idStr = extractTag(block, "manga_mangadb_id");
     try {

@@ -8,7 +8,7 @@ namespace catalist::test {
 // A small fixed library that exercises the CLI formatters' edge cases: long
 // titles, quotes and commas, multiline notes, unknown totals, unrated entries
 // and manga volumes.
-void seedSampleLibrary(Database& db);
+void seedSampleLibrary(database& db);
 
 }  // namespace catalist::test
 

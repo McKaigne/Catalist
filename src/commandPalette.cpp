@@ -7,11 +7,11 @@ namespace catalist {
 
 using namespace ftxui;
 
-CommandPalette::CommandPalette() {
+commandPalette::commandPalette() {
   initCatalog();
 }
 
-void CommandPalette::initCatalog() {
+void commandPalette::initCatalog() {
   catalog_ = {{"theme", "Switch color palette",
                "<catppuccin|dracula|nord|tokyo-night...>"},
               {"sort", "Sort table by property",
@@ -35,24 +35,24 @@ void CommandPalette::initCatalog() {
               {"help", "Toggle keybindings cheat-sheet", ""}};
 }
 
-void CommandPalette::open(const std::string& initialPrefix) {
+void commandPalette::open(const std::string& initialPrefix) {
   isOpen_ = true;
   query_ = initialPrefix;
   selectedIndex_ = 0;
   updateFilter();
 }
 
-void CommandPalette::close() {
+void commandPalette::close() {
   isOpen_ = false;
   query_.clear();
   filteredItems_.clear();
 }
 
-bool CommandPalette::isOpen() const {
+bool commandPalette::isOpen() const {
   return isOpen_;
 }
 
-void CommandPalette::updateFilter() {
+void commandPalette::updateFilter() {
   filteredItems_.clear();
   std::string q = query_;
   std::transform(q.begin(), q.end(), q.begin(), ::tolower);
@@ -62,7 +62,7 @@ void CommandPalette::updateFilter() {
   ss >> verb;
 
   if (verb == "theme") {
-    auto themes = ThemeRegistry::getAvailableThemes();
+    auto themes = themeRegistry::getAvailableThemes();
     std::string arg;
     ss >> arg;
     for (const auto& th : themes) {
@@ -88,7 +88,7 @@ void CommandPalette::updateFilter() {
                  std::max(0, static_cast<int>(filteredItems_.size()) - 1));
 }
 
-void CommandPalette::handleEvent(const std::string& keyChar, bool isBack,
+void commandPalette::handleEvent(const std::string& keyChar, bool isBack,
                                  bool isEnter, bool isTab, bool isUp,
                                  bool isDown) {
   (void)isEnter;
@@ -127,7 +127,7 @@ void CommandPalette::handleEvent(const std::string& keyChar, bool isBack,
   }
 }
 
-void CommandPalette::execute(
+void commandPalette::execute(
     const std::function<void(const std::string&)>& onExecute) {
   std::string cmd = query_;
   if (cmd.empty() && !filteredItems_.empty() && selectedIndex_ >= 0 &&
@@ -140,7 +140,7 @@ void CommandPalette::execute(
   }
 }
 
-Element CommandPalette::render(const ThemePalette& theme) {
+Element commandPalette::render(const themePalette& theme) {
   Elements items;
 
   for (size_t i = 0; i < filteredItems_.size(); ++i) {

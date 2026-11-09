@@ -7,15 +7,15 @@
 
 namespace catalist {
 
-struct MalCredentials {
+struct malCredentials {
   std::string accessToken;
   std::string refreshToken;
   long long expiresAt = 0;
 };
 
-class MalAuth {
+class malAuth {
  public:
-  static MalAuth& getInstance();
+  static malAuth& getInstance();
 
   bool isAuthenticated() const;
   bool authenticate(std::string& outMsg);
@@ -26,15 +26,15 @@ class MalAuth {
   void save();
 
  private:
-  MalAuth();
-  MalCredentials creds_;
+  malAuth();
+  malCredentials creds_;
   bool exchangeToken(const std::string& code, const std::string& verifier,
                      std::string& outMsg);
 };
 
-class MetadataSync {
+class metadataSync {
  public:
-  static size_t syncOngoing(Database& db, std::string& outMsg);
+  static size_t syncOngoing(database& db, std::string& outMsg);
 };
 
 }  // namespace catalist

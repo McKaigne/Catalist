@@ -4,18 +4,18 @@
 
 #include "catalist/kdl.hpp"
 
-using catalist::kdl::Document;
-using catalist::kdl::Node;
-using catalist::kdl::Value;
+using catalist::kdl::document;
+using catalist::kdl::node;
+using catalist::kdl::value;
 
 namespace {
 
-void checkSameValue(const Value& lhs, const Value& rhs) {
-  CHECK(lhs.type == rhs.type);
+void checkSameValue(const value& lhs, const value& rhs) {
+  CHECK(lhs.valueType == rhs.valueType);
   CHECK(lhs.asString() == rhs.asString());
 }
 
-void checkSameNode(const Node& lhs, const Node& rhs) {
+void checkSameNode(const node& lhs, const node& rhs) {
   CAPTURE(lhs.name);
   CHECK(lhs.name == rhs.name);
   REQUIRE(lhs.args.size() == rhs.args.size());
@@ -51,7 +51,7 @@ ratio 1.5
 
 TEST_CASE("kdl parses nodes args props and children") {
   std::string err;
-  auto doc = Document::parse(kSampleKdl, err);
+  auto doc = document::parse(kSampleKdl, err);
   CHECK(err == "");
   REQUIRE(doc.rootNodes.size() == 3);
 
@@ -73,9 +73,9 @@ TEST_CASE("kdl parses nodes args props and children") {
 
 TEST_CASE("kdl serialize then parse round trips the tree") {
   std::string err;
-  auto original = Document::parse(kSampleKdl, err);
+  auto original = document::parse(kSampleKdl, err);
   auto serialized = original.serialize();
-  auto reparsed = Document::parse(serialized, err);
+  auto reparsed = document::parse(serialized, err);
   CHECK(err == "");
 
   REQUIRE(original.rootNodes.size() == reparsed.rootNodes.size());
@@ -85,6 +85,6 @@ TEST_CASE("kdl serialize then parse round trips the tree") {
 
 TEST_CASE("kdl serialize uses four space indentation") {
   std::string err;
-  auto doc = Document::parse("parent {\n child \"x\"\n}\n", err);
+  auto doc = document::parse("parent {\n child \"x\"\n}\n", err);
   CHECK(doc.serialize() == "parent {\n    child \"x\"\n}\n");
 }

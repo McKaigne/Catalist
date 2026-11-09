@@ -13,7 +13,7 @@ namespace catalist {
 
 namespace {
 
-struct PipeDeleter {
+struct pipeDeleter {
   void operator()(FILE* f) const {
     if (f)
       pclose(f);
@@ -35,15 +35,15 @@ std::string escapeShellArg(std::string_view arg) {
 
 std::string execCommand(const std::string& cmd) {
   std::array<char, 256> buffer;
-  std::string result;
-  std::unique_ptr<FILE, PipeDeleter> pipe(popen(cmd.c_str(), "r"));
+  std::string commandOutput;
+  std::unique_ptr<FILE, pipeDeleter> pipe(popen(cmd.c_str(), "r"));
   if (!pipe)
     return "";
   while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) !=
          nullptr) {
-    result += buffer.data();
+    commandOutput += buffer.data();
   }
-  return result;
+  return commandOutput;
 }
 
 std::string unescapeJsonString(const std::string& str) {
@@ -131,7 +131,7 @@ double extractJsonNumber(const std::string& block,
 
 }  // namespace
 
-std::string RemoteSearchEngine::urlEncode(const std::string& value) {
+std::string remoteSearchEngine::urlEncode(const std::string& value) {
   std::ostringstream escaped;
   escaped.fill('0');
   escaped << std::hex;
@@ -148,9 +148,9 @@ std::string RemoteSearchEngine::urlEncode(const std::string& value) {
   return escaped.str();
 }
 
-static std::vector<RemoteSearchResult> queryAniList(
-    MediaType type, const std::string& searchQuery, size_t limit) {
-  std::vector<RemoteSearchResult> results;
+static std::vector<remoteSearchResult> queryAniList(
+    mediaType type, const std::string& searchQuery, size_t limit) {
+  std::vector<remoteSearchResult> results;
 
   std::filesystem::path tempPayload =
       std::filesystem::temp_directory_path() /
@@ -159,7 +159,7 @@ static std::vector<RemoteSearchResult> queryAniList(
   if (!out.is_open())
     return results;
 
-  std::string queryType = (type == MediaType::Anime) ? "ANIME" : "MANGA";
+  std::string queryType = (type == mediaType::Anime) ? "ANIME" : "MANGA";
 
   out << "{\"query\":\"query($s:String,$t:MediaType){Page(perPage:" << limit
       << "){media(search:$s,type:$t){id idMal title{romaji english} episodes chapters status averageScore startDate{year}}}}\",\"variables\":{\"s\":\"";
@@ -224,7 +224,7 @@ static std::vector<RemoteSearchResult> queryAniList(
     std::string block = json.substr(objStart, objEnd - objStart + 1);
     cur = objEnd + 1;
 
-    RemoteSearchResult r;
+    remoteSearchResult r;
     r.type = type;
 
     r.malId = static_cast<int>(extractJsonNumber(block, "idMal"));
@@ -240,7 +240,7 @@ static std::vector<RemoteSearchResult> queryAniList(
       continue;
 
     r.titleEnglish = unescapeJsonString(extractJsonString(block, "english"));
-    std::string unitKey = (type == MediaType::Anime) ? "episodes" : "chapters";
+    std::string unitKey = (type == mediaType::Anime) ? "episodes" : "chapters";
     r.totalUnits = static_cast<int>(extractJsonNumber(block, unitKey));
 
     double avg100 = extractJsonNumber(block, "averageScore");
@@ -257,13 +257,13 @@ static std::vector<RemoteSearchResult> queryAniList(
   return results;
 }
 
-static std::vector<RemoteSearchResult> queryJikanFallback(
-    MediaType type, const std::string& searchQuery, size_t limit) {
-  std::vector<RemoteSearchResult> results;
+static std::vector<remoteSearchResult> queryJikanFallback(
+    mediaType type, const std::string& searchQuery, size_t limit) {
+  std::vector<remoteSearchResult> results;
 
-  std::string endpoint = (type == MediaType::Anime) ? "anime" : "manga";
+  std::string endpoint = (type == mediaType::Anime) ? "anime" : "manga";
   std::string url = "https://api.jikan.moe/v4/" + endpoint +
-                    "?q=" + RemoteSearchEngine::urlEncode(searchQuery) +
+                    "?q=" + remoteSearchEngine::urlEncode(searchQuery) +
                     "&limit=" + std::to_string(limit);
   std::string cmd =
       "curl -s -L -m 8 -A \"Mozilla/5.0 (Windows NT 10.0; Win64; x64)\" " +
@@ -310,7 +310,7 @@ static std::vector<RemoteSearchResult> queryJikanFallback(
     std::string block = json.substr(objStart, objEnd - objStart + 1);
     cur = objEnd + 1;
 
-    RemoteSearchResult r;
+    remoteSearchResult r;
     r.type = type;
     r.malId = static_cast<int>(extractJsonNumber(block, "mal_id"));
     if (r.malId <= 0)
@@ -322,7 +322,7 @@ static std::vector<RemoteSearchResult> queryJikanFallback(
 
     r.titleEnglish =
         unescapeJsonString(extractJsonString(block, "title_english"));
-    std::string unitKey = (type == MediaType::Anime) ? "episodes" : "chapters";
+    std::string unitKey = (type == mediaType::Anime) ? "episodes" : "chapters";
     r.totalUnits = static_cast<int>(extractJsonNumber(block, unitKey));
     r.score = extractJsonNumber(block, "score");
     r.status = extractJsonString(block, "status");
@@ -342,8 +342,8 @@ static std::vector<RemoteSearchResult> queryJikanFallback(
   return results;
 }
 
-std::vector<RemoteSearchResult> RemoteSearchEngine::query(
-    MediaType type, const std::string& searchQuery, std::string& outErr,
+std::vector<remoteSearchResult> remoteSearchEngine::query(
+    mediaType type, const std::string& searchQuery, std::string& outErr,
     size_t limit) {
   if (searchQuery.empty())
     return {};

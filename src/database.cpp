@@ -11,7 +11,7 @@
 
 namespace catalist {
 
-std::filesystem::path Database::getDefaultConfigDir() {
+std::filesystem::path database::getDefaultConfigDir() {
   const char* custom = std::getenv("CATALIST_DATA_DIR");
   if (custom && *custom)
     return std::filesystem::path(custom);
@@ -31,121 +31,121 @@ std::filesystem::path Database::getDefaultConfigDir() {
   return std::filesystem::path("./config");
 }
 
-std::filesystem::path Database::getConfigDir() {
+std::filesystem::path database::getConfigDir() {
   return getDefaultConfigDir();
 }
 
-Database::Database() : configDir_(getDefaultConfigDir()) {}
-Database::Database(std::filesystem::path configDir)
+database::database() : configDir_(getDefaultConfigDir()) {}
+database::database(std::filesystem::path configDir)
     : configDir_(std::move(configDir)) {}
 
-std::filesystem::path Database::getConfigPath() const {
+std::filesystem::path database::getConfigPath() const {
   return configDir_;
 }
 
-std::vector<Entry>& Database::getList(MediaType type) {
-  return (type == MediaType::Anime) ? animeEntries_ : mangaEntries_;
+std::vector<entry>& database::getList(mediaType type) {
+  return (type == mediaType::Anime) ? animeEntries_ : mangaEntries_;
 }
 
-const std::vector<Entry>& Database::getList(MediaType type) const {
-  return (type == MediaType::Anime) ? animeEntries_ : mangaEntries_;
+const std::vector<entry>& database::getList(mediaType type) const {
+  return (type == mediaType::Anime) ? animeEntries_ : mangaEntries_;
 }
 
-void Database::clear(MediaType type) {
+void database::clear(mediaType type) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   getList(type).clear();
 }
 
-void Database::sortEntries(std::vector<Entry>& v, SortKey key, bool reverse) {
-  auto less = [key](const Entry& a, const Entry& b) {
+void database::sortEntries(std::vector<entry>& v, sortKey key, bool reverse) {
+  auto less = [key](const entry& a, const entry& b) {
     switch (key) {
-      case SortKey::Score:
+      case sortKey::Score:
         return a.score != b.score ? a.score > b.score : a.title < b.title;
-      case SortKey::Progress:
+      case sortKey::Progress:
         return a.progress != b.progress ? a.progress > b.progress
                                         : a.title < b.title;
-      case SortKey::Date:
+      case sortKey::Date:
         return a.startDate != b.startDate ? a.startDate > b.startDate
                                           : a.title < b.title;
-      case SortKey::Status:
+      case sortKey::Status:
         return a.status != b.status
                    ? static_cast<int>(a.status) < static_cast<int>(b.status)
                    : a.title < b.title;
-      case SortKey::Title:
+      case sortKey::Title:
         return a.title < b.title;
-      case SortKey::Id:
+      case sortKey::Id:
         return a.id < b.id;
     }
     return false;
   };
-  std::sort(v.begin(), v.end(), [&](const Entry& a, const Entry& b) {
+  std::sort(v.begin(), v.end(), [&](const entry& a, const entry& b) {
     return reverse ? less(b, a) : less(a, b);
   });
 }
 
-int Database::addEntry(Entry entry) {
+int database::addEntry(entry mediaEntry) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  LOG_INFO("Adding/updating entry ID " + std::to_string(entry.id) + ": " + entry.title);
-  if (entry.malId > 0 && entry.id <= 0) {
-    entry.id = entry.malId;
-  } else if (entry.id <= 0) {
-    entry.id = nextLocalId_++;
+  LOG_INFO("Adding/updating entry ID " + std::to_string(mediaEntry.id) + ": " + mediaEntry.title);
+  if (mediaEntry.malId > 0 && mediaEntry.id <= 0) {
+    mediaEntry.id = mediaEntry.malId;
+  } else if (mediaEntry.id <= 0) {
+    mediaEntry.id = nextLocalId_++;
   }
 
-  if (entry.id >= nextLocalId_) {
-    nextLocalId_ = entry.id + 1;
+  if (mediaEntry.id >= nextLocalId_) {
+    nextLocalId_ = mediaEntry.id + 1;
   }
 
-  auto& list = getList(entry.type);
+  auto& list = getList(mediaEntry.type);
   for (auto& existing : list) {
-    bool idMatch = (existing.id == entry.id);
-    bool malMatch = (entry.malId > 0 && existing.malId == entry.malId);
+    bool idMatch = (existing.id == mediaEntry.id);
+    bool malMatch = (mediaEntry.malId > 0 && existing.malId == mediaEntry.malId);
     bool remoteMatch = false;
-    std::string incMal = entry.getRemoteId("mal");
+    std::string incMal = mediaEntry.getRemoteId("mal");
     if (!incMal.empty() && existing.getRemoteId("mal") == incMal) {
       remoteMatch = true;
     }
 
     if (idMatch || malMatch || remoteMatch) {
       // Tier 2 (Upstream metadata)
-      if (entry.totalUnits > 0)
-        existing.totalUnits = entry.totalUnits;
-      if (entry.totalVolumes > 0)
-        existing.totalVolumes = entry.totalVolumes;
-      for (const auto& [prov, rId] : entry.remoteIds) {
+      if (mediaEntry.totalUnits > 0)
+        existing.totalUnits = mediaEntry.totalUnits;
+      if (mediaEntry.totalVolumes > 0)
+        existing.totalVolumes = mediaEntry.totalVolumes;
+      for (const auto& [prov, rId] : mediaEntry.remoteIds) {
         existing.setRemoteId(prov, rId);
       }
-      if (entry.malId > 0 && existing.malId <= 0)
-        existing.malId = entry.malId;
-      if (entry.anilistId > 0 && existing.anilistId <= 0)
-        existing.anilistId = entry.anilistId;
+      if (mediaEntry.malId > 0 && existing.malId <= 0)
+        existing.malId = mediaEntry.malId;
+      if (mediaEntry.anilistId > 0 && existing.anilistId <= 0)
+        existing.anilistId = mediaEntry.anilistId;
 
       // Tier 1 (User Authority): Only backfill untouched local records
-      if (existing.notes.empty() && !entry.notes.empty())
-        existing.notes = entry.notes;
-      if (existing.score == 0 && entry.score > 0)
-        existing.score = entry.score;
-      if (existing.progress == 0 && entry.progress > 0)
-        existing.progress = entry.progress;
-      if (existing.startDate.empty() && !entry.startDate.empty())
-        existing.startDate = entry.startDate;
-      if (existing.finishDate.empty() && !entry.finishDate.empty())
-        existing.finishDate = entry.finishDate;
+      if (existing.notes.empty() && !mediaEntry.notes.empty())
+        existing.notes = mediaEntry.notes;
+      if (existing.score == 0 && mediaEntry.score > 0)
+        existing.score = mediaEntry.score;
+      if (existing.progress == 0 && mediaEntry.progress > 0)
+        existing.progress = mediaEntry.progress;
+      if (existing.startDate.empty() && !mediaEntry.startDate.empty())
+        existing.startDate = mediaEntry.startDate;
+      if (existing.finishDate.empty() && !mediaEntry.finishDate.empty())
+        existing.finishDate = mediaEntry.finishDate;
 
       return existing.id;
     }
   }
 
-  list.push_back(entry);
-  return entry.id;
+  list.push_back(mediaEntry);
+  return mediaEntry.id;
 }
 
-const std::vector<Entry>& Database::getEntries(MediaType type) const {
+const std::vector<entry>& database::getEntries(mediaType type) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   return getList(type);
 }
 
-std::optional<Entry> Database::getById(MediaType type, int id) const {
+std::optional<entry> database::getById(mediaType type, int id) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   const auto& list = getList(type);
   // Prioritize exact ID match
@@ -161,24 +161,24 @@ std::optional<Entry> Database::getById(MediaType type, int id) const {
   return std::nullopt;
 }
 
-bool Database::updateEntry(const Entry& entry) {
+bool database::updateEntry(const entry& mediaEntry) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  auto& list = getList(entry.type);
+  auto& list = getList(mediaEntry.type);
   for (auto& item : list) {
-    if (item.id == entry.id) {
-      item = entry;
+    if (item.id == mediaEntry.id) {
+      item = mediaEntry;
       return true;
     }
   }
   return false;
 }
 
-bool Database::removeEntry(MediaType type, int id) {
+bool database::removeEntry(mediaType type, int id) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   LOG_INFO("Removing entry ID " + std::to_string(id));
   auto& list = getList(type);
   auto it = std::remove_if(list.begin(), list.end(),
-                           [id](const Entry& e) { return e.id == id; });
+                           [id](const entry& e) { return e.id == id; });
   if (it != list.end()) {
     list.erase(it, list.end());
     return true;
@@ -186,19 +186,19 @@ bool Database::removeEntry(MediaType type, int id) {
   return false;
 }
 
-bool Database::changeMediaType(MediaType currentType, int id) {
+bool database::changeMediaType(mediaType currentType, int id) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   auto& srcList = getList(currentType);
-  MediaType targetType =
-      (currentType == MediaType::Anime) ? MediaType::Manga : MediaType::Anime;
+  mediaType targetType =
+      (currentType == mediaType::Anime) ? mediaType::Manga : mediaType::Anime;
   auto& dstList = getList(targetType);
 
   auto it = std::find_if(srcList.begin(), srcList.end(),
-                         [id](const Entry& e) { return e.id == id; });
+                         [id](const entry& e) { return e.id == id; });
   if (it == srcList.end())
     return false;
 
-  Entry moved = *it;
+  entry moved = *it;
   moved.type = targetType;
   srcList.erase(it);
   dstList.push_back(moved);
@@ -206,11 +206,11 @@ bool Database::changeMediaType(MediaType currentType, int id) {
   return true;
 }
 
-std::vector<Entry> Database::filterEntries(
-    MediaType type, std::optional<WatchStatus> status, int scoreFilter,
-    const std::string& query, SortKey sortKey, bool reverse) const {
+std::vector<entry> database::filterEntries(
+    mediaType type, std::optional<watchStatus> status, int scoreFilter,
+    const std::string& query, sortKey sortBy, bool reverse) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::vector<Entry> results;
+  std::vector<entry> results;
   const auto& list = getList(type);
 
   std::string queryLower = query;
@@ -234,11 +234,11 @@ std::vector<Entry> Database::filterEntries(
     results.push_back(e);
   }
 
-  sortEntries(results, sortKey, reverse);
+  sortEntries(results, sortBy, reverse);
   return results;
 }
 
-size_t Database::countByStatus(MediaType type, WatchStatus status) const {
+size_t database::countByStatus(mediaType type, watchStatus status) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   size_t count = 0;
   for (const auto& e : getList(type)) {
@@ -248,7 +248,7 @@ size_t Database::countByStatus(MediaType type, WatchStatus status) const {
   return count;
 }
 
-size_t Database::countByScore(MediaType type, int score) const {
+size_t database::countByScore(mediaType type, int score) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   size_t count = 0;
   for (const auto& e : getList(type)) {
@@ -258,7 +258,7 @@ size_t Database::countByScore(MediaType type, int score) const {
   return count;
 }
 
-double Database::averageScore(MediaType type) const {
+double database::averageScore(mediaType type) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   int sum = 0;
   int rated = 0;
@@ -271,7 +271,7 @@ double Database::averageScore(MediaType type) const {
   return (rated == 0) ? 0.0 : static_cast<double>(sum) / rated;
 }
 
-int Database::totalProgress(MediaType type) const {
+int database::totalProgress(mediaType type) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   int total = 0;
   for (const auto& e : getList(type)) {
@@ -280,7 +280,7 @@ int Database::totalProgress(MediaType type) const {
   return total;
 }
 
-int Database::totalVolumes(MediaType type) const {
+int database::totalVolumes(mediaType type) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   int total = 0;
   for (const auto& e : getList(type)) {
@@ -289,7 +289,7 @@ int Database::totalVolumes(MediaType type) const {
   return total;
 }
 
-int Database::totalRewatched(MediaType type) const {
+int database::totalRewatched(mediaType type) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   int total = 0;
   for (const auto& e : getList(type)) {
@@ -298,38 +298,38 @@ int Database::totalRewatched(MediaType type) const {
   return total;
 }
 
-double Database::daysSpent(MediaType type) const {
+double database::daysSpent(mediaType type) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  if (type == MediaType::Anime) {
-    return (totalProgress(MediaType::Anime) * 24.0) / 1440.0;
+  if (type == mediaType::Anime) {
+    return (totalProgress(mediaType::Anime) * 24.0) / 1440.0;
   } else {
-    return (totalProgress(MediaType::Manga) * 5.0) / 1440.0;
+    return (totalProgress(mediaType::Manga) * 5.0) / 1440.0;
   }
 }
 
-double Database::completedPercentage(MediaType type) const {
+double database::completedPercentage(mediaType type) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   const auto& list = getList(type);
   if (list.empty())
     return 0.0;
-  return (static_cast<double>(countByStatus(type, WatchStatus::Completed)) /
+  return (static_cast<double>(countByStatus(type, watchStatus::Completed)) /
           list.size()) *
          100.0;
 }
 
-std::filesystem::path Database::getCsvPath(MediaType type) const {
-  return configDir_ / (type == MediaType::Anime ? "anime.csv" : "manga.csv");
+std::filesystem::path database::getCsvPath(mediaType type) const {
+  return configDir_ / (type == mediaType::Anime ? "anime.csv" : "manga.csv");
 }
 
-std::filesystem::path Database::getHistoryPath() const {
+std::filesystem::path database::getHistoryPath() const {
   return configDir_ / "history.csv";
 }
 
-std::filesystem::path Database::getBackupDir() const {
+std::filesystem::path database::getBackupDir() const {
   return configDir_ / "backups";
 }
 
-void Database::createBackupSnapshot() {
+void database::createBackupSnapshot() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   LOG_INFO("Creating pre-mutation snapshot backup...");
   auto bdir = getBackupDir();
@@ -341,14 +341,14 @@ void Database::createBackupSnapshot() {
   ss << std::put_time(std::localtime(&inTimeT), "%Y%m%d_%H%M%S");
   std::string timestamp = ss.str();
 
-  if (std::filesystem::exists(getCsvPath(MediaType::Anime))) {
+  if (std::filesystem::exists(getCsvPath(mediaType::Anime))) {
     std::filesystem::copy_file(
-        getCsvPath(MediaType::Anime), bdir / ("anime_" + timestamp + ".csv"),
+        getCsvPath(mediaType::Anime), bdir / ("anime_" + timestamp + ".csv"),
         std::filesystem::copy_options::overwrite_existing);
   }
-  if (std::filesystem::exists(getCsvPath(MediaType::Manga))) {
+  if (std::filesystem::exists(getCsvPath(mediaType::Manga))) {
     std::filesystem::copy_file(
-        getCsvPath(MediaType::Manga), bdir / ("manga_" + timestamp + ".csv"),
+        getCsvPath(mediaType::Manga), bdir / ("manga_" + timestamp + ".csv"),
         std::filesystem::copy_options::overwrite_existing);
   }
 }
@@ -386,7 +386,7 @@ static std::vector<std::string> parseCsvRecord(const std::string& record) {
   return fields;
 }
 
-void Database::autoHealIds() {
+void database::autoHealIds() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (const auto& e : animeEntries_) {
     if (e.id >= nextLocalId_)
@@ -398,7 +398,7 @@ void Database::autoHealIds() {
   }
 }
 
-bool Database::loadCsv(MediaType type, const std::filesystem::path& path) {
+bool database::loadCsv(mediaType type, const std::filesystem::path& path) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::ifstream file(path);
   if (!file.is_open())
@@ -437,7 +437,7 @@ bool Database::loadCsv(MediaType type, const std::filesystem::path& path) {
       if (fields.size() < 7)
         continue;
 
-      Entry e;
+      entry e;
       e.type = type;
 
       try {
@@ -534,7 +534,7 @@ bool Database::loadCsv(MediaType type, const std::filesystem::path& path) {
   return true;
 }
 
-bool Database::saveCsv(MediaType type,
+bool database::saveCsv(mediaType type,
                        const std::filesystem::path& path) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::filesystem::create_directories(path.parent_path());
@@ -547,7 +547,7 @@ bool Database::saveCsv(MediaType type,
       << "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,dirty,external_ids\n";
   for (const auto& e : getList(type)) {
     file << e.id << "," << e.malId << "," << e.anilistId << ","
-         << (e.type == MediaType::Anime ? "anime" : "manga") << ","
+         << (e.type == mediaType::Anime ? "anime" : "manga") << ","
          << escapeCsv(e.title) << ","
          << escapeCsv(statusToString(e.status, e.type)) << "," << e.score << ","
          << e.progress << "," << e.totalUnits << "," << e.volumes << ","
@@ -563,7 +563,7 @@ bool Database::saveCsv(MediaType type,
   return !ec;
 }
 
-void Database::logActivity(const ActivityRecord& record) {
+void database::logActivity(const activityRecord& record) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   historyRecords_.insert(historyRecords_.begin(), record);
   if (historyRecords_.size() > 100) {
@@ -572,10 +572,10 @@ void Database::logActivity(const ActivityRecord& record) {
   saveHistory();
 }
 
-std::vector<ActivityRecord> Database::getRecentActivity(MediaType type,
+std::vector<activityRecord> database::getRecentActivity(mediaType type,
                                                         size_t limit) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::vector<ActivityRecord> res;
+  std::vector<activityRecord> res;
   for (const auto& h : historyRecords_) {
     if (h.type == type) {
       res.push_back(h);
@@ -586,7 +586,7 @@ std::vector<ActivityRecord> Database::getRecentActivity(MediaType type,
   return res;
 }
 
-bool Database::loadHistory() {
+bool database::loadHistory() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   auto hPath = getHistoryPath();
   std::ifstream file(hPath);
@@ -605,9 +605,9 @@ bool Database::loadHistory() {
     if (fields.size() < 7)
       continue;
 
-    ActivityRecord r;
+    activityRecord r;
     r.timestamp = fields[0];
-    r.type = (fields[1] == "anime" ? MediaType::Anime : MediaType::Manga);
+    r.type = (fields[1] == "anime" ? mediaType::Anime : mediaType::Manga);
     r.title = fields[2];
     r.status = stringToStatus(fields[3]);
     try {
@@ -630,7 +630,7 @@ bool Database::loadHistory() {
   return true;
 }
 
-bool Database::saveHistory() const {
+bool database::saveHistory() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::filesystem::create_directories(configDir_);
   auto hPath = getHistoryPath();
@@ -642,7 +642,7 @@ bool Database::saveHistory() const {
   file << "#timestamp,type,title,status,progress,total_units,score\n";
   for (const auto& h : historyRecords_) {
     file << escapeCsv(h.timestamp) << ","
-         << (h.type == MediaType::Anime ? "anime" : "manga") << ","
+         << (h.type == mediaType::Anime ? "anime" : "manga") << ","
          << escapeCsv(h.title) << ","
          << escapeCsv(statusToString(h.status, h.type)) << "," << h.progress
          << "," << h.totalUnits << "," << h.score << "\n";
@@ -653,24 +653,24 @@ bool Database::saveHistory() const {
   return !ec;
 }
 
-bool Database::loadAll() {
+bool database::loadAll() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  bool a = loadCsv(MediaType::Anime, getCsvPath(MediaType::Anime));
-  bool m = loadCsv(MediaType::Manga, getCsvPath(MediaType::Manga));
+  bool a = loadCsv(mediaType::Anime, getCsvPath(mediaType::Anime));
+  bool m = loadCsv(mediaType::Manga, getCsvPath(mediaType::Manga));
   loadHistory();
   autoHealIds();
   return a || m;
 }
 
-bool Database::saveAll() const {
+bool database::saveAll() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::filesystem::create_directories(configDir_);
-  bool a = saveCsv(MediaType::Anime, getCsvPath(MediaType::Anime));
-  bool m = saveCsv(MediaType::Manga, getCsvPath(MediaType::Manga));
+  bool a = saveCsv(mediaType::Anime, getCsvPath(mediaType::Anime));
+  bool m = saveCsv(mediaType::Manga, getCsvPath(mediaType::Manga));
   saveHistory();
   return a && m;
 }
 
-void Database::seedDefaults() {}
+void database::seedDefaults() {}
 
 }  // namespace catalist

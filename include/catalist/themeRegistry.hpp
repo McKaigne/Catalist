@@ -6,7 +6,7 @@
 
 namespace catalist {
 
-struct ThemePalette {
+struct themePalette {
   std::string name;
   ftxui::Color base;
   ftxui::Color mantle;
@@ -26,19 +26,19 @@ struct ThemePalette {
   ftxui::Color red;
 };
 
-class ThemeRegistry {
+class themeRegistry {
 public:
   static ftxui::Color hexToColor(const std::string& hex);
-  static const ThemePalette& getTheme(const std::string& name);
+  static const themePalette& getTheme(const std::string& name);
   static bool hasTheme(const std::string& name);
   static std::vector<std::string> getAvailableThemes();
-  static void setCustomPalette(const ThemePalette& palette);
-  static const ThemePalette& active();
+  static void setCustomPalette(const themePalette& palette);
+  static const themePalette& active();
   static void setActive(const std::string& name);
 
 private:
-  static ThemePalette activePalette_;
-  static ThemePalette customPalette_;
+  static themePalette activePalette_;
+  static themePalette customPalette_;
 };
 
 }  // namespace catalist

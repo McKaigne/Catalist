@@ -9,9 +9,9 @@
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"
 
-using catalist::CliDispatcher;
-using catalist::MediaType;
-using catalist::WatchStatus;
+using catalist::cliDispatcher;
+using catalist::mediaType;
+using catalist::watchStatus;
 using catalist::test::streamCapture;
 using catalist::test::tempDirFixture;
 
@@ -19,21 +19,21 @@ namespace {
 
 struct setFixture : tempDirFixture {
   setFixture() : db(tempDir()) { catalist::test::seedSampleLibrary(db); }
-  catalist::Database db;
+  catalist::database db;
   std::string out;
   std::string err;
 
   int set(const std::vector<std::string>& args) {
     streamCapture outCapture(std::cout);
     streamCapture errCapture(std::cerr);
-    int exitCode = CliDispatcher::executeSet(args, db);
+    int exitCode = cliDispatcher::executeSet(args, db);
     out = outCapture.text();
     err = errCapture.text();
     return exitCode;
   }
 
-  catalist::Entry anime(int id) const {
-    auto found = db.getById(MediaType::Anime, id);
+  catalist::entry anime(int id) const {
+    auto found = db.getById(mediaType::Anime, id);
     REQUIRE(found.has_value());
     return *found;
   }
@@ -44,7 +44,7 @@ struct setFixture : tempDirFixture {
 TEST_CASE_FIXTURE(setFixture, "cli set progress at total completes the entry") {
   CHECK(set({"44265", "-p", "13"}) == 0);
   CHECK(anime(44265).progress == 13);
-  CHECK(anime(44265).status == WatchStatus::Completed);
+  CHECK(anime(44265).status == watchStatus::Completed);
   CHECK(out == "Updated [44265] 'Odd Taxi': Progress 13/13, Rating 8/10, "
                "Status Completed\n");
 }
@@ -52,18 +52,18 @@ TEST_CASE_FIXTURE(setFixture, "cli set progress at total completes the entry") {
 TEST_CASE_FIXTURE(setFixture, "cli set progress above total clamps and completes") {
   CHECK(set({"44265", "-p", "+50"}) == 0);
   CHECK(anime(44265).progress == 13);
-  CHECK(anime(44265).status == WatchStatus::Completed);
+  CHECK(anime(44265).status == watchStatus::Completed);
 }
 
 TEST_CASE_FIXTURE(setFixture, "cli set explicit status wins over auto completion") {
   CHECK(set({"44265", "-p", "13", "-s", "on-hold"}) == 0);
-  CHECK(anime(44265).status == WatchStatus::OnHold);
+  CHECK(anime(44265).status == watchStatus::OnHold);
 }
 
 TEST_CASE_FIXTURE(setFixture, "cli set negative delta stops at zero") {
   CHECK(set({"44265", "-p", "sub", "99"}) == 0);
   CHECK(anime(44265).progress == 0);
-  CHECK(anime(44265).status == WatchStatus::Watching);
+  CHECK(anime(44265).status == watchStatus::Watching);
 
   CHECK(set({"10002", "-p", "-7"}) == 0);
   CHECK(anime(10002).progress == 0);
@@ -86,7 +86,7 @@ TEST_CASE_FIXTURE(setFixture, "cli set targets by unique substring") {
 
 TEST_CASE_FIXTURE(setFixture, "cli set falls through to manga") {
   CHECK(set({"berserk", "-p", "a"}) == 0);
-  auto berserk = db.getById(MediaType::Manga, 2);
+  auto berserk = db.getById(mediaType::Manga, 2);
   REQUIRE(berserk.has_value());
   CHECK(berserk->progress == 365);
 }

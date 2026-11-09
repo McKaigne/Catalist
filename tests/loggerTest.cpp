@@ -34,7 +34,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "logger writes exactly one formatted line") {
   auto logPath = tempDir() / "catalist.log";
   std::filesystem::remove(logPath);
 
-  catalist::Logger::get().init(logPath);
+  catalist::logger::get().init(logPath);
   LOG_INFO("Testing logger output line");
 
   REQUIRE(std::filesystem::exists(logPath));

@@ -4,8 +4,8 @@
 #include "catalist/keybindManager.hpp"
 #include "support/testSupport.hpp"
 
-using catalist::AppConfig;
-using catalist::KeyAction;
+using catalist::appConfig;
+using catalist::keyAction;
 using catalist::test::tempDirFixture;
 using catalist::test::writeTextFile;
 
@@ -26,15 +26,15 @@ top-bar height=3 border=true {
 }
 )kdl");
 
-  AppConfig config;
+  appConfig config;
   REQUIRE(config.load(configPath));
   CHECK(config.theme == "nord");
   CHECK(config.mouse == false);
   CHECK(config.defaultMedia == "manga");
   CHECK(config.defaultSort == "title");
   CHECK(config.reverseSort == false);
-  CHECK(config.keybinds.getKey(KeyAction::MoveUp) == "w");
-  CHECK(config.keybinds.getKey(KeyAction::MoveDown) == "s");
+  CHECK(config.keybinds.getKey(keyAction::MoveUp) == "w");
+  CHECK(config.keybinds.getKey(keyAction::MoveDown) == "s");
 
   auto topBar = config.kdlDoc.getNode("top-bar");
   REQUIRE(topBar.has_value());
@@ -46,9 +46,9 @@ top-bar height=3 border=true {
 TEST_CASE_FIXTURE(tempDirFixture, "appConfig ignores dashed keybind names") {
   auto configPath = tempDir() / "catalist.kdl";
   writeTextFile(configPath, "keybinds {\n    move-up \"w\"\n}\n");
-  AppConfig config;
+  appConfig config;
   REQUIRE(config.load(configPath));
-  CHECK(config.keybinds.getKey(KeyAction::MoveUp) == "k");
+  CHECK(config.keybinds.getKey(keyAction::MoveUp) == "k");
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "appConfig loads child style general block") {
@@ -56,7 +56,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig loads child style general block") {
   writeTextFile(configPath,
                 "general {\n    theme \"dracula\"\n    mouse false\n"
                 "    reverse-sort false\n}\n");
-  AppConfig config;
+  appConfig config;
   REQUIRE(config.load(configPath));
   CHECK(config.theme == "dracula");
   CHECK(config.mouse == false);
@@ -66,7 +66,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig loads child style general block") {
 
 TEST_CASE_FIXTURE(tempDirFixture, "appConfig generates the default file when missing") {
   auto configPath = tempDir() / "nested" / "catalist.kdl";
-  AppConfig config;
+  appConfig config;
   REQUIRE(config.load(configPath));
   CHECK(std::filesystem::exists(configPath));
   CHECK(config.kdlDoc.getNode("top-bar").has_value());
@@ -75,13 +75,13 @@ TEST_CASE_FIXTURE(tempDirFixture, "appConfig generates the default file when mis
 
 TEST_CASE_FIXTURE(tempDirFixture, "appConfig save then load keeps general settings") {
   auto configPath = tempDir() / "catalist.kdl";
-  AppConfig original;
+  appConfig original;
   original.theme = "gruvbox";
   original.mouse = false;
   original.defaultSort = "progress";
   REQUIRE(original.save(configPath));
 
-  AppConfig reloaded;
+  appConfig reloaded;
   REQUIRE(reloaded.load(configPath));
   CHECK(reloaded.theme == "gruvbox");
   CHECK(reloaded.mouse == false);

@@ -6,7 +6,7 @@
 #include "catalist/provider.hpp"
 
 TEST_CASE("kitsu provider parses search results from an injected client") {
-  auto mockClient = std::make_shared<catalist::MockHttpClient>();
+  auto mockClient = std::make_shared<catalist::mockHttpClient>();
   mockClient->setResponse(
       "kitsu.io",
       {200,
@@ -15,11 +15,11 @@ TEST_CASE("kitsu provider parses search results from an injected client") {
        "\"89.4\"}}]}",
        "", 0, ""});
 
-  catalist::ProviderRegistry registry(mockClient);
+  catalist::providerRegistry registry(mockClient);
   auto kitsu = registry.getProvider("kitsu");
   REQUIRE(static_cast<bool>(kitsu));
 
-  auto results = kitsu->search(catalist::MediaType::Anime, "Frieren", 5);
+  auto results = kitsu->search(catalist::mediaType::Anime, "Frieren", 5);
   REQUIRE(results.size() == 1);
   CHECK(results[0].remoteId == "1234");
   CHECK(results[0].title == "Frieren: Beyond Journey");

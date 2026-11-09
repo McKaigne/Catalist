@@ -4,111 +4,111 @@
 
 namespace catalist {
 
-std::string statusToString(WatchStatus status, MediaType type) {
+std::string statusToString(watchStatus status, mediaType type) {
   switch (status) {
-    case WatchStatus::Watching:
-      return (type == MediaType::Manga) ? "Reading" : "Watching";
-    case WatchStatus::Completed:
+    case watchStatus::Watching:
+      return (type == mediaType::Manga) ? "Reading" : "Watching";
+    case watchStatus::Completed:
       return "Completed";
-    case WatchStatus::OnHold:
+    case watchStatus::OnHold:
       return "On-Hold";
-    case WatchStatus::Dropped:
+    case watchStatus::Dropped:
       return "Dropped";
-    case WatchStatus::PlanToWatch:
-      return (type == MediaType::Manga) ? "Plan to Read" : "Plan to Watch";
+    case watchStatus::PlanToWatch:
+      return (type == mediaType::Manga) ? "Plan to Read" : "Plan to Watch";
   }
   return "Unknown";
 }
 
-std::string statusToIcon(WatchStatus status) {
+std::string statusToIcon(watchStatus status) {
   switch (status) {
-    case WatchStatus::Watching:
+    case watchStatus::Watching:
       return icon::Watching;
-    case WatchStatus::Completed:
+    case watchStatus::Completed:
       return icon::Completed;
-    case WatchStatus::OnHold:
+    case watchStatus::OnHold:
       return icon::OnHold;
-    case WatchStatus::Dropped:
+    case watchStatus::Dropped:
       return icon::Dropped;
-    case WatchStatus::PlanToWatch:
+    case watchStatus::PlanToWatch:
       return icon::Plan;
   }
   return icon::Plan;
 }
 
-ftxui::Color statusToColor(WatchStatus status) {
+ftxui::Color statusToColor(watchStatus status) {
   switch (status) {
-    case WatchStatus::Watching:
+    case watchStatus::Watching:
       return theme::Green;
-    case WatchStatus::Completed:
+    case watchStatus::Completed:
       return theme::Mauve;
-    case WatchStatus::OnHold:
+    case watchStatus::OnHold:
       return theme::Yellow;
-    case WatchStatus::Dropped:
+    case watchStatus::Dropped:
       return theme::Red;
-    case WatchStatus::PlanToWatch:
+    case watchStatus::PlanToWatch:
       return theme::Overlay0;
   }
   return theme::Subtext;
 }
 
-WatchStatus stringToStatus(const std::string& str) {
+watchStatus stringToStatus(const std::string& str) {
   std::string lower = str;
   std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
   if (lower.find("plan") != std::string::npos || lower == "5" ||
       lower == "plan-to-watch" || lower == "plan-to-read") {
-    return WatchStatus::PlanToWatch;
+    return watchStatus::PlanToWatch;
   } else if (lower.find("watch") != std::string::npos ||
              lower.find("read") != std::string::npos || lower == "1") {
-    return WatchStatus::Watching;
+    return watchStatus::Watching;
   } else if (lower.find("complete") != std::string::npos || lower == "2") {
-    return WatchStatus::Completed;
+    return watchStatus::Completed;
   } else if (lower.find("hold") != std::string::npos || lower == "3") {
-    return WatchStatus::OnHold;
+    return watchStatus::OnHold;
   } else if (lower.find("drop") != std::string::npos || lower == "4") {
-    return WatchStatus::Dropped;
+    return watchStatus::Dropped;
   }
-  return WatchStatus::PlanToWatch;
+  return watchStatus::PlanToWatch;
 }
 
-std::string typeToString(MediaType type) {
+std::string typeToString(mediaType type) {
   switch (type) {
-    case MediaType::Anime:
+    case mediaType::Anime:
       return "Anime";
-    case MediaType::Manga:
+    case mediaType::Manga:
       return "Manga";
   }
   return "Anime";
 }
 
-std::string typeToIcon(MediaType type) {
+std::string typeToIcon(mediaType type) {
   switch (type) {
-    case MediaType::Anime:
+    case mediaType::Anime:
       return icon::Anime;
-    case MediaType::Manga:
+    case mediaType::Manga:
       return icon::Manga;
   }
   return icon::Anime;
 }
 
-ftxui::Color typeToColor(MediaType type) {
+ftxui::Color typeToColor(mediaType type) {
   switch (type) {
-    case MediaType::Anime:
+    case mediaType::Anime:
       return theme::Blue;
-    case MediaType::Manga:
+    case mediaType::Manga:
       return theme::Peach;
   }
   return theme::Blue;
 }
 
-MediaType stringToType(const std::string& str) {
+mediaType stringToType(const std::string& str) {
   std::string lower = str;
   std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
   if (lower.find("manga") != std::string::npos) {
-    return MediaType::Manga;
+    return mediaType::Manga;
   }
-  return MediaType::Anime;
+  return mediaType::Anime;
 }
 
 std::string renderStarMeter(int score) {
@@ -158,7 +158,7 @@ std::string escapeCsv(const std::string& field) {
   return escaped;
 }
 
-std::string Entry::getRemoteId(const std::string& provider) const {
+std::string entry::getRemoteId(const std::string& provider) const {
   auto it = remoteIds.find(provider);
   if (it != remoteIds.end())
     return it->second;
@@ -169,7 +169,7 @@ std::string Entry::getRemoteId(const std::string& provider) const {
   return "";
 }
 
-void Entry::setRemoteId(const std::string& provider,
+void entry::setRemoteId(const std::string& provider,
                         const std::string& remoteId) {
   if (remoteId.empty()) {
     remoteIds.erase(provider);

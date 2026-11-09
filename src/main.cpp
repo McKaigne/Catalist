@@ -86,14 +86,14 @@ int main(int argc, char* argv[]) {
 
   setupCrashHandlers();
 
-  auto logPath = catalist::Database::getConfigDir() / "catalist.log";
-  catalist::Logger::get().init(logPath);
+  auto logPath = catalist::database::getConfigDir() / "catalist.log";
+  catalist::logger::get().init(logPath);
   LOG_INFO("Catalist starting up...");
 
-  catalist::Database db;
-  catalist::AppConfig config;
+  catalist::database db;
+  catalist::appConfig config;
 
-  auto configPath = catalist::Database::getConfigDir() / "catalist.kdl";
+  auto configPath = catalist::database::getConfigDir() / "catalist.kdl";
   config.load(configPath);
   LOG_INFO("Loaded workspace config from: " + configPath.string());
 
@@ -104,11 +104,11 @@ int main(int argc, char* argv[]) {
 
   if (argc > 1) {
     LOG_INFO("Dispatching CLI command: " + std::string(argv[1]));
-    return catalist::CliDispatcher::dispatch(argc, argv, db, config);
+    return catalist::cliDispatcher::dispatch(argc, argv, db, config);
   }
 
   LOG_INFO("Launching interactive TUI screen.");
-  catalist::AppTui app(db, config);
+  catalist::appTui app(db, config);
   app.run();
   LOG_INFO("Catalist session exited cleanly.");
 

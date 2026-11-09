@@ -5,7 +5,7 @@
 
 namespace catalist {
 
-ftxui::Color ThemeRegistry::hexToColor(const std::string& hex) {
+ftxui::Color themeRegistry::hexToColor(const std::string& hex) {
   std::string clean = hex;
   if (!clean.empty() && clean[0] == '#') {
     clean = clean.substr(1);
@@ -23,7 +23,7 @@ ftxui::Color ThemeRegistry::hexToColor(const std::string& hex) {
   }
 }
 
-static ThemePalette makeCatppuccinMocha() {
+static themePalette makeCatppuccinMocha() {
   return {
       "catppuccin-mocha",
       ftxui::Color::RGB(0x1e, 0x1e, 0x2e),  // base
@@ -45,7 +45,7 @@ static ThemePalette makeCatppuccinMocha() {
   };
 }
 
-static ThemePalette makeDark() {
+static themePalette makeDark() {
   return {"dark",
           ftxui::Color::RGB(0x12, 0x12, 0x12),
           ftxui::Color::RGB(0x1a, 0x1a, 0x1a),
@@ -65,7 +65,7 @@ static ThemePalette makeDark() {
           ftxui::Color::RGB(0xcf, 0x66, 0x79)};
 }
 
-static ThemePalette makeLight() {
+static themePalette makeLight() {
   return {"light",
           ftxui::Color::RGB(0xfa, 0xfa, 0xfa),
           ftxui::Color::RGB(0xf0, 0xf0, 0xf0),
@@ -85,7 +85,7 @@ static ThemePalette makeLight() {
           ftxui::Color::RGB(0xd3, 0x2f, 0x2f)};
 }
 
-static ThemePalette makeTokyoNight() {
+static themePalette makeTokyoNight() {
   return {"tokyo-night",
           ftxui::Color::RGB(0x1a, 0x1b, 0x26),
           ftxui::Color::RGB(0x16, 0x16, 0x1e),
@@ -105,7 +105,7 @@ static ThemePalette makeTokyoNight() {
           ftxui::Color::RGB(0xf7, 0x76, 0x8e)};
 }
 
-static ThemePalette makeKanagawa() {
+static themePalette makeKanagawa() {
   return {"kanagawa",
           ftxui::Color::RGB(0x1f, 0x1f, 0x28),
           ftxui::Color::RGB(0x16, 0x16, 0x1d),
@@ -125,7 +125,7 @@ static ThemePalette makeKanagawa() {
           ftxui::Color::RGB(0xc3, 0x40, 0x43)};
 }
 
-static ThemePalette makeGruvbox() {
+static themePalette makeGruvbox() {
   return {"gruvbox",
           ftxui::Color::RGB(0x28, 0x28, 0x28),
           ftxui::Color::RGB(0x1d, 0x20, 0x21),
@@ -145,7 +145,7 @@ static ThemePalette makeGruvbox() {
           ftxui::Color::RGB(0xfb, 0x49, 0x34)};
 }
 
-static ThemePalette makeNord() {
+static themePalette makeNord() {
   return {"nord",
           ftxui::Color::RGB(0x2e, 0x34, 0x40),
           ftxui::Color::RGB(0x24, 0x29, 0x33),
@@ -165,7 +165,7 @@ static ThemePalette makeNord() {
           ftxui::Color::RGB(0xbf, 0x61, 0x6a)};
 }
 
-static ThemePalette makeDracula() {
+static themePalette makeDracula() {
   return {"dracula",
           ftxui::Color::RGB(0x28, 0x2a, 0x36),
           ftxui::Color::RGB(0x21, 0x22, 0x2c),
@@ -185,7 +185,7 @@ static ThemePalette makeDracula() {
           ftxui::Color::RGB(0xff, 0x55, 0x55)};
 }
 
-static ThemePalette makeRosePine() {
+static themePalette makeRosePine() {
   return {"rose-pine",
           ftxui::Color::RGB(0x19, 0x17, 0x24),
           ftxui::Color::RGB(0x1f, 0x1d, 0x2e),
@@ -205,7 +205,7 @@ static ThemePalette makeRosePine() {
           ftxui::Color::RGB(0xeb, 0x6f, 0x92)};
 }
 
-static ThemePalette makeAyu() {
+static themePalette makeAyu() {
   return {"ayu",
           ftxui::Color::RGB(0x0f, 0x14, 0x19),
           ftxui::Color::RGB(0x0a, 0x0e, 0x13),
@@ -225,7 +225,7 @@ static ThemePalette makeAyu() {
           ftxui::Color::RGB(0xf0, 0x71, 0x78)};
 }
 
-static ThemePalette makeSolarizedDark() {
+static themePalette makeSolarizedDark() {
   return {"solarized-dark",
           ftxui::Color::RGB(0x00, 0x2b, 0x36),
           ftxui::Color::RGB(0x00, 0x21, 0x2b),
@@ -245,7 +245,7 @@ static ThemePalette makeSolarizedDark() {
           ftxui::Color::RGB(0xdc, 0x32, 0x2f)};
 }
 
-static ThemePalette makeSolarizedLight() {
+static themePalette makeSolarizedLight() {
   return {"solarized-light",
           ftxui::Color::RGB(0xfd, 0xf6, 0xe3),
           ftxui::Color::RGB(0xee, 0xe8, 0xd5),
@@ -265,14 +265,14 @@ static ThemePalette makeSolarizedLight() {
           ftxui::Color::RGB(0xdc, 0x32, 0x2f)};
 }
 
-ThemePalette ThemeRegistry::activePalette_ = makeCatppuccinMocha();
-ThemePalette ThemeRegistry::customPalette_ = makeCatppuccinMocha();
+themePalette themeRegistry::activePalette_ = makeCatppuccinMocha();
+themePalette themeRegistry::customPalette_ = makeCatppuccinMocha();
 
-const ThemePalette& ThemeRegistry::getTheme(const std::string& name) {
+const themePalette& themeRegistry::getTheme(const std::string& name) {
   std::string lower = name;
   std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
-  static const std::unordered_map<std::string, ThemePalette> catalog = {
+  static const std::unordered_map<std::string, themePalette> catalog = {
       {"catppuccin", makeCatppuccinMocha()},
       {"catppuccin-mocha", makeCatppuccinMocha()},
       {"dark", makeDark()},
@@ -298,7 +298,7 @@ const ThemePalette& ThemeRegistry::getTheme(const std::string& name) {
   return catalog.at("catppuccin-mocha");
 }
 
-bool ThemeRegistry::hasTheme(const std::string& name) {
+bool themeRegistry::hasTheme(const std::string& name) {
   std::string lower = name;
   std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
   if (lower == "custom")
@@ -308,7 +308,7 @@ bool ThemeRegistry::hasTheme(const std::string& name) {
   return std::find(themes.begin(), themes.end(), lower) != themes.end();
 }
 
-std::vector<std::string> ThemeRegistry::getAvailableThemes() {
+std::vector<std::string> themeRegistry::getAvailableThemes() {
   return {"catppuccin-mocha",
           "dark",
           "light",
@@ -324,16 +324,16 @@ std::vector<std::string> ThemeRegistry::getAvailableThemes() {
           "custom"};
 }
 
-void ThemeRegistry::setCustomPalette(const ThemePalette& palette) {
+void themeRegistry::setCustomPalette(const themePalette& palette) {
   customPalette_ = palette;
   customPalette_.name = "custom";
 }
 
-const ThemePalette& ThemeRegistry::active() {
+const themePalette& themeRegistry::active() {
   return activePalette_;
 }
 
-void ThemeRegistry::setActive(const std::string& name) {
+void themeRegistry::setActive(const std::string& name) {
   activePalette_ = getTheme(name);
 }
 

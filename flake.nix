@@ -41,16 +41,15 @@
               doctest
             ];
 
+            # Completions come from the binary itself so they always match
+            # the installed commands; the throwaway data dir keeps the build
+            # from looking for a home directory.
             postInstall = ''
-              if [ -f completions/catalist.bash ]; then
-                installShellCompletion --bash completions/catalist.bash
-              fi
-              if [ -f completions/_catalist ]; then
-                installShellCompletion --zsh completions/_catalist
-              fi
-              if [ -f completions/catalist.fish ]; then
-                installShellCompletion --fish completions/catalist.fish
-              fi
+              export CATALIST_DATA_DIR="$TMPDIR/catalist-data"
+              installShellCompletion --cmd catalist \
+                --bash <($out/bin/catalist completion bash) \
+                --zsh <($out/bin/catalist completion zsh) \
+                --fish <($out/bin/catalist completion fish)
 
               wrapProgram $out/bin/catalist \
                 --prefix PATH : ${

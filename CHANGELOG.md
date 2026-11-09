@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-10
+
+### Fixed
+- Security: the MyAnimeList OAuth authorization code was inserted into a
+  shell command without escaping. Token exchange now goes through the HTTP
+  client and the code is form-encoded, so a crafted code can neither run
+  commands nor inject form fields.
+- Security: the OAuth redirect listener bound to every network interface; it
+  now listens on 127.0.0.1 only.
+- Opening links and copying to the clipboard no longer pass URLs or titles
+  through a shell command line.
+- AniList search results reported the MyAnimeList id as the AniList id, so
+  AniList links pointed at the wrong page.
+
 ## [0.2.0] - 2026-11-04
 
 ### Added

@@ -5,9 +5,10 @@
 
 namespace catalist::test {
 
-// A small fixed library that exercises the CLI formatters' edge cases: long
-// titles, quotes and commas, multiline notes, unknown totals, unrated entries
-// and manga volumes.
+// A small fixed library with the awkward cases: long titles, quotes and
+// commas, multiline notes, unknown totals, unrated entries and manga volumes.
+// Anime: Sousou no Frieren (10), Odd Taxi (8), Ghost, "in" the Shell (6) and
+// the long title (unrated). Manga: Berserk (10) and Chainsaw Man (9).
 void seedSampleLibrary(database& db);
 
 }  // namespace catalist::test

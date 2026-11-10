@@ -76,42 +76,6 @@ TEST_CASE("csvCodec entries round trip through encode and decode") {
   CHECK(copy.anilistId == 7);
 }
 
-TEST_CASE("csvCodec history round trips and skips short rows") {
-  std::vector<catalist::activityRecord> history = {
-      {"Oct 20, 12:00 PM", mediaType::kManga, "A, b", watchStatus::kWatching,
-       4, 10, 8}};
-  auto text = csvCodec::encodeHistory(history) + "too,short\n";
-  auto decoded = csvCodec::decodeHistory(text);
-  REQUIRE(decoded.size() == 1);
-  CHECK(decoded[0].timestamp == "Oct 20, 12:00 PM");
-  CHECK(decoded[0].type == mediaType::kManga);
-  CHECK(decoded[0].title == "A, b");
-  CHECK(decoded[0].score == 8);
-}
-
-TEST_CASE("csvCodec round trips sync bases") {
-  catalist::entry values = catalist::test::makeEntry()
-                               .type(mediaType::kManga)
-                               .status(watchStatus::kOnHold).score(7)
-                               .progress(30).volumes(3).rewatched(1)
-                               .startDate("2024-01-02").notes("a, \"b\"\nc");
-  auto decoded = csvCodec::decodeSyncBases(
-      csvCodec::encodeSyncBases({{"anilist", 30002, values}}));
-  REQUIRE(decoded.size() == 1);
-  CHECK(decoded[0].service == "anilist");
-  CHECK(decoded[0].remoteId == 30002);
-  const auto& copy = decoded[0].values;
-  CHECK(copy.type == mediaType::kManga);
-  CHECK(copy.status == watchStatus::kOnHold);
-  CHECK(copy.score == 7);
-  CHECK(copy.progress == 30);
-  CHECK(copy.volumes == 3);
-  CHECK(copy.rewatched == 1);
-  CHECK(formatDate(copy.startDate) == "2024-01-02");
-  CHECK_FALSE(copy.finishDate.has_value());
-  CHECK(copy.notes == "a, \"b\"\nc");
-}
-
 TEST_CASE("csvCodec reads files with the old internal columns and drops them") {
   auto decoded = csvCodec::decodeEntries(
       "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,"
@@ -128,4 +92,24 @@ TEST_CASE("csvCodec reads files with the old internal columns and drops them") {
         "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,"
         "volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at\n"
         "5,5,105,anime,Kept,Watching,7,3,12,0,0,0,2024-01-02,,n,2024-02-03\n");
+}
+
+TEST_CASE("csvCodec reads an unknown status as planned instead of dropping the row") {
+  auto decoded = csvCodec::decodeEntries(
+      "1,0,0,manga,Edited by hand,Someday,0,0,0,0,0,0,,,,\n",
+      mediaType::kManga);
+  REQUIRE(decoded.ok());
+  REQUIRE(decoded.value().size() == 1);
+  CHECK(decoded.value()[0].status == watchStatus::kPlanToWatch);
+  CHECK(decoded.value()[0].type == mediaType::kManga);
+}
+
+TEST_CASE("csvCodec names the first row it cannot read") {
+  auto decoded = csvCodec::decodeEntries(
+      "1,0,0,anime,Fine,Watching,0,0,0,0,0,0,,,,\n"
+      "x,0,0,anime,Bad id,Watching,0,0,0,0,0,0,,,,\n",
+      mediaType::kAnime);
+  REQUIRE_FALSE(decoded.ok());
+  CHECK(decoded.errorMessage() ==
+        "row 2 has a column layout this version cannot read");
 }

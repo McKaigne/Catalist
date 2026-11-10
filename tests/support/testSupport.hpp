@@ -1,45 +1,15 @@
 #ifndef CATALIST_TESTS_SUPPORT_TEST_SUPPORT_HPP_
 #define CATALIST_TESTS_SUPPORT_TEST_SUPPORT_HPP_
 
-#include <chrono>
 #include <filesystem>
-#include <optional>
-#include <iosfwd>
-#include <sstream>
 #include <string>
-#include <unordered_map>
 
-#include "catalist/net/accounts.hpp"
-#include "catalist/core/clock.hpp"
-#include "catalist/platform/httpClient.hpp"
-#include "catalist/storage/database.hpp"
 #include "catalist/model/entry.hpp"
 #include "catalist/platform/fileSystem.hpp"
-#include "catalist/platform/processLauncher.hpp"
+#include "catalist/storage/database.hpp"
+#include "support/fakes.hpp"
 
 namespace catalist::test {
-
-class noAuthServer : public iAuthCallbackServer {
-public:
-  std::optional<std::string> waitForCode(std::chrono::seconds) override {
-    return std::nullopt;
-  }
-};
-
-// Logged-out MyAnimeList and AniList services over the given files and HTTP
-// client, with no request pacing.
-struct accountFakes {
-  accountFakes(iFileSystem& fileSystem, iHttpClient& http, const iClock& clock,
-               const std::filesystem::path& dataDir);
-
-  fakeProcessLauncher launcher;
-  noAuthServer authServer;
-  malAuth malLogin;
-  anilistAuth anilistLogin;
-  malListService mal;
-  anilistListService anilist;
-  listAccounts accounts;
-};
 
 std::filesystem::path makeUniqueTempDir(const std::string& prefix);
 
@@ -54,29 +24,10 @@ public:
     return tempDir_;
   }
   [[nodiscard]] realFileSystem& fileSystem() { return fileSystem_; }
-  [[nodiscard]] fixedClock& clock() { return clock_; }
 
 private:
   std::filesystem::path tempDir_;
   realFileSystem fileSystem_;
-  fixedClock clock_;
-};
-
-class streamCapture {
-public:
-  explicit streamCapture(std::ostream& target);
-  ~streamCapture();
-  streamCapture(const streamCapture&) = delete;
-  streamCapture& operator=(const streamCapture&) = delete;
-
-  [[nodiscard]] std::string text() const { return buffer_.str(); }
-
-private:
-  // buffer_ must be declared before original_: the constructor hands
-  // buffer_'s streambuf to the target while initialising original_.
-  std::ostream& target_;
-  std::ostringstream buffer_;
-  std::streambuf* original_;
 };
 
 // Test data must spell dates correctly; a typo should fail loudly instead
@@ -137,6 +88,10 @@ private:
 
 // 2026-10-20 12:00:00 UTC; the test main pins TZ=UTC so local dates agree.
 [[nodiscard]] fixedClock makeTestClock();
+
+// The entry titled `title`; fails the test when there is none.
+[[nodiscard]] entry findTitle(const database& db, mediaType type,
+                              const std::string& title);
 
 std::filesystem::path fixturePath(const std::string& relativePath);
 std::string readTextFile(const std::filesystem::path& path);

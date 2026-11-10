@@ -44,15 +44,13 @@ TEST_CASE("isoDate fromParts validates each part") {
   CHECK_FALSE(isoDate::fromParts(0, 1, 1).has_value());
 }
 
-TEST_CASE("isoDate day numbers round trip across leap years and eras") {
-  CHECK(isoDate::parse("1970-01-01")->dayNumber() == 0);
-  CHECK(isoDate::parse("2000-03-01")->dayNumber() == 11017);
-  CHECK(isoDate::fromDayNumber(-1).toString() == "1969-12-31");
-  for (const char* text : {"2024-02-29", "1900-03-01", "2100-12-31",
-                           "0001-01-01", "2026-10-20"}) {
-    auto date = isoDate::parse(text);
-    REQUIRE(date.has_value());
-    CHECK(isoDate::fromDayNumber(date->dayNumber()).toString() == text);
-  }
+TEST_CASE("isoDate orders dates by year, then month, then day") {
+  auto early = *isoDate::parse("2023-12-31");
+  auto late = *isoDate::parse("2024-01-01");
+  CHECK(early < late);
+  CHECK(late > early);
+  CHECK(early != late);
+  CHECK(*isoDate::parse("2024-01-01") == late);
+  CHECK(*isoDate::parse("2024-01-02") > late);
+  CHECK(*isoDate::parse("2024-02-01") > *isoDate::parse("2024-01-31"));
 }
-

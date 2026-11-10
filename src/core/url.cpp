@@ -13,16 +13,6 @@ bool isUnreserved(char c) {
          c == '.' || c == '~';
 }
 
-std::optional<int> hexValue(char c) {
-  if (c >= '0' && c <= '9')
-    return c - '0';
-  if (c >= 'a' && c <= 'f')
-    return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F')
-    return c - 'A' + 10;
-  return std::nullopt;
-}
-
 }  // namespace
 
 std::string encode(std::string_view text) {
@@ -37,29 +27,6 @@ std::string encode(std::string_view text) {
               << static_cast<int>(static_cast<unsigned char>(c));
   }
   return encoded.str();
-}
-
-std::optional<std::string> decode(std::string_view text) {
-  std::string decoded;
-  for (size_t i = 0; i < text.size(); ++i) {
-    if (text[i] == '+') {
-      decoded += ' ';
-      continue;
-    }
-    if (text[i] != '%') {
-      decoded += text[i];
-      continue;
-    }
-    if (i + 2 >= text.size())
-      return std::nullopt;
-    auto high = hexValue(text[i + 1]);
-    auto low = hexValue(text[i + 2]);
-    if (!high || !low)
-      return std::nullopt;
-    decoded += static_cast<char>(*high * 16 + *low);
-    i += 2;
-  }
-  return decoded;
 }
 
 }  // namespace catalist::url

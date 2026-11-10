@@ -6,7 +6,6 @@
 
 #include "catalist/core/date.hpp"
 
-
 namespace catalist {
 
 enum class mediaType { kAnime, kManga };
@@ -30,7 +29,6 @@ struct entry {
   std::optional<isoDate> finishDate;
   std::string notes;
   std::optional<isoDate> updatedAt;
-
 };
 
 std::string statusToString(watchStatus status,
@@ -44,6 +42,9 @@ std::string typeToString(mediaType type);
 // The display and file form of an optional date: ISO text, or empty.
 [[nodiscard]] std::string formatDate(const std::optional<isoDate>& date);
 
+// The one date the list shows for an entry: when it was finished if it is
+// completed, else when it was started, else when it was last changed.
+[[nodiscard]] std::optional<isoDate> listDate(const entry& shown);
 
 }  // namespace catalist
 

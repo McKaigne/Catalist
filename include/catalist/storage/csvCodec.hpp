@@ -8,17 +8,13 @@
 
 #include "catalist/core/date.hpp"
 #include "catalist/core/result.hpp"
-#include "catalist/model/activity.hpp"
-#include "catalist/model/syncBase.hpp"
 #include "catalist/model/entry.hpp"
 
-// RFC 4180 encoding and decoding of the catalogue and history files. Pure
-// text in, records out; reading and writing the files is the database's job.
+// RFC 4180 encoding and decoding of the catalogue files. Pure text in,
+// records out; reading and writing the files is the database's job.
 namespace catalist::csvCodec {
 
 [[nodiscard]] std::string catalogFileName(mediaType type);
-[[nodiscard]] std::string historyFileName();
-[[nodiscard]] std::string syncFileName();
 
 [[nodiscard]] std::string escapeField(const std::string& field);
 
@@ -29,9 +25,9 @@ namespace catalist::csvCodec {
 
 [[nodiscard]] std::optional<isoDate> decodeDate(const std::string& field);
 
-// The 16 columns of encodeEntries, which export csv prints too. Columns
-// after them (written by 0.3 and earlier builds) are ignored; a row without
-// the type column is in an older layout and is not read.
+// The 16 columns of encodeEntries. Columns after them (written by 0.3 and
+// earlier builds) are ignored; a row without the type column is in an older
+// layout and is not read.
 [[nodiscard]] std::optional<entry> decodeEntry(
     const std::vector<std::string>& fields, mediaType type);
 // Fails on the first row decodeEntry cannot read, so a file is never loaded
@@ -39,13 +35,6 @@ namespace catalist::csvCodec {
 [[nodiscard]] result<std::vector<entry>> decodeEntries(std::string_view text,
                                                        mediaType type);
 [[nodiscard]] std::string encodeEntries(const std::vector<entry>& entries);
-
-[[nodiscard]] std::vector<syncBase> decodeSyncBases(std::string_view text);
-[[nodiscard]] std::string encodeSyncBases(const std::vector<syncBase>& bases);
-
-[[nodiscard]] std::vector<activityRecord> decodeHistory(std::string_view text);
-[[nodiscard]] std::string encodeHistory(
-    const std::vector<activityRecord>& records);
 
 }  // namespace catalist::csvCodec
 

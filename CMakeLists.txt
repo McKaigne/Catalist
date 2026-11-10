@@ -27,8 +27,6 @@ endif()
 set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 
 set(CATALIST_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
-set(CATALIST_ANILIST_CLIENT_ID "" CACHE STRING
-    "AniList API client id (register at anilist.co/settings/developer with the redirect URL https://anilist.co/api/v2/oauth/pin)")
 configure_file(
   include/catalist/core/version.hpp.in
   "${CATALIST_GENERATED_INCLUDE_DIR}/catalist/core/version.hpp"
@@ -43,24 +41,13 @@ add_library(catalistCore STATIC
   src/core/clock.cpp
   src/core/date.cpp
   src/core/json.cpp
-  src/core/logger.cpp
   src/core/shell.cpp
   src/core/url.cpp
-  src/model/activity.cpp
   src/model/entry.cpp
   src/model/entryOps.cpp
-  src/model/serviceLinks.cpp
-  src/model/undoStack.cpp
-  src/net/anilistAuth.cpp
-  src/net/anilistListService.cpp
-  src/net/listSync.cpp
-  src/net/malAuth.cpp
-  src/net/malListService.cpp
-  src/net/remoteSearch.cpp
+  src/net/jikan.cpp
   src/platform/fileSystem.cpp
   src/platform/httpClient.cpp
-  src/platform/processLauncher.cpp
-  src/storage/backup.cpp
   src/storage/csvCodec.cpp
   src/storage/database.cpp
   src/storage/malXml.cpp
@@ -72,7 +59,6 @@ target_include_directories(catalistCore PUBLIC
 target_compile_options(catalistCore PRIVATE ${CATALIST_WARNING_FLAGS})
 
 add_library(catalistTui STATIC
-  src/tui/actions.cpp
   src/tui/app.cpp
   src/tui/keys.cpp
   src/tui/tabs/catalogTab.cpp
@@ -80,7 +66,6 @@ add_library(catalistTui STATIC
   src/tui/theme/statusStyle.cpp
   src/tui/widgets/card.cpp
   src/tui/widgets/marquee.cpp
-  src/tui/widgets/notifier.cpp
   src/tui/widgets/pill.cpp
 )
 target_link_libraries(catalistTui PUBLIC
@@ -116,7 +101,6 @@ else()
 endif()
 
 add_executable(catalistTests
-  tests/activityTest.cpp
   tests/cliTest.cpp
   tests/csvCodecTest.cpp
   tests/databaseTest.cpp
@@ -124,20 +108,14 @@ add_executable(catalistTests
   tests/entryOpsTest.cpp
   tests/entryTest.cpp
   tests/fileSystemTest.cpp
+  tests/jikanTest.cpp
   tests/jsonTest.cpp
-  tests/listServiceTest.cpp
-  tests/listSyncTest.cpp
-  tests/serviceLinksTest.cpp
-  tests/loggerTest.cpp
-  tests/malAuthTest.cpp
   tests/malXmlTest.cpp
-  tests/remoteSearchTest.cpp
   tests/resultTest.cpp
   tests/shellTest.cpp
   tests/support/sampleLibrary.cpp
   tests/support/testSupport.cpp
   tests/testMain.cpp
-  tests/undoStackTest.cpp
   tests/urlTest.cpp
   tests/versionTest.cpp
 )
@@ -160,6 +138,7 @@ add_executable(catalistTuiTests
   tests/testMain.cpp
   tests/support/sampleLibrary.cpp
   tests/support/testSupport.cpp
+  tests/tui/appShellTest.cpp
   tests/tui/catalogTabTest.cpp
   tests/tui/statsTabTest.cpp
   tests/tui/tuiHarness.cpp

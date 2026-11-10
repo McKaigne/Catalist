@@ -54,4 +54,10 @@ std::string formatDate(const std::optional<isoDate>& date) {
   return date ? date->toString() : "";
 }
 
+std::optional<isoDate> listDate(const entry& shown) {
+  if (shown.status == watchStatus::kCompleted && shown.finishDate)
+    return shown.finishDate;
+  return shown.startDate ? shown.startDate : shown.updatedAt;
+}
+
 }  // namespace catalist

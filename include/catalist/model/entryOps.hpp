@@ -4,7 +4,7 @@
 #include "catalist/core/date.hpp"
 #include "catalist/model/entry.hpp"
 
-// Pure watchlist rules shared by the TUI and the CLI. Each takes the entry
+// Pure watchlist rules. Each takes the entry
 // by value and returns the updated copy; `today` stamps updatedAt and any
 // start or finish date the rule fills in.
 namespace catalist {
@@ -24,9 +24,6 @@ namespace catalist {
 // start/finish dates and progress consistent with the new status.
 [[nodiscard]] entry cycleStatus(entry target, int direction,
                                 const isoDate& today);
-
-// Takes every MyAnimeList and AniList id `source` has; ids it lacks are kept.
-void adoptServiceIds(entry& target, const entry& source);
 
 // Folds an imported row into an entry the user already has. Totals and
 // service ids are refreshed, but the user's own score, progress, notes and

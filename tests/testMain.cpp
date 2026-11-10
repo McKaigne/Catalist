@@ -8,8 +8,7 @@
 #include "support/testSupport.hpp"
 
 // The data directory, HOME and XDG_CONFIG_HOME are redirected before any test
-// code runs so the logger and config can never touch the developer's real
-// ~/.config/catalist, even through lazily-initialised singletons.
+// code runs, so no test can touch the developer's real ~/.config/catalist.
 int main(int argc, char** argv) {
   auto sandboxRoot = catalist::test::makeUniqueTempDir("catalist-tests-env-");
   auto dataDir = sandboxRoot / "data";

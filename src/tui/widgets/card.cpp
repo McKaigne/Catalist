@@ -31,8 +31,4 @@ Element choice(bool active, const std::string& label, Color tint) {
                    color(active ? theme::kPeach : tint)});
 }
 
-Element note(const std::string& line) {
-  return text("  " + line) | color(theme::kOverlay0);
-}
-
 }  // namespace catalist::card

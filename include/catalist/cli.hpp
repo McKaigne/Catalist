@@ -12,7 +12,7 @@ namespace catalist {
 
 // Runs `catalist <args>` for a non-empty argument list and returns the exit
 // code: 0 on success, 1 when the work failed, 2 when the command line is
-// wrong. Lists move in and out as MyAnimeList XML files, see printUsage.
+// wrong. Lists move in and out as MyAnimeList XML files.
 int runCli(const std::vector<std::string>& args, database& db,
            const iFileSystem& fileSystem, std::ostream& out, std::ostream& err);
 

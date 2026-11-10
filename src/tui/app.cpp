@@ -21,16 +21,12 @@ using namespace ftxui;
 
 namespace {
 
-// Redraw cadence for the scrolling titles in the catalogue.
+// Redraw cadence for the scrolling titles in the catalogue; also how soon a
+// title search starts after Return.
 constexpr auto kTickInterval = std::chrono::milliseconds(250);
 
 bool isBackTab(const Event& event) {
   return event == Event::TabReverse || event == Event::Special("\033[Z");
-}
-
-bool isPopupDismissal(const Event& event) {
-  return event == Event::Character(';') || event == Event::Escape ||
-         event == Event::Return;
 }
 
 Element tabLabel(int number, bool active, const std::string& label,
@@ -57,8 +53,8 @@ Element modePill(appMode mode) {
       return pill(" SCH ", theme::kCrust, theme::kPeach);
     case appMode::kEdt:
       return pill(" EDT ", theme::kCrust, theme::kGreen);
-    case appMode::kVis:
-      return pill(" VIS ", theme::kCrust, theme::kBlue);
+    case appMode::kAdd:
+      return pill(" ADD ", theme::kCrust, theme::kBlue);
     case appMode::kDel:
       return pill(" DEL ", theme::kCrust, theme::kRed);
   }
@@ -66,6 +62,12 @@ Element modePill(appMode mode) {
 }
 
 }  // namespace
+
+void appContext::save(const std::string& done) {
+  status = db.saveAll() ? done
+                        : "Could not save the catalogue to " +
+                              db.getConfigPath().string() + ".";
+}
 
 appShell::appShell(appContext& ctx, std::vector<iTab*> tabs,
                    std::function<void()> quit)
@@ -76,24 +78,17 @@ appShell::appShell(appContext& ctx, std::vector<iTab*> tabs,
 void appShell::activate(int index) {
   if (index < 0 || index >= static_cast<int>(tabs_.size()))
     return;
-  if (index != activeIndex_)
-    activeTab().onDeactivate(ctx_);
   activeIndex_ = index;
   activeTab().onActivate(ctx_);
 }
 
 bool appShell::onEvent(const Event& event) {
-  if (ctx_.db.takeSaveFailure())
-    ctx_.notices.push("Could not save the catalogue to " +
-                      ctx_.db.getConfigPath().string() + ".");
-  // The ticker's event only asks for a redraw.
-  if (event == Event::Custom)
-    return true;
-  if (ctx_.notices.hasPopup()) {
-    if (isPopupDismissal(event))
-      ctx_.notices.dismiss();
+  if (event == Event::Custom) {
+    activeTab().onTick(ctx_);
     return true;
   }
+  if (event.is_mouse())
+    return true;
   if (!activeTab().capturesInput() && handleGlobalKey(event))
     return true;
   return activeTab().onEvent(event, ctx_);
@@ -115,8 +110,8 @@ bool appShell::handleGlobalKey(const Event& event) {
     activate(position);
     return true;
   }
+  // Every change is saved as it is made, so quitting has nothing to write.
   if (keys::isCharacter(event, 'q')) {
-    ctx_.db.saveAll();
     quit_();
     return true;
   }
@@ -124,11 +119,8 @@ bool appShell::handleGlobalKey(const Event& event) {
 }
 
 Element appShell::render() {
-  auto base =
-      vbox({renderTopBar(), activeTab().render(ctx_) | flex, renderBottomBar()});
-  if (auto popup = ctx_.notices.renderPopup())
-    return dbox({base, *popup});
-  return base;
+  return vbox(
+      {renderTopBar(), activeTab().render(ctx_) | flex, renderBottomBar()});
 }
 
 Element appShell::renderTopBar() {
@@ -149,34 +141,29 @@ Element appShell::renderTopBar() {
 
 Element appShell::renderBottomBar() {
   Elements hintItems;
+  int hintsWidth = 0;
   for (const auto& item : activeTab().hints()) {
+    hintsWidth +=
+        static_cast<int>(item.key.size() + item.description.size()) + 3;
     if (!hintItems.empty())
       hintItems.push_back(text("  "));
-    hintItems.push_back(hbox({text(item.key) | bold | color(theme::kText),
-                              text(" " + item.description) |
-                                  color(theme::kSubtext)}));
+    hintItems.push_back(
+        hbox({text(item.key) | bold | color(theme::kText),
+              text(" " + item.description) | color(theme::kSubtext)}));
   }
 
-  std::string selection = activeTab().selectionSummary();
-  Element selectionElement =
-      selection.empty() ? text("")
-                        : hbox({text(" " + selection + " ") | bold |
-                                    color(theme::kGreen),
-                                text("│ ") | color(theme::kSurface1)});
-
-  int maxStatusLength = std::max(16, Terminal::Size().dimx - 76 - 40);
+  // The pill, the separators and the borders take about 14 columns.
+  int maxStatusLength = std::max(16, Terminal::Size().dimx - hintsWidth - 14);
   return hbox({text(" "), modePill(activeTab().mode()),
-               text(" │ ") | color(theme::kSurface1), selectionElement,
-               text(truncated(ctx_.notices.status(), maxStatusLength)) |
+               text(" │ ") | color(theme::kSurface1),
+               text(truncated(ctx_.status, maxStatusLength)) |
                    color(theme::kYellow),
                filler(), hbox(std::move(hintItems)), text(" ")}) |
          border | color(theme::kSurface0) | size(HEIGHT, EQUAL, 3);
 }
 
-void runTui(database& db, const iClock& clock, iProcessLauncher& launcher) {
-  undoStack undo;
-  notifier notices;
-  appContext ctx{db, undo, notices, launcher, clock};
+void runTui(database& db, const iClock& clock, iHttpClient& http) {
+  appContext ctx{db, clock, http};
 
   catalogTab anime(mediaType::kAnime);
   catalogTab manga(mediaType::kManga);
@@ -184,6 +171,7 @@ void runTui(database& db, const iClock& clock, iProcessLauncher& launcher) {
   std::vector<iTab*> tabs = {&anime, &manga, &stats};
 
   auto screen = ScreenInteractive::Fullscreen();
+  screen.TrackMouse(false);
   appShell app(ctx, tabs, screen.ExitLoopClosure());
 
   // FTXUI only draws a text cursor for components it knows about, so each
@@ -191,10 +179,10 @@ void runTui(database& db, const iClock& clock, iProcessLauncher& launcher) {
   Components focusRoots;
   for (iTab* tab : tabs)
     focusRoots.push_back(tab->focusRoot());
-  auto root = CatchEvent(
-      Renderer(Container::Tab(focusRoots, &app.activeIndex()),
-               [&app] { return app.render(); }),
-      [&app](Event event) { return app.onEvent(event); });
+  auto root =
+      CatchEvent(Renderer(Container::Tab(focusRoots, &app.activeIndex()),
+                          [&app] { return app.render(); }),
+                 [&app](Event event) { return app.onEvent(event); });
 
   std::atomic<bool> running{true};
   std::thread ticker([&]() {

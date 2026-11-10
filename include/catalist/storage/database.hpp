@@ -2,98 +2,71 @@
 #define CATALIST_DATABASE_HPP_
 
 #include <filesystem>
-#include <map>
-#include <mutex>
 #include <optional>
-#include <string>
 #include <vector>
 
-#include "catalist/core/clock.hpp"
 #include "catalist/core/result.hpp"
-#include "catalist/model/activity.hpp"
 #include "catalist/model/entry.hpp"
-#include "catalist/model/syncBase.hpp"
 #include "catalist/platform/fileSystem.hpp"
 
 namespace catalist {
 
-enum class sortKey { kScore, kStatus, kTitle, kProgress, kDate, kId };
+enum class sortKey { kScore, kStatus, kTitle, kProgress, kDate };
 
+// The anime and manga lists in memory, and their two CSV files on disk.
 class database {
- public:
-  database(iFileSystem& fileSystem, const iClock& clock,
-           std::filesystem::path configDir);
+public:
+  database(iFileSystem& fileSystem, std::filesystem::path dataDir);
 
-  int addEntry(entry mediaEntry);
-  const std::vector<entry>& getEntries(mediaType type) const;
-  std::optional<entry> getById(mediaType type, int id) const;
-  bool updateEntry(const entry& mediaEntry);
+  // Adds a title under a fresh id and returns it. A title that shares a
+  // MyAnimeList or AniList id with a stored one is merged into that entry
+  // instead (see mergeImported), so importing a list twice adds nothing.
+  int addEntry(entry added);
+  [[nodiscard]] const std::vector<entry>& getEntries(mediaType type) const;
+  [[nodiscard]] std::optional<entry> getById(mediaType type, int id) const;
+  [[nodiscard]] std::optional<entry> findByMalId(mediaType type,
+                                                 int malId) const;
+  bool updateEntry(const entry& changed);
   bool removeEntry(mediaType type, int id);
-  void clear(mediaType type);
-  static void sortEntries(std::vector<entry>& v, sortKey key, bool reverse);
 
-  size_t countByStatus(mediaType type, watchStatus status) const;
-  size_t countByScore(mediaType type, int score) const;
-  double averageScore(mediaType type) const;
-  int totalProgress(mediaType type) const;
-  int totalVolumes(mediaType type) const;
-  int totalRewatched(mediaType type) const;
-  double daysSpent(mediaType type) const;
-  double completedPercentage(mediaType type) const;
+  // Each key has a natural order: score, progress and date from high to low,
+  // title and status from first to last. `reverse` flips it.
+  static void sortEntries(std::vector<entry>& entries, sortKey key,
+                          bool reverse);
+
+  [[nodiscard]] size_t countByStatus(mediaType type, watchStatus status) const;
+  [[nodiscard]] size_t countByScore(mediaType type, int score) const;
+  // Over rated entries only; 0 when nothing is rated.
+  [[nodiscard]] double averageScore(mediaType type) const;
+  [[nodiscard]] int totalProgress(mediaType type) const;
+  [[nodiscard]] int totalVolumes(mediaType type) const;
+  [[nodiscard]] int totalRewatched(mediaType type) const;
+  // An estimate: 24 minutes an episode, 5 minutes a chapter.
+  [[nodiscard]] double daysSpent(mediaType type) const;
 
   // CATALIST_DATA_DIR, then $XDG_CONFIG_HOME/catalist, then
   // ~/.config/catalist.
-  static std::filesystem::path getDefaultConfigDir();
-  std::filesystem::path getConfigPath() const;
-  std::filesystem::path getCsvPath(mediaType type) const;
-  std::filesystem::path getHistoryPath() const;
+  [[nodiscard]] static std::filesystem::path getDefaultConfigDir();
+  [[nodiscard]] std::filesystem::path getConfigPath() const;
+  [[nodiscard]] std::filesystem::path getCsvPath(mediaType type) const;
 
   // Whether a catalogue file was found; fails, naming the file, when one
   // cannot be read, and then nothing of that file is loaded.
   [[nodiscard]] result<bool> loadAll();
-  bool saveAll() const;
-  // Whether a saveAll() failed since the last call. The CLI dispatcher and
-  // the TUI shell each ask once, so the callers of saveAll() need not.
-  [[nodiscard]] bool takeSaveFailure();
+  [[nodiscard]] bool saveAll() const;
   [[nodiscard]] result<bool> loadCsv(mediaType type,
                                      const std::filesystem::path& path);
-  bool saveCsv(mediaType type, const std::filesystem::path& path) const;
+  [[nodiscard]] bool saveCsv(mediaType type,
+                             const std::filesystem::path& path) const;
 
-  void logActivity(const activityRecord& record);
-  std::vector<activityRecord> getRecentActivity(mediaType type,
-                                                size_t limit = 3) const;
-  bool loadHistory();
-  bool saveHistory() const;
-
-  // The sync bases of `service` for `type`, by the service's id (see
-  // syncBase). They live in sync.csv, which saveAll() writes last.
-  [[nodiscard]] std::map<int, entry> syncBases(const std::string& service,
-                                               mediaType type) const;
-  void setSyncBase(const std::string& service, int remoteId,
-                   const entry& values);
-  void eraseSyncBase(const std::string& service, mediaType type, int remoteId);
-
-  void createBackupSnapshot();
-  void autoHealIds();
-
- private:
-  void trackLocalId(int id);
-
-  iFileSystem& fileSystem_;
-  const iClock& clock_;
-  std::filesystem::path configDir_;
-  mutable std::recursive_mutex mutex_;
-  std::vector<entry> animeEntries_;
-  std::vector<entry> mangaEntries_;
-  std::vector<activityRecord> historyRecords_;
-  std::vector<syncBase> syncBases_;
-  int nextLocalId_ = 10001;
-  mutable bool saveFailed_ = false;
-
+private:
   std::vector<entry>& getList(mediaType type);
   const std::vector<entry>& getList(mediaType type) const;
-  void loadSyncBases();
-  bool saveSyncBases() const;
+
+  iFileSystem& fileSystem_;
+  std::filesystem::path dataDir_;
+  std::vector<entry> animeEntries_;
+  std::vector<entry> mangaEntries_;
 };
 
 }  // namespace catalist

@@ -5,11 +5,10 @@
 
 namespace catalist {
 
-// Totals, status breakdown, recent activity, score histogram and a per-year
-// chart for one media type at a time.
+// Totals, the status breakdown and the score histogram, for one media type
+// at a time.
 class statsTab : public iTab {
 public:
-  [[nodiscard]] std::string id() const override;
   [[nodiscard]] std::string title() const override;
   [[nodiscard]] std::string icon() const override;
 

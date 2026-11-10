@@ -26,9 +26,6 @@ namespace catalist::card {
 [[nodiscard]] ftxui::Element choice(bool active, const std::string& label,
                                     ftxui::Color tint);
 
-// A dim explanatory line.
-[[nodiscard]] ftxui::Element note(const std::string& text);
-
 }  // namespace catalist::card
 
 #endif  // CATALIST_TUI_WIDGETS_CARD_HPP_

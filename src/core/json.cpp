@@ -1,7 +1,6 @@
 #include "catalist/core/json.hpp"
 
 #include <charconv>
-#include <cstdio>
 #include <cmath>
 #include <cstdint>
 
@@ -257,89 +256,6 @@ private:
   std::string error_;
 };
 
-void writeString(std::string& out, const std::string& text) {
-  out += '"';
-  out += escape(text);
-  out += '"';
-}
-
-void writeNumber(std::string& out, double number) {
-  if (!std::isfinite(number)) {
-    out += "null";
-    return;
-  }
-  char buffer[32];
-  auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), number);
-  out.append(buffer, error == std::errc() ? end : buffer);
-}
-
-class writer {
-public:
-  explicit writer(bool indented) : indented_(indented) {}
-
-  void write(const value& item, int depth) {
-    if (item.isObject())
-      writeObject(item, depth);
-    else if (item.isArray())
-      writeArray(item, depth);
-    else
-      writeScalar(item);
-  }
-
-  std::string out;
-
-private:
-  void newline(int depth) {
-    if (!indented_)
-      return;
-    out += '\n';
-    out.append(static_cast<size_t>(depth) * 2, ' ');
-  }
-
-  void writeScalar(const value& item) {
-    if (auto text = item.asString())
-      writeString(out, *text);
-    else if (auto number = item.asNumber())
-      writeNumber(out, *number);
-    else if (auto flag = item.asBool())
-      out += *flag ? "true" : "false";
-    else
-      out += "null";
-  }
-
-  void writeArray(const value& item, int depth) {
-    out += '[';
-    bool first = true;
-    for (const auto& element : item.items()) {
-      out += first ? "" : ",";
-      first = false;
-      newline(depth + 1);
-      write(element, depth + 1);
-    }
-    if (!first)
-      newline(depth);
-    out += ']';
-  }
-
-  void writeObject(const value& item, int depth) {
-    out += '{';
-    bool first = true;
-    for (const auto& [key, element] : item.members()) {
-      out += first ? "" : ",";
-      first = false;
-      newline(depth + 1);
-      writeString(out, key);
-      out += indented_ ? ": " : ":";
-      write(element, depth + 1);
-    }
-    if (!first)
-      newline(depth);
-    out += '}';
-  }
-
-  bool indented_;
-};
-
 }  // namespace
 
 bool value::isNull() const {
@@ -399,74 +315,8 @@ const value::object& value::members() const {
   return found ? *found : kEmpty;
 }
 
-void value::set(const std::string& key, value item) {
-  if (isNull())
-    data_ = object{};
-  auto* members = std::get_if<object>(&data_);
-  if (!members)
-    return;
-  for (auto& entry : *members) {
-    if (entry.key == key) {
-      entry.item = std::move(item);
-      return;
-    }
-  }
-  members->push_back({key, std::move(item)});
-}
-
-void value::push(value item) {
-  if (isNull())
-    data_ = array{};
-  if (auto* items = std::get_if<array>(&data_))
-    items->push_back(std::move(item));
-}
-
 result<value> parse(std::string_view text) {
   return parser(text).parseDocument();
-}
-
-std::string escape(std::string_view text) {
-  std::string escaped;
-  for (unsigned char c : text) {
-    switch (c) {
-      case '"':
-        escaped += "\\\"";
-        break;
-      case '\\':
-        escaped += "\\\\";
-        break;
-      case '\b':
-        escaped += "\\b";
-        break;
-      case '\f':
-        escaped += "\\f";
-        break;
-      case '\n':
-        escaped += "\\n";
-        break;
-      case '\r':
-        escaped += "\\r";
-        break;
-      case '\t':
-        escaped += "\\t";
-        break;
-      default:
-        if (c >= 0x20) {
-          escaped += static_cast<char>(c);
-          break;
-        }
-        char buffer[8];
-        std::snprintf(buffer, sizeof(buffer), "\\u%04x", c);
-        escaped += buffer;
-    }
-  }
-  return escaped;
-}
-
-std::string serialize(const value& document, bool indented) {
-  writer output(indented);
-  output.write(document, 0);
-  return output.out;
 }
 
 }  // namespace catalist::json

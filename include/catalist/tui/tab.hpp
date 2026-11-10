@@ -18,14 +18,13 @@ struct hint {
 };
 
 // What the keyboard currently does, shown as a pill in the bottom-left corner:
-// normal, search, edit, visual selection or a pending delete.
-enum class appMode { kNor, kSch, kEdt, kVis, kDel };
+// normal, search, editing notes, adding a title or a pending delete.
+enum class appMode { kNor, kSch, kEdt, kAdd, kDel };
 
 class iTab {
 public:
   virtual ~iTab() = default;
 
-  [[nodiscard]] virtual std::string id() const = 0;
   [[nodiscard]] virtual std::string title() const = 0;
   [[nodiscard]] virtual std::string icon() const = 0;
 
@@ -34,7 +33,10 @@ public:
   [[nodiscard]] virtual std::vector<hint> hints() const = 0;
 
   virtual void onActivate(appContext&) {}
-  virtual void onDeactivate(appContext&) {}
+  // Called by the shell's redraw timer, four times a second, while the tab
+  // is shown; where slow work (the title search) runs, so the status line
+  // has been drawn before it starts.
+  virtual void onTick(appContext&) {}
   // FTXUI children (menus, inputs) that need focus and default handling.
   // FTXUI only routes keys to focusable components, so tabs without children
   // get a focusable placeholder.
@@ -49,7 +51,6 @@ public:
       appContext&) const {
     return std::nullopt;
   }
-  [[nodiscard]] virtual std::string selectionSummary() const { return ""; }
 };
 
 }  // namespace catalist

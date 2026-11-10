@@ -35,27 +35,3 @@ TEST_CASE("json rejects malformed input") {
   CHECK_FALSE(json::parse("{} trailing").ok());
   CHECK_FALSE(json::parse(std::string(100, '[') + std::string(100, ']')).ok());
 }
-
-TEST_CASE("json serializes with escaping and round trips") {
-  json::value doc;
-  doc.set("title", "say \"hi\"\n");
-  doc.set("count", 3);
-  doc.set("ratio", 0.25);
-  doc.set("flag", false);
-  json::value list;
-  list.push(1);
-  list.push(json::value());
-  doc.set("list", std::move(list));
-  std::string text = json::serialize(doc);
-  CHECK(text ==
-        R"({"title":"say \"hi\"\n","count":3,"ratio":0.25,"flag":false,"list":[1,null]})");
-  auto reparsed = json::parse(json::serialize(doc, true));
-  REQUIRE(reparsed.ok());
-  CHECK(reparsed.value()["title"].asString() == "say \"hi\"\n");
-}
-
-TEST_CASE("json escape writes short escapes and \\u for other control characters") {
-  CHECK(catalist::json::escape("a\"b\\c\n\x01") == "a\\\"b\\\\c\\n\\u0001");
-  CHECK(catalist::json::escape("\b\f\r\t\x1f") == "\\b\\f\\r\\t\\u001f");
-  CHECK(catalist::json::escape("é") == "é");
-}

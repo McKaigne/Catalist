@@ -2,14 +2,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <ftxui/component/event.hpp>
-#include <ftxui/component/mouse.hpp>
 #include <ftxui/screen/terminal.hpp>
 
-#include "catalist/core/logger.hpp"
 #include "catalist/model/entryOps.hpp"
-#include "catalist/model/serviceLinks.hpp"
-#include "catalist/tui/actions.hpp"
 #include "catalist/tui/keys.hpp"
 #include "catalist/tui/theme/palettes.hpp"
 #include "catalist/tui/theme/statusStyle.hpp"
@@ -27,6 +24,15 @@ std::string lowercase(std::string text) {
   return text;
 }
 
+std::string trimmed(const std::string& text) {
+  auto first = text.find_first_not_of(" \t");
+  if (first == std::string::npos)
+    return "";
+  return text.substr(first, text.find_last_not_of(" \t") - first + 1);
+}
+
+// Score, progress and date start high-to-low (see sortEntries), so for them
+// the reversed order is the ascending one.
 bool isSortAscending(sortKey key, bool reverse) {
   switch (key) {
     case sortKey::kScore:
@@ -35,16 +41,9 @@ bool isSortAscending(sortKey key, bool reverse) {
       return reverse;
     case sortKey::kTitle:
     case sortKey::kStatus:
-    case sortKey::kId:
       return !reverse;
   }
   return false;
-}
-
-// Numeric columns read best high-to-low first; text columns A-Z.
-bool defaultsToDescending(sortKey key) {
-  return key == sortKey::kScore || key == sortKey::kProgress ||
-         key == sortKey::kDate;
 }
 
 std::string progressLabel(const entry& e) {
@@ -52,18 +51,13 @@ std::string progressLabel(const entry& e) {
          (e.totalUnits > 0 ? std::to_string(e.totalUnits) : "?");
 }
 
-std::optional<isoDate> catalogDate(const entry& e) {
-  bool showsFinish = e.status == watchStatus::kCompleted && e.finishDate;
-  if (showsFinish)
-    return e.finishDate;
-  if (e.startDate)
-    return e.startDate;
-  return e.updatedAt;
+std::string formatListDate(const entry& e) {
+  auto shown = listDate(e);
+  return shown ? shown->toString() : "    -     ";
 }
 
-std::string formatCatalogDate(const entry& e) {
-  auto shown = catalogDate(e);
-  return shown ? shown->toString() : "    -     ";
+std::string unitName(mediaType type) {
+  return type == mediaType::kAnime ? " eps" : " chs";
 }
 
 Element styledText(const std::string& content, Color tint, bool emphasised) {
@@ -75,7 +69,8 @@ Element highlightMatches(const std::string& title, const std::string& query,
                          bool emphasised) {
   std::string loweredTitle = lowercase(title);
   std::string loweredQuery = lowercase(query);
-  size_t match = query.empty() ? std::string::npos : loweredTitle.find(loweredQuery);
+  size_t match =
+      query.empty() ? std::string::npos : loweredTitle.find(loweredQuery);
   if (match == std::string::npos)
     return styledText(title, theme::kText, emphasised);
 
@@ -91,7 +86,8 @@ Element highlightMatches(const std::string& title, const std::string& query,
     match = loweredTitle.find(loweredQuery, consumed);
   }
   if (consumed < title.size())
-    parts.push_back(styledText(title.substr(consumed), theme::kText, emphasised));
+    parts.push_back(
+        styledText(title.substr(consumed), theme::kText, emphasised));
   return hbox(std::move(parts));
 }
 
@@ -129,30 +125,27 @@ std::vector<sidebarRow> buildSidebarRows(const database& db, mediaType media) {
   return rows;
 }
 
-int labelIndex(const std::string& label) {
-  try {
-    return std::stoi(label);
-  } catch (...) {
-    return -1;
-  }
-}
-
-template <typename member>
-void toggleMembership(std::set<member>& members, const member& item) {
-  if (members.count(item))
-    members.erase(item);
-  else
-    members.insert(item);
+InputOption fieldStyle() {
+  InputOption option;
+  option.transform = [](InputState state) {
+    Element field =
+        state.element |
+        color(state.is_placeholder ? theme::kOverlay0 : theme::kText);
+    return state.focused ? field | color(theme::kPeach) : field;
+  };
+  return option;
 }
 
 }  // namespace
 
 catalogTab::catalogTab(mediaType media) : media_(media) {
-  buildComponents();
-}
-
-std::string catalogTab::id() const {
-  return media_ == mediaType::kAnime ? "anime" : "manga";
+  idle_ = Renderer([](bool) { return text(""); });
+  searchInput_ = Input(&searchQuery_, "Press '/' to search...", fieldStyle());
+  addInput_ = Input(&addQuery_, "Title to add...", fieldStyle());
+  InputOption notesOption;
+  notesOption.cursor_position = &notesCursor_;
+  notesInput_ = Input(&notesBuffer_, "Write notes here...", notesOption);
+  root_ = Container::Vertical({idle_, searchInput_, addInput_, notesInput_});
 }
 
 std::string catalogTab::title() const {
@@ -163,64 +156,19 @@ std::string catalogTab::icon() const {
   return media_ == mediaType::kAnime ? icon::kAnime : icon::kManga;
 }
 
-void catalogTab::buildComponents() {
-  MenuOption sidebarOption;
-  sidebarOption.entries_option.transform = [this](const EntryState& state) {
-    return renderSidebarRow(labelIndex(state.label));
-  };
-  sidebarMenu_ = Menu(&sidebarLabels_, &sidebarSelected_, sidebarOption);
-
-  InputOption inputOption;
-  inputOption.transform = [](InputState state) {
-    Element field = state.element | color(state.is_placeholder ? theme::kOverlay0
-                                                               : theme::kText);
-    return state.focused ? field | color(theme::kPeach) : field;
-  };
-  searchInput_ = Input(&searchQuery_, "Press '/' to search...", inputOption);
-
-  MenuOption catalogOption;
-  catalogOption.entries_option.transform = [this](const EntryState& state) {
-    return renderCatalogRow(labelIndex(state.label));
-  };
-  catalogMenu_ = Menu(&catalogLabels_, &catalogSelected_, catalogOption);
-
-  notesInput_ = Input(&notesBuffer_, "Write notes here...");
-
-  root_ = Container::Horizontal({sidebarMenu_, catalogMenu_, notesInput_});
-}
-
 void catalogTab::onActivate(appContext& ctx) {
   refresh(ctx);
 }
 
-bool catalogTab::isRowFilterActive(int row) const {
-  if (row < 0 || row >= static_cast<int>(sidebarRows_.size()))
-    return false;
-  const auto& candidate = sidebarRows_[row];
-  if (candidate.status)
-    return statusFilters_.count(*candidate.status) > 0;
-  if (candidate.score)
-    return scoreFilters_.count(*candidate.score) > 0;
-  return false;
-}
-
 bool catalogTab::passesFilters(const entry& candidate) const {
-  if (!statusFilters_.empty() && !statusFilters_.count(candidate.status))
-    return false;
-  if (!scoreFilters_.empty() && !scoreFilters_.count(candidate.score))
-    return false;
-
-  bool usesSidebarRow = statusFilters_.empty() && scoreFilters_.empty() &&
-                        sidebarSelected_ >= 0 &&
-                        sidebarSelected_ < static_cast<int>(sidebarRows_.size());
-  if (usesSidebarRow) {
+  if (sidebarSelected_ >= 0 &&
+      sidebarSelected_ < static_cast<int>(sidebarRows_.size())) {
     const auto& row = sidebarRows_[sidebarSelected_];
     if (row.status && candidate.status != *row.status)
       return false;
     if (row.score && candidate.score != *row.score)
       return false;
   }
-
   if (searchQuery_.empty())
     return true;
   return lowercase(candidate.title).find(lowercase(searchQuery_)) !=
@@ -229,20 +177,13 @@ bool catalogTab::passesFilters(const entry& candidate) const {
 
 void catalogTab::refresh(appContext& ctx) {
   sidebarRows_ = buildSidebarRows(ctx.db, media_);
-  sidebarLabels_.clear();
-  for (size_t i = 0; i < sidebarRows_.size(); ++i)
-    sidebarLabels_.push_back(std::to_string(i));
-
+  libraryEmpty_ = ctx.db.getEntries(media_).empty();
   displayed_.clear();
   for (const auto& candidate : ctx.db.getEntries(media_)) {
     if (passesFilters(candidate))
       displayed_.push_back(candidate);
   }
   database::sortEntries(displayed_, sortBy_, reverseSort_);
-
-  catalogLabels_.clear();
-  for (size_t i = 0; i < displayed_.size(); ++i)
-    catalogLabels_.push_back(std::to_string(i));
   int lastRow = static_cast<int>(displayed_.size()) - 1;
   catalogSelected_ = std::clamp(catalogSelected_, 0, std::max(0, lastRow));
 }
@@ -253,9 +194,22 @@ const entry* catalogTab::selectedEntry() const {
   return inRange ? &displayed_[catalogSelected_] : nullptr;
 }
 
+void catalogTab::selectId(int id) {
+  for (size_t row = 0; row < displayed_.size(); ++row) {
+    if (displayed_[row].id == id)
+      catalogSelected_ = static_cast<int>(row);
+  }
+}
+
+void catalogTab::returnToCatalog() {
+  focus_ = focusedCard::kCatalog;
+  mode_ = appMode::kNor;
+  idle_->TakeFocus();
+}
+
 bool catalogTab::capturesInput() const {
   return pendingDeleteId_.has_value() || mode_ == appMode::kSch ||
-         editingNotes_;
+         editingNotes_ || adding_ != addStage::kOff;
 }
 
 appMode catalogTab::mode() const {
@@ -266,38 +220,40 @@ std::optional<std::string> catalogTab::countBadge(appContext& ctx) const {
   return std::to_string(ctx.db.getEntries(media_).size());
 }
 
-std::string catalogTab::selectionSummary() const {
-  if (visualSelectedIds_.empty())
-    return "";
-  return "(" + std::to_string(visualSelectedIds_.size()) + " selected)";
-}
-
 std::vector<hint> catalogTab::hints() const {
+  if (pendingDeleteId_)
+    return {{"y", "delete"}, {"n/Esc", "keep"}};
   if (editingNotes_)
-    return {{"ret", "commit"}, {"Esc", "cancel"}};
+    return {{"ret", "save"}, {"Esc", "cancel"}};
   if (mode_ == appMode::kSch)
     return {{"ret", "apply"}, {"Esc", "clear"}};
+  if (adding_ == addStage::kTyping)
+    return {{"ret", "search"}, {"Esc", "cancel"}};
+  if (adding_ == addStage::kSearching)
+    return {{"Esc", "cancel"}};
+  if (adding_ == addStage::kPicking)
+    return {{"j/k", "move"}, {"ret", "add"}, {"Esc", "cancel"}};
   if (focus_ == focusedCard::kDetails)
     return {{"j/k", "field"},
             {"h/l", "adjust"},
             {"e/ret", "notes"},
             {"Esc", "catalog"}};
-  return {{"Tab", "tabs"},       {"h/l", "panes"},  {"e/ret", "edit"},
+  return {{"Tab", "tabs"},       {"h/l", "panes"},   {"e/ret", "edit"},
           {"c/t/s/r/p", "sort"}, {"S/R/P", "cycle"}, {"+/-", "ep"},
-          {"spc", "select"},     {"d", "del"},
-          {"/", "find"},         {"q", "quit"}};
+          {"a", "add"},          {"d", "del"},       {"/", "find"},
+          {"q", "quit"}};
 }
 
 bool catalogTab::onEvent(const Event& event, appContext& ctx) {
-  if (handleMouse(event, ctx))
-    return true;
   if (pendingDeleteId_)
     return handlePendingDelete(event, ctx);
   if (mode_ == appMode::kSch)
     return handleSearchTyping(event, ctx);
   if (editingNotes_)
     return handleNotesEditing(event, ctx);
-  if (handleBatchKeys(event, ctx))
+  if (adding_ != addStage::kOff)
+    return handleAdding(event, ctx);
+  if (handleEntryKeys(event, ctx))
     return true;
   if (focus_ != focusedCard::kDetails && handleSortKeys(event, ctx))
     return true;
@@ -309,34 +265,25 @@ bool catalogTab::onEvent(const Event& event, appContext& ctx) {
     handledByFocus = handleSidebarFocus(event, ctx);
   else
     handledByFocus = handleDetailsFocus(event, ctx);
-  return handledByFocus || handleEntryCommands(event, ctx);
+  return handledByFocus || handleCommands(event, ctx);
 }
 
-bool catalogTab::handleMouse(const Event& event, appContext& ctx) {
-  if (!event.is_mouse())
-    return false;
-  Event mouseEvent = event;
-  auto mouse = mouseEvent.mouse();
-  if (mouse.button != Mouse::Left || mouse.motion != Mouse::Pressed)
-    return false;
-
-  if (searchBarBox_.Contain(mouse.x, mouse.y)) {
-    startSearch(ctx);
-    return true;
-  }
-  const std::pair<Box*, std::pair<sortKey, const char*>> headers[] = {
-      {&headerDateBox_, {sortKey::kDate, "Date"}},
-      {&headerTitleBox_, {sortKey::kTitle, "Title"}},
-      {&headerStatusBox_, {sortKey::kStatus, "Status"}},
-      {&headerRatingBox_, {sortKey::kScore, "Rating"}},
-      {&headerProgressBox_, {sortKey::kProgress, "Progress"}}};
-  for (const auto& [box, column] : headers) {
-    if (!box->Contain(mouse.x, mouse.y))
-      continue;
-    toggleSort(column.first, column.second, ctx);
-    return true;
-  }
-  return false;
+void catalogTab::onTick(appContext& ctx) {
+  if (adding_ != addStage::kSearching)
+    return;
+  auto found = jikan::search(ctx.http, media_, addQuery_);
+  addResults_ = found.ok() ? found.value() : std::vector<jikan::title>{};
+  addSelected_ = 0;
+  adding_ = addStage::kPicking;
+  std::string quoted = "'" + marquee::clip(addQuery_, 24) + "'";
+  if (!found.ok())
+    ctx.status = "Could not reach MyAnimeList; the last row adds " + quoted +
+                 " by hand.";
+  else if (addResults_.empty())
+    ctx.status = "No matches for " + quoted + "; the last row adds it by hand.";
+  else
+    ctx.status =
+        std::to_string(addResults_.size()) + " matches for " + quoted + ".";
 }
 
 bool catalogTab::handlePendingDelete(const Event& event, appContext& ctx) {
@@ -348,7 +295,7 @@ bool catalogTab::handlePendingDelete(const Event& event, appContext& ctx) {
                  keys::isCharacter(event, 'N') || event == Event::Escape;
   if (cancels) {
     pendingDeleteId_.reset();
-    ctx.notices.setStatus("Deletion canceled.");
+    ctx.status = "Deletion canceled.";
   }
   return true;
 }
@@ -357,22 +304,17 @@ bool catalogTab::handleSearchTyping(const Event& event, appContext& ctx) {
   if (event == Event::Escape) {
     searchQuery_.clear();
     refresh(ctx);
-    focus_ = focusedCard::kCatalog;
-    catalogMenu_->TakeFocus();
-    mode_ = appMode::kNor;
-    ctx.notices.setStatus("Search cleared.");
+    returnToCatalog();
+    ctx.status = "Search cleared.";
     return true;
   }
   if (keys::isConfirm(event) || event == Event::ArrowDown) {
     refresh(ctx);
-    focus_ = focusedCard::kCatalog;
-    catalogMenu_->TakeFocus();
-    mode_ = appMode::kNor;
-    ctx.notices.setStatus(
-        searchQuery_.empty()
-            ? "Filter cleared."
-            : "Filtered: '" + searchQuery_ + "' (" +
-                  std::to_string(displayed_.size()) + " matches)");
+    returnToCatalog();
+    ctx.status = searchQuery_.empty()
+                     ? "Filter cleared."
+                     : "Filtered: '" + searchQuery_ + "' (" +
+                           std::to_string(displayed_.size()) + " matches)";
     return true;
   }
   searchInput_->OnEvent(event);
@@ -381,41 +323,81 @@ bool catalogTab::handleSearchTyping(const Event& event, appContext& ctx) {
 }
 
 bool catalogTab::handleNotesEditing(const Event& event, appContext& ctx) {
-  if (event == Event::Escape || keys::isConfirm(event)) {
+  if (keys::isConfirm(event)) {
     commitNotes(ctx);
+    return true;
+  }
+  if (event == Event::Escape) {
+    editingNotes_ = false;
+    mode_ = appMode::kNor;
+    idle_->TakeFocus();
+    ctx.status = "Notes left unchanged.";
     return true;
   }
   notesInput_->OnEvent(event);
   return true;
 }
 
-bool catalogTab::handleBatchKeys(const Event& event, appContext& ctx) {
-  if (keys::isCharacter(event, 'S')) {
-    applyToTargets(ctx, [](const entry& e, const isoDate& today) {
-      return cycleStatus(e, 1, today);
-    }, "cycled status");
+bool catalogTab::handleAdding(const Event& event, appContext& ctx) {
+  if (event == Event::Escape) {
+    cancelAdding(ctx);
     return true;
   }
-  if (keys::isCharacter(event, 'R')) {
-    applyToTargets(ctx, [](const entry& e, const isoDate& today) {
-      return adjustRating(e, 1, today);
-    }, "bumped rating");
+  if (adding_ == addStage::kTyping) {
+    if (!keys::isConfirm(event)) {
+      addInput_->OnEvent(event);
+      return true;
+    }
+    addQuery_ = trimmed(addQuery_);
+    if (addQuery_.empty()) {
+      ctx.status = "Type a title first, or [Esc] to cancel.";
+      return true;
+    }
+    adding_ = addStage::kSearching;
+    idle_->TakeFocus();
+    ctx.status =
+        "Searching MyAnimeList for '" + marquee::clip(addQuery_, 24) + "'...";
     return true;
   }
+  if (adding_ != addStage::kPicking)
+    return true;
+  // The last row adds the typed title by hand.
+  int lastRow = static_cast<int>(addResults_.size());
+  if (keys::isMoveDown(event))
+    addSelected_ = std::min(addSelected_ + 1, lastRow);
+  else if (keys::isMoveUp(event))
+    addSelected_ = std::max(addSelected_ - 1, 0);
+  else if (keys::isJumpTop(event))
+    addSelected_ = 0;
+  else if (keys::isJumpBottom(event))
+    addSelected_ = lastRow;
+  else if (keys::isConfirm(event))
+    addPicked(ctx);
+  return true;
+}
+
+bool catalogTab::handleEntryKeys(const Event& event, appContext& ctx) {
+  const entry* current = selectedEntry();
   bool increments = keys::isCharacter(event, 'P') || keys::isIncrement(event);
-  if (increments) {
-    applyToTargets(ctx, [](const entry& e, const isoDate& today) {
-      return stepProgress(e, 1, today);
-    }, "incremented progress");
+  bool acts = keys::isCharacter(event, 'S') || keys::isCharacter(event, 'R') ||
+              increments || keys::isCharacter(event, '-');
+  if (!acts)
+    return false;
+  if (!current)
     return true;
+
+  isoDate today = localDate(ctx.clock);
+  if (keys::isCharacter(event, 'S')) {
+    entry changed = cycleStatus(*current, 1, today);
+    commit(ctx, changed, "Status: " + statusToString(changed.status, media_));
+  } else if (keys::isCharacter(event, 'R')) {
+    entry changed = adjustRating(*current, 1, today);
+    commit(ctx, changed, "Rating: " + renderStarMeter(changed.score));
+  } else {
+    entry changed = stepProgress(*current, increments ? 1 : -1, today);
+    commit(ctx, changed, "Progress: " + progressLabel(changed));
   }
-  if (keys::isCharacter(event, '-')) {
-    applyToTargets(ctx, [](const entry& e, const isoDate& today) {
-      return stepProgress(e, -1, today);
-    }, "decremented progress");
-    return true;
-  }
-  return false;
+  return true;
 }
 
 bool catalogTab::handleSortKeys(const Event& event, appContext& ctx) {
@@ -435,51 +417,39 @@ bool catalogTab::handleSortKeys(const Event& event, appContext& ctx) {
 }
 
 bool catalogTab::handleCatalogFocus(const Event& event, appContext& ctx) {
-  int lastRow = static_cast<int>(displayed_.size()) - 1;
+  int lastRow = std::max(0, static_cast<int>(displayed_.size()) - 1);
   if (keys::isMoveLeft(event)) {
     focus_ = focusedCard::kSidebar;
-    sidebarMenu_->TakeFocus();
     return true;
   }
   if (keys::isMoveRight(event)) {
     focus_ = focusedCard::kDetails;
     detailsCursor_ = detailsField::kStatus;
-    return true;
-  }
-  if (keys::isCharacter(event, ' ') || keys::isCharacter(event, 'v')) {
-    toggleVisualSelection();
     return true;
   }
   if (keys::isConfirm(event) || keys::isCharacter(event, 'e')) {
     focus_ = focusedCard::kDetails;
     detailsCursor_ = detailsField::kStatus;
-    ctx.notices.setStatus(
-        "Details: [j/k] Navigate properties, [h/l] Adjust, [e/ret] Notes");
+    ctx.status =
+        "Details: [j/k] Navigate properties, [h/l] Adjust, [e/ret] Notes";
     return true;
   }
-  if (keys::isMoveDown(event)) {
-    catalogSelected_ = std::min(catalogSelected_ + 1, std::max(0, lastRow));
-    return true;
-  }
-  if (keys::isMoveUp(event)) {
+  if (keys::isMoveDown(event))
+    catalogSelected_ = std::min(catalogSelected_ + 1, lastRow);
+  else if (keys::isMoveUp(event))
     catalogSelected_ = std::max(catalogSelected_ - 1, 0);
-    return true;
-  }
-  if (keys::isJumpTop(event)) {
+  else if (keys::isJumpTop(event))
     catalogSelected_ = 0;
-    return true;
-  }
-  if (keys::isJumpBottom(event)) {
-    catalogSelected_ = std::max(0, lastRow);
-    return true;
-  }
-  return false;
+  else if (keys::isJumpBottom(event))
+    catalogSelected_ = lastRow;
+  else
+    return false;
+  return true;
 }
 
 bool catalogTab::handleSidebarFocus(const Event& event, appContext& ctx) {
-  if (keys::isMoveRight(event)) {
+  if (keys::isMoveRight(event) || keys::isConfirm(event)) {
     focus_ = focusedCard::kCatalog;
-    catalogMenu_->TakeFocus();
     return true;
   }
   if (keys::isMoveDown(event)) {
@@ -490,27 +460,13 @@ bool catalogTab::handleSidebarFocus(const Event& event, appContext& ctx) {
     moveSidebarCursor(-1, ctx);
     return true;
   }
-  if (keys::isCharacter(event, ' ')) {
-    toggleSidebarMultiFilter();
-    refresh(ctx);
-    return true;
-  }
-  if (keys::isConfirm(event)) {
-    statusFilters_.clear();
-    scoreFilters_.clear();
-    refresh(ctx);
-    focus_ = focusedCard::kCatalog;
-    catalogMenu_->TakeFocus();
-    return true;
-  }
   return false;
 }
 
 bool catalogTab::handleDetailsFocus(const Event& event, appContext& ctx) {
   int cursor = static_cast<int>(detailsCursor_);
   if (event == Event::Escape) {
-    focus_ = focusedCard::kCatalog;
-    mode_ = appMode::kNor;
+    returnToCatalog();
     return true;
   }
   if (keys::isMoveDown(event)) {
@@ -524,148 +480,87 @@ bool catalogTab::handleDetailsFocus(const Event& event, appContext& ctx) {
   if (!selectedEntry())
     return false;
 
+  bool onNotes = detailsCursor_ == detailsField::kNotes;
   if (keys::isMoveLeft(event)) {
-    if (detailsCursor_ == detailsField::kNotes)
+    if (onNotes)
       focus_ = focusedCard::kCatalog;
     else
       adjustDetailsField(ctx, -1);
     return true;
   }
   if (keys::isMoveRight(event)) {
-    if (detailsCursor_ != detailsField::kNotes)
+    if (!onNotes)
       adjustDetailsField(ctx, 1);
     return true;
   }
-  bool activates = keys::isConfirmOrSpace(event) || keys::isCharacter(event, 'e');
+  bool activates =
+      keys::isConfirmOrSpace(event) || keys::isCharacter(event, 'e');
   if (!activates)
     return false;
-  if (detailsCursor_ != detailsField::kNotes) {
+  if (!onNotes) {
     adjustDetailsField(ctx, 1);
     return true;
   }
   notesBuffer_ = selectedEntry()->notes;
+  // FTXUI counts the cursor in bytes; start at the end to add to the notes.
+  notesCursor_ = static_cast<int>(notesBuffer_.size());
   editingNotes_ = true;
   mode_ = appMode::kEdt;
   notesInput_->TakeFocus();
-  ctx.notices.setStatus("Editing notes. Press [ret] or [Esc] to commit.");
+  ctx.status = "Editing notes. [ret] Save  [Esc] Cancel";
   return true;
 }
 
-bool catalogTab::handleEntryCommands(const Event& event, appContext& ctx) {
+bool catalogTab::handleCommands(const Event& event, appContext& ctx) {
   if (keys::isCharacter(event, '/')) {
     startSearch(ctx);
+    return true;
+  }
+  if (keys::isCharacter(event, 'a')) {
+    startAdding(ctx);
     return true;
   }
   if (keys::isCharacter(event, 'd')) {
     requestDelete(ctx);
     return true;
   }
-  if (keys::isCharacter(event, 'u')) {
-    undoLast(ctx);
-    return true;
-  }
-  if (keys::isCharacter(event, 'U') ||
-      event == Event::Special("\x12")) {
-    redoLast(ctx);
-    return true;
-  }
-  if (keys::isCharacter(event, 'o')) {
-    if (const entry* current = selectedEntry())
-      openInBrowser(ctx, *current);
-    return true;
-  }
-  if (keys::isCharacter(event, 'y')) {
-    if (const entry* current = selectedEntry())
-      copyToClipboard(ctx, current->title);
-    return true;
-  }
   return false;
 }
 
-void catalogTab::applyChange(appContext& ctx, const entry& before,
-                             const entryChange& change,
-                             const std::string& status) {
-  entry after = change(before, localDate(ctx.clock));
-  commitEntryChange(ctx, before, after);
+void catalogTab::commit(appContext& ctx, const entry& changed,
+                        const std::string& done) {
+  ctx.db.updateEntry(changed);
   refresh(ctx);
-  if (!status.empty())
-    ctx.notices.setStatus(status);
-}
-
-void catalogTab::applyToTargets(appContext& ctx, const entryChange& change,
-                                const std::string& batchVerb) {
-  if (visualSelectedIds_.empty()) {
-    const entry* current = selectedEntry();
-    if (current)
-      applyChange(ctx, *current, change, "");
-    return;
-  }
-  for (int targetId : visualSelectedIds_) {
-    if (auto target = ctx.db.getById(media_, targetId))
-      applyChange(ctx, *target, change, "");
-  }
-  ctx.notices.setStatus("Batch " + batchVerb + " for " +
-                        std::to_string(visualSelectedIds_.size()) +
-                        " entries.");
+  selectId(changed.id);
+  ctx.save(done);
 }
 
 void catalogTab::adjustDetailsField(appContext& ctx, int direction) {
   const entry* current = selectedEntry();
   if (!current)
     return;
-  entry before = *current;
+  isoDate today = localDate(ctx.clock);
   if (detailsCursor_ == detailsField::kStatus) {
-    LOG_INFO("Cycling status for ID " + std::to_string(before.id));
-    entry after = cycleStatus(before, direction, localDate(ctx.clock));
-    applyChange(ctx, before, [&](const entry&, const isoDate&) { return after; },
-                "Status: " + statusToString(after.status, after.type));
-    return;
+    entry changed = cycleStatus(*current, direction, today);
+    commit(ctx, changed, "Status: " + statusToString(changed.status, media_));
+  } else if (detailsCursor_ == detailsField::kRating) {
+    entry changed = adjustRating(*current, direction, today);
+    commit(ctx, changed, "Rating: " + renderStarMeter(changed.score));
+  } else {
+    entry changed = stepProgress(*current, direction, today);
+    commit(ctx, changed, "Progress: " + progressLabel(changed));
   }
-  if (detailsCursor_ == detailsField::kRating) {
-    LOG_INFO("Adjusting rating for ID " + std::to_string(before.id));
-    entry after = adjustRating(before, direction, localDate(ctx.clock));
-    applyChange(ctx, before, [&](const entry&, const isoDate&) { return after; },
-                "Rating: " + renderStarMeter(after.score));
-    return;
-  }
-  LOG_INFO("Mutating progress for ID " + std::to_string(before.id));
-  entry after = stepProgress(before, direction, localDate(ctx.clock));
-  applyChange(ctx, before, [&](const entry&, const isoDate&) { return after; },
-              "Progress: " + progressLabel(after));
 }
 
+// A new column starts in its natural order; choosing it again flips it.
 void catalogTab::toggleSort(sortKey key, const std::string& name,
                             appContext& ctx) {
-  LOG_INFO("Toggled sort column: " + name);
-  if (sortBy_ == key) {
-    reverseSort_ = !reverseSort_;
-  } else {
-    sortBy_ = key;
-    reverseSort_ = defaultsToDescending(key);
-  }
+  reverseSort_ = sortBy_ == key && !reverseSort_;
+  sortBy_ = key;
   refresh(ctx);
-  bool ascending = isSortAscending(sortBy_, reverseSort_);
-  ctx.notices.setStatus("Sort: " + name +
-                        (ascending ? " (Increasing ▲)" : " (Decreasing ▼)"));
-}
-
-void catalogTab::toggleVisualSelection() {
-  const entry* current = selectedEntry();
-  if (!current)
-    return;
-  toggleMembership(visualSelectedIds_, current->id);
-  mode_ = visualSelectedIds_.empty() ? appMode::kNor : appMode::kVis;
-}
-
-void catalogTab::toggleSidebarMultiFilter() {
-  if (sidebarSelected_ < 0 ||
-      sidebarSelected_ >= static_cast<int>(sidebarRows_.size()))
-    return;
-  const auto& row = sidebarRows_[sidebarSelected_];
-  if (row.status)
-    toggleMembership(statusFilters_, *row.status);
-  if (row.score)
-    toggleMembership(scoreFilters_, *row.score);
+  ctx.status = "Sort: " + name +
+               (isSortAscending(sortBy_, reverseSort_) ? " (Increasing ▲)"
+                                                       : " (Decreasing ▼)");
 }
 
 void catalogTab::moveSidebarCursor(int direction, appContext& ctx) {
@@ -683,123 +578,117 @@ void catalogTab::moveSidebarCursor(int direction, appContext& ctx) {
 void catalogTab::startSearch(appContext& ctx) {
   mode_ = appMode::kSch;
   searchInput_->TakeFocus();
-  ctx.notices.setStatus("Search title... [ret] Apply  [Esc] Clear");
+  ctx.status = "Search title... [ret] Apply  [Esc] Clear";
 }
 
 void catalogTab::commitNotes(appContext& ctx) {
-  const entry* current = selectedEntry();
-  if (current) {
-    entry before = *current;
-    entry after = before;
-    after.notes = notesBuffer_;
-    after.updatedAt = localDate(ctx.clock);
-    commitEntryChange(ctx, before, after);
-    refresh(ctx);
-  }
   editingNotes_ = false;
   mode_ = appMode::kNor;
-  ctx.notices.setStatus("Saved notes.");
+  idle_->TakeFocus();
+  const entry* current = selectedEntry();
+  if (!current)
+    return;
+  entry changed = *current;
+  changed.notes = notesBuffer_;
+  changed.updatedAt = localDate(ctx.clock);
+  commit(ctx, changed, "Saved notes.");
 }
 
 void catalogTab::requestDelete(appContext& ctx) {
-  if (!visualSelectedIds_.empty()) {
-    for (int selectedId : visualSelectedIds_)
-      ctx.db.removeEntry(media_, selectedId);
-    visualSelectedIds_.clear();
-    mode_ = appMode::kNor;
-    ctx.db.saveAll();
-    refresh(ctx);
-    ctx.notices.push("Deleted selected entries.");
-    return;
-  }
   const entry* current = selectedEntry();
   if (!current)
     return;
   pendingDeleteId_ = current->id;
-  ctx.notices.setStatus("Delete '" + marquee::clip(current->title, 24) +
-                        "'? Confirm [y/N]");
+  ctx.status =
+      "Delete '" + marquee::clip(current->title, 24) + "'? Confirm [y/N]";
 }
 
 void catalogTab::confirmDelete(appContext& ctx) {
   auto doomed = ctx.db.getById(media_, *pendingDeleteId_);
   pendingDeleteId_.reset();
-  if (doomed) {
-    ctx.undo.record({historyAction::kDelete, media_, *doomed, entry{}});
-    ctx.db.removeEntry(media_, doomed->id);
-    ctx.db.saveAll();
-    ctx.notices.push("Deleted '" + marquee::clip(doomed->title, 36) + "'.");
-  }
+  if (!doomed)
+    return;
+  ctx.db.removeEntry(media_, doomed->id);
   refresh(ctx);
+  ctx.save("Deleted '" + marquee::clip(doomed->title, 36) + "'.");
 }
 
-void catalogTab::undoLast(appContext& ctx) {
-  auto action = ctx.undo.takeUndo();
-  if (!action) {
-    ctx.notices.push("Nothing left to undo.");
-    return;
-  }
-  if (action->actionType == historyAction::kMutate)
-    ctx.db.updateEntry(action->before);
-  else if (action->actionType == historyAction::kDelete)
-    ctx.db.addEntry(action->before);
-  else
-    ctx.db.removeEntry(action->media, action->after.id);
-  ctx.db.saveAll();
-  ctx.notices.push("Action undone successfully.");
-  refresh(ctx);
+void catalogTab::startAdding(appContext& ctx) {
+  adding_ = addStage::kTyping;
+  mode_ = appMode::kAdd;
+  addQuery_.clear();
+  addResults_.clear();
+  addInput_->TakeFocus();
+  ctx.status = "Add: type a title to look up on MyAnimeList.";
 }
 
-void catalogTab::redoLast(appContext& ctx) {
-  auto action = ctx.undo.takeRedo();
-  if (!action) {
-    ctx.notices.push("Nothing left to redo.");
+void catalogTab::cancelAdding(appContext& ctx) {
+  adding_ = addStage::kOff;
+  addResults_.clear();
+  addQuery_.clear();
+  returnToCatalog();
+  ctx.status = "Add canceled.";
+}
+
+void catalogTab::addPicked(appContext& ctx) {
+  entry added;
+  added.type = media_;
+  added.status = watchStatus::kPlanToWatch;
+  added.updatedAt = localDate(ctx.clock);
+  added.title = addQuery_;
+  std::optional<entry> existing;
+  if (addSelected_ < static_cast<int>(addResults_.size())) {
+    const auto& pick = addResults_[addSelected_];
+    added.title = pick.name;
+    added.malId = pick.malId;
+    added.totalUnits = pick.totalUnits;
+    added.totalVolumes = pick.totalVolumes;
+    existing = ctx.db.findByMalId(media_, pick.malId);
+  }
+
+  adding_ = addStage::kOff;
+  addResults_.clear();
+  addQuery_.clear();
+  // Show the whole list so the title is there to be seen.
+  searchQuery_.clear();
+  sidebarSelected_ = 1;
+  returnToCatalog();
+  std::string name = "'" + marquee::clip(added.title, 36) + "'";
+  if (existing) {
+    refresh(ctx);
+    selectId(existing->id);
+    ctx.status = name + " is already in the catalogue.";
     return;
   }
-  if (action->actionType == historyAction::kMutate)
-    ctx.db.updateEntry(action->after);
-  else if (action->actionType == historyAction::kDelete)
-    ctx.db.removeEntry(action->media, action->before.id);
-  else
-    ctx.db.addEntry(action->after);
-  ctx.db.saveAll();
-  ctx.notices.push("Action redone successfully.");
+  int id = ctx.db.addEntry(added);
   refresh(ctx);
+  selectId(id);
+  ctx.save("Added " + name + ".");
 }
 
 Element catalogTab::renderSidebarRow(int row) const {
-  if (row < 0 || row >= static_cast<int>(sidebarRows_.size()))
-    return text("");
   const auto& item = sidebarRows_[row];
   if (item.isHeader)
     return text(item.label) | bold | color(theme::kOverlay0);
 
-  bool usesMultiFilter = !statusFilters_.empty() || !scoreFilters_.empty();
-  bool inMultiFilter = isRowFilterActive(row);
-  bool isSingleFilter = !usesMultiFilter && row == sidebarSelected_;
-  bool cursorHere = mode_ != appMode::kSch && row == sidebarSelected_ &&
-                    focus_ == focusedCard::kSidebar;
-  std::string prefix = inMultiFilter    ? icon::kCheckMulti + " "
-                       : isSingleFilter ? icon::kCheckSingle + " "
-                                        : "   ";
-
+  bool isFilter = row == sidebarSelected_;
+  bool cursorHere =
+      isFilter && mode_ != appMode::kSch && focus_ == focusedCard::kSidebar;
+  std::string prefix = isFilter ? icon::kCheckSingle + " " : "   ";
   if (cursorHere)
     return hbox({text(prefix) | color(theme::kMauve) | bold,
                  text(item.label) | bold | color(theme::kText)}) |
            bgcolor(theme::kSurface0) | focus;
-  if (inMultiFilter || isSingleFilter)
+  if (isFilter)
     return hbox({text(prefix) | color(theme::kGreen) | bold,
                  text(item.label) | bold | color(theme::kLavender)});
   return hbox({text("   "), text(item.label) | color(theme::kSubtext)});
 }
 
 Element catalogTab::renderCatalogRow(int row) {
-  if (row < 0 || row >= static_cast<int>(displayed_.size()))
-    return text("");
   const auto& e = displayed_[row];
-
   bool rowActive = mode_ != appMode::kSch && row == catalogSelected_ &&
                    focus_ != focusedCard::kSidebar;
-  bool selected = visualSelectedIds_.count(e.id) > 0;
   size_t maxGlyphs =
       static_cast<size_t>(std::max(16, Terminal::Size().dimx - 134));
   std::string shownTitle =
@@ -807,54 +696,38 @@ Element catalogTab::renderCatalogRow(int row) {
                                   rowTimer_.elapsedFor(catalogSelected_))
                 : marquee::clip(e.title, maxGlyphs);
 
-  std::string marker = "  ";
-  Color markerColor = theme::kGreen;
-  if (selected) {
-    marker = (visualSelectedIds_.size() > 1 ? icon::kCheckMulti
-                                            : icon::kCheckSingle) +
-             " ";
-  } else if (rowActive) {
-    marker = "▌ ";
-    markerColor = theme::kMauve;
-  }
-
   auto statusCell =
       hbox({text(statusToIcon(e.status) + " ") | color(statusToColor(e.status)),
             text(statusToString(e.status, e.type)) |
                 color(statusToColor(e.status))});
-  auto line = hbox(
-      {text(marker) | bold | color(markerColor),
-       text(formatCatalogDate(e)) | size(WIDTH, EQUAL, 10) |
-           color(theme::kSubtext),
-       text(" "),
-       hbox({text(" " + typeToIcon(e.type) + " "),
-             highlightMatches(shownTitle, searchQuery_, rowActive)}) |
-           flex,
-       text(" "), statusCell | size(WIDTH, EQUAL, 14), text(" "),
-       text(" " + renderStarMeter(e.score)) | size(WIDTH, EQUAL, 12) |
-           color(theme::kYellow),
-       text(" "),
-       text(" " + icon::kGauge + " " + progressLabel(e)) |
-           size(WIDTH, EQUAL, 12) | color(theme::kLavender),
-       text(" ")});
-
-  if (rowActive)
-    return line | bgcolor(theme::kSurface0) | focus;
-  return selected ? line | bgcolor(theme::kSurface0) : line;
+  auto line =
+      hbox({text(rowActive ? "▌ " : "  ") | bold | color(theme::kMauve),
+            text(formatListDate(e)) | size(WIDTH, EQUAL, 10) |
+                color(theme::kSubtext),
+            text(" "),
+            hbox({text(" " + typeToIcon(e.type) + " "),
+                  highlightMatches(shownTitle, searchQuery_, rowActive)}) |
+                flex,
+            text(" "), statusCell | size(WIDTH, EQUAL, 14), text(" "),
+            text(" " + renderStarMeter(e.score)) | size(WIDTH, EQUAL, 12) |
+                color(theme::kYellow),
+            text(" "),
+            text(" " + icon::kGauge + " " + progressLabel(e)) |
+                size(WIDTH, EQUAL, 12) | color(theme::kLavender),
+            text(" ")});
+  return rowActive ? line | bgcolor(theme::kSurface0) | focus : line;
 }
 
 Element catalogTab::renderHeaderCell(const std::string& name, sortKey key,
-                                     int width, Box& box,
-                                     bool stretches) const {
-  bool active = sortBy_ == key;
+                                     int width, bool stretches) const {
+  bool active = sortBy_ == key && adding_ == addStage::kOff;
   std::string label = " " + name;
   if (active)
     label += isSortAscending(key, reverseSort_) ? " ▲" : " ▼";
   Element cell = text(label);
   cell = stretches ? cell | flex : cell | size(WIDTH, EQUAL, width);
-  cell = active ? cell | bold | color(theme::kMauve) | underlined
+  return active ? cell | bold | color(theme::kMauve) | underlined
                 : cell | bold | color(theme::kSubtext);
-  return cell | reflect(box);
 }
 
 Element catalogTab::renderDetails() {
@@ -879,14 +752,12 @@ Element catalogTab::renderDetails() {
                  content | flex});
   };
 
-  Elements providerBadges;
-  for (const auto& badge : serviceBadges(e)) {
-    if (!providerBadges.empty())
-      providerBadges.push_back(text("  "));
-    providerBadges.push_back(text(badge) | color(theme::kText));
-  }
-  if (providerBadges.empty())
-    providerBadges.push_back(text("-") | color(theme::kSubtext));
+  std::string links;
+  if (e.malId > 0)
+    links = "MAL #" + std::to_string(e.malId);
+  if (e.anilistId > 0)
+    links += (links.empty() ? "" : "  ") + std::string("AL #") +
+             std::to_string(e.anilistId);
 
   std::string shownTitle =
       marquee::scroll(e.title, 36, detailsTimer_.elapsedFor(catalogSelected_));
@@ -898,55 +769,60 @@ Element catalogTab::renderDetails() {
   };
 
   auto seriesCard =
-      vbox({hbox({text("  DETAILS") | bold | color(theme::kLavender), filler(),
-                  text("ID #" + std::to_string(e.id) + " ") |
-                      color(theme::kOverlay0)}),
-            text(""),
-            hbox({text("  " + shownTitle) | bold | color(theme::kMauve)}),
-            text(""),
-            hbox({text("  Type:     ") | color(theme::kSubtext),
-                  pill(typeToIcon(e.type) + " " + typeToString(e.type),
-                       theme::kCrust, typeToColor(e.type)),
-                  filler()}),
-            hbox({text("  Links:    ") | color(theme::kSubtext),
-                  hbox(std::move(providerBadges)) | flex}),
-            infoRow("  Updated:  ", e.updatedAt ? e.updatedAt->toString() : "-"),
-            infoRow("  Started:  ",
-                    e.startDate ? e.startDate->toString() : "Not started"),
-            infoRow("  Finished: ", e.finishDate ? e.finishDate->toString()
-                                                 : unfinishedLabel)}) |
+      vbox(
+          {hbox({text("  DETAILS") | bold | color(theme::kLavender), filler(),
+                 text("ID #" + std::to_string(e.id) + " ") |
+                     color(theme::kOverlay0)}),
+           text(""),
+           hbox({text("  " + shownTitle) | bold | color(theme::kMauve)}),
+           text(""),
+           hbox({text("  Type:     ") | color(theme::kSubtext),
+                 pill(typeToIcon(e.type) + " " + typeToString(e.type),
+                      theme::kCrust, typeToColor(e.type)),
+                 filler()}),
+           hbox({text("  Links:    ") | color(theme::kSubtext),
+                 text(links.empty() ? "-" : links) |
+                     color(links.empty() ? theme::kSubtext : theme::kText),
+                 filler()}),
+           infoRow("  Updated:  ", e.updatedAt ? e.updatedAt->toString() : "-"),
+           infoRow("  Started:  ",
+                   e.startDate ? e.startDate->toString() : "Not started"),
+           infoRow("  Finished: ", e.finishDate ? e.finishDate->toString()
+                                                : unfinishedLabel)}) |
       border | color(theme::kSurface0);
 
   bool trackingActive = mode_ != appMode::kSch && onDetails &&
                         detailsCursor_ != detailsField::kNotes;
-  std::string percent = e.totalUnits > 0
-                            ? std::to_string(static_cast<int>(ratio * 100)) + "% "
-                            : "Ongoing ";
-  std::string units = e.type == mediaType::kAnime ? " eps" : " chs";
+  std::string percent =
+      e.totalUnits > 0 ? std::to_string(static_cast<int>(ratio * 100)) + "% "
+                       : "Ongoing ";
   auto trackingCard =
-      vbox({hbox({text("  TRACKING") | bold | color(theme::kLavender), filler(),
-                  text(trackingActive ? "[Active]" : "") | color(theme::kPeach)}),
-            text(""), text("  STATUS") | bold | color(theme::kOverlay0),
-            fieldRow(detailsField::kStatus, "Status:",
-                     pill(statusToIcon(e.status) + " " +
-                              statusToString(e.status, e.type),
-                          theme::kCrust, statusToColor(e.status))),
-            text(""), text("  METRICS") | bold | color(theme::kOverlay0),
-            fieldRow(detailsField::kRating, "Rating:",
-                     hbox({text(renderStarMeter(e.score)) | color(theme::kYellow),
-                           text(" (" + std::to_string(e.score) + "/10)") |
-                               color(theme::kText)})),
-            text(""),
-            fieldRow(detailsField::kProgress, "Progress:",
-                     vbox({hbox({text(std::to_string(e.progress) + " / " +
-                                      (e.totalUnits > 0
-                                           ? std::to_string(e.totalUnits)
-                                           : "?") +
-                                      units) |
-                                     color(theme::kText),
-                                 filler(), text(percent) | color(theme::kSubtext)}),
-                           gauge(ratio) |
-                               color(finished ? theme::kGreen : theme::kBlue)}))}) |
+      vbox(
+          {hbox(
+               {text("  TRACKING") | bold | color(theme::kLavender), filler(),
+                text(trackingActive ? "[Active]" : "") | color(theme::kPeach)}),
+           text(""), text("  STATUS") | bold | color(theme::kOverlay0),
+           fieldRow(detailsField::kStatus, "Status:",
+                    pill(statusToIcon(e.status) + " " +
+                             statusToString(e.status, e.type),
+                         theme::kCrust, statusToColor(e.status))),
+           text(""), text("  METRICS") | bold | color(theme::kOverlay0),
+           fieldRow(
+               detailsField::kRating, "Rating:",
+               hbox({text(renderStarMeter(e.score)) | color(theme::kYellow),
+                     text(" (" + std::to_string(e.score) + "/10)") |
+                         color(theme::kText)})),
+           text(""),
+           fieldRow(
+               detailsField::kProgress, "Progress:",
+               vbox({hbox({text(std::to_string(e.progress) + " / " +
+                                (e.totalUnits > 0 ? std::to_string(e.totalUnits)
+                                                  : "?") +
+                                unitName(e.type)) |
+                               color(theme::kText),
+                           filler(), text(percent) | color(theme::kSubtext)}),
+                     gauge(ratio) |
+                         color(finished ? theme::kGreen : theme::kBlue)}))}) |
       border | color(trackingActive ? theme::kMauve : theme::kSurface0);
 
   bool notesActive = mode_ != appMode::kSch && onDetails &&
@@ -954,7 +830,8 @@ Element catalogTab::renderDetails() {
   Element notesBody =
       editingNotes_
           ? notesInput_->Render() | border | color(theme::kPeach)
-          : text(e.notes.empty() ? "(empty - press e or ret to edit)" : e.notes) |
+          : text(e.notes.empty() ? "(empty - press e or ret to edit)"
+                                 : e.notes) |
                 color(e.notes.empty() ? theme::kOverlay0 : theme::kSubtext);
   std::string notesBadge =
       notesActive ? (editingNotes_ ? "[Editing]" : "[Active]") : "";
@@ -973,50 +850,127 @@ Element catalogTab::renderDetails() {
 
 Element catalogTab::renderSidebarCard() const {
   bool focused = mode_ != appMode::kSch && focus_ == focusedCard::kSidebar;
+  Elements rows;
+  for (size_t row = 0; row < sidebarRows_.size(); ++row)
+    rows.push_back(renderSidebarRow(static_cast<int>(row)));
   return vbox({text("  Categories") | bold | color(theme::kLavender), text(""),
-               sidebarMenu_->Render() | vscroll_indicator | frame | flex}) |
+               vbox(std::move(rows)) | vscroll_indicator | frame | flex}) |
          border | color(focused ? theme::kMauve : theme::kSurface0) |
          size(WIDTH, EQUAL, 28);
 }
 
 Element catalogTab::renderSearchCard() {
-  std::string summary = searchQuery_.empty()
-                            ? "All entries "
-                            : "Filter: '" + searchQuery_ + "' ";
+  if (adding_ != addStage::kOff)
+    return hbox({text(" + ") | bold | color(theme::kBlue),
+                 adding_ == addStage::kTyping
+                     ? addInput_->Render() | flex
+                     : text(addQuery_) | color(theme::kText) | flex,
+                 text("Add to " + lowercase(title()) + " ") |
+                     color(theme::kSubtext)}) |
+           border | color(theme::kBlue) | size(HEIGHT, EQUAL, 3);
+  std::string summary =
+      searchQuery_.empty() ? "All entries " : "Filter: '" + searchQuery_ + "' ";
   return hbox({text(" " + icon::kSearch + " ") | color(theme::kPeach),
                searchInput_->Render() | flex,
                text(summary) | color(theme::kSubtext), text(" ")}) |
          border |
          color(mode_ == appMode::kSch ? theme::kPeach : theme::kSurface0) |
-         size(HEIGHT, EQUAL, 3) | reflect(searchBarBox_);
+         size(HEIGHT, EQUAL, 3);
 }
 
 Element catalogTab::renderCatalogCard() {
   auto header = hbox(
       {text("   ") | size(WIDTH, EQUAL, 3),
-       renderHeaderCell("Date", sortKey::kDate, 10, headerDateBox_, false),
-       text(" "),
-       renderHeaderCell("Title", sortKey::kTitle, 28, headerTitleBox_, true),
-       text(" "),
-       renderHeaderCell("Status", sortKey::kStatus, 14, headerStatusBox_, false),
-       text(" "),
-       renderHeaderCell("Rating", sortKey::kScore, 12, headerRatingBox_, false),
-       text(" "),
-       renderHeaderCell("Progress", sortKey::kProgress, 12, headerProgressBox_,
-                        false),
-       text(" ")});
-  Element rows = displayed_.empty()
-                     ? text(" No matching entries found.") |
-                           color(theme::kSubtext) | center | flex
-                     : catalogMenu_->Render() | vscroll_indicator | frame | flex;
+       renderHeaderCell("Date", sortKey::kDate, 10, false), text(" "),
+       renderHeaderCell("Title", sortKey::kTitle, 28, true), text(" "),
+       renderHeaderCell("Status", sortKey::kStatus, 14, false), text(" "),
+       renderHeaderCell("Rating", sortKey::kScore, 12, false), text(" "),
+       renderHeaderCell("Progress", sortKey::kProgress, 12, false), text(" ")});
+  Element rows;
+  if (displayed_.empty()) {
+    rows = text(libraryEmpty_
+                    ? " Nothing here yet. Press a to add a title, or run: "
+                      "catalist import <file.xml>"
+                    : " No matching entries found.") |
+           color(theme::kSubtext) | center | flex;
+  } else {
+    Elements lines;
+    for (size_t row = 0; row < displayed_.size(); ++row)
+      lines.push_back(renderCatalogRow(static_cast<int>(row)));
+    rows = vbox(std::move(lines)) | vscroll_indicator | frame | flex;
+  }
   bool focused = mode_ != appMode::kSch && focus_ == focusedCard::kCatalog;
   return vbox({header, text(""), rows}) | border |
          color(focused ? theme::kMauve : theme::kSurface0) | flex;
 }
 
+Element catalogTab::renderPickCard() {
+  auto heading = [](const std::string& name, int width) {
+    Element cell = text(" " + name) | bold | color(theme::kSubtext);
+    return width > 0 ? cell | size(WIDTH, EQUAL, width) : cell | flex;
+  };
+  auto header =
+      hbox({text("   ") | size(WIDTH, EQUAL, 3), heading("Year", 10), text(" "),
+            heading("Title", 0), text(" "), heading("Length", 14), text(" "),
+            heading("Score", 12), text(" ")});
+  if (adding_ == addStage::kSearching)
+    return vbox({header, text(""),
+                 text(" Searching MyAnimeList...") | color(theme::kSubtext) |
+                     center | flex}) |
+           border | color(theme::kBlue) | flex;
+
+  size_t maxGlyphs =
+      static_cast<size_t>(std::max(16, Terminal::Size().dimx - 134));
+  Elements lines;
+  for (size_t row = 0; row <= addResults_.size(); ++row) {
+    bool active = static_cast<int>(row) == addSelected_;
+    Element line;
+    if (row == addResults_.size()) {
+      line = hbox(
+          {text(active ? "▌ " : "  ") | bold | color(theme::kMauve),
+           text("    +     ") | color(theme::kBlue), text(" "),
+           text(" Add '" + marquee::clip(addQuery_, maxGlyphs) + "' by hand") |
+               color(theme::kSubtext) | flex});
+    } else {
+      const auto& match = addResults_[row];
+      char score[16];
+      std::snprintf(score, sizeof(score), "%.2f", match.score);
+      std::string length =
+          (match.totalUnits > 0 ? std::to_string(match.totalUnits) : "?") +
+          unitName(media_);
+      std::string name =
+          active ? marquee::scroll(match.name, maxGlyphs,
+                                   rowTimer_.elapsedFor(addSelected_))
+                 : marquee::clip(match.name, maxGlyphs);
+      line = hbox({text(active ? "▌ " : "  ") | bold | color(theme::kMauve),
+                   text(match.year.empty() ? "    -" : "   " + match.year) |
+                       size(WIDTH, EQUAL, 10) | color(theme::kSubtext),
+                   text(" "),
+                   text(" " + name) | (active ? bold : nothing) |
+                       color(theme::kText) | flex,
+                   text(" "),
+                   text(" " + icon::kGauge + " " + length) |
+                       size(WIDTH, EQUAL, 14) | color(theme::kLavender),
+                   text(" "),
+                   text(" " + icon::kStarFull + " " +
+                        (match.score > 0 ? std::string(score) : "-")) |
+                       size(WIDTH, EQUAL, 12) | color(theme::kYellow),
+                   text(" ")});
+    }
+    lines.push_back(active ? line | bgcolor(theme::kSurface0) | focus : line);
+  }
+  return vbox({header, text(""),
+               vbox(std::move(lines)) | vscroll_indicator | frame | flex}) |
+         border | color(theme::kBlue) | flex;
+}
+
 Element catalogTab::render(appContext&) {
+  Element middle =
+      adding_ == addStage::kSearching || adding_ == addStage::kPicking
+          ? renderPickCard()
+          : renderCatalogCard();
   return hbox({renderSidebarCard(),
-               vbox({renderSearchCard(), renderCatalogCard() | flex}) | flex,
+               vbox({renderSearchCard(), middle | flex}) | flex,
                vbox({renderDetails() | flex}) | size(WIDTH, EQUAL, 42)});
 }
 

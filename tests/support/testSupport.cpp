@@ -30,18 +30,11 @@ std::filesystem::path makeUniqueTempDir(const std::string& prefix) {
 }
 
 tempDirFixture::tempDirFixture()
-    : tempDir_(makeUniqueTempDir("catalist-test-")), clock_(makeTestClock()) {}
+    : tempDir_(makeUniqueTempDir("catalist-test-")) {}
 
 tempDirFixture::~tempDirFixture() {
   std::error_code ignored;
   std::filesystem::remove_all(tempDir_, ignored);
-}
-
-streamCapture::streamCapture(std::ostream& target)
-    : target_(target), buffer_(), original_(target.rdbuf(buffer_.rdbuf())) {}
-
-streamCapture::~streamCapture() {
-  target_.rdbuf(original_);
 }
 
 isoDate requireDate(const std::string& text) {
@@ -51,22 +44,20 @@ isoDate requireDate(const std::string& text) {
   return *parsed;
 }
 
-accountFakes::accountFakes(iFileSystem& fileSystem, iHttpClient& http,
-                           const iClock& clock,
-                           const std::filesystem::path& dataDir)
-    : malLogin(fileSystem, http, launcher, authServer, clock,
-               dataDir / "mal_auth.json"),
-      anilistLogin(fileSystem, dataDir / "anilist_auth.json", "1234"),
-      mal(http, malLogin, nullptr),
-      anilist(http, anilistLogin, nullptr),
-      accounts{malLogin, anilistLogin, mal, anilist} {}
-
 entryBuilder makeEntry() {
   return entryBuilder{};
 }
 
 fixedClock makeTestClock() {
   return fixedClock(iClock::timePoint(std::chrono::seconds(1792497600)));
+}
+
+entry findTitle(const database& db, mediaType type, const std::string& title) {
+  for (const auto& e : db.getEntries(type)) {
+    if (e.title == title)
+      return e;
+  }
+  throw std::runtime_error("no entry titled " + title);
 }
 
 std::filesystem::path fixturePath(const std::string& relativePath) {

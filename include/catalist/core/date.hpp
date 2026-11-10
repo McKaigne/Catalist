@@ -15,11 +15,6 @@ public:
   // Absent unless the parts name a real calendar day in year 1 or later.
   static std::optional<isoDate> fromParts(int year, int month, int day);
   static isoDate fromLocalTm(const std::tm& local);
-  // Proleptic Gregorian day count with 1970-01-01 as day 0.
-  static isoDate fromDayNumber(long dayNumber);
-
-  [[nodiscard]] long dayNumber() const;
-  // 0 = Monday ... 6 = Sunday.
 
   [[nodiscard]] std::string toString() const;
 

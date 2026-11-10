@@ -2,8 +2,6 @@
 
 #include <sstream>
 
-#include "catalist/core/logger.hpp"
-
 namespace catalist::csvCodec {
 
 namespace {
@@ -11,14 +9,8 @@ namespace {
 const char* kCatalogHeader =
     "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,"
     "volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at\n";
-const char* kSyncHeader =
-    "#type,service,remote_id,status,score,progress,volumes,rewatched,"
-    "start_date,finish_date,notes\n";
-const char* kHistoryHeader =
-    "#timestamp,type,title,status,progress,total_units,score\n";
 
 constexpr size_t kCatalogFields = 16;
-constexpr size_t kMinimumHistoryFields = 7;
 
 std::optional<int> parseInt(const std::string& field) {
   try {
@@ -71,26 +63,14 @@ bool isSkippableLine(const std::string& line) {
 
 // Our own files only hold names we wrote, so an unknown status is a hand
 // edit; keeping the row (as Plan to Watch) beats dropping it on the next save.
-watchStatus decodeStatus(const std::string& field, const std::string& title) {
-  auto status = parseStatus(field);
-  if (!status)
-    LOG_WARN("Unknown status '" + field + "' for '" + title +
-             "'; loaded as Plan to Watch.");
-  return status.value_or(watchStatus::kPlanToWatch);
+watchStatus decodeStatus(const std::string& field) {
+  return parseStatus(field).value_or(watchStatus::kPlanToWatch);
 }
 
 }  // namespace
 
 std::string catalogFileName(mediaType type) {
   return type == mediaType::kAnime ? "anime.csv" : "manga.csv";
-}
-
-std::string historyFileName() {
-  return "history.csv";
-}
-
-std::string syncFileName() {
-  return "sync.csv";
 }
 
 std::string escapeField(const std::string& field) {
@@ -151,9 +131,8 @@ std::vector<std::string> splitFields(std::string_view record) {
 
 std::optional<isoDate> decodeDate(const std::string& field) {
   // Files written before dates became optional used "0000-00-00" for an
-  // unknown date; it and an empty field both mean "no date".
-  if (field.empty() || field == "0000-00-00")
-    return std::nullopt;
+  // unknown date; parse rejects it (there is no year 0), so it and an empty
+  // field both mean "no date".
   return isoDate::parse(field);
 }
 
@@ -170,7 +149,7 @@ std::optional<entry> decodeEntry(const std::vector<std::string>& fields,
   decoded.malId = intOrZero(fields[1]);
   decoded.anilistId = intOrZero(fields[2]);
   decoded.title = fields[4];
-  decoded.status = decodeStatus(fields[5], decoded.title);
+  decoded.status = decodeStatus(fields[5]);
   decoded.score = intOrZero(fields[6]);
   decoded.progress = intOrZero(fields[7]);
   decoded.totalUnits = intOrZero(fields[8]);
@@ -209,78 +188,6 @@ std::string encodeEntries(const std::vector<entry>& entries) {
         << e.totalVolumes << "," << e.rewatched << ","
         << formatDate(e.startDate) << "," << formatDate(e.finishDate) << ","
         << escapeField(e.notes) << "," << formatDate(e.updatedAt) << "\n";
-  }
-  return out.str();
-}
-
-std::vector<syncBase> decodeSyncBases(std::string_view text) {
-  constexpr size_t kSyncFields = 11;
-  std::vector<syncBase> bases;
-  for (const auto& record : splitRecords(text)) {
-    auto fields = splitFields(record);
-    if (fields.size() < kSyncFields)
-      continue;
-    syncBase base;
-    base.values.type = fields[0] == "manga" ? mediaType::kManga : mediaType::kAnime;
-    base.service = fields[1];
-    base.remoteId = intOrZero(fields[2]);
-    base.values.status = decodeStatus(fields[3], fields[1] + " #" + fields[2]);
-    base.values.score = intOrZero(fields[4]);
-    base.values.progress = intOrZero(fields[5]);
-    base.values.volumes = intOrZero(fields[6]);
-    base.values.rewatched = intOrZero(fields[7]);
-    base.values.startDate = decodeDate(fields[8]);
-    base.values.finishDate = decodeDate(fields[9]);
-    base.values.notes = fields[10];
-    if (base.remoteId > 0)
-      bases.push_back(std::move(base));
-  }
-  return bases;
-}
-
-std::string encodeSyncBases(const std::vector<syncBase>& bases) {
-  std::ostringstream out;
-  out << kSyncHeader;
-  for (const auto& base : bases) {
-    const entry& v = base.values;
-    out << typeKey(v.type) << "," << escapeField(base.service) << ","
-        << base.remoteId << "," << escapeField(statusToString(v.status, v.type))
-        << "," << v.score << "," << v.progress << "," << v.volumes << ","
-        << v.rewatched << "," << formatDate(v.startDate) << ","
-        << formatDate(v.finishDate) << "," << escapeField(v.notes) << "\n";
-  }
-  return out.str();
-}
-
-std::vector<activityRecord> decodeHistory(std::string_view text) {
-  std::vector<activityRecord> records;
-  for (const auto& line : splitLines(text)) {
-    if (isSkippableLine(line))
-      continue;
-    auto fields = splitFields(line);
-    if (fields.size() < kMinimumHistoryFields)
-      continue;
-    activityRecord record;
-    record.timestamp = fields[0];
-    record.type = fields[1] == "anime" ? mediaType::kAnime : mediaType::kManga;
-    record.title = fields[2];
-    record.status = decodeStatus(fields[3], record.title);
-    record.progress = intOrZero(fields[4]);
-    record.totalUnits = intOrZero(fields[5]);
-    record.score = intOrZero(fields[6]);
-    records.push_back(std::move(record));
-  }
-  return records;
-}
-
-std::string encodeHistory(const std::vector<activityRecord>& records) {
-  std::ostringstream out;
-  out << kHistoryHeader;
-  for (const auto& h : records) {
-    out << escapeField(h.timestamp) << "," << typeKey(h.type) << ","
-        << escapeField(h.title) << ","
-        << escapeField(statusToString(h.status, h.type)) << "," << h.progress
-        << "," << h.totalUnits << "," << h.score << "\n";
   }
   return out.str();
 }

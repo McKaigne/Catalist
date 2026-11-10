@@ -14,18 +14,21 @@ namespace catalist {
 // The frame around the tabs: the tab bar on top, the mode, status message and
 // key hints at the bottom, and the keys that work in every tab.
 class appShell {
- public:
-  appShell(appContext& ctx, std::vector<iTab*> tabs, std::function<void()> quit);
+public:
+  appShell(appContext& ctx, std::vector<iTab*> tabs,
+           std::function<void()> quit);
 
   [[nodiscard]] int& activeIndex() { return activeIndex_; }
   void activate(int index);
 
   // Tab, Shift-Tab and the number keys switch tabs and q quits, unless the
-  // active tab is taking text; everything else goes to the active tab.
+  // active tab is taking text; everything else goes to the active tab. The
+  // redraw timer's Event::Custom becomes the tab's onTick, and the mouse is
+  // ignored: Catalist is driven by the keyboard.
   bool onEvent(const ftxui::Event& event);
   [[nodiscard]] ftxui::Element render();
 
- private:
+private:
   [[nodiscard]] iTab& activeTab() { return *tabs_[activeIndex_]; }
   bool handleGlobalKey(const ftxui::Event& event);
   [[nodiscard]] ftxui::Element renderTopBar();
@@ -38,7 +41,7 @@ class appShell {
 };
 
 // Runs the full-screen interface until the user quits.
-void runTui(database& db, const iClock& clock, iProcessLauncher& launcher);
+void runTui(database& db, const iClock& clock, iHttpClient& http);
 
 }  // namespace catalist
 

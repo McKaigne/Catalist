@@ -55,3 +55,23 @@ TEST_CASE_FIXTURE(catalist::test::tempDirFixture, "cli --version prints kVersion
   CHECK(out.text() ==
         std::string("Catalist v") + catalist::kVersionString + " (C++17 / FTXUI)\n");
 }
+
+TEST_CASE("cli write command exits 1 when the catalogue cannot be saved") {
+  catalist::memoryFileSystem fs;
+  auto clock = catalist::test::makeTestClock();
+  catalist::database db(fs, clock, "/data");
+  catalist::test::cliHarness harness(db, fs, clock, "/data");
+  fs.failWritesTo("/data/anime.csv");
+  catalist::test::streamCapture out(std::cout);
+  catalist::test::streamCapture err(std::cerr);
+  char program[] = "catalist";
+  char command[] = "add";
+  char title[] = "Frieren";
+  char json[] = "--json";
+  char* argv[] = {program, command, title, json};
+  CHECK(catalist::cli::dispatch(4, argv, harness.context) == 1);
+  CHECK(err.text() ==
+        "{\"error\":{\"code\":\"io\",\"message\":\"could not save the "
+        "catalogue to /data.\"}}\n");
+  CHECK_FALSE(db.takeSaveFailure());
+}

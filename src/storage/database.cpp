@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <mutex>
+#include <utility>
 
 #include "catalist/model/entryOps.hpp"
 #include "catalist/storage/backup.hpp"
@@ -464,9 +465,17 @@ bool database::saveAll() const {
   fileSystem_.createDirectories(configDir_);
   bool a = saveCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
   bool m = saveCsv(mediaType::kManga, getCsvPath(mediaType::kManga));
-  saveHistory();
+  bool h = saveHistory();
   bool d = saveDeletions();
-  return a && m && d;
+  bool saved = a && m && h && d;
+  if (!saved)
+    saveFailed_ = true;
+  return saved;
+}
+
+bool database::takeSaveFailure() {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  return std::exchange(saveFailed_, false);
 }
 
 }  // namespace catalist

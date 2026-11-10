@@ -1,5 +1,6 @@
 #include "catalist/cli/dispatcher.hpp"
 
+#include <algorithm>
 #include <iostream>
 #include <random>
 
@@ -15,6 +16,24 @@ size_t pickRandomIndex(size_t count) {
   std::uniform_int_distribution<size_t> distribution(0, count - 1);
   return distribution(generator);
 }
+
+namespace {
+
+// A command that changed the catalogue but could not write it must not look
+// successful.
+int reportSaveFailure(int exitCode, const commandArgs& args,
+                      commandContext& ctx) {
+  if (!ctx.db.takeSaveFailure())
+    return exitCode;
+  bool jsonMode = std::find(args.begin(), args.end(), "--json") != args.end();
+  emitError("io",
+            "could not save the catalogue to " +
+                ctx.db.getConfigPath().string() + ".",
+            jsonMode);
+  return 1;
+}
+
+}  // namespace
 
 const std::vector<commandEntry>& commandTable() {
   static const std::vector<commandEntry> table = {
@@ -48,7 +67,7 @@ int dispatch(int argc, char* argv[], commandContext& ctx) {
   commandArgs args(argv + 2, argv + argc);
   for (const auto& known : commandTable()) {
     if (command == known.name)
-      return known.handler(args, ctx);
+      return reportSaveFailure(known.handler(args, ctx), args, ctx);
   }
   emitError(
       "usage",

@@ -92,6 +92,9 @@ public:
   }
 
   bool onEvent(const Event& event) {
+    if (ctx_.db.takeSaveFailure())
+      ctx_.notices.push("Could not save the catalogue to " +
+                        ctx_.db.getConfigPath().string() + ".");
     if (event == Event::Custom) {
       refreshAfterSync();
       return true;

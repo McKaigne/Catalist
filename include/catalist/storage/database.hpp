@@ -61,6 +61,9 @@ class database {
 
   bool loadAll();
   bool saveAll() const;
+  // Whether a saveAll() failed since the last call. The CLI dispatcher and
+  // the TUI shell each ask once, so the callers of saveAll() need not.
+  [[nodiscard]] bool takeSaveFailure();
   bool loadCsv(mediaType type, const std::filesystem::path& path);
   bool saveCsv(mediaType type, const std::filesystem::path& path) const;
 
@@ -86,6 +89,7 @@ class database {
   std::vector<activityRecord> historyRecords_;
   std::vector<deletedEntry> deletions_;
   int nextLocalId_ = 10001;
+  mutable bool saveFailed_ = false;
 
   std::vector<entry>& getList(mediaType type);
   const std::vector<entry>& getList(mediaType type) const;

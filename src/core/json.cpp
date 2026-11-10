@@ -259,24 +259,7 @@ private:
 
 void writeString(std::string& out, const std::string& text) {
   out += '"';
-  for (unsigned char c : text) {
-    if (c == '"' || c == '\\') {
-      out += '\\';
-      out += static_cast<char>(c);
-    } else if (c == '\n') {
-      out += "\\n";
-    } else if (c == '\r') {
-      out += "\\r";
-    } else if (c == '\t') {
-      out += "\\t";
-    } else if (c < 0x20) {
-      char buffer[8];
-      std::snprintf(buffer, sizeof(buffer), "\\u%04x", c);
-      out += buffer;
-    } else {
-      out += static_cast<char>(c);
-    }
-  }
+  out += escape(text);
   out += '"';
 }
 
@@ -440,6 +423,44 @@ void value::push(value item) {
 
 result<value> parse(std::string_view text) {
   return parser(text).parseDocument();
+}
+
+std::string escape(std::string_view text) {
+  std::string escaped;
+  for (unsigned char c : text) {
+    switch (c) {
+      case '"':
+        escaped += "\\\"";
+        break;
+      case '\\':
+        escaped += "\\\\";
+        break;
+      case '\b':
+        escaped += "\\b";
+        break;
+      case '\f':
+        escaped += "\\f";
+        break;
+      case '\n':
+        escaped += "\\n";
+        break;
+      case '\r':
+        escaped += "\\r";
+        break;
+      case '\t':
+        escaped += "\\t";
+        break;
+      default:
+        if (c >= 0x20) {
+          escaped += static_cast<char>(c);
+          break;
+        }
+        char buffer[8];
+        std::snprintf(buffer, sizeof(buffer), "\\u%04x", c);
+        escaped += buffer;
+    }
+  }
+  return escaped;
 }
 
 std::string serialize(const value& document, bool indented) {

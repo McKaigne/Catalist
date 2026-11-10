@@ -53,3 +53,9 @@ TEST_CASE("json serializes with escaping and round trips") {
   REQUIRE(reparsed.ok());
   CHECK(reparsed.value()["title"].asString() == "say \"hi\"\n");
 }
+
+TEST_CASE("json escape writes short escapes and \\u for other control characters") {
+  CHECK(catalist::json::escape("a\"b\\c\n\x01") == "a\\\"b\\\\c\\n\\u0001");
+  CHECK(catalist::json::escape("\b\f\r\t\x1f") == "\\b\\f\\r\\t\\u001f");
+  CHECK(catalist::json::escape("é") == "é");
+}

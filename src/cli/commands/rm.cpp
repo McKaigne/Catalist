@@ -7,11 +7,10 @@
 
 #include "catalist/cli/args.hpp"
 #include "catalist/cli/output.hpp"
-#include "catalist/core/jsonLite.hpp"
+#include "catalist/core/json.hpp"
 
 namespace catalist::cli {
 
-using jsonLite::escapeJsonString;
 
 int runRm(const commandArgs& args, commandContext& ctx) {
   database& db = ctx.db;
@@ -80,7 +79,7 @@ int runRm(const commandArgs& args, commandContext& ctx) {
 
     if (jsonMode) {
       std::cout << "{\"deleted\":true,\"id\":" << e.id << ",\"title\":\""
-                << escapeJsonString(e.title) << "\"}\n";
+                << json::escape(e.title) << "\"}\n";
     } else {
       bool color = shouldColor(ctx.interactive);
       std::cout << (color ? ansi::kRed : "") << "Deleted '" << e.title

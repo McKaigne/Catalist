@@ -8,7 +8,7 @@
 #include "catalist/cli/args.hpp"
 #include "catalist/cli/output.hpp"
 #include "catalist/net/remoteSearch.hpp"
-#include "catalist/core/jsonLite.hpp"
+#include "catalist/core/json.hpp"
 
 namespace catalist::cli {
 
@@ -26,7 +26,6 @@ std::optional<size_t> parseResultLimit(const std::string& raw) {
 
 }  // namespace
 
-using jsonLite::escapeJsonString;
 
 int runSearch(const commandArgs& args, commandContext& ctx) {
   database& db = ctx.db;
@@ -90,7 +89,7 @@ int runSearch(const commandArgs& args, commandContext& ctx) {
       const auto& r = results[i];
       std::cout << "  {"
                 << "\"malId\":" << r.malId << ","
-                << "\"title\":\"" << escapeJsonString(r.title) << "\","
+                << "\"title\":\"" << json::escape(r.title) << "\","
                 << "\"type\":\""
                 << (r.type == mediaType::kAnime ? "anime" : "manga") << "\","
                 << "\"episodes\":" << r.totalUnits << ","

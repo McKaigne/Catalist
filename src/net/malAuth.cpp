@@ -10,7 +10,7 @@
 #include <random>
 #include <sstream>
 
-#include "catalist/core/jsonLite.hpp"
+#include "catalist/core/json.hpp"
 #include "catalist/core/url.hpp"
 
 namespace catalist {
@@ -21,13 +21,18 @@ const std::string kMalClientId = "6114d00ca681b7701d1e15fe11a4987e";
 
 namespace {
 
-std::string stringField(const std::string& json, const char* key) {
-  return jsonLite::extractJsonString(json, key).value_or("");
+// A reply that is not JSON reads as null, so every field is then absent.
+json::value parseOrNull(const std::string& text) {
+  auto document = json::parse(text);
+  return document.ok() ? document.value() : json::value();
 }
 
-long long integerField(const std::string& json, const char* key) {
-  return static_cast<long long>(
-      jsonLite::extractJsonNumber(json, key).value_or(0.0));
+std::string stringField(const json::value& document, const char* key) {
+  return document[key].asString().value_or("");
+}
+
+long long integerField(const json::value& document, const char* key) {
+  return document[key].asInteger().value_or(0);
 }
 
 }  // namespace
@@ -67,10 +72,11 @@ void malAuth::load() {
   auto content = fileSystem_.readFile(credentialsPath_);
   if (!content)
     return;
+  json::value stored = parseOrNull(*content);
   std::lock_guard<std::mutex> lock(mutex_);
-  creds_.accessToken = stringField(*content, "access_token");
-  creds_.refreshToken = stringField(*content, "refresh_token");
-  creds_.expiresAt = integerField(*content, "expires_at");
+  creds_.accessToken = stringField(stored, "access_token");
+  creds_.refreshToken = stringField(stored, "refresh_token");
+  creds_.expiresAt = integerField(stored, "expires_at");
 }
 
 void malAuth::save() {
@@ -227,16 +233,16 @@ bool malAuth::requestToken(const std::string& formBody) {
   request.body = formBody;
 
   auto response = http_.execute(request);
-  std::string json = response.ok() ? response.value().body : "";
-  std::string accessToken = stringField(json, "access_token");
+  json::value reply = parseOrNull(response.ok() ? response.value().body : "");
+  std::string accessToken = stringField(reply, "access_token");
   if (accessToken.empty())
     return false;
 
-  long long expiresIn = integerField(json, "expires_in");
+  long long expiresIn = integerField(reply, "expires_in");
   {
     std::lock_guard<std::mutex> lock(mutex_);
     creds_.accessToken = accessToken;
-    creds_.refreshToken = stringField(json, "refresh_token");
+    creds_.refreshToken = stringField(reply, "refresh_token");
     creds_.expiresAt = nowSeconds() + expiresIn;
   }
   save();

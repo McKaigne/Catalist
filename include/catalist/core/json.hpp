@@ -65,6 +65,8 @@ struct member {
 };
 
 [[nodiscard]] result<value> parse(std::string_view text);
+// The inside of a JSON string literal, without the quotes.
+[[nodiscard]] std::string escape(std::string_view text);
 // Compact unless `indented`, which puts one member per line.
 [[nodiscard]] std::string serialize(const value& document, bool indented = false);
 

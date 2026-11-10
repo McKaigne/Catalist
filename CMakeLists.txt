@@ -39,7 +39,6 @@ add_library(catalistCore STATIC
   src/core/clock.cpp
   src/core/date.cpp
   src/core/json.cpp
-  src/core/jsonLite.cpp
   src/core/logger.cpp
   src/core/shell.cpp
   src/core/url.cpp
@@ -153,7 +152,6 @@ add_executable(catalistTests
   tests/entryOpsTest.cpp
   tests/entryTest.cpp
   tests/fileSystemTest.cpp
-  tests/jsonLiteTest.cpp
   tests/jsonTest.cpp
   tests/listServiceTest.cpp
   tests/listSyncTest.cpp

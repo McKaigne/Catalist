@@ -7,7 +7,7 @@
 
 #include <unistd.h>
 
-#include "catalist/core/jsonLite.hpp"
+#include "catalist/core/json.hpp"
 
 namespace catalist {
 
@@ -29,7 +29,6 @@ const std::string kSubtext = "\033[38;2;166;173;200m";
 
 namespace catalist::cli {
 
-using jsonLite::escapeJsonString;
 
 namespace {
 
@@ -48,13 +47,12 @@ bool shouldColor(bool interactive) {
   return interactive && std::getenv("NO_COLOR") == nullptr;
 }
 
-using jsonLite::escapeJsonString;
 
 void emitError(const std::string& code, const std::string& message,
                       bool jsonMode) {
   if (jsonMode) {
-    std::cerr << "{\"error\":{\"code\":\"" << escapeJsonString(code)
-              << "\",\"message\":\"" << escapeJsonString(message) << "\"}}\n";
+    std::cerr << "{\"error\":{\"code\":\"" << json::escape(code)
+              << "\",\"message\":\"" << json::escape(message) << "\"}}\n";
   } else {
     if (shouldColor(isatty(STDERR_FILENO))) {
       std::cerr << ansi::kRed << ansi::kBold << "error: " << ansi::kReset
@@ -87,7 +85,7 @@ std::string formatJsonEntry(const entry& e) {
      << "\"id\":" << e.id << ","
      << "\"malId\":" << e.malId << ","
      << "\"anilistId\":" << e.anilistId << ","
-     << "\"title\":\"" << escapeJsonString(e.title) << "\","
+     << "\"title\":\"" << json::escape(e.title) << "\","
      << "\"type\":\"" << (e.type == mediaType::kAnime ? "anime" : "manga")
      << "\","
      << "\"status\":\"" << statusToString(e.status, e.type) << "\","
@@ -97,10 +95,10 @@ std::string formatJsonEntry(const entry& e) {
      << "\"volumes\":" << e.volumes << ","
      << "\"totalVolumes\":" << e.totalVolumes << ","
      << "\"rewatched\":" << e.rewatched << ","
-     << "\"startDate\":\"" << escapeJsonString(formatDate(e.startDate)) << "\","
-     << "\"finishDate\":\"" << escapeJsonString(formatDate(e.finishDate)) << "\","
-     << "\"notes\":\"" << escapeJsonString(e.notes) << "\","
-     << "\"updatedAt\":\"" << escapeJsonString(formatDate(e.updatedAt)) << "\""
+     << "\"startDate\":\"" << json::escape(formatDate(e.startDate)) << "\","
+     << "\"finishDate\":\"" << json::escape(formatDate(e.finishDate)) << "\","
+     << "\"notes\":\"" << json::escape(e.notes) << "\","
+     << "\"updatedAt\":\"" << json::escape(formatDate(e.updatedAt)) << "\""
      << "}";
   return ss.str();
 }

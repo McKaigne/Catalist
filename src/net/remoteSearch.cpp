@@ -1,30 +1,20 @@
 #include "catalist/net/remoteSearch.hpp"
 
-#include <sstream>
-
-#include "catalist/core/jsonLite.hpp"
+#include "catalist/core/json.hpp"
 #include "catalist/core/url.hpp"
 
 namespace catalist {
 
 namespace {
 
-using jsonLite::extractJsonNumber;
-using jsonLite::extractJsonString;
-using jsonLite::unescapeJsonString;
-
 constexpr auto kSearchTimeout = std::chrono::milliseconds(8000);
 
-std::string stringField(const std::string& block, const char* key) {
-  return extractJsonString(block, key).value_or("");
+std::string stringField(const json::value& item) {
+  return item.asString().value_or("");
 }
 
-std::string decodedField(const std::string& block, const char* key) {
-  return unescapeJsonString(stringField(block, key));
-}
-
-int intField(const std::string& block, const std::string& key) {
-  return static_cast<int>(extractJsonNumber(block, key).value_or(0.0));
+int intField(const json::value& item) {
+  return static_cast<int>(item.asNumber().value_or(0.0));
 }
 
 std::string unitKeyFor(mediaType type) {
@@ -33,91 +23,96 @@ std::string unitKeyFor(mediaType type) {
 
 std::string anilistPayload(mediaType type, const std::string& searchQuery,
                            size_t limit) {
-  std::string mediaKind = type == mediaType::kAnime ? "ANIME" : "MANGA";
-  std::ostringstream payload;
-  payload << "{\"query\":\"query($s:String,$t:MediaType){Page(perPage:"
-          << limit
-          << "){media(search:$s,type:$t){id idMal title{romaji english} "
-             "episodes chapters status averageScore startDate{year}}}}\","
-             "\"variables\":{\"s\":\""
-          << jsonLite::escapeJsonString(searchQuery) << "\",\"t\":\""
-          << mediaKind << "\"}}";
-  return payload.str();
+  json::value variables;
+  variables.set("s", searchQuery);
+  variables.set("t", type == mediaType::kAnime ? "ANIME" : "MANGA");
+  json::value payload;
+  payload.set("query", "query($s:String,$t:MediaType){Page(perPage:" +
+                           std::to_string(limit) +
+                           "){media(search:$s,type:$t){id idMal title{romaji "
+                           "english} episodes chapters status averageScore "
+                           "startDate{year}}}}");
+  payload.set("variables", std::move(variables));
+  return json::serialize(payload);
 }
 
-std::optional<remoteSearchResult> parseAnilistMedia(const std::string& block,
+std::optional<remoteSearchResult> parseAnilistMedia(const json::value& item,
                                                     mediaType type) {
   remoteSearchResult parsed;
   parsed.type = type;
-  parsed.malId = intField(block, "idMal");
-  parsed.anilistId = intField(block, "id");
+  parsed.malId = intField(item["idMal"]);
+  parsed.anilistId = intField(item["id"]);
   if (parsed.malId <= 0 && parsed.anilistId <= 0)
     return std::nullopt;
 
-  parsed.title = decodedField(block, "romaji");
+  parsed.title = stringField(item["title"]["romaji"]);
   if (parsed.title.empty())
-    parsed.title = decodedField(block, "english");
+    parsed.title = stringField(item["title"]["english"]);
   if (parsed.title.empty())
     return std::nullopt;
 
-  parsed.titleEnglish = decodedField(block, "english");
-  parsed.totalUnits = intField(block, unitKeyFor(type));
-  double averageOutOf100 = extractJsonNumber(block, "averageScore").value_or(0);
+  parsed.titleEnglish = stringField(item["title"]["english"]);
+  parsed.totalUnits = intField(item[unitKeyFor(type)]);
+  double averageOutOf100 = item["averageScore"].asNumber().value_or(0.0);
   parsed.score = averageOutOf100 > 0.0 ? averageOutOf100 / 10.0 : 0.0;
-  parsed.status = stringField(block, "status");
-  int startYear = intField(block, "year");
+  parsed.status = stringField(item["status"]);
+  int startYear = intField(item["startDate"]["year"]);
   if (startYear > 1900)
     parsed.year = std::to_string(startYear);
   return parsed;
 }
 
-std::optional<remoteSearchResult> parseJikanItem(const std::string& block,
+std::optional<remoteSearchResult> parseJikanItem(const json::value& item,
                                                  mediaType type) {
   remoteSearchResult parsed;
   parsed.type = type;
-  parsed.malId = intField(block, "mal_id");
+  parsed.malId = intField(item["mal_id"]);
   if (parsed.malId <= 0)
     return std::nullopt;
 
-  parsed.title = decodedField(block, "title");
+  parsed.title = stringField(item["title"]);
   if (parsed.title.empty())
     return std::nullopt;
 
-  parsed.titleEnglish = decodedField(block, "title_english");
-  parsed.totalUnits = intField(block, unitKeyFor(type));
-  parsed.score = extractJsonNumber(block, "score").value_or(0.0);
-  parsed.status = stringField(block, "status");
+  parsed.titleEnglish = stringField(item["title_english"]);
+  parsed.totalUnits = intField(item[unitKeyFor(type)]);
+  parsed.score = item["score"].asNumber().value_or(0.0);
+  parsed.status = stringField(item["status"]);
 
-  int startYear = intField(block, "year");
-  std::string airedFrom = stringField(block, "from");
+  int startYear = intField(item["year"]);
+  // Anime carry their first air date under "aired", manga under "published".
+  std::string firstDate = stringField(item["aired"]["from"]);
+  if (firstDate.empty())
+    firstDate = stringField(item["published"]["from"]);
   if (startYear > 1900)
     parsed.year = std::to_string(startYear);
-  else if (airedFrom.size() >= 4)
-    parsed.year = airedFrom.substr(0, 4);
+  else if (firstDate.size() >= 4)
+    parsed.year = firstDate.substr(0, 4);
   return parsed;
 }
 
 template <typename parser>
-std::vector<remoteSearchResult> parseItems(const std::string& json,
-                                           const char* arrayKey,
+std::vector<remoteSearchResult> parseItems(const json::value& items,
                                            mediaType type, size_t limit,
                                            parser parseItem) {
   std::vector<remoteSearchResult> results;
-  for (const auto& block : jsonLite::splitArrayObjects(json, arrayKey)) {
+  for (const auto& item : items.items()) {
     if (results.size() >= limit)
       break;
-    if (auto parsed = parseItem(block, type))
+    if (auto parsed = parseItem(item, type))
       results.push_back(std::move(*parsed));
   }
   return results;
 }
 
-std::optional<std::string> fetchBody(iHttpClient& http,
-                                     const httpRequest& request) {
+// A failed request and a reply that is not JSON both read as null, which has
+// no items.
+json::value fetchDocument(iHttpClient& http, const httpRequest& request) {
   auto response = http.execute(request);
-  if (!response.ok() || response.value().body.empty())
-    return std::nullopt;
-  return response.value().body;
+  if (!response.ok())
+    return {};
+  auto document = json::parse(response.value().body);
+  return document.ok() ? document.value() : json::value();
 }
 
 }  // namespace
@@ -132,10 +127,9 @@ std::vector<remoteSearchResult> remoteSearchEngine::queryAniList(
   request.body = anilistPayload(type, searchQuery, limit);
   request.timeout = kSearchTimeout;
 
-  auto body = fetchBody(http_, request);
-  if (!body)
-    return {};
-  return parseItems(*body, "media", type, limit, parseAnilistMedia);
+  json::value document = fetchDocument(http_, request);
+  return parseItems(document["data"]["Page"]["media"], type, limit,
+                    parseAnilistMedia);
 }
 
 std::vector<remoteSearchResult> remoteSearchEngine::queryJikan(
@@ -148,10 +142,8 @@ std::vector<remoteSearchResult> remoteSearchEngine::queryJikan(
   request.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
   request.timeout = kSearchTimeout;
 
-  auto body = fetchBody(http_, request);
-  if (!body)
-    return {};
-  return parseItems(*body, "data", type, limit, parseJikanItem);
+  json::value document = fetchDocument(http_, request);
+  return parseItems(document["data"], type, limit, parseJikanItem);
 }
 
 std::vector<remoteSearchResult> remoteSearchEngine::query(

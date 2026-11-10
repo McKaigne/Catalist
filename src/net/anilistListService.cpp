@@ -111,9 +111,8 @@ remoteListEntry rowFromJson(const json::value& row, mediaType type) {
   entry& item = converted.item;
   item.type = type;
   item.title = titleOf(media);
-  item.setRemoteId("anilist", std::to_string(intField(media, "id")));
-  if (int malId = intField(media, "idMal"); malId > 0)
-    item.setRemoteId("mal", std::to_string(malId));
+  item.anilistId = intField(media, "id");
+  item.malId = intField(media, "idMal");
   item.totalUnits = intField(media, anime ? "episodes" : "chapters");
   item.totalVolumes = anime ? 0 : intField(media, "volumes");
   item.status = statusFromAnilist(row["status"].asString().value_or(""));

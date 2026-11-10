@@ -95,10 +95,8 @@ size_t malParser::importXml(const iFileSystem& fileSystem,
     } catch (...) {
       e.malId = 0;
     }
-    if (e.malId > 0) {
+    if (e.malId > 0)
       e.id = e.malId;
-      e.setRemoteId("mal", std::to_string(e.malId));
-    }
 
     e.title = extractTag(block, "series_title");
     if (e.title.empty())
@@ -164,10 +162,8 @@ size_t malParser::importXml(const iFileSystem& fileSystem,
     } catch (...) {
       e.malId = 0;
     }
-    if (e.malId > 0) {
+    if (e.malId > 0)
       e.id = e.malId;
-      e.setRemoteId("mal", std::to_string(e.malId));
-    }
 
     e.title = extractTag(block, "manga_title");
     if (e.title.empty())

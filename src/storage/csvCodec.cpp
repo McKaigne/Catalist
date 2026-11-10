@@ -100,8 +100,6 @@ void fillOptionalColumns(entry& decoded, const std::vector<std::string>& fields,
     decoded.updatedAt = decodeDate(*value);
   if (auto* value = column(12))
     decoded.dirty = (*value == "1" || *value == "true");
-  if (auto* value = column(13); value && !value->empty())
-    decoded.remoteIds = deserializeRemoteIds(*value);
   if (auto* value = column(14))
     decoded.queuePos = parseInt(*value);
   if (auto* value = column(15))
@@ -116,13 +114,6 @@ watchStatus decodeStatus(const std::string& field, const std::string& title) {
     LOG_WARN("Unknown status '" + field + "' for '" + title +
              "'; loaded as Plan to Watch.");
   return status.value_or(watchStatus::kPlanToWatch);
-}
-
-void backfillRemoteIds(entry& decoded) {
-  if (decoded.malId > 0 && !decoded.remoteIds.count("mal"))
-    decoded.remoteIds["mal"] = std::to_string(decoded.malId);
-  if (decoded.anilistId > 0 && !decoded.remoteIds.count("anilist"))
-    decoded.remoteIds["anilist"] = std::to_string(decoded.anilistId);
 }
 
 }  // namespace
@@ -225,7 +216,6 @@ std::optional<entry> decodeEntry(const std::vector<std::string>& fields,
   decoded.progress = intOrZero(fields[offset + 3]);
   decoded.totalUnits = intOrZero(fields[offset + 4]);
   fillOptionalColumns(decoded, fields, offset);
-  backfillRemoteIds(decoded);
   return decoded;
 }
 
@@ -250,7 +240,7 @@ std::string encodeEntries(const std::vector<entry>& entries) {
         << formatDate(e.startDate) << "," << formatDate(e.finishDate) << ","
         << escapeField(e.notes) << "," << formatDate(e.updatedAt) << ","
         << (e.dirty ? "1" : "0") << ","
-        << escapeField(serializeRemoteIds(e.remoteIds)) << ","
+        << ","
         << (e.queuePos ? std::to_string(*e.queuePos) : "") << ","
         << escapeField(serializeServiceSet(e.syncedWith)) << "\n";
   }

@@ -65,7 +65,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "malParser imports a manga block") {
   CHECK(imported->volumes == 42);
   CHECK(imported->rewatched == 2);
   CHECK(imported->status == catalist::watchStatus::kWatching);
-  CHECK(imported->getRemoteId("mal") == "2");
+  CHECK(imported->malId == 2);
   CHECK(db.getEntries(catalist::mediaType::kAnime).empty());
 }
 

@@ -64,33 +64,3 @@ TEST_CASE("statusToString round trips through parseStatus") {
     }
   }
 }
-
-TEST_CASE("remoteIds serialize skips empty pairs and deserialize skips malformed ones") {
-  std::unordered_map<std::string, std::string> ids = {
-      {"mal", "1"}, {"", "2"}, {"kitsu", ""}};
-  CHECK(catalist::serializeRemoteIds(ids) == "mal=1");
-
-  auto parsed = catalist::deserializeRemoteIds("mal=1;=2;kitsu=;anilist=3;junk");
-  CHECK(parsed.size() == 2);
-  CHECK(parsed.at("mal") == "1");
-  CHECK(parsed.at("anilist") == "3");
-  CHECK(catalist::deserializeRemoteIds("").empty());
-}
-
-TEST_CASE("remoteIds round trip through serialize and deserialize") {
-  std::unordered_map<std::string, std::string> ids = {
-      {"mal", "52991"}, {"anilist", "154587"}, {"kitsu", "46474"}};
-  CHECK(catalist::deserializeRemoteIds(catalist::serializeRemoteIds(ids)) == ids);
-}
-
-TEST_CASE("entry setRemoteId keeps the numeric mal and anilist ids in sync") {
-  catalist::entry e;
-  e.setRemoteId("mal", "77");
-  e.setRemoteId("anilist", "88");
-  CHECK(e.malId == 77);
-  CHECK(e.anilistId == 88);
-  CHECK(e.getRemoteId("mal") == "77");
-  e.setRemoteId("mal", "");
-  CHECK(e.malId == 0);
-  CHECK(e.getRemoteId("mal") == "");
-}

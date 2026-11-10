@@ -137,17 +137,19 @@ entry adjustRating(entry target, int delta, const isoDate& today) {
   return target;
 }
 
+void adoptServiceIds(entry& target, const entry& source) {
+  if (source.malId > 0)
+    target.malId = source.malId;
+  if (source.anilistId > 0)
+    target.anilistId = source.anilistId;
+}
+
 entry mergeImported(entry existing, const entry& incoming) {
   if (incoming.totalUnits > 0)
     existing.totalUnits = incoming.totalUnits;
   if (incoming.totalVolumes > 0)
     existing.totalVolumes = incoming.totalVolumes;
-  for (const auto& [provider, remoteId] : incoming.remoteIds)
-    existing.setRemoteId(provider, remoteId);
-  if (incoming.malId > 0 && existing.malId <= 0)
-    existing.setRemoteId("mal", std::to_string(incoming.malId));
-  if (incoming.anilistId > 0 && existing.anilistId <= 0)
-    existing.setRemoteId("anilist", std::to_string(incoming.anilistId));
+  adoptServiceIds(existing, incoming);
   if (existing.notes.empty() && !incoming.notes.empty())
     existing.notes = incoming.notes;
   if (existing.score == 0 && incoming.score > 0)

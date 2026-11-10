@@ -22,10 +22,7 @@ constexpr size_t kHistoryLimit = 5000;
 bool sharesRemoteId(const entry& existing, const entry& incoming) {
   if (incoming.malId > 0 && existing.malId == incoming.malId)
     return true;
-  if (incoming.anilistId > 0 && existing.anilistId == incoming.anilistId)
-    return true;
-  std::string incomingMal = incoming.getRemoteId("mal");
-  return !incomingMal.empty() && existing.getRemoteId("mal") == incomingMal;
+  return incoming.anilistId > 0 && existing.anilistId == incoming.anilistId;
 }
 
 }  // namespace

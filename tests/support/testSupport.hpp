@@ -140,10 +140,6 @@ public:
     return *this;
   }
   entryBuilder& dirty(bool value) { built_.dirty = value; return *this; }
-  entryBuilder& remoteId(const std::string& provider, const std::string& value) {
-    built_.remoteIds[provider] = value;
-    return *this;
-  }
 
   [[nodiscard]] entry build() const { return built_; }
   operator entry() const { return built_; }

@@ -37,8 +37,7 @@ entry withRemoteValues(entry local, const entry& remote, const isoDate& today) {
     merged.totalUnits = remote.totalUnits;
   if (remote.totalVolumes > 0)
     merged.totalVolumes = remote.totalVolumes;
-  for (const auto& [provider, remoteId] : remote.remoteIds)
-    merged.setRemoteId(provider, remoteId);
+  adoptServiceIds(merged, remote);
   if (!sameListFields(merged, local))
     merged.updatedAt = today;
   return merged;
@@ -209,8 +208,7 @@ private:
   }
 
   void linkAndReconcile(entry local, const entry& row) {
-    for (const auto& [provider, remoteId] : row.remoteIds)
-      local.setRemoteId(provider, remoteId);
+    adoptServiceIds(local, row);
     reconcile(local);
   }
 
@@ -287,9 +285,9 @@ void listSync::fillMissingIds(mediaType type, syncReport& report,
     auto anilist = toAnilist.find(item.malId);
     auto mal = toMal.find(item.anilistId);
     if (item.anilistId <= 0 && anilist != toAnilist.end())
-      item.setRemoteId("anilist", std::to_string(anilist->second));
+      item.anilistId = anilist->second;
     else if (item.malId <= 0 && mal != toMal.end())
-      item.setRemoteId("mal", std::to_string(mal->second));
+      item.malId = mal->second;
     else
       continue;
     updates.push_back(item);

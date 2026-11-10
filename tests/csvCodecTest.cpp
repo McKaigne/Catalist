@@ -19,7 +19,7 @@ TEST_CASE("csvCodec reads the zero date sentinel as absent and writes it empty")
 
   auto encoded = csvCodec::encodeEntries(decoded);
   CHECK(encoded.find("0000-00-00") == std::string::npos);
-  CHECK(encoded.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,0,mal=1,,\n") !=
+  CHECK(encoded.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,0,,,\n") !=
         std::string::npos);
 }
 
@@ -60,8 +60,7 @@ TEST_CASE("csvCodec entries round trip through encode and decode") {
                                  .progress(3).totalUnits(9).volumes(1)
                                  .totalVolumes(2).rewatched(1)
                                  .startDate("2024-01-02").notes("n\nn")
-                                 .updatedAt("2024-02-03").dirty(true)
-                                 .remoteId("kitsu", "11");
+                                 .updatedAt("2024-02-03").dirty(true);
   auto decoded =
       csvCodec::decodeEntries(csvCodec::encodeEntries({original}),
                               mediaType::kManga);
@@ -74,8 +73,8 @@ TEST_CASE("csvCodec entries round trip through encode and decode") {
   CHECK_FALSE(copy.finishDate.has_value());
   CHECK(copy.notes == "n\nn");
   CHECK(copy.dirty);
-  CHECK(copy.getRemoteId("kitsu") == "11");
-  CHECK(copy.getRemoteId("anilist") == "7");
+  CHECK(copy.malId == 6);
+  CHECK(copy.anilistId == 7);
 }
 
 TEST_CASE("csvCodec history round trips and skips short rows") {

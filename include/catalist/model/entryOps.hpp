@@ -25,8 +25,11 @@ namespace catalist {
 [[nodiscard]] entry cycleStatus(entry target, int direction,
                                 const isoDate& today);
 
+// Takes every MyAnimeList and AniList id `source` has; ids it lacks are kept.
+void adoptServiceIds(entry& target, const entry& source);
+
 // Folds an imported row into an entry the user already has. Totals and
-// provider ids are refreshed, but the user's own score, progress, notes and
+// service ids are refreshed, but the user's own score, progress, notes and
 // dates win: imported values only fill fields the user never set.
 [[nodiscard]] entry mergeImported(entry existing, const entry& incoming);
 

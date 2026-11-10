@@ -4,7 +4,6 @@
 #include <optional>
 #include <set>
 #include <string>
-#include <unordered_map>
 
 #include "catalist/core/date.hpp"
 
@@ -37,13 +36,9 @@ struct entry {
   // Position in the user's watch queue; absent until the user orders it.
   std::optional<int> queuePos;
 
-  std::unordered_map<std::string, std::string> remoteIds = {};
   // List services ("mal", "anilist") this entry has been synced with, so a
   // later sync can tell "deleted there" from "never sent there".
   std::set<std::string> syncedWith;
-
-  std::string getRemoteId(const std::string& provider) const;
-  void setRemoteId(const std::string& provider, const std::string& remoteId);
 };
 
 std::string statusToString(watchStatus status,
@@ -60,11 +55,6 @@ std::string typeToString(mediaType type);
 // "anilist;mal" style text for the CSV column, and back.
 [[nodiscard]] std::string serializeServiceSet(const std::set<std::string>& services);
 [[nodiscard]] std::set<std::string> deserializeServiceSet(const std::string& text);
-
-std::string serializeRemoteIds(
-    const std::unordered_map<std::string, std::string>& ids);
-std::unordered_map<std::string, std::string> deserializeRemoteIds(
-    const std::string& s);
 
 }  // namespace catalist
 

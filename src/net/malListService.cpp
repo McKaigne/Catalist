@@ -62,7 +62,7 @@ remoteListEntry rowFromJson(const json::value& data, mediaType type) {
   entry& item = row.item;
   item.type = type;
   item.title = node["title"].asString().value_or("");
-  item.setRemoteId("mal", std::to_string(intField(node, "id")));
+  item.malId = intField(node, "id");
   item.totalUnits = intField(node, anime ? "num_episodes" : "num_chapters");
   item.totalVolumes = anime ? 0 : intField(node, "num_volumes");
   item.status = statusFromMal(status["status"].asString().value_or(""));

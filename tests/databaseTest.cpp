@@ -108,7 +108,6 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads legacy seven column layout") {
   CHECK(entries[0].progress == 28);
   CHECK(entries[0].totalUnits == 28);
   CHECK(entries[0].anilistId == 0);
-  CHECK(entries[0].getRemoteId("mal") == "52991");
 
   CHECK(entries[1].title == "86");
   CHECK(entries[1].anilistId == 0);
@@ -144,9 +143,8 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads current layout with external ids") 
   CHECK(loaded.volumes == 42);
   CHECK(catalist::formatDate(loaded.finishDate) == "");
   CHECK_FALSE(loaded.dirty);
-  CHECK(loaded.getRemoteId("kitsu") == "1234");
-  CHECK(loaded.getRemoteId("mal") == "2");
-  CHECK(loaded.getRemoteId("anilist") == "30002");
+  CHECK(loaded.malId == 2);
+  CHECK(loaded.anilistId == 30002);
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
@@ -157,7 +155,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
   CHECK(entries[0].title == "Odd Taxi");
   CHECK(entries[0].notes == "Crlf notes");
   CHECK(catalist::formatDate(entries[0].updatedAt) == "2026-10-17");
-  CHECK(entries[0].remoteIds.size() == 1);
+  CHECK(entries[0].malId == 44265);
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted multiline notes") {
@@ -181,7 +179,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add keeps user fields and refresh
                                  .title("Frieren (remote)").score(3)
                                  .progress(20).totalUnits(28).totalVolumes(4)
                                  .notes("remote notes").startDate("1999-01-01")
-                                 .remoteId("kitsu", "46474"));
+                                 );
 
   CHECK(mergedId == 52991);
   REQUIRE(db.getEntries(mediaType::kAnime).size() == 1);
@@ -194,7 +192,6 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add keeps user fields and refresh
   CHECK(merged->title == "Sousou no Frieren");
   CHECK(merged->totalUnits == 28);
   CHECK(merged->totalVolumes == 4);
-  CHECK(merged->getRemoteId("kitsu") == "46474");
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add backfills empty user fields") {
@@ -214,9 +211,9 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add backfills empty user fields")
 
 TEST_CASE_FIXTURE(tempDirFixture, "addEntry matches an existing entry by mal remote id") {
   catalist::database db(fileSystem(), clock(), tempDir());
-  db.addEntry(makeEntry().id(10001).title("Local").remoteId("mal", "777"));
+  db.addEntry(makeEntry().id(10001).malId(777).title("Local"));
   int mergedId = db.addEntry(makeEntry().id(0).title("Remote").totalUnits(12)
-                                 .remoteId("mal", "777"));
+                                 .malId(777));
   CHECK(mergedId == 10001);
   REQUIRE(db.getEntries(mediaType::kAnime).size() == 1);
   CHECK(db.getEntries(mediaType::kAnime)[0].totalUnits == 12);

@@ -85,11 +85,9 @@ int runSet(const commandArgs& args, commandContext& ctx) {
     if (arg == "--json") {
       jsonMode = true;
     } else if (arg == "--progress" || arg == "-p") {
-      if (++i >= args.size()) {
-        emitError("usage", "missing value for '--progress'", jsonMode);
-        return 2;
-      }
-      auto change = parseProgressArgument(args, i, jsonMode);
+      auto value = flagValue(args, i, "missing value for '--progress'", jsonMode);
+      auto change = value ? parseProgressArgument(args, i, jsonMode)
+                          : std::nullopt;
       if (!change)
         return 2;
       if (change->absolute)
@@ -97,83 +95,52 @@ int runSet(const commandArgs& args, commandContext& ctx) {
       else
         deltaProgress = change->delta;
     } else if (arg == "--rating" || arg == "-r" || arg == "--score") {
-      if (++i >= args.size()) {
-        emitError("usage", "missing argument for '--rating'", jsonMode);
+      auto value = flagValue(args, i, "missing argument for '--rating'", jsonMode);
+      setScore = value ? boundedInteger(*value, 0, 10,
+                                        "invalid score for '--rating': " + *value,
+                                        jsonMode)
+                       : std::nullopt;
+      if (!setScore)
         return 2;
-      }
-      try {
-        setScore = std::clamp(std::stoi(args[i]), 0, 10);
-      } catch (...) {
-        emitError("usage", "invalid score for '--rating': " + args[i],
-                  jsonMode);
-        return 2;
-      }
     } else if (arg == "--status" || arg == "-s") {
-      if (++i >= args.size()) {
-        emitError("usage", "missing argument for '--status'", jsonMode);
+      auto value = flagValue(args, i, "missing argument for '--status'", jsonMode);
+      if (!value)
         return 2;
-      }
-      setStatus = parseStatus(args[i]);
+      setStatus = parseStatus(*value);
       if (!setStatus) {
-        emitError("usage", "invalid status '" + args[i] + "'. " + kStatusChoices,
+        emitError("usage", "invalid status '" + *value + "'. " + kStatusChoices,
                   jsonMode);
         return 2;
       }
     } else if (arg == "--episodes" || arg == "--chapters" || arg == "--total" ||
                arg == "-e") {
-      if (++i >= args.size()) {
-        emitError("usage", "missing argument for '--total'", jsonMode);
+      setTotal = countFlag(args, i, "--total", jsonMode);
+      if (!setTotal)
         return 2;
-      }
-      try {
-        setTotal = std::max(0, std::stoi(args[i]));
-      } catch (...) {
-        emitError("usage", "invalid integer for '--total': " + args[i],
-                  jsonMode);
-        return 2;
-      }
     } else if (arg == "--volumes" || arg == "-v") {
-      if (++i >= args.size()) {
-        emitError("usage", "missing argument for '--volumes'", jsonMode);
+      setVolumes = countFlag(args, i, "--volumes", jsonMode);
+      if (!setVolumes)
         return 2;
-      }
-      try {
-        setVolumes = std::max(0, std::stoi(args[i]));
-      } catch (...) {
-        emitError("usage", "invalid integer for '--volumes': " + args[i],
-                  jsonMode);
-        return 2;
-      }
     } else if (arg == "--start" || arg == "--started") {
-      if (++i >= args.size()) {
-        emitError("usage", "missing date for '--start'", jsonMode);
+      auto value = flagValue(args, i, "missing date for '--start'", jsonMode);
+      setStart = value ? parseDateArgument(*value, "--start", jsonMode)
+                       : std::nullopt;
+      if (!setStart)
         return 2;
-      }
-      auto parsedDate = parseDateArgument(args[i], "--start", jsonMode);
-      if (!parsedDate)
-        return 2;
-      setStart = *parsedDate;
     } else if (arg == "--finish" || arg == "--finished") {
-      if (++i >= args.size()) {
-        emitError("usage", "missing date for '--finish'", jsonMode);
+      auto value = flagValue(args, i, "missing date for '--finish'", jsonMode);
+      setFinish = value ? parseDateArgument(*value, "--finish", jsonMode)
+                        : std::nullopt;
+      if (!setFinish)
         return 2;
-      }
-      auto parsedDate = parseDateArgument(args[i], "--finish", jsonMode);
-      if (!parsedDate)
-        return 2;
-      setFinish = *parsedDate;
     } else if (arg == "--notes" || arg == "-n") {
-      if (++i >= args.size()) {
-        emitError("usage", "missing text for '--notes'", jsonMode);
+      setNotes = flagValue(args, i, "missing text for '--notes'", jsonMode);
+      if (!setNotes)
         return 2;
-      }
-      setNotes = args[i];
     } else if (arg == "--title") {
-      if (++i >= args.size()) {
-        emitError("usage", "missing text for '--title'", jsonMode);
+      setTitle = flagValue(args, i, "missing text for '--title'", jsonMode);
+      if (!setTitle)
         return 2;
-      }
-      setTitle = args[i];
     } else if (target.empty() && arg.rfind("-", 0) != 0) {
       target = arg;
     } else if (target.empty() && arg == "-") {

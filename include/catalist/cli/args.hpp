@@ -56,6 +56,26 @@ struct argumentError {
 // "-" reads one target per stdin line (trimmed, blanks skipped).
 [[nodiscard]] std::vector<std::string> collectQueries(const std::string& target);
 
+// The value that follows the flag at args[index], which index then points
+// at. Without one, prints `missingMessage` as a usage error and returns
+// nullopt.
+[[nodiscard]] std::optional<std::string> flagValue(
+    const std::vector<std::string>& args, size_t& index,
+    const std::string& missingMessage, bool jsonMode);
+
+// A leading integer in `raw`, clamped to [low, high]. When there is none,
+// prints `invalidMessage` as a usage error and returns nullopt.
+[[nodiscard]] std::optional<int> boundedInteger(
+    const std::string& raw, int low, int high,
+    const std::string& invalidMessage, bool jsonMode);
+
+// A non-negative count after `flag`, with the usual "missing argument" and
+// "invalid integer" usage errors.
+[[nodiscard]] std::optional<int> countFlag(const std::vector<std::string>& args,
+                                           size_t& index,
+                                           const std::string& flag,
+                                           bool jsonMode);
+
 // An empty value clears the date; anything else must be YYYY-MM-DD. On a
 // malformed value the usage error is printed and nullopt returned.
 [[nodiscard]] std::optional<std::optional<isoDate>> parseDateArgument(

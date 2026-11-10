@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iostream>
+#include <limits>
 
 #include "catalist/cli/output.hpp"
 
@@ -244,6 +245,39 @@ std::vector<std::string> collectQueries(const std::string& target) {
       queries.push_back(line);
   }
   return queries;
+}
+
+std::optional<std::string> flagValue(const std::vector<std::string>& args,
+                                     size_t& index,
+                                     const std::string& missingMessage,
+                                     bool jsonMode) {
+  if (++index < args.size())
+    return args[index];
+  emitError("usage", missingMessage, jsonMode);
+  return std::nullopt;
+}
+
+std::optional<int> boundedInteger(const std::string& raw, int low, int high,
+                                  const std::string& invalidMessage,
+                                  bool jsonMode) {
+  try {
+    return std::clamp(std::stoi(raw), low, high);
+  } catch (...) {
+    emitError("usage", invalidMessage, jsonMode);
+    return std::nullopt;
+  }
+}
+
+std::optional<int> countFlag(const std::vector<std::string>& args,
+                             size_t& index, const std::string& flag,
+                             bool jsonMode) {
+  auto value =
+      flagValue(args, index, "missing argument for '" + flag + "'", jsonMode);
+  if (!value)
+    return std::nullopt;
+  return boundedInteger(*value, 0, std::numeric_limits<int>::max(),
+                        "invalid integer for '" + flag + "': " + *value,
+                        jsonMode);
 }
 
 std::optional<std::optional<isoDate>> parseDateArgument(const std::string& raw,

@@ -209,8 +209,8 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add keeps user fields and refresh
 
 TEST_CASE_FIXTURE(tempDirFixture, "addEntry re-add backfills empty user fields") {
   catalist::database db(fileSystem(), clock(), tempDir());
-  db.addEntry(makeEntry().id(100).title("Blank"));
-  db.addEntry(makeEntry().id(100).title("Blank").score(7).progress(3)
+  db.addEntry(makeEntry().id(100).malId(100).title("Blank"));
+  db.addEntry(makeEntry().id(100).malId(100).title("Blank").score(7).progress(3)
                   .notes("filled").finishDate("2024-01-01").anilistId(55));
 
   auto merged = db.getById(mediaType::kAnime, 100);
@@ -232,8 +232,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry matches an existing entry by mal rem
   CHECK(db.getEntries(mediaType::kAnime)[0].totalUnits == 12);
 }
 
-TEST_CASE("addEntry never merges two titles that only share a local id"
-          * doctest::should_fail()) {
+TEST_CASE("addEntry never merges two titles that only share a local id") {
   catalist::memoryFileSystem fs;
   auto clock = catalist::test::makeTestClock();
   catalist::database db(fs, clock, "/data");

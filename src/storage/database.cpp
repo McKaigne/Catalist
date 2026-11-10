@@ -16,10 +16,12 @@ namespace {
 // Enough for years of daily logging while keeping history.csv small.
 constexpr size_t kHistoryLimit = 5000;
 
-bool isSameTitle(const entry& existing, const entry& incoming) {
-  if (existing.id == incoming.id)
-    return true;
+// A local id is only a row number, so two titles are the same only when a
+// list service says so.
+bool sharesRemoteId(const entry& existing, const entry& incoming) {
   if (incoming.malId > 0 && existing.malId == incoming.malId)
+    return true;
+  if (incoming.anilistId > 0 && existing.anilistId == incoming.anilistId)
     return true;
   std::string incomingMal = incoming.getRemoteId("mal");
   return !incomingMal.empty() && existing.getRemoteId("mal") == incomingMal;
@@ -111,12 +113,17 @@ int database::addEntry(entry mediaEntry) {
   forgetDeletionsOf(mediaEntry);
   auto& list = getList(mediaEntry.type);
   for (auto& existing : list) {
-    if (!isSameTitle(existing, mediaEntry))
+    if (!sharesRemoteId(existing, mediaEntry))
       continue;
     existing = mergeImported(existing, mediaEntry);
     return existing.id;
   }
 
+  bool idTaken = std::any_of(list.begin(), list.end(), [&](const entry& e) {
+    return e.id == mediaEntry.id;
+  });
+  if (idTaken)
+    mediaEntry.id = nextLocalId_++;
   list.push_back(mediaEntry);
   return mediaEntry.id;
 }

@@ -417,15 +417,14 @@ bool catalogTab::handleBatchKeys(const Event& event, appContext& ctx) {
     }, "bumped rating");
     return true;
   }
-  bool increments = keys::isCharacter(event, 'P') ||
-                    keys::isBound(event, keyAction::kIncrementProgress);
+  bool increments = keys::isCharacter(event, 'P') || keys::isIncrement(event);
   if (increments) {
     applyToTargets(ctx, [](const entry& e, const isoDate& today) {
       return stepProgress(e, 1, today);
     }, "incremented progress");
     return true;
   }
-  if (keys::isBound(event, keyAction::kDecrementProgress)) {
+  if (keys::isCharacter(event, '-')) {
     applyToTargets(ctx, [](const entry& e, const isoDate& today) {
       return stepProgress(e, -1, today);
     }, "decremented progress");
@@ -568,29 +567,29 @@ bool catalogTab::handleDetailsFocus(const Event& event, appContext& ctx) {
 }
 
 bool catalogTab::handleEntryCommands(const Event& event, appContext& ctx) {
-  if (keys::isBound(event, keyAction::kSearchFilter)) {
+  if (keys::isCharacter(event, '/')) {
     startSearch(ctx);
     return true;
   }
-  if (keys::isBound(event, keyAction::kDeleteEntry)) {
+  if (keys::isCharacter(event, 'd')) {
     requestDelete(ctx);
     return true;
   }
-  if (keys::isBound(event, keyAction::kUndo)) {
+  if (keys::isCharacter(event, 'u')) {
     undoLast(ctx);
     return true;
   }
-  if (keys::isBound(event, keyAction::kRedo) ||
+  if (keys::isCharacter(event, 'U') ||
       event == Event::Special("\x12")) {
     redoLast(ctx);
     return true;
   }
-  if (keys::isBound(event, keyAction::kOpenBrowser)) {
+  if (keys::isCharacter(event, 'o')) {
     if (const entry* current = selectedEntry())
       openInBrowser(ctx, *current);
     return true;
   }
-  if (keys::isBound(event, keyAction::kYankTitle)) {
+  if (keys::isCharacter(event, 'y')) {
     if (const entry* current = selectedEntry())
       copyToClipboard(ctx, current->title);
     return true;

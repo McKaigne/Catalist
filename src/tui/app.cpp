@@ -164,12 +164,11 @@ private:
     }
     if (switchByHotkey(event))
       return true;
-    if (keys::isBound(event, keyAction::kCommandPalette)) {
+    if (keys::isCharacter(event, ':')) {
       palette_.open();
       return true;
     }
-    bool quits = keys::isCharacter(event, 'q') ||
-                 keys::isBound(event, keyAction::kQuit);
+    bool quits = keys::isCharacter(event, 'q');
     if (quits)
       quit();
     return quits;

@@ -250,7 +250,7 @@ Element statsTab::render(appContext& ctx) {
 }
 
 bool statsTab::onEvent(const Event& event, appContext&) {
-  bool toggles = keys::isBound(event, keyAction::kToggleMedia) ||
+  bool toggles = keys::isCharacter(event, 'm') ||
                  keys::isMoveUp(event) || keys::isMoveDown(event);
   if (!toggles)
     return false;

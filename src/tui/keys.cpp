@@ -1,75 +1,33 @@
 #include "catalist/tui/keys.hpp"
 
-#include <string_view>
+#include <string>
 
 namespace catalist::keys {
 
 using ftxui::Event;
 
-namespace {
-
-std::string_view keyFor(keyAction action) {
-  switch (action) {
-    case keyAction::kMoveUp: return "k";
-    case keyAction::kMoveDown: return "j";
-    case keyAction::kJumpTop: return "g";
-    case keyAction::kJumpBottom: return "G";
-    case keyAction::kFocusLeft: return "h";
-    case keyAction::kFocusRight: return "l";
-    case keyAction::kIncrementProgress: return "+";
-    case keyAction::kDecrementProgress: return "-";
-    case keyAction::kEditNotes: return "e";
-    case keyAction::kDeleteEntry: return "d";
-    case keyAction::kSortDate: return "c";
-    case keyAction::kSortTitle: return "t";
-    case keyAction::kSortStatus: return "s";
-    case keyAction::kSortRating: return "r";
-    case keyAction::kSortProgress: return "p";
-    case keyAction::kSearchFilter: return "/";
-    case keyAction::kOpenBrowser: return "o";
-    case keyAction::kYankTitle: return "y";
-    case keyAction::kUndo: return "u";
-    case keyAction::kRedo: return "U";
-    case keyAction::kCommandPalette: return ":";
-    case keyAction::kQuit: return "q";
-    case keyAction::kToggleMedia: return "m";
-  }
-  return "";
-}
-
-}  // namespace
-
-bool isBound(const Event& event, keyAction action) {
-  if (!event.is_character())
-    return false;
-  std::string_view key = keyFor(action);
-  // Unshifted '=' shares the '+' key on most layouts.
-  return event.character() == key ||
-         (key == "+" && event.character() == "=");
-}
-
 bool isMoveUp(const Event& event) {
-  return event == Event::ArrowUp || isBound(event, keyAction::kMoveUp);
+  return event == Event::ArrowUp || isCharacter(event, 'k');
 }
 
 bool isMoveDown(const Event& event) {
-  return event == Event::ArrowDown || isBound(event, keyAction::kMoveDown);
+  return event == Event::ArrowDown || isCharacter(event, 'j');
 }
 
 bool isMoveLeft(const Event& event) {
-  return event == Event::ArrowLeft || isBound(event, keyAction::kFocusLeft);
+  return event == Event::ArrowLeft || isCharacter(event, 'h');
 }
 
 bool isMoveRight(const Event& event) {
-  return event == Event::ArrowRight || isBound(event, keyAction::kFocusRight);
+  return event == Event::ArrowRight || isCharacter(event, 'l');
 }
 
 bool isJumpTop(const Event& event) {
-  return event == Event::Home || isBound(event, keyAction::kJumpTop);
+  return event == Event::Home || isCharacter(event, 'g');
 }
 
 bool isJumpBottom(const Event& event) {
-  return event == Event::End || isBound(event, keyAction::kJumpBottom);
+  return event == Event::End || isCharacter(event, 'G');
 }
 
 bool isConfirm(const Event& event) {
@@ -78,6 +36,10 @@ bool isConfirm(const Event& event) {
 
 bool isConfirmOrSpace(const Event& event) {
   return event == Event::Return || event == Event::Character(' ');
+}
+
+bool isIncrement(const Event& event) {
+  return isCharacter(event, '+') || isCharacter(event, '=');
 }
 
 bool isCharacter(const Event& event, char expected) {

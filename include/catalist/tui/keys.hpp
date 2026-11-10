@@ -3,39 +3,11 @@
 
 #include <ftxui/component/event.hpp>
 
-// The fixed key map, plus named predicates for the movement and confirmation
-// keys every tab shares (arrows always work too).
+// Named predicates for the keys that have more than one spelling: movement
+// (arrows always work too), confirmation and the progress step.
 namespace catalist {
 
-enum class keyAction {
-  kMoveUp,
-  kMoveDown,
-  kJumpTop,
-  kJumpBottom,
-  kFocusLeft,
-  kFocusRight,
-  kIncrementProgress,
-  kDecrementProgress,
-  kEditNotes,
-  kDeleteEntry,
-  kSortDate,
-  kSortTitle,
-  kSortStatus,
-  kSortRating,
-  kSortProgress,
-  kSearchFilter,
-  kOpenBrowser,
-  kYankTitle,
-  kUndo,
-  kRedo,
-  kCommandPalette,
-  kQuit,
-  kToggleMedia
-};
-
 namespace keys {
-
-[[nodiscard]] bool isBound(const ftxui::Event& event, keyAction action);
 
 [[nodiscard]] bool isMoveUp(const ftxui::Event& event);
 [[nodiscard]] bool isMoveDown(const ftxui::Event& event);
@@ -45,6 +17,8 @@ namespace keys {
 [[nodiscard]] bool isJumpBottom(const ftxui::Event& event);
 [[nodiscard]] bool isConfirm(const ftxui::Event& event);
 [[nodiscard]] bool isConfirmOrSpace(const ftxui::Event& event);
+// '+', or the unshifted '=' that shares its key on most layouts.
+[[nodiscard]] bool isIncrement(const ftxui::Event& event);
 [[nodiscard]] bool isCharacter(const ftxui::Event& event, char expected);
 
 }  // namespace keys

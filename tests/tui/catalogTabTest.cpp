@@ -48,6 +48,12 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog plus steps progress and u undoes 
   CHECK(notices.hasPopup());
 }
 
+TEST_CASE_FIXTURE(catalogFixture, "tui catalog equals steps progress like plus") {
+  type(tab, "j");
+  REQUIRE(press(tab, Event::Character('=')));
+  CHECK(anime(44265).progress == 6);
+}
+
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog details keys adjust status and rating") {
   REQUIRE(press(tab, Event::Character('l')));
   REQUIRE(press(tab, Event::Character('l')));

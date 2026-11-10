@@ -64,14 +64,4 @@ std::filesystem::path fixturePath(const std::string& relativePath) {
   return std::filesystem::path(CATALIST_FIXTURE_DIR) / relativePath;
 }
 
-std::string readTextFile(const std::filesystem::path& path) {
-  return realFileSystem().readFile(path).value_or("");
-}
-
-void writeTextFile(const std::filesystem::path& path,
-                   const std::string& content) {
-  if (!realFileSystem().writeFileAtomic(path, content))
-    throw std::runtime_error("could not write test file " + path.string());
-}
-
 }  // namespace catalist::test

@@ -94,9 +94,6 @@ private:
                               const std::string& title);
 
 std::filesystem::path fixturePath(const std::string& relativePath);
-std::string readTextFile(const std::filesystem::path& path);
-void writeTextFile(const std::filesystem::path& path,
-                   const std::string& content);
 
 }  // namespace catalist::test
 

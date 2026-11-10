@@ -112,8 +112,9 @@ Theme, mouse, default media and sort, and startup tab; written by Catalist.
 .I ~/.config/catalist/mal_auth.json, anilist_auth.json
 Saved logins, readable only by you.
 .TP
-.I ~/.config/catalist/deleted.csv
-Deletions waiting for the next sync.
+.I ~/.config/catalist/sync.csv
+What each entry looked like on each list when they last agreed; sync
+compares both sides with it.
 .TP
 .I ~/.config/catalist/backups/
 Snapshot backups.

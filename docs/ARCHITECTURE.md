@@ -63,8 +63,8 @@
   global handler
   only switches tabs, opens the command palette and quits, and yields while
   a tab `capturesInput()`. Shared pieces live in `tui/widgets` (pill,
-  marquee, notifier, commandPalette), `tui/keys` (the fixed key map and
-  movement predicates) and `tui/actions` (browser, clipboard, import, backup).
+  marquee, notifier, commandPalette), `tui/keys` (movement and
+  confirmation predicates; other keys are tested with `isCharacter`) and `tui/actions` (browser, clipboard, import, backup).
 - **Layering:** `catalistCore` (core, platform, model, storage, net, settings)
   never includes FTXUI; `catalistCli` and `catalistTui` build on it.
 
@@ -95,7 +95,8 @@
   logic is tested offline and deterministically with the fakes from ADR-005.
 - **Characterization:** before refactoring, golden files in
   `tests/fixtures/golden` recorded the CLI output and `tests/fixtures/csv`
-  every historical CSV layout; refactors must keep them passing.
+  the CSV layouts still read (those of 0.2.1 and later); refactors must
+  keep them passing.
   `CATALIST_UPDATE_GOLDEN=1` regenerates goldens deliberately.
 - **Targets:** `catalistTests` links only `catalistCore` and `catalistCli`;
   tab, widget and theme tests need FTXUI and live in `catalistTuiTests`.

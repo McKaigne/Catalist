@@ -31,14 +31,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Preferences (theme, mouse, default media and sort, startup tab) are saved
   to `settings.json`, which the app writes itself; `catalist config` reads
   and changes that file and rejects values outside the allowed choices.
+- Sync remembers, per entry and list, the values both sides last agreed on
+  (in `sync.csv`, which replaces `deleted.csv`) and merges field by field:
+  a change made on either side reaches the other, and when the same field
+  changed on both sides the local value is kept and the report names the
+  entry and the field. The first sync after upgrading treats every entry as
+  a first contact; run one last sync on the old build before switching.
+- `anime.csv` and `manga.csv` now have the same 16 columns as
+  `catalist export csv`; the `dirty`, `external_ids`, `queue_pos` and
+  `synced` columns are no longer written. Older files still load and are
+  rewritten on the next save.
+- Editing notes in the catalogue now shows up in recent activity like other
+  edits.
 
 ### Fixed
 - Dates such as 2024-13-45 or 2023-02-29 are rejected instead of stored.
 - `--status` in `ls`, `count`, `add` and `set` rejects unknown values instead
   of treating them as Plan to Watch; an unknown status in a CSV or MAL XML
   file is still loaded as Plan to Watch but logged.
-- In the oldest 7-column CSV layout, a numeric title (such as "86") is no
-  longer also read as the AniList id.
+- A remote edit no longer gets lost when both services are connected: it
+  reaches the local copy and the other list instead of being overwritten.
+- A local edit no longer overwrites an unrelated change made on the list
+  since the last sync (for example a score set online while progress was
+  raised here).
+- Adding a MyAnimeList title whose id equals a local-only entry's id no
+  longer merges the two; titles are matched only by MyAnimeList or AniList
+  id.
+- A list that comes back empty while entries are synced with it no longer
+  removes those entries; nothing is changed for that list.
+- A failed save (full disk, read-only folder) is reported instead of looking
+  like success: CLI commands exit with code 1 and an `io` error, and the TUI
+  shows a notice.
 - `ls` decides between the terminal table and the piped layout from the
   stream it writes to, and error colour follows stderr.
 - `export json` no longer puts a line break before the comma between the
@@ -49,7 +72,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The episode-count refresh through Jikan, replaced by account sync.
 - The Queue, Search, Library, History and Help tabs, with `?` (help), `:help`
   and `a` (add, which opened Search) in the TUI. Add entries with
-  `catalist add`. Stored `queue_pos` values are kept in the CSV files.
+  `catalist add`. Stored `queue_pos` values are dropped on the next save.
+- Kitsu links: the Kitsu badge and stored Kitsu ids, which only the Search
+  tab added. Entries with only a Kitsu id lose "open in browser".
+- Reading the 7-column and 16-column CSV layouts of development builds
+  before 0.2.1; such a file now fails to load with a message naming it
+  (open and save it once with Catalist 0.3.0 to convert it).
+- Internal leftovers of the removed tabs and the KDL config: the search
+  provider classes, a second JSON parser, the rebindable key table and
+  unused functions.
 - `catalist.kdl`: custom keybindings, top-bar layout and the KDL parser. Keys
   are fixed; an existing `catalist.kdl` is ignored (set your theme again in
   Settings).

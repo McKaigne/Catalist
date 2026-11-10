@@ -2,7 +2,7 @@
 
 A fast, lightweight, and local-first anime and manga watchlist TUI built with **C++17** and **FTXUI**.
 
-Catalist keeps your watchlist saved on your computer in plaintext RFC 4180 CSV files. It supports modular metadata links across multiple providers (MyAnimeList, AniList, Kitsu), two-way sync with your MyAnimeList and AniList lists, and an integrated headless CLI for scripting.
+Catalist keeps your watchlist saved on your computer in plaintext RFC 4180 CSV files. It links each entry to its MyAnimeList and AniList pages, supports two-way sync with your MyAnimeList and AniList lists, and an integrated headless CLI for scripting.
 
 ---
 
@@ -109,12 +109,20 @@ The startup tab is set in Settings → Preferences, or with
 Log in under **Settings → Accounts & Sync** (or `catalist login mal|anilist`),
 then choose **Sync now** (or `:sync`, or `catalist sync`). Sync is two-way:
 
-- entries on your online lists that Catalist lacks are added;
-- entries you change in Catalist are sent to every logged-in list;
-- other entries take the values from the list;
+- Catalist remembers, for every entry and list, the values both sides last
+  agreed on, so it can tell which side changed;
+- entries on your online lists that Catalist lacks are added, and entries
+  Catalist has that a list lacks are sent to it;
+- a change made on one side reaches the other, field by field, so an edit
+  here and a different edit online are both kept;
+- if the same field changed on both sides, Catalist keeps its own value and
+  the sync report names the entry and the field;
 - the first time an entry meets a list, whichever side changed more recently wins;
 - deleting a synced entry in Catalist deletes it online, and an entry deleted
-  online is removed from Catalist;
+  online is removed from Catalist (unless you changed it here since; then it
+  is sent back and reported);
+- if a list comes back empty while Catalist has synced entries for it,
+  nothing is changed for that list;
 - a backup snapshot is written before every sync.
 
 MyAnimeList ids and AniList ids are matched through AniList, so entries move
@@ -170,10 +178,12 @@ catalist logout anilist
 ## Architecture & Data Safety
 
 - **Local-First & Offline**: Your library is stored in `~/.config/catalist/anime.csv` and `manga.csv`. No background daemon or database setup required.
-- **Atomic File Operations**: All disk writes write to a `.tmp` file before an atomic `rename`, preventing database corruption during power cuts or unexpected exits.
-- **Tier 1 / Tier 2 Merge Hierarchy**: Re-importing MyAnimeList XML archives never overwrites local progress, scores, or notes. Upstream metadata updates refresh total episodes and provider IDs without clobbering user edits.
+- **Atomic File Operations**: All disk writes write to a `.tmp` file before an atomic `rename`, preventing database corruption during power cuts or unexpected exits. A save that fails (a full disk, a read-only folder) is reported: the CLI exits with code 1 and the TUI shows a notice.
+- **One Writer at a Time**: Each command loads the whole catalogue and saves it whole, so if the TUI and a CLI command that changes entries run at the same moment, one of the two changes can be lost.
+- **CSV Columns**: `anime.csv` and `manga.csv` have the same 16 columns as `catalist export csv`, so they open directly in a spreadsheet. Files from Catalist 0.3 and earlier load and are rewritten in this layout on the next save; files from development builds before 0.2.1 must be opened and saved once with Catalist 0.3.0 first.
+- **Tier 1 / Tier 2 Merge Hierarchy**: Re-importing MyAnimeList XML archives never overwrites local progress, scores, or notes. Upstream metadata updates refresh total episodes and MyAnimeList and AniList ids without clobbering user edits.
 - **Preferences**: Theme, mouse support, default media and sort, and the startup tab are changed in Settings (or with `catalist config`) and saved to `~/.config/catalist/settings.json`. Keybindings are fixed.
-- **Accounts**: Logins are kept in `mal_auth.json` and `anilist_auth.json` (readable only by you). Deletions waiting to reach your online lists are kept in `deleted.csv`.
+- **Accounts**: Logins are kept in `mal_auth.json` and `anilist_auth.json` (readable only by you). What each entry looked like when it was last synced is kept in `sync.csv`.
 - **Backups**: `Settings → Data` (or `:backup`) writes timestamped copies to `~/.config/catalist/backups/`; restoring one first backs up the current data.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.

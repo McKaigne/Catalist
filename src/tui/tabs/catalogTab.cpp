@@ -110,13 +110,8 @@ std::vector<sidebarRow> buildSidebarRows(const database& db, mediaType media) {
   auto count = [&](watchStatus status) {
     return " (" + std::to_string(db.countByStatus(media, status)) + ")";
   };
-  auto scoreRow = [&](int score) {
-    return sidebarRow{renderStarMeter(score) + " (" +
-                          std::to_string(db.countByScore(media, score)) + ")",
-                      false, std::nullopt, score};
-  };
   bool isManga = media == mediaType::kManga;
-  return {
+  std::vector<sidebarRow> rows = {
       {"  LIBRARY", true, std::nullopt, std::nullopt},
       {icon::kLibrary + " All Media    (" +
            std::to_string(db.getEntries(media).size()) + ")",
@@ -134,14 +129,15 @@ std::vector<sidebarRow> buildSidebarRows(const database& db, mediaType media) {
       {icon::kPlan + " Planned     " + count(watchStatus::kPlanToWatch), false,
        watchStatus::kPlanToWatch, std::nullopt},
       {"  RATINGS", true, std::nullopt, std::nullopt},
-      scoreRow(10),
-      scoreRow(9),
-      scoreRow(8),
-      scoreRow(7),
-      scoreRow(6),
-      scoreRow(5),
-      scoreRow(0),
   };
+  // Every score has its row, 10 down to 0 (unrated), so each can be filtered.
+  for (int score = 10; score >= 0; --score) {
+    std::string number = (score < 10 ? " " : "") + std::to_string(score);
+    rows.push_back({number + " " + renderStarMeter(score) + " (" +
+                        std::to_string(db.countByScore(media, score)) + ")",
+                    false, std::nullopt, score});
+  }
+  return rows;
 }
 
 int labelIndex(const std::string& label) {

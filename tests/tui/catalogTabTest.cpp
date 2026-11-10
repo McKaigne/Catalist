@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "catalist/tui/tabs/catalogTab.hpp"
+#include "catalist/tui/theme/statusStyle.hpp"
 #include "support/sampleLibrary.hpp"
 #include "tui/tuiHarness.hpp"
 
@@ -124,6 +125,33 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog sidebar filters by status") {
   auto shown = screen(tab);
   CHECK(shown.find("Odd Taxi") != std::string::npos);
   CHECK(shown.find("Frieren") == std::string::npos);
+}
+
+TEST_CASE_FIXTURE(catalogFixture, "tui catalog sidebar has a row for every rating from 10 to 0") {
+  // Sample scores: Frieren 10, Odd Taxi 8, Ghost 6 and one unrated title.
+  const int expectedCounts[11] = {1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1};
+  auto shown = screen(tab);
+  size_t previousRow = 0;
+  for (int score = 10; score >= 0; --score) {
+    CAPTURE(score);
+    std::string row = (score < 10 ? " " : "") + std::to_string(score) + " " +
+                      catalist::renderStarMeter(score) + " (" +
+                      std::to_string(expectedCounts[score]) + ")";
+    size_t found = shown.find(row);
+    REQUIRE(found != std::string::npos);
+    CHECK(found > previousRow);
+    previousRow = found;
+  }
+}
+
+TEST_CASE_FIXTURE(catalogFixture, "tui catalog sidebar filters by any rating") {
+  REQUIRE(press(tab, Event::Character('h')));
+  // All Media, five statuses, then the ratings 10, 9, 8: eight steps down.
+  type(tab, "jjjjjjjj");
+  auto shown = screen(tab);
+  CHECK(shown.find("Odd Taxi") != std::string::npos);
+  CHECK(shown.find("Frieren") == std::string::npos);
+  CHECK(shown.find("Ghost") == std::string::npos);
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog open and copy go through the launcher") {

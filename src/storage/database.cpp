@@ -226,58 +226,7 @@ bool database::saveDeletions() const {
                                      csvCodec::encodeDeletions(deletions_));
 }
 
-bool database::changeMediaType(mediaType currentType, int id) {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  auto& srcList = getList(currentType);
-  mediaType targetType =
-      (currentType == mediaType::kAnime) ? mediaType::kManga : mediaType::kAnime;
-  auto& dstList = getList(targetType);
 
-  auto it = std::find_if(srcList.begin(), srcList.end(),
-                         [id](const entry& e) { return e.id == id; });
-  if (it == srcList.end())
-    return false;
-
-  entry moved = *it;
-  moved.type = targetType;
-  srcList.erase(it);
-  dstList.push_back(moved);
-  saveAll();
-  return true;
-}
-
-std::vector<entry> database::filterEntries(
-    mediaType type, std::optional<watchStatus> status,
-    std::optional<int> exactScore, const std::string& query, sortKey sortBy,
-    bool reverse) const {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::vector<entry> results;
-  const auto& list = getList(type);
-
-  std::string queryLower = query;
-  std::transform(queryLower.begin(), queryLower.end(), queryLower.begin(),
-                 ::tolower);
-
-  for (const auto& e : list) {
-    if (status.has_value() && e.status != status.value())
-      continue;
-    if (exactScore && e.score != *exactScore)
-      continue;
-
-    if (!queryLower.empty()) {
-      std::string titleLower = e.title;
-      std::transform(titleLower.begin(), titleLower.end(), titleLower.begin(),
-                     ::tolower);
-      if (titleLower.find(queryLower) == std::string::npos)
-        continue;
-    }
-
-    results.push_back(e);
-  }
-
-  sortEntries(results, sortBy, reverse);
-  return results;
-}
 
 size_t database::countByStatus(mediaType type, watchStatus status) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
@@ -366,9 +315,6 @@ std::filesystem::path database::getHistoryPath() const {
   return configDir_ / csvCodec::historyFileName();
 }
 
-std::filesystem::path database::getBackupDir() const {
-  return backup::backupDirectory(configDir_);
-}
 
 void database::createBackupSnapshot() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
@@ -430,10 +376,6 @@ std::vector<activityRecord> database::getRecentActivity(mediaType type,
   return res;
 }
 
-std::vector<activityRecord> database::getHistory() const {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  return historyRecords_;
-}
 
 bool database::loadHistory() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);

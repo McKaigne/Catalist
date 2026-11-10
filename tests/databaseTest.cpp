@@ -74,25 +74,15 @@ void seedSortData(catalist::database& db) {
 
 }  // namespace
 
-TEST_CASE_FIXTURE(tempDirFixture, "filterEntries sorts by score descending") {
+TEST_CASE_FIXTURE(tempDirFixture, "sortEntries sorts by score descending") {
   catalist::database db(fileSystem(), clock(), tempDir());
   seedSortData(db);
 
-  auto byScore = db.filterEntries(mediaType::kAnime, std::nullopt, std::nullopt, "",
-                                  sortKey::kScore, false);
+  auto byScore = db.getEntries(mediaType::kAnime);
+  catalist::database::sortEntries(byScore, sortKey::kScore, false);
   REQUIRE(byScore.size() == 4);
   CHECK(byScore.front().title == "Sousou no Frieren");
   CHECK(byScore.back().title == "Odd Taxi");
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "filterEntries matches title substring case insensitively") {
-  catalist::database db(fileSystem(), clock(), tempDir());
-  seedSortData(db);
-
-  auto searched = db.filterEntries(mediaType::kAnime, std::nullopt, std::nullopt,
-                                   "frieren", sortKey::kTitle, false);
-  REQUIRE(searched.size() == 1);
-  CHECK(searched[0].id == 52991);
 }
 
 namespace {

@@ -32,15 +32,8 @@ class database {
   [[nodiscard]] std::vector<deletedEntry> pendingDeletions() const;
   // Drops `service` from the matching deletion; forgets it once none remain.
   void settleDeletion(const deletedEntry& deleted, const std::string& service);
-  bool changeMediaType(mediaType currentType, int id);
   void clear(mediaType type);
   static void sortEntries(std::vector<entry>& v, sortKey key, bool reverse);
-
-  std::vector<entry> filterEntries(mediaType type,
-                                   std::optional<watchStatus> status,
-                                   std::optional<int> exactScore,
-                                   const std::string& query, sortKey sortBy,
-                                   bool reverse) const;
 
   size_t countByStatus(mediaType type, watchStatus status) const;
   size_t countByScore(mediaType type, int score) const;
@@ -57,7 +50,6 @@ class database {
   std::filesystem::path getConfigPath() const;
   std::filesystem::path getCsvPath(mediaType type) const;
   std::filesystem::path getHistoryPath() const;
-  std::filesystem::path getBackupDir() const;
 
   bool loadAll();
   bool saveAll() const;
@@ -70,7 +62,6 @@ class database {
   void logActivity(const activityRecord& record);
   std::vector<activityRecord> getRecentActivity(mediaType type,
                                                 size_t limit = 3) const;
-  [[nodiscard]] std::vector<activityRecord> getHistory() const;
   bool loadHistory();
   bool saveHistory() const;
 

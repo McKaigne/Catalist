@@ -60,9 +60,9 @@ TEST_CASE_FIXTURE(tempDirFixture, "cli add then step progress then rm") {
                                       "-r", "9"};
   REQUIRE(catalist::cli::runAdd(addArgs, harness.context) == 0);
 
-  auto entries = db.filterEntries(mediaType::kAnime, std::nullopt, std::nullopt,
-                                  "Dungeon Meshi", sortKey::kTitle, false);
+  const auto& entries = db.getEntries(mediaType::kAnime);
   REQUIRE(entries.size() == 1);
+  REQUIRE(entries[0].title == "Dungeon Meshi");
   int id = entries[0].id;
 
   REQUIRE(catalist::cli::runSet({std::to_string(id), "-p", "a", "2"},

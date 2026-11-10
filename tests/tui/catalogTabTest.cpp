@@ -41,7 +41,7 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog plus steps progress and u undoes 
   REQUIRE(press(tab, Event::Character('+')));
   CHECK(anime(44265).progress == 6);
   CHECK(undo.canUndo());
-  CHECK(db.getHistory().size() == 1);
+  CHECK(db.getRecentActivity(catalist::mediaType::kAnime, 10).size() == 1);
 
   REQUIRE(press(tab, Event::Character('u')));
   CHECK(anime(44265).progress == 5);

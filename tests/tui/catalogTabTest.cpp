@@ -14,13 +14,8 @@ namespace {
 
 // Highest score first: Frieren (10), Odd Taxi (8), Ghost (6), Long Title (0).
 // Off a terminal the title column is 16 glyphs wide, hence the short names.
-const catalist::appSettings& descendingScores(catalist::appSettings& settings) {
-  settings.reverseSort = false;
-  return settings;
-}
-
 struct catalogFixture : catalist::test::tuiHarness {
-  catalogFixture() : tab(mediaType::kAnime, descendingScores(settings)) {
+  catalogFixture() : tab(mediaType::kAnime) {
     catalist::test::seedSampleLibrary(db);
     tab.onActivate(ctx);
   }
@@ -161,15 +156,4 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog open and copy go through the laun
   CHECK(launcher.calls()[0].argv ==
         std::vector<std::string>{"xdg-open", "https://myanimelist.net/anime/52991"});
   CHECK(launcher.calls()[1].standardInput == "Sousou no Frieren");
-}
-
-TEST_CASE("tui catalog starts in the default sort from settings") {
-  catalist::test::tuiHarness harness;
-  catalist::test::seedSampleLibrary(harness.db);
-  harness.settings.defaultSort = "title";
-  harness.settings.reverseSort = false;
-  catalogTab tab(mediaType::kAnime, harness.settings);
-  tab.onActivate(harness.ctx);
-  auto shown = harness.screen(tab);
-  CHECK(shown.find("Title ▲") != std::string::npos);
 }

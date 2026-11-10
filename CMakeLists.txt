@@ -46,7 +46,6 @@ add_library(catalistCore STATIC
   src/core/logger.cpp
   src/core/shell.cpp
   src/core/url.cpp
-  src/settings/settings.cpp
   src/model/activity.cpp
   src/model/entry.cpp
   src/model/entryOps.cpp
@@ -76,15 +75,10 @@ add_library(catalistTui STATIC
   src/tui/actions.cpp
   src/tui/app.cpp
   src/tui/keys.cpp
-  src/tui/jobRunner.cpp
-  src/tui/tab.cpp
   src/tui/tabs/catalogTab.cpp
-  src/tui/tabs/settingsTab.cpp
   src/tui/tabs/statsTab.cpp
   src/tui/theme/statusStyle.cpp
-  src/tui/theme/themeRegistry.cpp
   src/tui/widgets/card.cpp
-  src/tui/widgets/commandPalette.cpp
   src/tui/widgets/marquee.cpp
   src/tui/widgets/notifier.cpp
   src/tui/widgets/pill.cpp
@@ -134,7 +128,6 @@ add_executable(catalistTests
   tests/listServiceTest.cpp
   tests/listSyncTest.cpp
   tests/serviceLinksTest.cpp
-  tests/settingsTest.cpp
   tests/loggerTest.cpp
   tests/malAuthTest.cpp
   tests/malXmlTest.cpp
@@ -161,18 +154,14 @@ target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 
 doctest_discover_tests(catalistTests)
 
-# Tab, widget and theme tests need FTXUI, so they live in their own binary;
+# Tab and widget tests need FTXUI, so they live in their own binary;
 # catalistTests stays free of it.
 add_executable(catalistTuiTests
   tests/testMain.cpp
   tests/support/sampleLibrary.cpp
   tests/support/testSupport.cpp
-  tests/tui/actionsTest.cpp
   tests/tui/catalogTabTest.cpp
-  tests/tui/commandPaletteTest.cpp
-  tests/tui/settingsTabTest.cpp
   tests/tui/statsTabTest.cpp
-  tests/tui/themeRegistryTest.cpp
   tests/tui/tuiHarness.cpp
   tests/tui/widgetsTest.cpp
 )

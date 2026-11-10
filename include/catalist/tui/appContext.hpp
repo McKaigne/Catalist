@@ -1,15 +1,10 @@
 #ifndef CATALIST_TUI_APP_CONTEXT_HPP_
 #define CATALIST_TUI_APP_CONTEXT_HPP_
 
-#include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/model/undoStack.hpp"
-#include "catalist/net/accounts.hpp"
-#include "catalist/platform/fileSystem.hpp"
-#include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
 #include "catalist/storage/database.hpp"
-#include "catalist/tui/jobRunner.hpp"
 #include "catalist/tui/widgets/notifier.hpp"
 
 namespace catalist {
@@ -18,19 +13,11 @@ namespace catalist {
 // for globals.
 struct appContext {
   database& db;
-  appSettings& settings;
   undoStack& undo;
   notifier& notices;
   iProcessLauncher& launcher;
   const iClock& clock;
-  iFileSystem& fileSystem;
-  iHttpClient& http;
-  listAccounts& accounts;
-  jobRunner& jobs;
 };
-
-// Writes ctx.settings to settings.json in the data directory.
-void persistSettings(appContext& ctx);
 
 }  // namespace catalist
 

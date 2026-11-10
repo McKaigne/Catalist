@@ -32,7 +32,7 @@ void notifier::dismiss() {
     popups_.pop_front();
 }
 
-std::optional<Element> notifier::renderPopup(const themePalette& theme) const {
+std::optional<Element> notifier::renderPopup() const {
   std::string message;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -42,13 +42,13 @@ std::optional<Element> notifier::renderPopup(const themePalette& theme) const {
   }
   int width = std::max(40, static_cast<int>(message.size()) + 8);
   return vbox({
-             hbox({text("  󰎟 Notification ") | bold | color(theme.mauve),
-                   filler(), text(" [;] Dismiss ") | color(theme.subtext)}),
+             hbox({text("  󰎟 Notification ") | bold | color(theme::kMauve),
+                   filler(), text(" [;] Dismiss ") | color(theme::kSubtext)}),
              text(""),
-             text("  " + message) | color(theme.text) | center,
+             text("  " + message) | color(theme::kText) | center,
              text(""),
          }) |
-         border | color(theme.mauve) | bgcolor(theme.crust) |
+         border | color(theme::kMauve) | bgcolor(theme::kCrust) |
          size(WIDTH, EQUAL, width) | clear_under | center;
 }
 

@@ -6,37 +6,33 @@ using namespace ftxui;
 
 Element frame(const std::string& heading, Element body, bool focused,
               const std::string& badge) {
-  const auto& theme = themeRegistry::active();
-  return vbox({hbox({text("  " + heading) | bold | color(theme.lavender),
-                     filler(), text(badge) | color(theme.peach), text(" ")}),
+  return vbox({hbox({text("  " + heading) | bold | color(theme::kLavender),
+                     filler(), text(badge) | color(theme::kPeach), text(" ")}),
                text(""), std::move(body) | flex}) |
-         border | color(focused ? theme.mauve : theme.surface0);
+         border | color(focused ? theme::kMauve : theme::kSurface0);
 }
 
 Element section(const std::string& label) {
-  const auto& theme = themeRegistry::active();
-  return text("  " + label) | bold | color(theme.overlay0);
+  return text("  " + label) | bold | color(theme::kOverlay0);
 }
 
 Element field(bool active, const std::string& label, Element value,
               int labelWidth) {
-  const auto& theme = themeRegistry::active();
-  return hbox({text(active ? "▌ " : "  ") | color(theme.mauve) | bold,
+  return hbox({text(active ? "▌ " : "  ") | color(theme::kMauve) | bold,
                text(label) | size(WIDTH, EQUAL, labelWidth) |
                    (active ? bold : nothing) |
-                   color(active ? theme.peach : theme.subtext),
+                   color(active ? theme::kPeach : theme::kSubtext),
                std::move(value) | flex});
 }
 
 Element choice(bool active, const std::string& label, Color tint) {
-  const auto& theme = themeRegistry::active();
-  return hbox({text(active ? "▌ " : "  ") | color(theme.mauve) | bold,
+  return hbox({text(active ? "▌ " : "  ") | color(theme::kMauve) | bold,
                text(label) | (active ? bold : nothing) |
-                   color(active ? theme.peach : tint)});
+                   color(active ? theme::kPeach : tint)});
 }
 
 Element note(const std::string& line) {
-  return text("  " + line) | color(themeRegistry::active().overlay0);
+  return text("  " + line) | color(theme::kOverlay0);
 }
 
 }  // namespace catalist::card

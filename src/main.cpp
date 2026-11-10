@@ -3,26 +3,16 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
-#include <algorithm>
 #include <iostream>
-#include <optional>
 #include <string>
-#include <chrono>
-#include <functional>
-#include <memory>
-#include <thread>
 #include <unistd.h>
 
 #include "catalist/cli.hpp"
-#include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/core/logger.hpp"
 #include "catalist/storage/database.hpp"
 #include "catalist/platform/fileSystem.hpp"
-#include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
-#include "catalist/core/version.hpp"
-#include "catalist/net/accounts.hpp"
 #include "catalist/tui/app.hpp"
 
 namespace {
@@ -90,22 +80,6 @@ void setupCrashHandlers() {
   });
 }
 
-// MyAnimeList asks clients to keep to about one request a second; AniList
-// allows 90 a minute.
-constexpr auto kMalPause = std::chrono::milliseconds(1000);
-constexpr auto kAnilistPause = std::chrono::milliseconds(700);
-
-std::function<void()> paceRequests(std::chrono::milliseconds pause) {
-  return [pause] { std::this_thread::sleep_for(pause); };
-}
-
-std::string anilistClientId() {
-  const char* fromEnvironment = std::getenv("CATALIST_ANILIST_CLIENT_ID");
-  if (fromEnvironment && *fromEnvironment)
-    return fromEnvironment;
-  return catalist::kBuiltInAnilistClientId;
-}
-
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -119,7 +93,6 @@ int main(int argc, char* argv[]) {
   catalist::realClock clock;
   catalist::realFileSystem fileSystem;
   catalist::realProcessLauncher launcher;
-  auto http = std::make_shared<catalist::curlHttpClient>();
   const auto dataDir = catalist::database::getDefaultConfigDir();
 
   catalist::logger::get().init(dataDir / "catalist.log", fileSystem, clock);
@@ -131,29 +104,14 @@ int main(int argc, char* argv[]) {
                             std::cerr);
   }
 
-  const auto settingsPath = dataDir / "settings.json";
-  catalist::appSettings settings = catalist::loadSettings(fileSystem, settingsPath);
-
   auto loaded = db.loadAll();
   if (!loaded.ok()) {
     std::cerr << "error: " << loaded.errorMessage() << "\n";
     return 1;
   }
 
-  catalist::loopbackAuthServer authCallback(8080);
-  catalist::malAuth malLogin(fileSystem, *http, launcher, authCallback, clock,
-                             dataDir / "mal_auth.json");
-  catalist::anilistAuth anilistLogin(fileSystem, dataDir / "anilist_auth.json",
-                                     anilistClientId());
-  catalist::malListService malList(*http, malLogin, paceRequests(kMalPause));
-  catalist::anilistListService anilistList(*http, anilistLogin,
-                                           paceRequests(kAnilistPause));
-  catalist::listAccounts accounts{malLogin, anilistLogin, malList, anilistList};
-
   LOG_INFO("Launching interactive TUI screen.");
-  catalist::appTui app(db, settings,
-                       {fileSystem, launcher, clock, *http, accounts});
-  app.run(std::nullopt);
+  catalist::runTui(db, clock, launcher);
   LOG_INFO("Catalist session exited cleanly.");
 
   return 0;

@@ -14,8 +14,6 @@
 
 namespace catalist {
 
-enum class appMode { kNor, kSch, kEdt, kVis };
-
 enum class focusedCard { kSidebar, kCatalog, kDetails };
 
 enum class detailsField { kStatus, kRating, kProgress, kNotes };
@@ -32,7 +30,7 @@ struct sidebarRow {
 // card and visual (batch) selection.
 class catalogTab : public iTab {
 public:
-  catalogTab(mediaType media, const appSettings& settings);
+  explicit catalogTab(mediaType media);
 
   [[nodiscard]] std::string id() const override;
   [[nodiscard]] std::string title() const override;
@@ -45,6 +43,7 @@ public:
   void onActivate(appContext& ctx) override;
   ftxui::Component focusRoot() override { return root_; }
   [[nodiscard]] bool capturesInput() const override;
+  [[nodiscard]] appMode mode() const override;
   [[nodiscard]] std::optional<std::string> countBadge(
       appContext& ctx) const override;
   [[nodiscard]] std::string selectionSummary() const override;

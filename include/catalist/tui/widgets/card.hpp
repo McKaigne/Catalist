@@ -4,7 +4,7 @@
 #include <ftxui/dom/elements.hpp>
 #include <string>
 
-#include "catalist/tui/theme/themeRegistry.hpp"
+#include "catalist/tui/theme/palettes.hpp"
 
 // The building blocks of the catalogue's look, shared by every tab.
 namespace catalist::card {

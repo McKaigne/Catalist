@@ -8,7 +8,6 @@
 
 #include "catalist/tui/keys.hpp"
 #include "catalist/tui/theme/palettes.hpp"
-#include "catalist/tui/theme/themeRegistry.hpp"
 #include "catalist/tui/widgets/card.hpp"
 #include "catalist/tui/widgets/marquee.hpp"
 
@@ -57,14 +56,14 @@ int segmentWidth(size_t count, size_t total, int width) {
   return count > 0 && cells == 0 ? 1 : cells;
 }
 
-Element statusBar(const statusCounts& counts, const themePalette& theme) {
+Element statusBar(const statusCounts& counts) {
   const int width = 46;
   if (counts.total == 0)
-    return text(std::string(width, ' ')) | bgcolor(theme.surface0);
-  const std::pair<size_t, Color> segments[] = {{counts.watching, theme.green},
-                                               {counts.completed, theme.blue},
-                                               {counts.onHold, theme.yellow},
-                                               {counts.dropped, theme.red}};
+    return text(std::string(width, ' ')) | bgcolor(theme::kSurface0);
+  const std::pair<size_t, Color> segments[] = {{counts.watching, theme::kGreen},
+                                               {counts.completed, theme::kBlue},
+                                               {counts.onHold, theme::kYellow},
+                                               {counts.dropped, theme::kRed}};
   Elements cells;
   int used = 0;
   for (const auto& [count, tint] : segments) {
@@ -75,96 +74,90 @@ Element statusBar(const statusCounts& counts, const themePalette& theme) {
   }
   int planned = std::max(0, width - used);
   if (planned > 0)
-    cells.push_back(text(std::string(planned, ' ')) | bgcolor(theme.overlay0));
+    cells.push_back(text(std::string(planned, ' ')) | bgcolor(theme::kOverlay0));
   return hbox(std::move(cells));
 }
 
-Element legendRow(const std::string& label, size_t count, Color dot,
-                  const themePalette& theme) {
-  return hbox({text("  ● ") | color(dot), text(label) | color(theme.text),
+Element legendRow(const std::string& label, size_t count, Color dot) {
+  return hbox({text("  ● ") | color(dot), text(label) | color(theme::kText),
                filler(),
                text("(" + formatCommas(static_cast<long long>(count)) + ")  ") |
-                   color(theme.subtext)});
+                   color(theme::kSubtext)});
 }
 
-Element sidebarCard(const database& db, mediaType selected,
-                    const themePalette& theme) {
+Element sidebarCard(const database& db, mediaType selected) {
   bool isAnime = selected == mediaType::kAnime;
   auto counts = countStatuses(db, selected);
   auto mediaChoice = [&](mediaType type, const std::string& label) {
     std::string count =
         " (" + std::to_string(db.getEntries(type).size()) + ")";
     return card::choice(type == selected, label + count,
-                        type == selected ? theme.mauve : theme.text);
+                        type == selected ? theme::kMauve : theme::kText);
   };
   auto body = vbox({card::section("MEDIA"),
                     mediaChoice(mediaType::kAnime, icon::kAnime + " Anime"),
                     mediaChoice(mediaType::kManga, icon::kManga + " Manga"),
                     text(""), card::section("STATUS"),
                     legendRow(isAnime ? "Watching" : "Reading", counts.watching,
-                              theme.green, theme),
-                    legendRow("Completed", counts.completed, theme.blue, theme),
-                    legendRow("On-Hold", counts.onHold, theme.yellow, theme),
-                    legendRow("Dropped", counts.dropped, theme.red, theme),
+                              theme::kGreen),
+                    legendRow("Completed", counts.completed, theme::kBlue),
+                    legendRow("On-Hold", counts.onHold, theme::kYellow),
+                    legendRow("Dropped", counts.dropped, theme::kRed),
                     legendRow(isAnime ? "Plan to Watch" : "Plan to Read",
-                              counts.planned, theme.overlay0, theme),
+                              counts.planned, theme::kOverlay0),
                     filler()});
   return card::frame("Statistics", body, true) | size(WIDTH, EQUAL, 28);
 }
 
-Element metric(const std::string& label, const std::string& value,
-               const themePalette& theme) {
-  return card::field(false, label, text(value) | bold | color(theme.text), 16);
+Element metric(const std::string& label, const std::string& value) {
+  return card::field(false, label, text(value) | bold | color(theme::kText), 16);
 }
 
-Element overviewCard(const database& db, mediaType type,
-                     const themePalette& theme) {
+Element overviewCard(const database& db, mediaType type) {
   bool isAnime = type == mediaType::kAnime;
   auto counts = countStatuses(db, type);
   auto left = vbox(
-      {metric("Days spent:", formatDays(db.daysSpent(type)), theme),
-       metric("Mean score:", formatMean(db.averageScore(type)), theme),
-       metric("Entries:", formatCommas(static_cast<long long>(counts.total)),
-              theme)});
+      {metric("Days spent:", formatDays(db.daysSpent(type))),
+       metric("Mean score:", formatMean(db.averageScore(type))),
+       metric("Entries:", formatCommas(static_cast<long long>(counts.total)))});
   auto right = vbox(
       {metric(isAnime ? "Episodes:" : "Chapters:",
-              formatCommas(db.totalProgress(type)), theme),
+              formatCommas(db.totalProgress(type))),
        metric(isAnime ? "Rewatched:" : "Reread:",
-              formatCommas(db.totalRewatched(type)), theme),
+              formatCommas(db.totalRewatched(type))),
        isAnime ? text("")
-               : metric("Volumes:", formatCommas(db.totalVolumes(type)), theme)});
+               : metric("Volumes:", formatCommas(db.totalVolumes(type)))});
   auto body = vbox({card::section("TOTALS"), hbox({left | flex, right | flex}),
                     text(""), card::section("BY STATUS"),
-                    hbox({text("  "), statusBar(counts, theme), filler()})});
+                    hbox({text("  "), statusBar(counts), filler()})});
   return card::frame(isAnime ? "ANIME OVERVIEW" : "MANGA OVERVIEW", body,
                      false);
 }
 
-Element activityItem(const activityRecord& activity, const themePalette& theme) {
+Element activityItem(const activityRecord& activity) {
   float ratio = activity.totalUnits > 0
                     ? std::clamp(static_cast<float>(activity.progress) /
                                      activity.totalUnits,
                                  0.0f, 1.0f)
                     : 0.0f;
   Color fill =
-      activity.status == watchStatus::kCompleted ? theme.green : theme.blue;
+      activity.status == watchStatus::kCompleted ? theme::kGreen : theme::kBlue;
   std::string summary =
       statusToString(activity.status, activity.type) + " · " +
       std::to_string(activity.progress) + "/" +
       (activity.totalUnits > 0 ? std::to_string(activity.totalUnits) : "?") +
       " · " + (activity.score > 0 ? std::to_string(activity.score) + "/10" : "unscored");
   return vbox({text("  " + marquee::clip(activity.title, 36)) | bold |
-                   color(theme.mauve),
-               text("  " + activity.timestamp) | color(theme.overlay0),
+                   color(theme::kMauve),
+               text("  " + activity.timestamp) | color(theme::kOverlay0),
                hbox({text("  "), gauge(ratio) | color(fill) | flex, text("  ")}),
-               text("  " + summary) | color(theme.subtext), text("")});
+               text("  " + summary) | color(theme::kSubtext), text("")});
 }
 
-Element activityCard(const database& db, mediaType type,
-                     const themePalette& theme) {
+Element activityCard(const database& db, mediaType type) {
   Elements rows;
   for (const auto& activity : db.getRecentActivity(type, 6))
-    rows.push_back(activityItem(activity, theme));
+    rows.push_back(activityItem(activity));
   if (rows.empty())
     rows.push_back(card::note("No updates logged yet."));
   return card::frame("RECENT ACTIVITY", vbox(std::move(rows)) | frame, false) |
@@ -172,7 +165,7 @@ Element activityCard(const database& db, mediaType type,
 }
 
 Element barChart(const std::vector<std::pair<std::string, size_t>>& rows,
-                 Color tint, const themePalette& theme) {
+                 Color tint) {
   const int barWidth = 30;
   size_t largest = 1;
   for (const auto& row : rows)
@@ -183,10 +176,10 @@ Element barChart(const std::vector<std::pair<std::string, size_t>>& rows,
     if (count > 0 && filled == 0)
       filled = 1;
     lines.push_back(hbox({text(label) | size(WIDTH, EQUAL, 7) |
-                              color(theme.subtext),
+                              color(theme::kSubtext),
                           text(std::string(filled, ' ')) | bgcolor(tint),
                           text(" " + formatCommas(static_cast<long long>(count))) |
-                              color(theme.text)}));
+                              color(theme::kText)}));
   }
   return vbox(std::move(lines));
 }
@@ -238,15 +231,14 @@ std::string statsTab::icon() const {
 }
 
 Element statsTab::render(appContext& ctx) {
-  const auto& theme = themeRegistry::active();
   auto charts =
       hbox({chartCard("SCORES", barChart(scoreHistogram(ctx.db, media_),
-                                         theme.yellow, theme)),
+                                         theme::kYellow)),
             chartCard("START YEARS", barChart(entriesPerYear(ctx.db, media_),
-                                              theme.blue, theme))});
-  return hbox({sidebarCard(ctx.db, media_, theme),
-               vbox({overviewCard(ctx.db, media_, theme), charts | flex}) | flex,
-               activityCard(ctx.db, media_, theme)});
+                                              theme::kBlue))});
+  return hbox({sidebarCard(ctx.db, media_),
+               vbox({overviewCard(ctx.db, media_), charts | flex}) | flex,
+               activityCard(ctx.db, media_)});
 }
 
 bool statsTab::onEvent(const Event& event, appContext&) {
@@ -259,7 +251,7 @@ bool statsTab::onEvent(const Event& event, appContext&) {
 }
 
 std::vector<hint> statsTab::hints() const {
-  return {{"j/k/m", "anime/manga"}, {":", "cmd"}, {"q", "quit"}};
+  return {{"Tab", "tabs"}, {"j/k/m", "anime/manga"}, {"q", "quit"}};
 }
 
 }  // namespace catalist

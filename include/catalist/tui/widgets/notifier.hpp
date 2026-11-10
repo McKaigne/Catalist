@@ -7,7 +7,7 @@
 #include <optional>
 #include <string>
 
-#include "catalist/tui/theme/themeRegistry.hpp"
+#include "catalist/tui/theme/palettes.hpp"
 
 namespace catalist {
 
@@ -22,8 +22,7 @@ public:
   [[nodiscard]] bool hasPopup() const;
   void dismiss();
 
-  [[nodiscard]] std::optional<ftxui::Element> renderPopup(
-      const themePalette& theme) const;
+  [[nodiscard]] std::optional<ftxui::Element> renderPopup() const;
 
 private:
   // Guards popups_ and status_: the background sync thread pushes popups

@@ -1,48 +1,44 @@
 #ifndef CATALIST_TUI_APP_HPP_
 #define CATALIST_TUI_APP_HPP_
 
-#include <optional>
-#include <string>
+#include <ftxui/component/event.hpp>
+#include <ftxui/dom/elements.hpp>
+#include <functional>
 #include <vector>
 
-#include "catalist/settings/settings.hpp"
-#include "catalist/core/clock.hpp"
-#include "catalist/model/undoStack.hpp"
-#include "catalist/net/accounts.hpp"
-#include "catalist/platform/fileSystem.hpp"
-#include "catalist/platform/httpClient.hpp"
-#include "catalist/platform/processLauncher.hpp"
-#include "catalist/storage/database.hpp"
-#include "catalist/tui/widgets/commandPalette.hpp"
-#include "catalist/tui/widgets/notifier.hpp"
+#include "catalist/tui/appContext.hpp"
+#include "catalist/tui/tab.hpp"
 
 namespace catalist {
 
-struct tuiServices {
-  iFileSystem& fileSystem;
-  iProcessLauncher& launcher;
-  const iClock& clock;
-  iHttpClient& http;
-  listAccounts& accounts;
-};
-
-// Ids of the tabs this build provides, in default order.
-[[nodiscard]] std::vector<std::string> builtInTabIds();
-
-class appTui {
+// The frame around the tabs: the tab bar on top, the mode, status message and
+// key hints at the bottom, and the keys that work in every tab.
+class appShell {
  public:
-  appTui(database& db, appSettings& settings, tuiServices services);
-  // startupTab overrides the configured startup tab (from --tab).
-  void run(const std::optional<std::string>& startupTab = std::nullopt);
+  appShell(appContext& ctx, std::vector<iTab*> tabs, std::function<void()> quit);
+
+  [[nodiscard]] int& activeIndex() { return activeIndex_; }
+  void activate(int index);
+
+  // Tab, Shift-Tab and the number keys switch tabs and q quits, unless the
+  // active tab is taking text; everything else goes to the active tab.
+  bool onEvent(const ftxui::Event& event);
+  [[nodiscard]] ftxui::Element render();
 
  private:
-  database& db_;
-  appSettings& settings_;
-  tuiServices services_;
-  undoStack undo_;
-  notifier notices_;
-  commandPalette palette_;
+  [[nodiscard]] iTab& activeTab() { return *tabs_[activeIndex_]; }
+  bool handleGlobalKey(const ftxui::Event& event);
+  [[nodiscard]] ftxui::Element renderTopBar();
+  [[nodiscard]] ftxui::Element renderBottomBar();
+
+  appContext& ctx_;
+  std::vector<iTab*> tabs_;
+  std::function<void()> quit_;
+  int activeIndex_ = 0;
 };
+
+// Runs the full-screen interface until the user quits.
+void runTui(database& db, const iClock& clock, iProcessLauncher& launcher);
 
 }  // namespace catalist
 

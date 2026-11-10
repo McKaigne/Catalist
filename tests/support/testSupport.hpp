@@ -10,7 +10,6 @@
 #include <unordered_map>
 
 #include "catalist/net/accounts.hpp"
-#include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/storage/database.hpp"

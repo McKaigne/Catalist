@@ -13,7 +13,6 @@
 #include "catalist/tui/keys.hpp"
 #include "catalist/tui/theme/palettes.hpp"
 #include "catalist/tui/theme/statusStyle.hpp"
-#include "catalist/tui/theme/themeRegistry.hpp"
 #include "catalist/tui/widgets/pill.hpp"
 
 namespace catalist {
@@ -21,16 +20,6 @@ namespace catalist {
 using namespace ftxui;
 
 namespace {
-
-sortKey sortKeyFor(const std::string& name) {
-  if (name == "title")
-    return sortKey::kTitle;
-  if (name == "date")
-    return sortKey::kDate;
-  if (name == "progress")
-    return sortKey::kProgress;
-  return sortKey::kScore;
-}
 
 std::string lowercase(std::string text) {
   std::transform(text.begin(), text.end(), text.begin(),
@@ -83,26 +72,26 @@ Element styledText(const std::string& content, Color tint, bool emphasised) {
 }
 
 Element highlightMatches(const std::string& title, const std::string& query,
-                         bool emphasised, const themePalette& theme) {
+                         bool emphasised) {
   std::string loweredTitle = lowercase(title);
   std::string loweredQuery = lowercase(query);
   size_t match = query.empty() ? std::string::npos : loweredTitle.find(loweredQuery);
   if (match == std::string::npos)
-    return styledText(title, theme.text, emphasised);
+    return styledText(title, theme::kText, emphasised);
 
   Elements parts;
   size_t consumed = 0;
   while (match != std::string::npos) {
     if (match > consumed)
       parts.push_back(styledText(title.substr(consumed, match - consumed),
-                                 theme.text, emphasised));
+                                 theme::kText, emphasised));
     parts.push_back(text(title.substr(match, loweredQuery.size())) | bold |
-                    color(theme.crust) | bgcolor(theme.yellow));
+                    color(theme::kCrust) | bgcolor(theme::kYellow));
     consumed = match + loweredQuery.size();
     match = loweredTitle.find(loweredQuery, consumed);
   }
   if (consumed < title.size())
-    parts.push_back(styledText(title.substr(consumed), theme.text, emphasised));
+    parts.push_back(styledText(title.substr(consumed), theme::kText, emphasised));
   return hbox(std::move(parts));
 }
 
@@ -158,10 +147,7 @@ void toggleMembership(std::set<member>& members, const member& item) {
 
 }  // namespace
 
-catalogTab::catalogTab(mediaType media, const appSettings& settings)
-    : media_(media),
-      sortBy_(sortKeyFor(settings.defaultSort)),
-      reverseSort_(settings.reverseSort) {
+catalogTab::catalogTab(mediaType media) : media_(media) {
   buildComponents();
 }
 
@@ -186,10 +172,9 @@ void catalogTab::buildComponents() {
 
   InputOption inputOption;
   inputOption.transform = [](InputState state) {
-    const auto& theme = themeRegistry::active();
-    Element field = state.element | color(state.is_placeholder ? theme.overlay0
-                                                               : theme.text);
-    return state.focused ? field | color(theme.peach) : field;
+    Element field = state.element | color(state.is_placeholder ? theme::kOverlay0
+                                                               : theme::kText);
+    return state.focused ? field | color(theme::kPeach) : field;
   };
   searchInput_ = Input(&searchQuery_, "Press '/' to search...", inputOption);
 
@@ -273,6 +258,10 @@ bool catalogTab::capturesInput() const {
          editingNotes_;
 }
 
+appMode catalogTab::mode() const {
+  return pendingDeleteId_ ? appMode::kDel : mode_;
+}
+
 std::optional<std::string> catalogTab::countBadge(appContext& ctx) const {
   return std::to_string(ctx.db.getEntries(media_).size());
 }
@@ -296,7 +285,7 @@ std::vector<hint> catalogTab::hints() const {
   return {{"Tab", "tabs"},       {"h/l", "panes"},  {"e/ret", "edit"},
           {"c/t/s/r/p", "sort"}, {"S/R/P", "cycle"}, {"+/-", "ep"},
           {"spc", "select"},     {"d", "del"},
-          {"/", "find"},         {":", "cmd"}};
+          {"/", "find"},         {"q", "quit"}};
 }
 
 bool catalogTab::onEvent(const Event& event, appContext& ctx) {
@@ -778,12 +767,11 @@ void catalogTab::redoLast(appContext& ctx) {
 }
 
 Element catalogTab::renderSidebarRow(int row) const {
-  const auto& theme = themeRegistry::active();
   if (row < 0 || row >= static_cast<int>(sidebarRows_.size()))
     return text("");
   const auto& item = sidebarRows_[row];
   if (item.isHeader)
-    return text(item.label) | bold | color(theme.overlay0);
+    return text(item.label) | bold | color(theme::kOverlay0);
 
   bool usesMultiFilter = !statusFilters_.empty() || !scoreFilters_.empty();
   bool inMultiFilter = isRowFilterActive(row);
@@ -795,17 +783,16 @@ Element catalogTab::renderSidebarRow(int row) const {
                                         : "   ";
 
   if (cursorHere)
-    return hbox({text(prefix) | color(theme.mauve) | bold,
-                 text(item.label) | bold | color(theme.text)}) |
-           bgcolor(theme.surface0) | focus;
+    return hbox({text(prefix) | color(theme::kMauve) | bold,
+                 text(item.label) | bold | color(theme::kText)}) |
+           bgcolor(theme::kSurface0) | focus;
   if (inMultiFilter || isSingleFilter)
-    return hbox({text(prefix) | color(theme.green) | bold,
-                 text(item.label) | bold | color(theme.lavender)});
-  return hbox({text("   "), text(item.label) | color(theme.subtext)});
+    return hbox({text(prefix) | color(theme::kGreen) | bold,
+                 text(item.label) | bold | color(theme::kLavender)});
+  return hbox({text("   "), text(item.label) | color(theme::kSubtext)});
 }
 
 Element catalogTab::renderCatalogRow(int row) {
-  const auto& theme = themeRegistry::active();
   if (row < 0 || row >= static_cast<int>(displayed_.size()))
     return text("");
   const auto& e = displayed_[row];
@@ -821,14 +808,14 @@ Element catalogTab::renderCatalogRow(int row) {
                 : marquee::clip(e.title, maxGlyphs);
 
   std::string marker = "  ";
-  Color markerColor = theme.green;
+  Color markerColor = theme::kGreen;
   if (selected) {
     marker = (visualSelectedIds_.size() > 1 ? icon::kCheckMulti
                                             : icon::kCheckSingle) +
              " ";
   } else if (rowActive) {
     marker = "▌ ";
-    markerColor = theme.mauve;
+    markerColor = theme::kMauve;
   }
 
   auto statusCell =
@@ -838,44 +825,42 @@ Element catalogTab::renderCatalogRow(int row) {
   auto line = hbox(
       {text(marker) | bold | color(markerColor),
        text(formatCatalogDate(e)) | size(WIDTH, EQUAL, 10) |
-           color(theme.subtext),
+           color(theme::kSubtext),
        text(" "),
        hbox({text(" " + typeToIcon(e.type) + " "),
-             highlightMatches(shownTitle, searchQuery_, rowActive, theme)}) |
+             highlightMatches(shownTitle, searchQuery_, rowActive)}) |
            flex,
        text(" "), statusCell | size(WIDTH, EQUAL, 14), text(" "),
        text(" " + renderStarMeter(e.score)) | size(WIDTH, EQUAL, 12) |
-           color(theme.yellow),
+           color(theme::kYellow),
        text(" "),
        text(" " + icon::kGauge + " " + progressLabel(e)) |
-           size(WIDTH, EQUAL, 12) | color(theme.lavender),
+           size(WIDTH, EQUAL, 12) | color(theme::kLavender),
        text(" ")});
 
   if (rowActive)
-    return line | bgcolor(theme.surface0) | focus;
-  return selected ? line | bgcolor(theme.surface0) : line;
+    return line | bgcolor(theme::kSurface0) | focus;
+  return selected ? line | bgcolor(theme::kSurface0) : line;
 }
 
 Element catalogTab::renderHeaderCell(const std::string& name, sortKey key,
                                      int width, Box& box,
                                      bool stretches) const {
-  const auto& theme = themeRegistry::active();
   bool active = sortBy_ == key;
   std::string label = " " + name;
   if (active)
     label += isSortAscending(key, reverseSort_) ? " ▲" : " ▼";
   Element cell = text(label);
   cell = stretches ? cell | flex : cell | size(WIDTH, EQUAL, width);
-  cell = active ? cell | bold | color(theme.mauve) | underlined
-                : cell | bold | color(theme.subtext);
+  cell = active ? cell | bold | color(theme::kMauve) | underlined
+                : cell | bold | color(theme::kSubtext);
   return cell | reflect(box);
 }
 
 Element catalogTab::renderDetails() {
-  const auto& theme = themeRegistry::active();
   const entry* current = selectedEntry();
   if (!current)
-    return text("No record selected.") | color(theme.subtext);
+    return text("No record selected.") | color(theme::kSubtext);
   const auto& e = *current;
 
   float ratio = e.totalUnits > 0
@@ -887,10 +872,10 @@ Element catalogTab::renderDetails() {
   auto fieldRow = [&](detailsField field, const std::string& label,
                       Element content) {
     bool active = onDetails && detailsCursor_ == field;
-    return hbox({text(active ? "▌ " : "  ") | color(theme.mauve) | bold,
+    return hbox({text(active ? "▌ " : "  ") | color(theme::kMauve) | bold,
                  text(label) | size(WIDTH, EQUAL, 12) |
                      (active ? bold : nothing) |
-                     color(active ? theme.peach : theme.subtext),
+                     color(active ? theme::kPeach : theme::kSubtext),
                  content | flex});
   };
 
@@ -898,39 +883,39 @@ Element catalogTab::renderDetails() {
   for (const auto& badge : serviceBadges(e)) {
     if (!providerBadges.empty())
       providerBadges.push_back(text("  "));
-    providerBadges.push_back(text(badge) | color(theme.text));
+    providerBadges.push_back(text(badge) | color(theme::kText));
   }
   if (providerBadges.empty())
-    providerBadges.push_back(text("-") | color(theme.subtext));
+    providerBadges.push_back(text("-") | color(theme::kSubtext));
 
   std::string shownTitle =
       marquee::scroll(e.title, 36, detailsTimer_.elapsedFor(catalogSelected_));
   std::string unfinishedLabel =
       e.status == watchStatus::kCompleted ? "Completed" : "In progress";
   auto infoRow = [&](const std::string& label, const std::string& value) {
-    return hbox({text(label) | color(theme.subtext),
-                 text(value) | color(theme.text), filler()});
+    return hbox({text(label) | color(theme::kSubtext),
+                 text(value) | color(theme::kText), filler()});
   };
 
   auto seriesCard =
-      vbox({hbox({text("  DETAILS") | bold | color(theme.lavender), filler(),
+      vbox({hbox({text("  DETAILS") | bold | color(theme::kLavender), filler(),
                   text("ID #" + std::to_string(e.id) + " ") |
-                      color(theme.overlay0)}),
+                      color(theme::kOverlay0)}),
             text(""),
-            hbox({text("  " + shownTitle) | bold | color(theme.mauve)}),
+            hbox({text("  " + shownTitle) | bold | color(theme::kMauve)}),
             text(""),
-            hbox({text("  Type:     ") | color(theme.subtext),
+            hbox({text("  Type:     ") | color(theme::kSubtext),
                   pill(typeToIcon(e.type) + " " + typeToString(e.type),
-                       theme.crust, typeToColor(e.type)),
+                       theme::kCrust, typeToColor(e.type)),
                   filler()}),
-            hbox({text("  Links:    ") | color(theme.subtext),
+            hbox({text("  Links:    ") | color(theme::kSubtext),
                   hbox(std::move(providerBadges)) | flex}),
             infoRow("  Updated:  ", e.updatedAt ? e.updatedAt->toString() : "-"),
             infoRow("  Started:  ",
                     e.startDate ? e.startDate->toString() : "Not started"),
             infoRow("  Finished: ", e.finishDate ? e.finishDate->toString()
                                                  : unfinishedLabel)}) |
-      border | color(theme.surface0);
+      border | color(theme::kSurface0);
 
   bool trackingActive = mode_ != appMode::kSch && onDetails &&
                         detailsCursor_ != detailsField::kNotes;
@@ -939,18 +924,18 @@ Element catalogTab::renderDetails() {
                             : "Ongoing ";
   std::string units = e.type == mediaType::kAnime ? " eps" : " chs";
   auto trackingCard =
-      vbox({hbox({text("  TRACKING") | bold | color(theme.lavender), filler(),
-                  text(trackingActive ? "[Active]" : "") | color(theme.peach)}),
-            text(""), text("  STATUS") | bold | color(theme.overlay0),
+      vbox({hbox({text("  TRACKING") | bold | color(theme::kLavender), filler(),
+                  text(trackingActive ? "[Active]" : "") | color(theme::kPeach)}),
+            text(""), text("  STATUS") | bold | color(theme::kOverlay0),
             fieldRow(detailsField::kStatus, "Status:",
                      pill(statusToIcon(e.status) + " " +
                               statusToString(e.status, e.type),
-                          theme.crust, statusToColor(e.status))),
-            text(""), text("  METRICS") | bold | color(theme.overlay0),
+                          theme::kCrust, statusToColor(e.status))),
+            text(""), text("  METRICS") | bold | color(theme::kOverlay0),
             fieldRow(detailsField::kRating, "Rating:",
-                     hbox({text(renderStarMeter(e.score)) | color(theme.yellow),
+                     hbox({text(renderStarMeter(e.score)) | color(theme::kYellow),
                            text(" (" + std::to_string(e.score) + "/10)") |
-                               color(theme.text)})),
+                               color(theme::kText)})),
             text(""),
             fieldRow(detailsField::kProgress, "Progress:",
                      vbox({hbox({text(std::to_string(e.progress) + " / " +
@@ -958,27 +943,27 @@ Element catalogTab::renderDetails() {
                                            ? std::to_string(e.totalUnits)
                                            : "?") +
                                       units) |
-                                     color(theme.text),
-                                 filler(), text(percent) | color(theme.subtext)}),
+                                     color(theme::kText),
+                                 filler(), text(percent) | color(theme::kSubtext)}),
                            gauge(ratio) |
-                               color(finished ? theme.green : theme.blue)}))}) |
-      border | color(trackingActive ? theme.mauve : theme.surface0);
+                               color(finished ? theme::kGreen : theme::kBlue)}))}) |
+      border | color(trackingActive ? theme::kMauve : theme::kSurface0);
 
   bool notesActive = mode_ != appMode::kSch && onDetails &&
                      detailsCursor_ == detailsField::kNotes;
   Element notesBody =
       editingNotes_
-          ? notesInput_->Render() | border | color(theme.peach)
+          ? notesInput_->Render() | border | color(theme::kPeach)
           : text(e.notes.empty() ? "(empty - press e or ret to edit)" : e.notes) |
-                color(e.notes.empty() ? theme.overlay0 : theme.subtext);
+                color(e.notes.empty() ? theme::kOverlay0 : theme::kSubtext);
   std::string notesBadge =
       notesActive ? (editingNotes_ ? "[Editing]" : "[Active]") : "";
   Color notesBorder = notesActive
-                          ? (editingNotes_ ? theme.peach : theme.mauve)
-                          : theme.surface0;
+                          ? (editingNotes_ ? theme::kPeach : theme::kMauve)
+                          : theme::kSurface0;
   auto notesCard =
-      vbox({hbox({text("  NOTES") | bold | color(theme.lavender), filler(),
-                  text(notesBadge) | color(theme.peach)}),
+      vbox({hbox({text("  NOTES") | bold | color(theme::kLavender), filler(),
+                  text(notesBadge) | color(theme::kPeach)}),
             text(""), fieldRow(detailsField::kNotes, "Notes:", notesBody),
             filler()}) |
       border | color(notesBorder) | flex;
@@ -987,29 +972,26 @@ Element catalogTab::renderDetails() {
 }
 
 Element catalogTab::renderSidebarCard() const {
-  const auto& theme = themeRegistry::active();
   bool focused = mode_ != appMode::kSch && focus_ == focusedCard::kSidebar;
-  return vbox({text("  Categories") | bold | color(theme.lavender), text(""),
+  return vbox({text("  Categories") | bold | color(theme::kLavender), text(""),
                sidebarMenu_->Render() | vscroll_indicator | frame | flex}) |
-         border | color(focused ? theme.mauve : theme.surface0) |
+         border | color(focused ? theme::kMauve : theme::kSurface0) |
          size(WIDTH, EQUAL, 28);
 }
 
 Element catalogTab::renderSearchCard() {
-  const auto& theme = themeRegistry::active();
   std::string summary = searchQuery_.empty()
                             ? "All entries "
                             : "Filter: '" + searchQuery_ + "' ";
-  return hbox({text(" " + icon::kSearch + " ") | color(theme.peach),
+  return hbox({text(" " + icon::kSearch + " ") | color(theme::kPeach),
                searchInput_->Render() | flex,
-               text(summary) | color(theme.subtext), text(" ")}) |
+               text(summary) | color(theme::kSubtext), text(" ")}) |
          border |
-         color(mode_ == appMode::kSch ? theme.peach : theme.surface0) |
+         color(mode_ == appMode::kSch ? theme::kPeach : theme::kSurface0) |
          size(HEIGHT, EQUAL, 3) | reflect(searchBarBox_);
 }
 
 Element catalogTab::renderCatalogCard() {
-  const auto& theme = themeRegistry::active();
   auto header = hbox(
       {text("   ") | size(WIDTH, EQUAL, 3),
        renderHeaderCell("Date", sortKey::kDate, 10, headerDateBox_, false),
@@ -1025,11 +1007,11 @@ Element catalogTab::renderCatalogCard() {
        text(" ")});
   Element rows = displayed_.empty()
                      ? text(" No matching entries found.") |
-                           color(theme.subtext) | center | flex
+                           color(theme::kSubtext) | center | flex
                      : catalogMenu_->Render() | vscroll_indicator | frame | flex;
   bool focused = mode_ != appMode::kSch && focus_ == focusedCard::kCatalog;
   return vbox({header, text(""), rows}) | border |
-         color(focused ? theme.mauve : theme.surface0) | flex;
+         color(focused ? theme::kMauve : theme::kSurface0) | flex;
 }
 
 Element catalogTab::render(appContext&) {

@@ -2,8 +2,6 @@
 #define CATALIST_TESTS_TUI_TUI_HARNESS_HPP_
 
 #include <ftxui/component/event.hpp>
-#include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -14,7 +12,7 @@
 namespace catalist::test {
 
 // A complete appContext over fakes: in-memory files under /data, the fixed
-// test clock, mock HTTP, a recording process launcher and no real network.
+// test clock and a recording process launcher.
 struct tuiHarness {
   tuiHarness();
 
@@ -25,14 +23,9 @@ struct tuiHarness {
   memoryFileSystem fs;
   fixedClock clock;
   database db;
-  appSettings settings;
   undoStack undo;
   notifier notices;
   fakeProcessLauncher launcher;
-  std::shared_ptr<mockHttpClient> http;
-  accountFakes fakes;
-  // After the fakes, so a running job is joined before they go away.
-  jobRunner jobs;
   appContext ctx;
 };
 

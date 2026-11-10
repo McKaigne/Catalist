@@ -17,6 +17,10 @@ struct hint {
   std::string description;
 };
 
+// What the keyboard currently does, shown as a pill in the bottom-left corner:
+// normal, search, edit, visual selection or a pending delete.
+enum class appMode { kNor, kSch, kEdt, kVis, kDel };
+
 class iTab {
 public:
   virtual ~iTab() = default;
@@ -40,16 +44,13 @@ public:
   // True while the tab owns the keyboard (text entry, confirmations), so the
   // shell must not treat keys like '1' or 'q' as global shortcuts.
   [[nodiscard]] virtual bool capturesInput() const { return false; }
+  [[nodiscard]] virtual appMode mode() const { return appMode::kNor; }
   [[nodiscard]] virtual std::optional<std::string> countBadge(
       appContext&) const {
     return std::nullopt;
   }
   [[nodiscard]] virtual std::string selectionSummary() const { return ""; }
 };
-
-// Wraps a tab as an FTXUI component for Container::Tab: the tab sees each
-// event first and its focus root gets what it leaves unhandled.
-[[nodiscard]] ftxui::Component makeTabComponent(iTab& tab, appContext& ctx);
 
 }  // namespace catalist
 

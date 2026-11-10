@@ -3,20 +3,12 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/screen.hpp>
 
-#include "catalist/tui/theme/themeRegistry.hpp"
-
 namespace catalist::test {
 
 tuiHarness::tuiHarness()
     : clock(makeTestClock()),
       db(fs, clock, "/data"),
-      http(std::make_shared<mockHttpClient>()),
-      fakes(fs, *http, clock, "/data"),
-      jobs(notices, [] {}),
-      ctx{db,    settings, undo,  notices,        launcher,
-          clock, fs,       *http, fakes.accounts, jobs} {
-  themeRegistry::setActive(settings.theme);
-}
+      ctx{db, undo, notices, launcher, clock} {}
 
 bool tuiHarness::press(iTab& tab, const ftxui::Event& event) {
   return tab.onEvent(event, ctx);

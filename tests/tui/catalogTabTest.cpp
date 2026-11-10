@@ -65,6 +65,18 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog details keys adjust status and ra
   CHECK(tab.hints().front().key == "Tab");
 }
 
+TEST_CASE_FIXTURE(catalogFixture, "tui catalog notes edit is saved, logged and undoable") {
+  REQUIRE(press(tab, Event::Character('l')));
+  type(tab, "jjj");
+  REQUIRE(press(tab, Event::Character('e')));
+  REQUIRE(tab.capturesInput());
+  type(tab, "ok");
+  REQUIRE(press(tab, Event::Return));
+  CHECK(anime(52991).notes.find("ok") != std::string::npos);
+  CHECK(db.getRecentActivity(mediaType::kAnime, 10).size() == 1);
+  CHECK(undo.canUndo());
+}
+
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog search filters and captures input") {
   REQUIRE(press(tab, Event::Character('/')));
   CHECK(tab.capturesInput());

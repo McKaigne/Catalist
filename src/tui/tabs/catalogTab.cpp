@@ -708,10 +708,7 @@ void catalogTab::commitNotes(appContext& ctx) {
     entry after = before;
     after.notes = notesBuffer_;
     after.updatedAt = localDate(ctx.clock);
-    after.dirty = true;
-    ctx.undo.record({historyAction::kMutate, after.type, before, after});
-    ctx.db.updateEntry(after);
-    ctx.db.saveAll();
+    commitEntryChange(ctx, before, after);
     refresh(ctx);
   }
   editingNotes_ = false;

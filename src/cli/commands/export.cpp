@@ -59,28 +59,14 @@ int runExport(const commandArgs& args, commandContext& ctx) {
   }
 
   if (formatStr == "csv") {
-    std::cout
-        << "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at\n";
-    auto dumpList = [](const std::vector<entry>& list) {
-      for (const auto& e : list) {
-        std::cout << e.id << "," << e.malId << "," << e.anilistId << ","
-                  << (e.type == mediaType::kAnime ? "anime" : "manga") << ","
-                  << csvCodec::escapeField(e.title) << ","
-                  << csvCodec::escapeField(statusToString(e.status, e.type)) << ","
-                  << e.score << "," << e.progress << "," << e.totalUnits << ","
-                  << e.volumes << "," << e.totalVolumes << "," << e.rewatched
-                  << "," << csvCodec::escapeField(formatDate(e.startDate)) << ","
-                  << csvCodec::escapeField(formatDate(e.finishDate)) << "," << csvCodec::escapeField(e.notes) << ","
-                  << csvCodec::escapeField(formatDate(e.updatedAt)) << "\n";
-      }
-    };
-
-    if (!filterType.has_value() || filterType.value() == mediaType::kAnime) {
-      dumpList(db.getEntries(mediaType::kAnime));
+    std::vector<entry> exported;
+    for (auto type : {mediaType::kAnime, mediaType::kManga}) {
+      if (filterType.value_or(type) != type)
+        continue;
+      const auto& list = db.getEntries(type);
+      exported.insert(exported.end(), list.begin(), list.end());
     }
-    if (!filterType.has_value() || filterType.value() == mediaType::kManga) {
-      dumpList(db.getEntries(mediaType::kManga));
-    }
+    std::cout << csvCodec::encodeEntries(exported);
     return 0;
   }
 

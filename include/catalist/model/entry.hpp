@@ -30,8 +30,6 @@ struct entry {
   std::optional<isoDate> finishDate;
   std::string notes;
   std::optional<isoDate> updatedAt;
-  // Position in the user's watch queue; absent until the user orders it.
-  std::optional<int> queuePos;
 
 };
 

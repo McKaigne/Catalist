@@ -19,7 +19,7 @@ TEST_CASE("csvCodec reads the zero date sentinel as absent and writes it empty")
 
   auto encoded = csvCodec::encodeEntries(decoded);
   CHECK(encoded.find("0000-00-00") == std::string::npos);
-  CHECK(encoded.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,,,,\n") !=
+  CHECK(encoded.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,\n") !=
         std::string::npos);
 }
 
@@ -89,20 +89,6 @@ TEST_CASE("csvCodec history round trips and skips short rows") {
   CHECK(decoded[0].score == 8);
 }
 
-TEST_CASE("csvCodec queue position round trips and is absent in older files") {
-  catalist::entry queued = catalist::test::makeEntry().id(3).title("Q");
-  queued.queuePos = 4;
-  auto decoded = csvCodec::decodeEntries(csvCodec::encodeEntries({queued}),
-                                         mediaType::kAnime);
-  REQUIRE(decoded.size() == 1);
-  CHECK(decoded[0].queuePos == 4);
-
-  auto legacy = csvCodec::decodeEntries(
-      "3,0,0,anime,Q,Watching,0,0,0,0,0,0,,,,,0,\n", mediaType::kAnime);
-  REQUIRE(legacy.size() == 1);
-  CHECK_FALSE(legacy[0].queuePos.has_value());
-}
-
 TEST_CASE("csvCodec round trips sync bases") {
   catalist::entry values = catalist::test::makeEntry()
                                .type(mediaType::kManga)
@@ -124,4 +110,22 @@ TEST_CASE("csvCodec round trips sync bases") {
   CHECK(formatDate(copy.startDate) == "2024-01-02");
   CHECK_FALSE(copy.finishDate.has_value());
   CHECK(copy.notes == "a, \"b\"\nc");
+}
+
+TEST_CASE("csvCodec reads files with the old internal columns and drops them") {
+  auto decoded = csvCodec::decodeEntries(
+      "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,"
+      "volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,"
+      "dirty,external_ids,queue_pos,synced\n"
+      "5,5,105,anime,Kept,Watching,7,3,12,0,0,0,2024-01-02,,n,2024-02-03,1,"
+      "kitsu=9;mal=5,2,anilist;mal\n",
+      mediaType::kAnime);
+  REQUIRE(decoded.size() == 1);
+  CHECK(decoded[0].anilistId == 105);
+  CHECK(decoded[0].notes == "n");
+  CHECK(formatDate(decoded[0].updatedAt) == "2024-02-03");
+  CHECK(csvCodec::encodeEntries(decoded) ==
+        "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,"
+        "volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at\n"
+        "5,5,105,anime,Kept,Watching,7,3,12,0,0,0,2024-01-02,,n,2024-02-03\n");
 }

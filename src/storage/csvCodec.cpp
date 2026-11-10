@@ -10,8 +10,7 @@ namespace {
 
 const char* kCatalogHeader =
     "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,"
-    "volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,"
-    "dirty,external_ids,queue_pos,synced\n";
+    "volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at\n";
 const char* kSyncHeader =
     "#type,service,remote_id,status,score,progress,volumes,rewatched,"
     "start_date,finish_date,notes\n";
@@ -100,8 +99,6 @@ void fillOptionalColumns(entry& decoded, const std::vector<std::string>& fields,
     decoded.notes = *value;
   if (auto* value = column(11))
     decoded.updatedAt = decodeDate(*value);
-  if (auto* value = column(14))
-    decoded.queuePos = parseInt(*value);
 }
 
 // Our own files only hold names we wrote, so an unknown status is a hand
@@ -236,11 +233,7 @@ std::string encodeEntries(const std::vector<entry>& entries) {
         << "," << e.progress << "," << e.totalUnits << "," << e.volumes << ","
         << e.totalVolumes << "," << e.rewatched << ","
         << formatDate(e.startDate) << "," << formatDate(e.finishDate) << ","
-        << escapeField(e.notes) << "," << formatDate(e.updatedAt) << ","
-        << ","
-        << ","
-        << (e.queuePos ? std::to_string(*e.queuePos) : "") << ","
-        << "\n";
+        << escapeField(e.notes) << "," << formatDate(e.updatedAt) << "\n";
   }
   return out.str();
 }

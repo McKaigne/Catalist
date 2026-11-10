@@ -13,7 +13,7 @@
 #include <thread>
 #include <unistd.h>
 
-#include "catalist/cli/dispatcher.hpp"
+#include "catalist/cli.hpp"
 #include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/core/logger.hpp"
@@ -126,6 +126,11 @@ int main(int argc, char* argv[]) {
   LOG_INFO("Catalist starting up...");
 
   catalist::database db(fileSystem, clock, dataDir);
+  if (argc > 1) {
+    return catalist::runCli({argv + 1, argv + argc}, db, fileSystem, std::cout,
+                            std::cerr);
+  }
+
   const auto settingsPath = dataDir / "settings.json";
   catalist::appSettings settings = catalist::loadSettings(fileSystem, settingsPath);
 
@@ -133,26 +138,6 @@ int main(int argc, char* argv[]) {
   if (!loaded.ok()) {
     std::cerr << "error: " << loaded.errorMessage() << "\n";
     return 1;
-  }
-  if (!loaded.value()) {
-    LOG_WARN("No catalog databases found on disk, initializing defaults.");
-    db.saveAll();
-  }
-
-  std::optional<std::string> startupTab;
-  bool opensTab = argc > 1 && std::string(argv[1]) == "--tab";
-  if (opensTab) {
-    auto known = catalist::builtInTabIds();
-    bool valid = argc == 3 &&
-                 std::find(known.begin(), known.end(), argv[2]) != known.end();
-    if (!valid) {
-      std::string expected;
-      for (const auto& tabId : known)
-        expected += (expected.empty() ? "" : ", ") + tabId;
-      std::cerr << "error: --tab needs one of: " << expected << "\n";
-      return 2;
-    }
-    startupTab = argv[2];
   }
 
   catalist::loopbackAuthServer authCallback(8080);
@@ -165,21 +150,10 @@ int main(int argc, char* argv[]) {
                                            paceRequests(kAnilistPause));
   catalist::listAccounts accounts{malLogin, anilistLogin, malList, anilistList};
 
-  if (argc > 1 && !opensTab) {
-    LOG_INFO("Dispatching CLI command: " + std::string(argv[1]));
-    catalist::cli::commandContext cliContext{
-        db,         settings, clock,
-        *http,      fileSystem, launcher,
-        accounts,   settingsPath,
-        catalist::cli::pickRandomIndex,
-        isatty(STDOUT_FILENO) == 1};
-    return catalist::cli::dispatch(argc, argv, cliContext);
-  }
-
   LOG_INFO("Launching interactive TUI screen.");
   catalist::appTui app(db, settings,
                        {fileSystem, launcher, clock, *http, accounts});
-  app.run(startupTab);
+  app.run(std::nullopt);
   LOG_INFO("Catalist session exited cleanly.");
 
   return 0;

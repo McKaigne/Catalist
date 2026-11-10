@@ -9,7 +9,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "catalist/cli/commandContext.hpp"
+#include "catalist/net/accounts.hpp"
 #include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/platform/httpClient.hpp"
@@ -80,19 +80,6 @@ private:
   std::streambuf* original_;
 };
 
-class stdinFeed {
-public:
-  explicit stdinFeed(const std::string& content);
-  ~stdinFeed();
-  stdinFeed(const stdinFeed&) = delete;
-  stdinFeed& operator=(const stdinFeed&) = delete;
-
-private:
-  // Same ordering constraint as streamCapture.
-  std::istringstream buffer_;
-  std::streambuf* original_;
-};
-
 // Test data must spell dates correctly; a typo should fail loudly instead
 // of silently becoming "no date".
 isoDate requireDate(const std::string& text);
@@ -149,19 +136,6 @@ private:
 
 [[nodiscard]] entryBuilder makeEntry();
 
-// A commandContext for CLI tests: fixed clock, mock HTTP, the given data
-// store and a deterministic "random" pick (always the first entry).
-class cliHarness {
-public:
-  cliHarness(database& db, iFileSystem& fileSystem, const iClock& clock,
-             const std::filesystem::path& dataDir);
-
-  appSettings settings;
-  mockHttpClient http;
-  accountFakes fakes;
-  cli::commandContext context;
-};
-
 // 2026-10-20 12:00:00 UTC; the test main pins TZ=UTC so local dates agree.
 [[nodiscard]] fixedClock makeTestClock();
 
@@ -169,10 +143,6 @@ std::filesystem::path fixturePath(const std::string& relativePath);
 std::string readTextFile(const std::filesystem::path& path);
 void writeTextFile(const std::filesystem::path& path,
                    const std::string& content);
-
-// Golden files are regenerated only when CATALIST_UPDATE_GOLDEN=1 so a normal
-// run can never silently rewrite the expected output.
-std::string loadGolden(const std::string& name, const std::string& actual);
 
 }  // namespace catalist::test
 

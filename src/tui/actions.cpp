@@ -7,7 +7,7 @@
 #include "catalist/model/serviceLinks.hpp"
 #include "catalist/net/listSync.hpp"
 #include "catalist/storage/backup.hpp"
-#include "catalist/storage/malParser.hpp"
+#include "catalist/storage/malXml.hpp"
 #include "catalist/tui/widgets/marquee.hpp"
 
 namespace catalist {
@@ -63,7 +63,11 @@ void importXmlInteractively(appContext& ctx) {
   auto chosen = pickXmlFile(ctx);
   if (!chosen)
     return;
-  size_t count = malParser::importXml(ctx.fileSystem, *chosen, ctx.db, false);
+  auto titles = malXml::parse(ctx.fileSystem.readFile(*chosen).value_or(""));
+  for (const auto& title : titles)
+    ctx.db.addEntry(title);
+  ctx.db.saveAll();
+  size_t count = titles.size();
   ctx.notices.push("Ingested " + std::to_string(count) +
                    " entries from XML backup.");
 }

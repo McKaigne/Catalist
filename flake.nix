@@ -33,7 +33,6 @@
               ninja
               pkg-config
               makeWrapper
-              installShellFiles
             ];
 
             buildInputs = with pkgs; [
@@ -41,16 +40,7 @@
               doctest
             ];
 
-            # Completions come from the binary itself so they always match
-            # the installed commands; the throwaway data dir keeps the build
-            # from looking for a home directory.
             postInstall = ''
-              export CATALIST_DATA_DIR="$TMPDIR/catalist-data"
-              installShellCompletion --cmd catalist \
-                --bash <($out/bin/catalist completion bash) \
-                --zsh <($out/bin/catalist completion zsh) \
-                --fish <($out/bin/catalist completion fish)
-
               wrapProgram $out/bin/catalist \
                 --prefix PATH : ${
                   pkgs.lib.makeBinPath (

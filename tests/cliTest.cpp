@@ -1,189 +1,231 @@
 #include <doctest/doctest.h>
 
-#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
 
-#include "catalist/cli/args.hpp"
-#include "catalist/cli/commands/commands.hpp"
-#include "catalist/cli/output.hpp"
-#include "catalist/storage/database.hpp"
+#include "catalist/cli.hpp"
+#include "catalist/core/version.hpp"
+#include "catalist/storage/malXml.hpp"
 #include "support/testSupport.hpp"
-
-using catalist::cli::formatJsonEntry;
-using catalist::cli::parseRatingSpec;
-using catalist::mediaType;
-using catalist::sortKey;
-using catalist::test::makeEntry;
-using catalist::test::streamCapture;
-using catalist::test::tempDirFixture;
-
-TEST_CASE("parseRatingSpec handles exact relational range and unrated") {
-  auto exact = parseRatingSpec("9");
-  REQUIRE(exact.has_value());
-  CHECK(exact->minScore == 9);
-  CHECK(exact->maxScore == 9);
-
-  auto atLeast = parseRatingSpec(">=8");
-  REQUIRE(atLeast.has_value());
-  CHECK(atLeast->minScore == 8);
-  CHECK(atLeast->maxScore == 10);
-
-  auto atMost = parseRatingSpec("<=6");
-  REQUIRE(atMost.has_value());
-  CHECK(atMost->minScore == 0);
-  CHECK(atMost->maxScore == 6);
-
-  auto range = parseRatingSpec("7..9");
-  REQUIRE(range.has_value());
-  CHECK(range->minScore == 7);
-  CHECK(range->maxScore == 9);
-
-  auto unrated = parseRatingSpec("unrated");
-  REQUIRE(unrated.has_value());
-  CHECK(unrated->unratedOnly);
-  CHECK(unrated->minScore == 0);
-}
-
-TEST_CASE("formatJsonEntry includes id and title") {
-  catalist::entry e = makeEntry().id(42).title("Odd Taxi").score(8);
-  auto json = formatJsonEntry(e);
-  CHECK(json.find("\"id\":42") != std::string::npos);
-  CHECK(json.find("\"title\":\"Odd Taxi\"") != std::string::npos);
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "cli add then step progress then rm") {
-  catalist::database db(fileSystem(), clock(), tempDir());
-  catalist::test::cliHarness harness(db, fileSystem(), clock(), tempDir());
-  streamCapture out(std::cout);
-
-  std::vector<std::string> addArgs = {"Dungeon Meshi", "-t", "anime", "-s",
-                                      "watching", "-e", "24", "-p", "10",
-                                      "-r", "9"};
-  REQUIRE(catalist::cli::runAdd(addArgs, harness.context) == 0);
-
-  const auto& entries = db.getEntries(mediaType::kAnime);
-  REQUIRE(entries.size() == 1);
-  REQUIRE(entries[0].title == "Dungeon Meshi");
-  int id = entries[0].id;
-
-  REQUIRE(catalist::cli::runSet({std::to_string(id), "-p", "a", "2"},
-                                 harness.context) == 0);
-  auto stepped = db.getById(mediaType::kAnime, id);
-  REQUIRE(stepped.has_value());
-  CHECK(stepped->progress == 12);
-  CHECK(catalist::formatDate(stepped->startDate) == "2026-10-20");
-  CHECK(catalist::formatDate(stepped->updatedAt) == "2026-10-20");
-
-  REQUIRE(catalist::cli::runRm({std::to_string(id), "-y"}, harness.context) == 0);
-  CHECK_FALSE(db.getById(mediaType::kAnime, id).has_value());
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "cli config list and completion generators succeed") {
-  catalist::database db(fileSystem(), clock(), tempDir());
-  catalist::test::cliHarness harness(db, fileSystem(), clock(), tempDir());
-  streamCapture out(std::cout);
-  CHECK(catalist::cli::runConfig({"list"}, harness.context) == 0);
-  CHECK(catalist::cli::runCompletion({"bash"}, harness.context) == 0);
-  CHECK(catalist::cli::runCompletion({"zsh"}, harness.context) == 0);
-  CHECK(catalist::cli::runCompletion({"fish"}, harness.context) == 0);
-}
-
-TEST_CASE("formatJsonEntry escapes quote backslash newline and control characters") {
-  catalist::entry e = makeEntry()
-                          .id(1)
-                          .title("say \"hi\" \\ back")
-                          .notes("line1\nline2\r\ttab\b\f\x01\x1f end");
-  auto json = formatJsonEntry(e);
-  CHECK(json.find("\"title\":\"say \\\"hi\\\" \\\\ back\"") != std::string::npos);
-  CHECK(json.find("\"notes\":\"line1\\nline2\\r\\ttab\\b\\f\\u0001\\u001f end\"") !=
-        std::string::npos);
-}
-
-TEST_CASE("formatJsonEntry passes utf8 bytes through unescaped") {
-  catalist::entry e = makeEntry().id(1).title("葬送のフリーレン");
-  auto json = formatJsonEntry(e);
-  CHECK(json.find("\"title\":\"葬送のフリーレン\"") != std::string::npos);
-}
 
 namespace {
 
-struct ratingSpec {
-  bool accepted = false;
-  int minScore = 0;
-  int maxScore = 0;
-  bool unrated = false;
-};
+using catalist::mediaType;
 
-ratingSpec parseRating(const std::string& spec) {
-  auto parsed = parseRatingSpec(spec);
-  if (!parsed)
-    return {};
-  return {true, parsed->minScore, parsed->maxScore, parsed->unratedOnly};
-}
+const char* const kAnimeXml =
+    "<myanimelist>"
+    "<anime><series_animedb_id>52991</series_animedb_id>"
+    "<series_title><![CDATA[Sousou no Frieren]]></series_title>"
+    "<series_episodes>28</series_episodes>"
+    "<my_watched_episodes>28</my_watched_episodes><my_score>10</my_score>"
+    "<my_status>Completed</my_status></anime>"
+    "<anime><series_animedb_id>44265</series_animedb_id>"
+    "<series_title><![CDATA[Odd Taxi]]></series_title>"
+    "<series_episodes>13</series_episodes>"
+    "<my_watched_episodes>5</my_watched_episodes><my_score>8</my_score>"
+    "<my_status>Watching</my_status></anime>"
+    "</myanimelist>";
+
+const char* const kMangaXml =
+    "<myanimelist>"
+    "<manga><manga_mangadb_id>2</manga_mangadb_id>"
+    "<manga_title><![CDATA[Berserk]]></manga_title>"
+    "<my_read_chapters>364</my_read_chapters><my_score>10</my_score>"
+    "<my_status>Reading</my_status></manga>"
+    "</myanimelist>";
+
+// One `catalist ...` run over an in-memory data directory. Each run gets a
+// fresh database, as each real invocation does.
+struct cliFixture {
+  catalist::memoryFileSystem fs;
+  catalist::fixedClock clock = catalist::test::makeTestClock();
+  std::string out;
+  std::string err;
+
+  int run(const std::vector<std::string>& args) {
+    catalist::database db(fs, clock, "/data");
+    std::ostringstream outStream;
+    std::ostringstream errStream;
+    int exitCode = catalist::runCli(args, db, fs, outStream, errStream);
+    out = outStream.str();
+    err = errStream.str();
+    return exitCode;
+  }
+
+  std::vector<catalist::entry> saved(mediaType type) {
+    catalist::database db(fs, clock, "/data");
+    REQUIRE(db.loadAll().ok());
+    return db.getEntries(type);
+  }
+
+  void put(const std::string& path, const std::string& content) {
+    REQUIRE(fs.writeFileAtomic(path, content));
+  }
+};
 
 }  // namespace
 
-TEST_CASE("parseRatingSpec strict greater and less than") {
-  auto greater = parseRating(">8");
-  CHECK(greater.accepted);
-  CHECK(greater.minScore == 9);
-  CHECK(greater.maxScore == 10);
-
-  auto less = parseRating("<5");
-  CHECK(less.accepted);
-  CHECK(less.minScore == 0);
-  CHECK(less.maxScore == 4);
-
-  CHECK(parseRating(">9").accepted);
-  CHECK_FALSE(parseRating(">10").accepted);
-  CHECK(parseRating("<1").accepted);
-  CHECK_FALSE(parseRating("<0").accepted);
-  CHECK_FALSE(parseRating("<=11").accepted);
+TEST_CASE_FIXTURE(cliFixture, "cli --version prints the version") {
+  CHECK(run({"--version"}) == 0);
+  CHECK(out == std::string("Catalist v") + catalist::kVersionString + "\n");
+  CHECK(err.empty());
+  CHECK(run({"-v"}) == 0);
+  CHECK(out == std::string("Catalist v") + catalist::kVersionString + "\n");
 }
 
-TEST_CASE("parseRatingSpec trims quotes and whitespace") {
-  auto quoted = parseRating("\"9\"");
-  CHECK(quoted.accepted);
-  CHECK(quoted.minScore == 9);
-  CHECK(quoted.maxScore == 9);
-
-  auto padded = parseRating("  >=7 ");
-  CHECK(padded.accepted);
-  CHECK(padded.minScore == 7);
-  CHECK(padded.maxScore == 10);
+TEST_CASE_FIXTURE(cliFixture, "cli --help lists the commands and data dir") {
+  for (const char* flag : {"--help", "-h"}) {
+    CHECK(run({flag}) == 0);
+    CHECK(out.find("catalist import <file.xml>...") != std::string::npos);
+    CHECK(out.find("catalist export <anime|manga>") != std::string::npos);
+    CHECK(out.find("The catalogue is kept in /data.") != std::string::npos);
+    CHECK(err.empty());
+  }
 }
 
-TEST_CASE("parseRatingSpec treats zero as unrated") {
-  auto zero = parseRating("0");
-  CHECK(zero.accepted);
-  CHECK(zero.unrated);
-  CHECK(zero.maxScore == 0);
+TEST_CASE_FIXTURE(cliFixture, "cli help and version work with a broken catalogue") {
+  put("/data/anime.csv", "this,is,not,a,catalogue\n");
+  CHECK(run({"--version"}) == 0);
+  CHECK(run({"--help"}) == 0);
 }
 
-TEST_CASE("parseRatingSpec rejects invalid input") {
-  CHECK_FALSE(parseRating("abc").accepted);
-  CHECK_FALSE(parseRating("").accepted);
-  CHECK_FALSE(parseRating("11").accepted);
-  CHECK_FALSE(parseRating("-1").accepted);
-  CHECK_FALSE(parseRating("9..7").accepted);
-  CHECK_FALSE(parseRating("7..").accepted);
-  CHECK_FALSE(parseRating(">=x").accepted);
+TEST_CASE_FIXTURE(cliFixture, "cli rejects a wrong command line with exit code 2") {
+  CHECK(run({"sync"}) == 2);
+  CHECK(err.find("error: unknown command 'sync'") == 0);
+  CHECK(err.find("Usage:") != std::string::npos);
+  CHECK(out.empty());
+
+  CHECK(run({"import"}) == 2);
+  CHECK(err.find("error: import needs at least one file") == 0);
+
+  CHECK(run({"export"}) == 2);
+  CHECK(err.find("error: export needs one of: anime, manga") == 0);
+  CHECK(run({"export", "books"}) == 2);
+  CHECK(run({"export", "anime", "manga"}) == 2);
+  CHECK(out.empty());
 }
 
-TEST_CASE_FIXTURE(tempDirFixture, "cli add rejects a malformed date and set clears one") {
-  catalist::database db(fileSystem(), clock(), tempDir());
-  catalist::test::cliHarness harness(db, fileSystem(), clock(), tempDir());
-  streamCapture out(std::cout);
-  streamCapture err(std::cerr);
+TEST_CASE_FIXTURE(cliFixture, "cli import adds the titles and saves them") {
+  put("/lists/anime.xml", kAnimeXml);
+  put("/lists/manga.xml", kMangaXml);
 
-  CHECK(catalist::cli::runAdd({"X", "--start", "soon"}, harness.context) == 2);
-  CHECK(err.text() ==
-        "error: invalid date 'soon' for '--start'. Expected YYYY-MM-DD.\n");
-  CHECK(db.getEntries(mediaType::kAnime).empty());
+  CHECK(run({"import", "/lists/anime.xml", "/lists/manga.xml"}) == 0);
+  CHECK(out ==
+        "/lists/anime.xml: 2 titles, 2 added, 0 already in the catalogue\n"
+        "/lists/manga.xml: 1 titles, 1 added, 0 already in the catalogue\n");
+  CHECK(err.empty());
 
-  REQUIRE(catalist::cli::runAdd({"X", "--finish", "2026-01-02"},
-                                 harness.context) == 0);
-  REQUIRE(catalist::cli::runSet({"X", "--finish", ""}, harness.context) == 0);
-  auto updated = db.getEntries(mediaType::kAnime).at(0);
-  CHECK_FALSE(updated.finishDate.has_value());
-  CHECK(catalist::formatDate(updated.startDate) == "2026-10-20");
+  auto anime = saved(mediaType::kAnime);
+  REQUIRE(anime.size() == 2);
+  CHECK(anime[0].title == "Sousou no Frieren");
+  CHECK(anime[0].malId == 52991);
+  CHECK(anime[0].score == 10);
+  CHECK(anime[0].progress == 28);
+  CHECK(anime[0].status == catalist::watchStatus::kCompleted);
+  CHECK(anime[1].title == "Odd Taxi");
+  auto manga = saved(mediaType::kManga);
+  REQUIRE(manga.size() == 1);
+  CHECK(manga[0].title == "Berserk");
+  CHECK(manga[0].progress == 364);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli importing again keeps what the user changed") {
+  put("/lists/anime.xml", kAnimeXml);
+  REQUIRE(run({"import", "/lists/anime.xml"}) == 0);
+
+  {
+    catalist::database db(fs, clock, "/data");
+    REQUIRE(db.loadAll().ok());
+    auto taxi = db.getEntries(mediaType::kAnime)[1];
+    REQUIRE(taxi.title == "Odd Taxi");
+    taxi.score = 9;
+    taxi.progress = 13;
+    taxi.notes = "mine";
+    REQUIRE(db.updateEntry(taxi));
+    REQUIRE(db.saveAll());
+  }
+
+  CHECK(run({"import", "/lists/anime.xml"}) == 0);
+  CHECK(out ==
+        "/lists/anime.xml: 2 titles, 0 added, 2 already in the catalogue\n");
+  auto anime = saved(mediaType::kAnime);
+  REQUIRE(anime.size() == 2);
+  CHECK(anime[1].score == 9);
+  CHECK(anime[1].progress == 13);
+  CHECK(anime[1].notes == "mine");
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli import changes nothing when any file is bad") {
+  put("/lists/anime.xml", kAnimeXml);
+  put("/lists/empty.xml", "<myanimelist></myanimelist>");
+
+  CHECK(run({"import", "/lists/anime.xml", "/lists/missing.xml"}) == 1);
+  CHECK(err == "error: cannot read /lists/missing.xml\n");
+  CHECK(out.empty());
+  CHECK_FALSE(fs.readFile("/data/anime.csv").has_value());
+
+  CHECK(run({"import", "/lists/anime.xml", "/lists/empty.xml"}) == 1);
+  CHECK(err == "error: no anime or manga found in /lists/empty.xml (is it a "
+               "MyAnimeList XML export?)\n");
+  CHECK_FALSE(fs.readFile("/data/anime.csv").has_value());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli import exits 1 when the catalogue cannot be saved") {
+  put("/lists/anime.xml", kAnimeXml);
+  fs.failWritesTo("/data/anime.csv");
+  CHECK(run({"import", "/lists/anime.xml"}) == 1);
+  CHECK(err == "error: could not save the catalogue to /data\n");
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli refuses to work on a catalogue it cannot read") {
+  put("/data/anime.csv", "this,is,not,a,catalogue\n");
+  put("/lists/anime.xml", kAnimeXml);
+  CHECK(run({"import", "/lists/anime.xml"}) == 1);
+  CHECK(err.find("error: /data/anime.csv: ") == 0);
+  CHECK(run({"export", "anime"}) == 1);
+  CHECK(out.empty());
+  CHECK(fs.readFile("/data/anime.csv") == "this,is,not,a,catalogue\n");
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli export prints what import read") {
+  put("/lists/anime.xml", kAnimeXml);
+  put("/lists/manga.xml", kMangaXml);
+  REQUIRE(run({"import", "/lists/anime.xml", "/lists/manga.xml"}) == 0);
+
+  CHECK(run({"export", "anime"}) == 0);
+  CHECK(err.empty());
+  auto anime = catalist::malXml::parse(out);
+  REQUIRE(anime.size() == 2);
+  CHECK(anime[0].title == "Sousou no Frieren");
+  CHECK(anime[0].malId == 52991);
+  CHECK(anime[0].progress == 28);
+  CHECK(anime[1].title == "Odd Taxi");
+  CHECK(anime[1].score == 8);
+
+  CHECK(run({"export", "manga"}) == 0);
+  auto manga = catalist::malXml::parse(out);
+  REQUIRE(manga.size() == 1);
+  CHECK(manga[0].type == mediaType::kManga);
+  CHECK(manga[0].title == "Berserk");
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli export notes the titles it had to leave out") {
+  {
+    catalist::database db(fs, clock, "/data");
+    db.addEntry(catalist::test::makeEntry().title("Home video"));
+    db.addEntry(catalist::test::makeEntry().title("Another one"));
+    REQUIRE(db.saveAll());
+  }
+  CHECK(run({"export", "anime"}) == 0);
+  CHECK(err == "note: 2 titles without a MyAnimeList id were left out.\n");
+  CHECK(catalist::malXml::parse(out).empty());
+  CHECK(out.find("<myanimelist>") != std::string::npos);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli export of an empty catalogue is an empty list") {
+  CHECK(run({"export", "manga"}) == 0);
+  CHECK(err.empty());
+  CHECK(out.find("<user_export_type>2</user_export_type>") != std::string::npos);
+  CHECK(catalist::malXml::parse(out).empty());
 }

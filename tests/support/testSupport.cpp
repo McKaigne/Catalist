@@ -1,8 +1,6 @@
 #include "support/testSupport.hpp"
 
 #include <atomic>
-#include <cstdlib>
-#include <iostream>
 #include <random>
 #include <stdexcept>
 
@@ -17,11 +15,6 @@ std::string randomSuffix() {
   std::random_device device;
   return std::to_string(::getpid()) + "-" + std::to_string(counter++) + "-" +
          std::to_string(device());
-}
-
-bool goldenUpdateRequested() {
-  const char* flag = std::getenv("CATALIST_UPDATE_GOLDEN");
-  return flag != nullptr && std::string(flag) == "1";
 }
 
 }  // namespace
@@ -51,14 +44,6 @@ streamCapture::~streamCapture() {
   target_.rdbuf(original_);
 }
 
-stdinFeed::stdinFeed(const std::string& content)
-    : buffer_(content), original_(std::cin.rdbuf(buffer_.rdbuf())) {}
-
-stdinFeed::~stdinFeed() {
-  std::cin.rdbuf(original_);
-  std::cin.clear();
-}
-
 isoDate requireDate(const std::string& text) {
   auto parsed = isoDate::parse(text);
   if (!parsed)
@@ -75,15 +60,6 @@ accountFakes::accountFakes(iFileSystem& fileSystem, iHttpClient& http,
       mal(http, malLogin, nullptr),
       anilist(http, anilistLogin, nullptr),
       accounts{malLogin, anilistLogin, mal, anilist} {}
-
-cliHarness::cliHarness(database& db, iFileSystem& fileSystem,
-                       const iClock& clock,
-                       const std::filesystem::path& dataDir)
-    : fakes(fileSystem, http, clock, dataDir),
-      context{db,          settings,         clock,
-              http,        fileSystem,       fakes.launcher,
-              fakes.accounts, dataDir / "settings.json",
-              [](size_t) { return size_t{0}; }} {}
 
 entryBuilder makeEntry() {
   return entryBuilder{};
@@ -105,13 +81,6 @@ void writeTextFile(const std::filesystem::path& path,
                    const std::string& content) {
   if (!realFileSystem().writeFileAtomic(path, content))
     throw std::runtime_error("could not write test file " + path.string());
-}
-
-std::string loadGolden(const std::string& name, const std::string& actual) {
-  auto path = fixturePath("golden/" + name);
-  if (goldenUpdateRequested())
-    writeTextFile(path, actual);
-  return readTextFile(path);
 }
 
 }  // namespace catalist::test

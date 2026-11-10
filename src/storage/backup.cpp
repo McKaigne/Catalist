@@ -4,7 +4,7 @@
 #include <optional>
 
 #include "catalist/storage/csvCodec.hpp"
-#include "catalist/storage/malParser.hpp"
+#include "catalist/storage/malXml.hpp"
 
 namespace catalist::backup {
 
@@ -93,7 +93,7 @@ xmlExportResult exportMalXml(iFileSystem& fileSystem, const iClock& clock,
   for (auto type : {mediaType::kAnime, mediaType::kManga}) {
     std::string kind = type == mediaType::kAnime ? "anime" : "manga";
     auto target = directory / (kind + "_" + stamp + ".xml");
-    auto xml = malParser::exportXml(db.getEntries(type), type);
+    auto xml = malXml::write(db.getEntries(type), type);
     exported.skipped += xml.skipped;
     if (fileSystem.writeFileAtomic(target, xml.xml))
       exported.files.push_back(target);

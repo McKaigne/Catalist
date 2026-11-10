@@ -36,9 +36,10 @@ configure_file(
 )
 configure_file(doc/catalist.1.in "${CMAKE_CURRENT_BINARY_DIR}/doc/catalist.1" @ONLY)
 
-# Domain, storage, networking and configuration. Must stay free of FTXUI so
-# the CLI and the tests can be built and run without a terminal UI.
+# Everything but the terminal UI. Must stay free of FTXUI so its tests can
+# be built and run without one.
 add_library(catalistCore STATIC
+  src/cli.cpp
   src/core/clock.cpp
   src/core/date.cpp
   src/core/json.cpp
@@ -63,36 +64,13 @@ add_library(catalistCore STATIC
   src/storage/backup.cpp
   src/storage/csvCodec.cpp
   src/storage/database.cpp
-  src/storage/malParser.cpp
+  src/storage/malXml.cpp
 )
 target_include_directories(catalistCore PUBLIC
   include
   "${CATALIST_GENERATED_INCLUDE_DIR}"
 )
 target_compile_options(catalistCore PRIVATE ${CATALIST_WARNING_FLAGS})
-
-add_library(catalistCli STATIC
-  src/cli/args.cpp
-  src/cli/commands/accounts.cpp
-  src/cli/commands/add.cpp
-  src/cli/commands/completion.cpp
-  src/cli/commands/config.cpp
-  src/cli/commands/count.cpp
-  src/cli/commands/export.cpp
-  src/cli/commands/import.cpp
-  src/cli/commands/ls.cpp
-  src/cli/commands/random.cpp
-  src/cli/commands/rm.cpp
-  src/cli/commands/search.cpp
-  src/cli/commands/set.cpp
-  src/cli/commands/show.cpp
-  src/cli/commands/stats.cpp
-  src/cli/dispatcher.cpp
-  src/cli/output.cpp
-  src/cli/resolveEntry.cpp
-)
-target_link_libraries(catalistCli PUBLIC catalistCore)
-target_compile_options(catalistCli PRIVATE ${CATALIST_WARNING_FLAGS})
 
 add_library(catalistTui STATIC
   src/tui/actions.cpp
@@ -120,7 +98,7 @@ target_link_libraries(catalistTui PUBLIC
 target_compile_options(catalistTui PRIVATE ${CATALIST_WARNING_FLAGS})
 
 add_executable(catalist src/main.cpp)
-target_link_libraries(catalist PRIVATE catalistCore catalistCli catalistTui)
+target_link_libraries(catalist PRIVATE catalistCore catalistTui)
 target_compile_options(catalist PRIVATE ${CATALIST_WARNING_FLAGS})
 
 install(TARGETS catalist DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -145,9 +123,6 @@ endif()
 
 add_executable(catalistTests
   tests/activityTest.cpp
-  tests/cliCommandsTest.cpp
-  tests/cliGoldenTest.cpp
-  tests/cliSetTest.cpp
   tests/cliTest.cpp
   tests/csvCodecTest.cpp
   tests/databaseTest.cpp
@@ -162,9 +137,8 @@ add_executable(catalistTests
   tests/settingsTest.cpp
   tests/loggerTest.cpp
   tests/malAuthTest.cpp
-  tests/malParserTest.cpp
+  tests/malXmlTest.cpp
   tests/remoteSearchTest.cpp
-  tests/resolveEntryTest.cpp
   tests/resultTest.cpp
   tests/shellTest.cpp
   tests/support/sampleLibrary.cpp
@@ -182,7 +156,6 @@ target_compile_definitions(catalistTests PRIVATE
 target_link_libraries(catalistTests PRIVATE
   doctest::doctest
   catalistCore
-  catalistCli
 )
 target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 
@@ -210,7 +183,6 @@ target_compile_definitions(catalistTuiTests PRIVATE
 target_link_libraries(catalistTuiTests PRIVATE
   doctest::doctest
   catalistCore
-  catalistCli
   catalistTui
 )
 target_compile_options(catalistTuiTests PRIVATE ${CATALIST_WARNING_FLAGS})

@@ -281,7 +281,7 @@ TEST_CASE("database backup snapshot copies the catalogue with a clock stamp") {
   CHECK(fs.exists("/data/backups/manga_20261020_120000.csv"));
 }
 
-TEST_CASE("backup restore copies a snapshot back over its catalogue file") {
+TEST_CASE("backup snapshot read and written back restores its catalogue file") {
   catalist::memoryFileSystem fs;
   auto clock = catalist::test::makeTestClock();
   catalist::database db(fs, clock, "/data");
@@ -291,13 +291,15 @@ TEST_CASE("backup restore copies a snapshot back over its catalogue file") {
   db.addEntry(makeEntry().id(2).title("Added later"));
   REQUIRE(db.saveAll());
 
-  REQUIRE(catalist::backup::restoreSnapshot(fs, "/data",
-                                            "anime_20261020_120000.csv"));
+  auto snapshot = catalist::backup::readSnapshot(fs, "/data",
+                                                 "anime_20261020_120000.csv");
+  REQUIRE(snapshot.has_value());
+  REQUIRE(catalist::backup::writeSnapshot(fs, "/data", *snapshot));
   REQUIRE(db.loadAll());
   CHECK(db.getEntries(mediaType::kAnime).size() == 1);
-  CHECK_FALSE(catalist::backup::restoreSnapshot(fs, "/data", "../anime.csv"));
-  CHECK_FALSE(catalist::backup::restoreSnapshot(fs, "/data", "notes_1.csv"));
-  CHECK_FALSE(catalist::backup::restoreSnapshot(fs, "/data", "anime_missing.csv"));
+  CHECK_FALSE(catalist::backup::readSnapshot(fs, "/data", "../anime.csv"));
+  CHECK_FALSE(catalist::backup::readSnapshot(fs, "/data", "notes_1.csv"));
+  CHECK_FALSE(catalist::backup::readSnapshot(fs, "/data", "anime_missing.csv"));
 }
 
 TEST_CASE("backup exportCatalog writes both catalogues to exports") {

@@ -56,10 +56,3 @@ TEST_CASE("isoDate day numbers round trip across leap years and eras") {
   }
 }
 
-TEST_CASE("isoDate weekday and addDays") {
-  CHECK(isoDate::parse("1970-01-01")->weekday() == 3);
-  CHECK(isoDate::parse("2026-10-19")->weekday() == 0);
-  CHECK(isoDate::parse("2026-10-25")->weekday() == 6);
-  CHECK(isoDate::parse("2024-02-28")->addDays(1).toString() == "2024-02-29");
-  CHECK(isoDate::parse("2025-01-01")->addDays(-1).toString() == "2024-12-31");
-}

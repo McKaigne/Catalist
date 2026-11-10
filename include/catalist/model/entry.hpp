@@ -56,7 +56,6 @@ std::string typeToString(mediaType type);
 
 // The display and file form of an optional date: ISO text, or empty.
 [[nodiscard]] std::string formatDate(const std::optional<isoDate>& date);
-mediaType stringToType(const std::string& str);
 
 // "anilist;mal" style text for the CSV column, and back.
 [[nodiscard]] std::string serializeServiceSet(const std::set<std::string>& services);

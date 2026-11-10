@@ -67,13 +67,6 @@ bool writeSnapshot(iFileSystem& fileSystem, const std::filesystem::path& dataDir
       dataDir / csvCodec::catalogFileName(snapshot.type), snapshot.csv);
 }
 
-bool restoreSnapshot(iFileSystem& fileSystem,
-                     const std::filesystem::path& dataDir,
-                     const std::string& snapshotName) {
-  auto snapshot = readSnapshot(fileSystem, dataDir, snapshotName);
-  return snapshot && writeSnapshot(fileSystem, dataDir, *snapshot);
-}
-
 std::vector<std::filesystem::path> exportCatalog(iFileSystem& fileSystem,
                                                  const iClock& clock,
                                                  const database& db) {

@@ -34,7 +34,6 @@ class logger {
   static void warn(std::string_view message);
   static void error(std::string_view message);
 
-  [[nodiscard]] std::filesystem::path getLogPath() const;
 
  private:
   logger() = default;

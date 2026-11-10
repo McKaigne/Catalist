@@ -74,31 +74,16 @@ std::vector<std::string> browserOpenCommand(const std::string& url) {
 #endif
 }
 
-void fakeProcessLauncher::setCaptureOutput(const std::string& program,
-                                           processOutput output) {
-  captureOutputs_[program] = std::move(output);
-}
-
-void fakeProcessLauncher::setFeedSucceeds(const std::string& program,
-                                          bool succeeds) {
-  feedResults_[program] = succeeds;
-}
-
 result<processOutput> fakeProcessLauncher::capture(
     const std::vector<std::string>& argv) {
   calls_.push_back({argv, "", false});
-  auto scripted = argv.empty() ? captureOutputs_.end()
-                               : captureOutputs_.find(argv[0]);
-  if (scripted == captureOutputs_.end())
-    return result<processOutput>::failure("fakeProcessLauncher: no output");
-  return result<processOutput>::success(scripted->second);
+  return result<processOutput>::failure("fakeProcessLauncher: no output");
 }
 
 bool fakeProcessLauncher::feed(const std::vector<std::string>& argv,
                                const std::string& standardInput) {
   calls_.push_back({argv, standardInput, false});
-  auto scripted = argv.empty() ? feedResults_.end() : feedResults_.find(argv[0]);
-  return scripted != feedResults_.end() && scripted->second;
+  return false;
 }
 
 bool fakeProcessLauncher::spawnDetached(const std::vector<std::string>& argv) {

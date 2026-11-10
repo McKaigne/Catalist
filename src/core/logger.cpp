@@ -69,9 +69,4 @@ void logger::error(std::string_view message) {
   get().log(logLevel::kError, message);
 }
 
-std::filesystem::path logger::getLogPath() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-  return logPath_;
-}
-
 }  // namespace catalist

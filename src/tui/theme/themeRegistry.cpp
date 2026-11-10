@@ -5,24 +5,6 @@
 
 namespace catalist {
 
-ftxui::Color themeRegistry::hexToColor(const std::string& hex) {
-  std::string clean = hex;
-  if (!clean.empty() && clean[0] == '#') {
-    clean = clean.substr(1);
-  }
-  if (clean.size() != 6) {
-    return ftxui::Color::RGB(0xcd, 0xd6, 0xf4);
-  }
-  try {
-    int r = std::stoi(clean.substr(0, 2), nullptr, 16);
-    int g = std::stoi(clean.substr(2, 2), nullptr, 16);
-    int b = std::stoi(clean.substr(4, 2), nullptr, 16);
-    return ftxui::Color::RGB(r, g, b);
-  } catch (...) {
-    return ftxui::Color::RGB(0xcd, 0xd6, 0xf4);
-  }
-}
-
 static themePalette makeCatppuccinMocha() {
   themePalette palette;
   palette.name = "catppuccin-mocha";
@@ -322,11 +304,6 @@ std::vector<std::string> themeRegistry::getAvailableThemes() {
           "solarized-dark",
           "solarized-light",
           "custom"};
-}
-
-void themeRegistry::setCustomPalette(const themePalette& palette) {
-  customPalette_ = palette;
-  customPalette_.name = "custom";
 }
 
 const themePalette& themeRegistry::active() {

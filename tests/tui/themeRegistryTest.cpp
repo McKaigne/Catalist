@@ -21,8 +21,3 @@ TEST_CASE("tui themeRegistry falls back for unknown names") {
   themeRegistry::setActive("no-such-theme");
   CHECK_FALSE(themeRegistry::active().name.empty());
 }
-
-TEST_CASE("tui themeRegistry parses hex colours") {
-  CHECK(themeRegistry::hexToColor("#ff0000") == ftxui::Color::RGB(255, 0, 0));
-  CHECK(themeRegistry::hexToColor("00ff00") == ftxui::Color::RGB(0, 255, 0));
-}

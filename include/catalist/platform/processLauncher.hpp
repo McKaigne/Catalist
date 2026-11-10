@@ -2,7 +2,6 @@
 #define CATALIST_PLATFORM_PROCESS_LAUNCHER_HPP_
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "catalist/core/result.hpp"
@@ -44,9 +43,6 @@ public:
     bool detached = false;
   };
 
-  void setCaptureOutput(const std::string& program, processOutput output);
-  void setFeedSucceeds(const std::string& program, bool succeeds);
-
   [[nodiscard]] result<processOutput> capture(
       const std::vector<std::string>& argv) override;
   [[nodiscard]] bool feed(const std::vector<std::string>& argv,
@@ -56,8 +52,6 @@ public:
   [[nodiscard]] const std::vector<call>& calls() const { return calls_; }
 
 private:
-  std::unordered_map<std::string, processOutput> captureOutputs_;
-  std::unordered_map<std::string, bool> feedResults_;
   std::vector<call> calls_;
 };
 

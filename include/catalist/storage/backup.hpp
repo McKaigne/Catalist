@@ -41,10 +41,6 @@ struct snapshotContent {
                                  const std::filesystem::path& dataDir,
                                  const snapshotContent& snapshot);
 
-[[nodiscard]] bool restoreSnapshot(iFileSystem& fileSystem,
-                                   const std::filesystem::path& dataDir,
-                                   const std::string& snapshotName);
-
 // Writes exports/<kind>_<YYYYmmdd_HHMMSS>.csv for both catalogues and
 // returns the files written.
 std::vector<std::filesystem::path> exportCatalog(iFileSystem& fileSystem,

@@ -28,11 +28,9 @@ struct themePalette {
 
 class themeRegistry {
 public:
-  static ftxui::Color hexToColor(const std::string& hex);
   static const themePalette& getTheme(const std::string& name);
   static bool hasTheme(const std::string& name);
   static std::vector<std::string> getAvailableThemes();
-  static void setCustomPalette(const themePalette& palette);
   static const themePalette& active();
   static void setActive(const std::string& name);
 

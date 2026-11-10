@@ -50,15 +50,6 @@ std::string typeToString(mediaType type) {
   return "Anime";
 }
 
-mediaType stringToType(const std::string& str) {
-  std::string lower = str;
-  std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-  if (lower.find("manga") != std::string::npos) {
-    return mediaType::kManga;
-  }
-  return mediaType::kAnime;
-}
-
 std::string formatDate(const std::optional<isoDate>& date) {
   return date ? date->toString() : "";
 }

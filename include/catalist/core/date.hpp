@@ -20,8 +20,6 @@ public:
 
   [[nodiscard]] long dayNumber() const;
   // 0 = Monday ... 6 = Sunday.
-  [[nodiscard]] int weekday() const;
-  [[nodiscard]] isoDate addDays(long days) const;
 
   [[nodiscard]] std::string toString() const;
 

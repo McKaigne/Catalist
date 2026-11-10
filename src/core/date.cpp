@@ -93,15 +93,6 @@ isoDate isoDate::fromDayNumber(long dayNumber) {
   return date;
 }
 
-int isoDate::weekday() const {
-  // 1970-01-01 was a Thursday (3 when Monday is 0).
-  return static_cast<int>(((dayNumber() % 7) + 7 + 3) % 7);
-}
-
-isoDate isoDate::addDays(long days) const {
-  return fromDayNumber(dayNumber() + days);
-}
-
 std::string isoDate::toString() const {
   std::ostringstream ss;
   ss << std::setfill(char(48)) << std::setw(4) << year_ << "-" << std::setw(2)

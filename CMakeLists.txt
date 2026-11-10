@@ -9,6 +9,9 @@ include(GNUInstallDirs)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# clangd reads build/compile_commands.json (see .clangd); without it every
+# project include shows up as an error in the editor.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(ftxui QUIET)
 if(NOT ftxui_FOUND)

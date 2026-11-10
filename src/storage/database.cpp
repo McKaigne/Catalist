@@ -322,16 +322,22 @@ void database::autoHealIds() {
     trackLocalId(e.id);
 }
 
-bool database::loadCsv(mediaType type, const std::filesystem::path& path) {
+result<bool> database::loadCsv(mediaType type,
+                               const std::filesystem::path& path) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   auto content = fileSystem_.readFile(path);
   if (!content)
-    return false;
+    return result<bool>::success(false);
+  auto decoded = csvCodec::decodeEntries(*content, type);
+  if (!decoded.ok())
+    return result<bool>::failure(
+        path.string() + ": " + decoded.errorMessage() +
+        ". Open and save it once with Catalist 0.3.0 to convert it.");
   auto& list = getList(type);
-  list = csvCodec::decodeEntries(*content, type);
+  list = std::move(decoded.value());
   for (const auto& e : list)
     trackLocalId(e.id);
-  return true;
+  return result<bool>::success(true);
 }
 
 bool database::saveCsv(mediaType type,
@@ -379,14 +385,18 @@ bool database::saveHistory() const {
                                      csvCodec::encodeHistory(historyRecords_));
 }
 
-bool database::loadAll() {
+result<bool> database::loadAll() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  bool a = loadCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
-  bool m = loadCsv(mediaType::kManga, getCsvPath(mediaType::kManga));
+  auto anime = loadCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
+  auto manga = loadCsv(mediaType::kManga, getCsvPath(mediaType::kManga));
+  for (const auto* loaded : {&anime, &manga}) {
+    if (!loaded->ok())
+      return *loaded;
+  }
   loadHistory();
   loadSyncBases();
   autoHealIds();
-  return a || m;
+  return result<bool>::success(anime.value() || manga.value());
 }
 
 bool database::saveAll() const {

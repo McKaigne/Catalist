@@ -34,7 +34,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv round trip keeps quotes commas and newlin
   REQUIRE(db.saveCsv(mediaType::kAnime, csvPath));
 
   catalist::database reloaded(fileSystem(), clock(), tempDir());
-  REQUIRE(reloaded.loadCsv(mediaType::kAnime, csvPath));
+  REQUIRE(reloaded.loadCsv(mediaType::kAnime, csvPath).value());
 
   auto loaded = reloaded.getById(mediaType::kAnime, 9901);
   REQUIRE(loaded.has_value());
@@ -89,44 +89,25 @@ namespace {
 
 void loadFixture(catalist::database& db, mediaType type,
                  const std::string& name) {
-  REQUIRE(db.loadCsv(type, catalist::test::fixturePath("csv/" + name)));
+  REQUIRE(db.loadCsv(type, catalist::test::fixturePath("csv/" + name)).value());
 }
 
 }  // namespace
 
-TEST_CASE_FIXTURE(tempDirFixture, "csv loads legacy seven column layout") {
-  catalist::database db(fileSystem(), clock(), tempDir());
-  loadFixture(db, mediaType::kAnime, "legacy7.csv");
-  const auto& entries = db.getEntries(mediaType::kAnime);
-  REQUIRE(entries.size() == 2);
-
-  CHECK(entries[0].id == 52991);
-  CHECK(entries[0].malId == 52991);
-  CHECK(entries[0].title == "Sousou no Frieren");
-  CHECK(entries[0].status == watchStatus::kCompleted);
-  CHECK(entries[0].score == 10);
-  CHECK(entries[0].progress == 28);
-  CHECK(entries[0].totalUnits == 28);
-  CHECK(entries[0].anilistId == 0);
-
-  CHECK(entries[1].title == "86");
-  CHECK(entries[1].anilistId == 0);
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "csv loads offset three layout without type column") {
-  catalist::database db(fileSystem(), clock(), tempDir());
-  loadFixture(db, mediaType::kAnime, "offset3.csv");
-  const auto& entries = db.getEntries(mediaType::kAnime);
-  REQUIRE(entries.size() == 1);
-  const auto& loaded = entries[0];
-  CHECK(loaded.anilistId == 154587);
-  CHECK(loaded.title == "Sousou no Frieren");
-  CHECK(loaded.status == watchStatus::kCompleted);
-  CHECK(loaded.rewatched == 1);
-  CHECK(catalist::formatDate(loaded.startDate) == "2023-09-29");
-  CHECK(catalist::formatDate(loaded.finishDate) == "2024-03-22");
-  CHECK(loaded.notes == "Masterpiece.");
-  CHECK(catalist::formatDate(loaded.updatedAt) == "2026-10-17");
+TEST_CASE("database refuses a catalogue in an old layout and names the file") {
+  catalist::memoryFileSystem fs;
+  auto clock = catalist::test::makeTestClock();
+  for (const char* oldRow :
+       {"52991,52991,Sousou no Frieren,Completed,10,28,28\n",
+        "52991,52991,154587,Sousou no Frieren,Completed,10,28,28,0,0,1,"
+        "2023-09-29,2024-03-22,Masterpiece.,2026-10-17,1\n"}) {
+    REQUIRE(fs.writeFileAtomic("/data/anime.csv", oldRow));
+    catalist::database db(fs, clock, "/data");
+    auto loaded = db.loadAll();
+    REQUIRE_FALSE(loaded.ok());
+    CHECK(loaded.errorMessage().find("/data/anime.csv: row 1 has a column layout") == 0);
+    CHECK(db.getEntries(mediaType::kAnime).empty());
+  }
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads current layout with external ids") {
@@ -245,7 +226,7 @@ TEST_CASE("database saves and reloads through an in-memory file system") {
   CHECK(fs.exists("/data/history.csv"));
 
   catalist::database reloaded(fs, clock, "/data");
-  REQUIRE(reloaded.loadAll());
+  REQUIRE(reloaded.loadAll().value());
   auto kept = reloaded.getById(mediaType::kAnime, 7);
   REQUIRE(kept.has_value());
   CHECK(kept->notes == "a, \"b\"\nc");
@@ -290,7 +271,7 @@ TEST_CASE("backup snapshot read and written back restores its catalogue file") {
                                                  "anime_20261020_120000.csv");
   REQUIRE(snapshot.has_value());
   REQUIRE(catalist::backup::writeSnapshot(fs, "/data", *snapshot));
-  REQUIRE(db.loadAll());
+  REQUIRE(db.loadAll().value());
   CHECK(db.getEntries(mediaType::kAnime).size() == 1);
   CHECK_FALSE(catalist::backup::readSnapshot(fs, "/data", "../anime.csv"));
   CHECK_FALSE(catalist::backup::readSnapshot(fs, "/data", "notes_1.csv"));
@@ -323,7 +304,7 @@ TEST_CASE("database keeps sync bases per service and type in sync.csv") {
   REQUIRE(db.saveAll());
 
   catalist::database reloaded(fs, clock, "/data");
-  reloaded.loadAll();
+  REQUIRE(reloaded.loadAll().value());
   auto mal = reloaded.syncBases("mal", mediaType::kAnime);
   REQUIRE(mal.size() == 1);
   CHECK(mal.at(7).progress == 4);

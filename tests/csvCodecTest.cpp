@@ -11,7 +11,7 @@ namespace csvCodec = catalist::csvCodec;
 TEST_CASE("csvCodec reads the zero date sentinel as absent and writes it empty") {
   auto decoded = csvCodec::decodeEntries(
       "1,1,0,anime,Old,Completed,7,1,1,0,0,0,0000-00-00,,n,0000-00-00,0,\n",
-      mediaType::kAnime);
+      mediaType::kAnime).value();
   REQUIRE(decoded.size() == 1);
   CHECK_FALSE(decoded[0].startDate.has_value());
   CHECK_FALSE(decoded[0].finishDate.has_value());
@@ -63,7 +63,7 @@ TEST_CASE("csvCodec entries round trip through encode and decode") {
                                  .updatedAt("2024-02-03");
   auto decoded =
       csvCodec::decodeEntries(csvCodec::encodeEntries({original}),
-                              mediaType::kManga);
+                              mediaType::kManga).value();
   REQUIRE(decoded.size() == 1);
   const auto& copy = decoded[0];
   CHECK(copy.title == original.title);
@@ -119,7 +119,7 @@ TEST_CASE("csvCodec reads files with the old internal columns and drops them") {
       "dirty,external_ids,queue_pos,synced\n"
       "5,5,105,anime,Kept,Watching,7,3,12,0,0,0,2024-01-02,,n,2024-02-03,1,"
       "kitsu=9;mal=5,2,anilist;mal\n",
-      mediaType::kAnime);
+      mediaType::kAnime).value();
   REQUIRE(decoded.size() == 1);
   CHECK(decoded[0].anilistId == 105);
   CHECK(decoded[0].notes == "n");

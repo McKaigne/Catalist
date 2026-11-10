@@ -169,8 +169,13 @@ void restoreBackup(appContext& ctx, const std::string& snapshotName) {
     ctx.notices.push("Could not restore " + snapshotName + ".");
     return;
   }
-  ctx.db.loadAll();
+  auto reloaded = ctx.db.loadAll();
   ctx.undo.clear();
+  if (!reloaded.ok()) {
+    ctx.notices.push("Could not read the restored file: " +
+                     reloaded.errorMessage());
+    return;
+  }
   ctx.notices.push("Restored " + snapshotName +
                    " (the previous data was backed up first).");
 }

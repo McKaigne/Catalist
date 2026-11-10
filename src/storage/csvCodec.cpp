@@ -17,9 +17,8 @@ const char* kSyncHeader =
 const char* kHistoryHeader =
     "#timestamp,type,title,status,progress,total_units,score\n";
 
-constexpr size_t kMinimumCatalogFields = 7;
+constexpr size_t kCatalogFields = 16;
 constexpr size_t kMinimumHistoryFields = 7;
-constexpr size_t kOffsetThreeMinimumFields = 16;
 
 std::optional<int> parseInt(const std::string& field) {
   try {
@@ -39,16 +38,6 @@ std::string typeKey(mediaType type) {
 
 bool isTypeColumn(const std::string& field) {
   return field == "anime" || field == "manga";
-}
-
-// Legacy files have no anilist/type columns; 16-column files have anilist
-// but no type; current files have both.
-size_t titleColumn(const std::vector<std::string>& fields) {
-  if (fields.size() >= 4 && isTypeColumn(fields[3]))
-    return 4;
-  if (fields.size() >= kOffsetThreeMinimumFields)
-    return 3;
-  return 2;
 }
 
 bool togglesQuoteState(const std::string& line, bool insideQuotes) {
@@ -78,27 +67,6 @@ std::vector<std::string> splitLines(std::string_view text) {
 
 bool isSkippableLine(const std::string& line) {
   return line.empty() || line[0] == '#';
-}
-
-void fillOptionalColumns(entry& decoded, const std::vector<std::string>& fields,
-                         size_t offset) {
-  auto column = [&](size_t index) -> const std::string* {
-    return fields.size() > offset + index ? &fields[offset + index] : nullptr;
-  };
-  if (auto* value = column(5))
-    decoded.volumes = parseInt(*value).value_or(decoded.volumes);
-  if (auto* value = column(6))
-    decoded.totalVolumes = parseInt(*value).value_or(decoded.totalVolumes);
-  if (auto* value = column(7))
-    decoded.rewatched = parseInt(*value).value_or(decoded.rewatched);
-  if (auto* value = column(8))
-    decoded.startDate = decodeDate(*value);
-  if (auto* value = column(9))
-    decoded.finishDate = decodeDate(*value);
-  if (auto* value = column(10))
-    decoded.notes = *value;
-  if (auto* value = column(11))
-    decoded.updatedAt = decodeDate(*value);
 }
 
 // Our own files only hold names we wrote, so an unknown status is a hand
@@ -191,9 +159,8 @@ std::optional<isoDate> decodeDate(const std::string& field) {
 
 std::optional<entry> decodeEntry(const std::vector<std::string>& fields,
                                  mediaType type) {
-  if (fields.size() < kMinimumCatalogFields)
-    return std::nullopt;
-  auto id = parseInt(fields[0]);
+  bool currentLayout = fields.size() >= kCatalogFields && isTypeColumn(fields[3]);
+  auto id = currentLayout ? parseInt(fields[0]) : std::nullopt;
   if (!id)
     return std::nullopt;
 
@@ -201,26 +168,34 @@ std::optional<entry> decodeEntry(const std::vector<std::string>& fields,
   decoded.type = type;
   decoded.id = *id;
   decoded.malId = intOrZero(fields[1]);
-
-  size_t offset = titleColumn(fields);
-  if (offset > 2)
-    decoded.anilistId = intOrZero(fields[2]);
-  decoded.title = fields[offset];
-  decoded.status = decodeStatus(fields[offset + 1], decoded.title);
-  decoded.score = intOrZero(fields[offset + 2]);
-  decoded.progress = intOrZero(fields[offset + 3]);
-  decoded.totalUnits = intOrZero(fields[offset + 4]);
-  fillOptionalColumns(decoded, fields, offset);
+  decoded.anilistId = intOrZero(fields[2]);
+  decoded.title = fields[4];
+  decoded.status = decodeStatus(fields[5], decoded.title);
+  decoded.score = intOrZero(fields[6]);
+  decoded.progress = intOrZero(fields[7]);
+  decoded.totalUnits = intOrZero(fields[8]);
+  decoded.volumes = intOrZero(fields[9]);
+  decoded.totalVolumes = intOrZero(fields[10]);
+  decoded.rewatched = intOrZero(fields[11]);
+  decoded.startDate = decodeDate(fields[12]);
+  decoded.finishDate = decodeDate(fields[13]);
+  decoded.notes = fields[14];
+  decoded.updatedAt = decodeDate(fields[15]);
   return decoded;
 }
 
-std::vector<entry> decodeEntries(std::string_view text, mediaType type) {
+result<std::vector<entry>> decodeEntries(std::string_view text,
+                                         mediaType type) {
   std::vector<entry> entries;
   for (const auto& record : splitRecords(text)) {
-    if (auto decoded = decodeEntry(splitFields(record), type))
-      entries.push_back(std::move(*decoded));
+    auto decoded = decodeEntry(splitFields(record), type);
+    if (!decoded)
+      return result<std::vector<entry>>::failure(
+          "row " + std::to_string(entries.size() + 1) +
+          " has a column layout this version cannot read");
+    entries.push_back(std::move(*decoded));
   }
-  return entries;
+  return result<std::vector<entry>>::success(std::move(entries));
 }
 
 std::string encodeEntries(const std::vector<entry>& entries) {

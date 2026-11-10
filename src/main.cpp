@@ -129,7 +129,12 @@ int main(int argc, char* argv[]) {
   const auto settingsPath = dataDir / "settings.json";
   catalist::appSettings settings = catalist::loadSettings(fileSystem, settingsPath);
 
-  if (!db.loadAll()) {
+  auto loaded = db.loadAll();
+  if (!loaded.ok()) {
+    std::cerr << "error: " << loaded.errorMessage() << "\n";
+    return 1;
+  }
+  if (!loaded.value()) {
     LOG_WARN("No catalog databases found on disk, initializing defaults.");
     db.saveAll();
   }

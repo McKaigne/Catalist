@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "catalist/core/clock.hpp"
+#include "catalist/core/result.hpp"
 #include "catalist/model/activity.hpp"
 #include "catalist/model/entry.hpp"
 #include "catalist/model/syncBase.hpp"
@@ -47,12 +48,15 @@ class database {
   std::filesystem::path getCsvPath(mediaType type) const;
   std::filesystem::path getHistoryPath() const;
 
-  bool loadAll();
+  // Whether a catalogue file was found; fails, naming the file, when one
+  // cannot be read, and then nothing of that file is loaded.
+  [[nodiscard]] result<bool> loadAll();
   bool saveAll() const;
   // Whether a saveAll() failed since the last call. The CLI dispatcher and
   // the TUI shell each ask once, so the callers of saveAll() need not.
   [[nodiscard]] bool takeSaveFailure();
-  bool loadCsv(mediaType type, const std::filesystem::path& path);
+  [[nodiscard]] result<bool> loadCsv(mediaType type,
+                                     const std::filesystem::path& path);
   bool saveCsv(mediaType type, const std::filesystem::path& path) const;
 
   void logActivity(const activityRecord& record);

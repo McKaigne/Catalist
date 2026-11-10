@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "catalist/core/date.hpp"
+#include "catalist/core/result.hpp"
 #include "catalist/model/activity.hpp"
 #include "catalist/model/syncBase.hpp"
 #include "catalist/model/entry.hpp"
@@ -28,13 +29,15 @@ namespace catalist::csvCodec {
 
 [[nodiscard]] std::optional<isoDate> decodeDate(const std::string& field);
 
-// Accepts every historical layout: the 7-column legacy file, the 16-column
-// file without a type column, and the current file with type and
-// external_ids columns.
+// The 16 columns of encodeEntries, which export csv prints too. Columns
+// after them (written by 0.3 and earlier builds) are ignored; a row without
+// the type column is in an older layout and is not read.
 [[nodiscard]] std::optional<entry> decodeEntry(
     const std::vector<std::string>& fields, mediaType type);
-[[nodiscard]] std::vector<entry> decodeEntries(std::string_view text,
-                                               mediaType type);
+// Fails on the first row decodeEntry cannot read, so a file is never loaded
+// half-read.
+[[nodiscard]] result<std::vector<entry>> decodeEntries(std::string_view text,
+                                                       mediaType type);
 [[nodiscard]] std::string encodeEntries(const std::vector<entry>& entries);
 
 [[nodiscard]] std::vector<syncBase> decodeSyncBases(std::string_view text);

@@ -754,9 +754,9 @@ void catalogTab::undoLast(appContext& ctx) {
     return;
   }
   if (action->actionType == historyAction::kMutate)
-    ctx.db.updateEntry(asLocalEdit(action->before));
+    ctx.db.updateEntry(action->before);
   else if (action->actionType == historyAction::kDelete)
-    ctx.db.addEntry(asLocalEdit(action->before));
+    ctx.db.addEntry(action->before);
   else
     ctx.db.removeEntry(action->media, action->after.id);
   ctx.db.saveAll();
@@ -771,11 +771,11 @@ void catalogTab::redoLast(appContext& ctx) {
     return;
   }
   if (action->actionType == historyAction::kMutate)
-    ctx.db.updateEntry(asLocalEdit(action->after));
+    ctx.db.updateEntry(action->after);
   else if (action->actionType == historyAction::kDelete)
     ctx.db.removeEntry(action->media, action->before.id);
   else
-    ctx.db.addEntry(asLocalEdit(action->after));
+    ctx.db.addEntry(action->after);
   ctx.db.saveAll();
   ctx.notices.push("Action redone successfully.");
   refresh(ctx);

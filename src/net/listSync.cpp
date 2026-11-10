@@ -10,49 +10,75 @@ namespace catalist {
 
 namespace {
 
-using remoteRows = std::map<int, remoteListEntry>;
-
 bool sameListFields(const entry& a, const entry& b) {
   return a.status == b.status && a.score == b.score &&
          a.progress == b.progress && a.volumes == b.volumes &&
          a.rewatched == b.rewatched && a.startDate == b.startDate &&
-         a.finishDate == b.finishDate && a.notes == b.notes &&
-         a.totalUnits == b.totalUnits && a.totalVolumes == b.totalVolumes &&
-         a.malId == b.malId && a.anilistId == b.anilistId;
+         a.finishDate == b.finishDate && a.notes == b.notes;
 }
 
-// The remote row's list values replace the local ones; the local title and
-// any id the remote lacks are kept.
-entry withRemoteValues(entry local, const entry& remote, const isoDate& today) {
-  entry merged = local;
-  merged.status = remote.status;
-  merged.score = remote.score;
-  merged.progress = remote.progress;
-  merged.volumes = remote.volumes;
-  merged.rewatched = remote.rewatched;
-  merged.startDate = remote.startDate;
-  merged.finishDate = remote.finishDate;
-  merged.notes = remote.notes;
+// The list fields plus what the service owns: totals and ids.
+bool sameDetails(const entry& a, const entry& b) {
+  return sameListFields(a, b) && a.totalUnits == b.totalUnits &&
+         a.totalVolumes == b.totalVolumes && a.malId == b.malId &&
+         a.anilistId == b.anilistId;
+}
+
+void copyListFields(entry& target, const entry& source) {
+  target.status = source.status;
+  target.score = source.score;
+  target.progress = source.progress;
+  target.volumes = source.volumes;
+  target.rewatched = source.rewatched;
+  target.startDate = source.startDate;
+  target.finishDate = source.finishDate;
+  target.notes = source.notes;
+}
+
+// Totals and ids come from the service; the local title is kept.
+void takeServiceDetails(entry& local, const entry& remote) {
   if (remote.totalUnits > 0)
-    merged.totalUnits = remote.totalUnits;
+    local.totalUnits = remote.totalUnits;
   if (remote.totalVolumes > 0)
-    merged.totalVolumes = remote.totalVolumes;
-  adoptServiceIds(merged, remote);
-  if (!sameListFields(merged, local))
-    merged.updatedAt = today;
+    local.totalVolumes = remote.totalVolumes;
+  adoptServiceIds(local, remote);
+}
+
+// The side that moved away from the base wins; when both did and disagree,
+// the local value stays and the field is named in `clashes`.
+template <typename value>
+void mergeField(entry& merged, const entry& base, const entry& remote,
+                value entry::*field, const char* name,
+                std::vector<std::string>& clashes) {
+  value& local = merged.*field;
+  if (local == base.*field) {
+    local = remote.*field;
+    return;
+  }
+  if (remote.*field != base.*field && remote.*field != local)
+    clashes.push_back(name);
+}
+
+entry mergeWithBase(const entry& local, const entry& base, const entry& remote,
+                    std::vector<std::string>& clashes) {
+  entry merged = local;
+  mergeField(merged, base, remote, &entry::status, "status", clashes);
+  mergeField(merged, base, remote, &entry::score, "score", clashes);
+  mergeField(merged, base, remote, &entry::progress, "progress", clashes);
+  mergeField(merged, base, remote, &entry::volumes, "volumes", clashes);
+  mergeField(merged, base, remote, &entry::rewatched, "rewatches", clashes);
+  mergeField(merged, base, remote, &entry::startDate, "start date", clashes);
+  mergeField(merged, base, remote, &entry::finishDate, "finish date", clashes);
+  mergeField(merged, base, remote, &entry::notes, "notes", clashes);
   return merged;
 }
 
 // On first contact the side changed more recently wins; a tie (or no
-// remote date) keeps the local values, which only rewrites them remotely.
+// remote date) keeps the local values.
 bool localIsNewer(const entry& local, const entry& remote) {
   if (!local.updatedAt)
     return !remote.updatedAt;
   return !remote.updatedAt || *local.updatedAt >= *remote.updatedAt;
-}
-
-int deletionIdFor(const iListService& service, const deletedEntry& deleted) {
-  return service.key() == "mal" ? deleted.malId : deleted.anilistId;
 }
 
 std::optional<entry> findByAnyId(const database& db, const entry& row) {
@@ -68,8 +94,6 @@ std::optional<entry> findByAnyId(const database& db, const entry& row) {
 entry newLocalEntry(const entry& row) {
   entry fresh = row;
   fresh.id = 0;
-  fresh.dirty = false;
-  fresh.syncedWith.clear();
   return fresh;
 }
 
@@ -78,138 +102,168 @@ std::string serviceProblem(const iListService& service, mediaType type,
   return service.displayName() + " (" + typeToString(type) + "): " + message;
 }
 
+std::string joined(const std::vector<std::string>& words) {
+  std::string text;
+  for (const auto& word : words)
+    text += (text.empty() ? "" : ", ") + word;
+  return text;
+}
+
+template <typename value>
+const value* findId(const std::map<int, value>& byId, int id) {
+  auto found = byId.find(id);
+  return found == byId.end() ? nullptr : &found->second;
+}
+
+// One service and one media type: every id seen locally, in the bases or in
+// the fetched list is settled by the table in ADR-012.
 class syncPass {
 public:
   syncPass(database& db, const isoDate& today, iListService& service,
-           mediaType type, syncReport& report,
-           std::set<std::pair<mediaType, int>>& unpushed)
-      : db_(db),
-        today_(today),
-        service_(service),
-        type_(type),
-        report_(report),
-        unpushed_(unpushed) {}
+           mediaType type, syncReport& report)
+      : db_(db), today_(today), service_(service), type_(type), report_(report) {}
 
-  // Returns false when the remote list could not be read.
+  // Returns whether anything changed locally.
+  bool run() {
+    if (!fetch())
+      return false;
+    linkRemoteRows();
+    std::map<int, entry> locals;
+    for (const auto& item : db_.getEntries(type_)) {
+      if (auto id = service_.idOf(item))
+        locals.emplace(*id, item);
+    }
+    std::set<int> ids;
+    for (const auto* byId : {&locals, &bases_})
+      for (const auto& [id, item] : *byId)
+        ids.insert(id);
+    for (const auto& [id, row] : remote_)
+      ids.insert(id);
+    for (int id : ids)
+      settle(id, findId(locals, id), findId(bases_, id), findId(remote_, id));
+    return changedLocally_;
+  }
+
+private:
   bool fetch() {
     auto fetched = service_.fetchList(type_, std::nullopt);
     if (!fetched.ok()) {
-      report_.problems.push_back(
-          serviceProblem(service_, type_, fetched.errorMessage()));
+      problem(fetched.errorMessage());
       return false;
     }
     for (auto& row : fetched.value()) {
       if (auto id = service_.idOf(row.item))
         remote_[*id] = std::move(row);
     }
+    bases_ = db_.syncBases(service_.key(), type_);
+    if (remote_.empty() && !bases_.empty()) {
+      problem("the service sent an empty list; nothing was changed.");
+      return false;
+    }
     return true;
   }
 
-  void pushDeletions() {
-    for (const auto& deleted : db_.pendingDeletions()) {
-      if (deleted.type == type_ && deleted.pendingServices.count(service_.key()))
-        pushDeletion(deleted);
-    }
-  }
-
-  void reconcileLocalEntries() {
-    std::vector<entry> locals = db_.getEntries(type_);
-    for (auto& local : locals)
-      reconcile(local);
-  }
-
-  // Returns the number of entries added locally.
-  int addRemoteOnlyRows() {
-    int added = 0;
-    remoteRows leftover = remote_;
-    for (const auto& [id, row] : leftover) {
-      if (auto existing = findByAnyId(db_, row.item)) {
-        linkAndReconcile(*existing, row.item);
+  // A remote row may match a local entry through the other service's id;
+  // that entry then gains this service's id.
+  void linkRemoteRows() {
+    for (const auto& [id, row] : remote_) {
+      auto local = findByAnyId(db_, row.item);
+      if (!local || service_.idOf(*local) == id)
         continue;
-      }
-      entry fresh = newLocalEntry(row.item);
-      fresh.syncedWith.insert(service_.key());
-      db_.addEntry(fresh);
-      ++added;
+      adoptServiceIds(*local, row.item);
+      db_.updateEntry(*local);
     }
-    report_.added += added;
-    return added;
   }
 
-private:
-  void pushDeletion(const deletedEntry& deleted) {
-    int id = deletionIdFor(service_, deleted);
-    auto found = remote_.find(id);
-    if (id <= 0 || found == remote_.end()) {
-      db_.settleDeletion(deleted, service_.key());
+  void settle(int id, const entry* local, const entry* base,
+              const remoteListEntry* remote) {
+    if (local && remote) {
+      settleBoth(id, *local, base, remote->item);
+    } else if (local) {
+      settleLocalOnly(id, *local, base);
+    } else if (remote && base) {
+      deleteThere(id, *remote);
+    } else if (remote) {
+      addHere(id, remote->item);
+    } else {
+      db_.eraseSyncBase(service_.key(), type_, id);
+    }
+  }
+
+  void settleBoth(int id, const entry& local, const entry* base,
+                  const entry& remote) {
+    entry merged = local;
+    if (base) {
+      std::vector<std::string> clashes;
+      merged = mergeWithBase(local, *base, remote, clashes);
+      if (!clashes.empty())
+        problem("'" + local.title + "' changed here and there (" +
+                joined(clashes) + "); kept this copy.");
+    } else if (!localIsNewer(local, remote)) {
+      copyListFields(merged, remote);
+    }
+    takeServiceDetails(merged, remote);
+    bool agreed = sameListFields(merged, remote) || push(merged);
+    keepLocally(local, merged);
+    if (agreed)
+      db_.setSyncBase(service_.key(), id, merged);
+  }
+
+  void settleLocalOnly(int id, const entry& local, const entry* base) {
+    if (base && sameListFields(local, *base)) {
+      LOG_INFO("Removed '" + local.title + "': deleted on " +
+               service_.displayName());
+      db_.removeEntry(type_, local.id);
+      db_.eraseSyncBase(service_.key(), type_, id);
+      ++report_.removedLocally;
+      changedLocally_ = true;
       return;
     }
-    auto outcome = service_.deleteEntry(found->second);
-    // Either way the row must not come back as "new" in this pass.
-    remote_.erase(found);
+    if (base)
+      problem("'" + local.title + "' was deleted there after it changed "
+              "here; sent it back.");
+    if (push(local))
+      db_.setSyncBase(service_.key(), id, local);
+  }
+
+  void deleteThere(int id, const remoteListEntry& remote) {
+    auto outcome = service_.deleteEntry(remote);
     if (!outcome.ok()) {
-      report_.problems.push_back(
-          serviceProblem(service_, type_, outcome.errorMessage()));
+      problem(outcome.errorMessage());
       return;
     }
-    db_.settleDeletion(deleted, service_.key());
+    db_.eraseSyncBase(service_.key(), type_, id);
     ++report_.removedRemotely;
   }
 
-  void push(entry& local) {
-    auto outcome = service_.saveEntry(local);
+  void addHere(int id, const entry& remote) {
+    db_.addEntry(newLocalEntry(remote));
+    db_.setSyncBase(service_.key(), id, remote);
+    ++report_.added;
+    changedLocally_ = true;
+  }
+
+  bool push(const entry& item) {
+    auto outcome = service_.saveEntry(item);
     if (!outcome.ok()) {
-      report_.problems.push_back(
-          serviceProblem(service_, type_, outcome.errorMessage()));
-      unpushed_.insert({local.type, local.id});
-      return;
+      problem(outcome.errorMessage());
+      return false;
     }
-    local.syncedWith.insert(service_.key());
     ++report_.pushed;
+    return true;
   }
 
-  void reconcileMissingRemotely(entry& local) {
-    bool deletedThere = local.syncedWith.count(service_.key()) && !local.dirty;
-    if (!deletedThere) {
-      push(local);
-      db_.updateEntry(local);
-      return;
+  void keepLocally(const entry& before, entry after) {
+    if (!sameDetails(before, after)) {
+      after.updatedAt = today_;
+      ++report_.updated;
+      changedLocally_ = true;
     }
-    LOG_INFO("Removed '" + local.title + "': deleted on " +
-             service_.displayName());
-    db_.removeEntry(local.type, local.id);
-    db_.settleDeletion({local.type, local.malId, local.anilistId, local.title, {}},
-                       service_.key());
-    ++report_.removedLocally;
+    db_.updateEntry(after);
   }
 
-  void reconcile(entry& local) {
-    auto id = service_.idOf(local);
-    if (!id)
-      return;
-    auto found = remote_.find(*id);
-    if (found == remote_.end()) {
-      reconcileMissingRemotely(local);
-      return;
-    }
-    const entry& row = found->second.item;
-    bool firstContact = !local.syncedWith.count(service_.key());
-    if (local.dirty || (firstContact && localIsNewer(local, row))) {
-      push(local);
-    } else {
-      entry merged = withRemoteValues(local, row, today_);
-      if (!sameListFields(merged, local))
-        ++report_.updated;
-      local = merged;
-    }
-    local.syncedWith.insert(service_.key());
-    db_.updateEntry(local);
-    remote_.erase(found);
-  }
-
-  void linkAndReconcile(entry local, const entry& row) {
-    adoptServiceIds(local, row);
-    reconcile(local);
+  void problem(const std::string& message) {
+    report_.problems.push_back(serviceProblem(service_, type_, message));
   }
 
   database& db_;
@@ -217,8 +271,9 @@ private:
   iListService& service_;
   mediaType type_;
   syncReport& report_;
-  std::set<std::pair<mediaType, int>>& unpushed_;
-  remoteRows remote_;
+  std::map<int, remoteListEntry> remote_;
+  std::map<int, entry> bases_;
+  bool changedLocally_ = false;
 };
 
 std::vector<int> idsMissing(const std::vector<entry>& entries, bool needAnilist) {
@@ -310,53 +365,21 @@ syncReport listSync::run() {
   db_.createBackupSnapshot();
 
   isoDate today = localDate(clock_);
-  std::set<std::pair<mediaType, int>> unpushed;
-  bool fetchFailed = false;
-  // A second round carries rows that the later service added over to the
+  // A second round carries what a later service changed locally over to the
   // earlier one in the same run.
   for (int round = 0; round < 2; ++round) {
     for (auto type : {mediaType::kAnime, mediaType::kManga})
       fillMissingIds(type, report, connected);
-    int added = 0;
+    bool changedLocally = false;
     for (auto* service : connected) {
       for (auto type : {mediaType::kAnime, mediaType::kManga})
-        added += syncList(*service, type, report, today, unpushed, fetchFailed);
+        changedLocally |= syncPass(db_, today, *service, type, report).run();
     }
-    if (added == 0 || connected.size() < 2)
+    if (!changedLocally || connected.size() < 2)
       break;
   }
-
-  if (!fetchFailed)
-    clearPushedDirtyFlags(unpushed);
   db_.saveAll();
   return report;
-}
-
-int listSync::syncList(iListService& service, mediaType type,
-                       syncReport& report, const isoDate& today,
-                       std::set<std::pair<mediaType, int>>& unpushed,
-                       bool& fetchFailed) {
-  syncPass pass(db_, today, service, type, report, unpushed);
-  if (!pass.fetch()) {
-    fetchFailed = true;
-    return 0;
-  }
-  pass.pushDeletions();
-  pass.reconcileLocalEntries();
-  return pass.addRemoteOnlyRows();
-}
-
-void listSync::clearPushedDirtyFlags(
-    const std::set<std::pair<mediaType, int>>& unpushed) {
-  for (auto type : {mediaType::kAnime, mediaType::kManga}) {
-    std::vector<entry> entries = db_.getEntries(type);
-    for (auto& item : entries) {
-      if (!item.dirty || unpushed.count({type, item.id}))
-        continue;
-      item.dirty = false;
-      db_.updateEntry(item);
-    }
-  }
 }
 
 syncReport listSync::importFrom(iListService& service, mediaType type,
@@ -376,7 +399,7 @@ syncReport listSync::importFrom(iListService& service, mediaType type,
       continue;
     }
     entry merged = mergeImported(*existing, row.item);
-    if (sameListFields(merged, *existing))
+    if (sameDetails(merged, *existing))
       continue;
     db_.updateEntry(merged);
     ++report.updated;

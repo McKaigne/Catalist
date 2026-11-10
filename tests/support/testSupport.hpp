@@ -139,7 +139,6 @@ public:
     built_.updatedAt = requireDate(value);
     return *this;
   }
-  entryBuilder& dirty(bool value) { built_.dirty = value; return *this; }
 
   [[nodiscard]] entry build() const { return built_; }
   operator entry() const { return built_; }

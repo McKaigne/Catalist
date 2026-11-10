@@ -108,7 +108,6 @@ int database::addEntry(entry mediaEntry) {
     nextLocalId_ = mediaEntry.id + 1;
   }
 
-  forgetDeletionsOf(mediaEntry);
   auto& list = getList(mediaEntry.type);
   for (auto& existing : list) {
     if (!sharesRemoteId(existing, mediaEntry))
@@ -166,61 +165,52 @@ bool database::removeEntry(mediaType type, int id) {
                          [id](const entry& e) { return e.id == id; });
   if (it == list.end())
     return false;
-  if (!it->syncedWith.empty())
-    deletions_.push_back(
-        {type, it->malId, it->anilistId, it->title, it->syncedWith});
   list.erase(it);
   return true;
 }
 
-std::vector<deletedEntry> database::pendingDeletions() const {
+std::map<int, entry> database::syncBases(const std::string& service,
+                                         mediaType type) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  return deletions_;
-}
-
-void database::settleDeletion(const deletedEntry& deleted,
-                              const std::string& service) {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  for (auto& pending : deletions_) {
-    bool same = pending.type == deleted.type && pending.malId == deleted.malId &&
-                pending.anilistId == deleted.anilistId;
-    if (same)
-      pending.pendingServices.erase(service);
+  std::map<int, entry> bases;
+  for (const auto& base : syncBases_) {
+    if (base.service == service && base.values.type == type)
+      bases.emplace(base.remoteId, base.values);
   }
-  deletions_.erase(std::remove_if(deletions_.begin(), deletions_.end(),
-                                  [](const deletedEntry& pending) {
-                                    return pending.pendingServices.empty();
-                                  }),
-                   deletions_.end());
+  return bases;
 }
 
-// Undoing a delete, or adding the same title again, cancels the remote
-// deletion that removing it scheduled.
-void database::forgetDeletionsOf(const entry& restored) {
-  auto matches = [&restored](const deletedEntry& pending) {
-    if (pending.type != restored.type)
-      return false;
-    return (restored.malId > 0 && pending.malId == restored.malId) ||
-           (restored.anilistId > 0 && pending.anilistId == restored.anilistId);
+void database::setSyncBase(const std::string& service, int remoteId,
+                           const entry& values) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  eraseSyncBase(service, values.type, remoteId);
+  syncBases_.push_back({service, remoteId, values});
+}
+
+void database::eraseSyncBase(const std::string& service, mediaType type,
+                             int remoteId) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  auto matches = [&](const syncBase& base) {
+    return base.service == service && base.values.type == type &&
+           base.remoteId == remoteId;
   };
-  deletions_.erase(
-      std::remove_if(deletions_.begin(), deletions_.end(), matches),
-      deletions_.end());
+  syncBases_.erase(
+      std::remove_if(syncBases_.begin(), syncBases_.end(), matches),
+      syncBases_.end());
 }
 
-void database::loadDeletions() {
-  auto content =
-      fileSystem_.readFile(configDir_ / csvCodec::deletionsFileName());
-  deletions_ = content ? csvCodec::decodeDeletions(*content)
-                       : std::vector<deletedEntry>{};
+void database::loadSyncBases() {
+  auto content = fileSystem_.readFile(configDir_ / csvCodec::syncFileName());
+  syncBases_ = content ? csvCodec::decodeSyncBases(*content)
+                       : std::vector<syncBase>{};
 }
 
-bool database::saveDeletions() const {
-  auto path = configDir_ / csvCodec::deletionsFileName();
-  if (deletions_.empty() && !fileSystem_.exists(path))
+bool database::saveSyncBases() const {
+  auto path = configDir_ / csvCodec::syncFileName();
+  if (syncBases_.empty() && !fileSystem_.exists(path))
     return true;
   return fileSystem_.writeFileAtomic(path,
-                                     csvCodec::encodeDeletions(deletions_));
+                                     csvCodec::encodeSyncBases(syncBases_));
 }
 
 
@@ -394,7 +384,7 @@ bool database::loadAll() {
   bool a = loadCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
   bool m = loadCsv(mediaType::kManga, getCsvPath(mediaType::kManga));
   loadHistory();
-  loadDeletions();
+  loadSyncBases();
   autoHealIds();
   return a || m;
 }
@@ -405,8 +395,9 @@ bool database::saveAll() const {
   bool a = saveCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
   bool m = saveCsv(mediaType::kManga, getCsvPath(mediaType::kManga));
   bool h = saveHistory();
-  bool d = saveDeletions();
-  bool saved = a && m && h && d;
+  // Last, so a crash before it leaves old bases, which the next sync repairs.
+  bool s = saveSyncBases();
+  bool saved = a && m && h && s;
   if (!saved)
     saveFailed_ = true;
   return saved;

@@ -2,7 +2,6 @@
 #define CATALIST_ENTRY_HPP_
 
 #include <optional>
-#include <set>
 #include <string>
 
 #include "catalist/core/date.hpp"
@@ -31,14 +30,9 @@ struct entry {
   std::optional<isoDate> finishDate;
   std::string notes;
   std::optional<isoDate> updatedAt;
-  // Edited locally since the last successful sync; sync pushes it.
-  bool dirty = false;
   // Position in the user's watch queue; absent until the user orders it.
   std::optional<int> queuePos;
 
-  // List services ("mal", "anilist") this entry has been synced with, so a
-  // later sync can tell "deleted there" from "never sent there".
-  std::set<std::string> syncedWith;
 };
 
 std::string statusToString(watchStatus status,
@@ -52,9 +46,6 @@ std::string typeToString(mediaType type);
 // The display and file form of an optional date: ISO text, or empty.
 [[nodiscard]] std::string formatDate(const std::optional<isoDate>& date);
 
-// "anilist;mal" style text for the CSV column, and back.
-[[nodiscard]] std::string serializeServiceSet(const std::set<std::string>& services);
-[[nodiscard]] std::set<std::string> deserializeServiceSet(const std::string& text);
 
 }  // namespace catalist
 

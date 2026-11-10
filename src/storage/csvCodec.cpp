@@ -12,7 +12,9 @@ const char* kCatalogHeader =
     "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,"
     "volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,"
     "dirty,external_ids,queue_pos,synced\n";
-const char* kDeletionsHeader = "#type,mal_id,anilist_id,title,services\n";
+const char* kSyncHeader =
+    "#type,service,remote_id,status,score,progress,volumes,rewatched,"
+    "start_date,finish_date,notes\n";
 const char* kHistoryHeader =
     "#timestamp,type,title,status,progress,total_units,score\n";
 
@@ -98,12 +100,8 @@ void fillOptionalColumns(entry& decoded, const std::vector<std::string>& fields,
     decoded.notes = *value;
   if (auto* value = column(11))
     decoded.updatedAt = decodeDate(*value);
-  if (auto* value = column(12))
-    decoded.dirty = (*value == "1" || *value == "true");
   if (auto* value = column(14))
     decoded.queuePos = parseInt(*value);
-  if (auto* value = column(15))
-    decoded.syncedWith = deserializeServiceSet(*value);
 }
 
 // Our own files only hold names we wrote, so an unknown status is a hand
@@ -126,8 +124,8 @@ std::string historyFileName() {
   return "history.csv";
 }
 
-std::string deletionsFileName() {
-  return "deleted.csv";
+std::string syncFileName() {
+  return "sync.csv";
 }
 
 std::string escapeField(const std::string& field) {
@@ -239,39 +237,49 @@ std::string encodeEntries(const std::vector<entry>& entries) {
         << e.totalVolumes << "," << e.rewatched << ","
         << formatDate(e.startDate) << "," << formatDate(e.finishDate) << ","
         << escapeField(e.notes) << "," << formatDate(e.updatedAt) << ","
-        << (e.dirty ? "1" : "0") << ","
+        << ","
         << ","
         << (e.queuePos ? std::to_string(*e.queuePos) : "") << ","
-        << escapeField(serializeServiceSet(e.syncedWith)) << "\n";
+        << "\n";
   }
   return out.str();
 }
 
-std::vector<deletedEntry> decodeDeletions(std::string_view text) {
-  std::vector<deletedEntry> records;
+std::vector<syncBase> decodeSyncBases(std::string_view text) {
+  constexpr size_t kSyncFields = 11;
+  std::vector<syncBase> bases;
   for (const auto& record : splitRecords(text)) {
     auto fields = splitFields(record);
-    if (fields.size() < 5)
+    if (fields.size() < kSyncFields)
       continue;
-    deletedEntry deleted;
-    deleted.type = fields[0] == "manga" ? mediaType::kManga : mediaType::kAnime;
-    deleted.malId = intOrZero(fields[1]);
-    deleted.anilistId = intOrZero(fields[2]);
-    deleted.title = fields[3];
-    deleted.pendingServices = deserializeServiceSet(fields[4]);
-    if (!deleted.pendingServices.empty())
-      records.push_back(std::move(deleted));
+    syncBase base;
+    base.values.type = fields[0] == "manga" ? mediaType::kManga : mediaType::kAnime;
+    base.service = fields[1];
+    base.remoteId = intOrZero(fields[2]);
+    base.values.status = decodeStatus(fields[3], fields[1] + " #" + fields[2]);
+    base.values.score = intOrZero(fields[4]);
+    base.values.progress = intOrZero(fields[5]);
+    base.values.volumes = intOrZero(fields[6]);
+    base.values.rewatched = intOrZero(fields[7]);
+    base.values.startDate = decodeDate(fields[8]);
+    base.values.finishDate = decodeDate(fields[9]);
+    base.values.notes = fields[10];
+    if (base.remoteId > 0)
+      bases.push_back(std::move(base));
   }
-  return records;
+  return bases;
 }
 
-std::string encodeDeletions(const std::vector<deletedEntry>& records) {
+std::string encodeSyncBases(const std::vector<syncBase>& bases) {
   std::ostringstream out;
-  out << kDeletionsHeader;
-  for (const auto& deleted : records) {
-    out << typeKey(deleted.type) << "," << deleted.malId << ","
-        << deleted.anilistId << "," << escapeField(deleted.title) << ","
-        << escapeField(serializeServiceSet(deleted.pendingServices)) << "\n";
+  out << kSyncHeader;
+  for (const auto& base : bases) {
+    const entry& v = base.values;
+    out << typeKey(v.type) << "," << escapeField(base.service) << ","
+        << base.remoteId << "," << escapeField(statusToString(v.status, v.type))
+        << "," << v.score << "," << v.progress << "," << v.volumes << ","
+        << v.rewatched << "," << formatDate(v.startDate) << ","
+        << formatDate(v.finishDate) << "," << escapeField(v.notes) << "\n";
   }
   return out.str();
 }

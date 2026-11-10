@@ -127,7 +127,6 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads offset three layout without type co
   CHECK(catalist::formatDate(loaded.finishDate) == "2024-03-22");
   CHECK(loaded.notes == "Masterpiece.");
   CHECK(catalist::formatDate(loaded.updatedAt) == "2026-10-17");
-  CHECK(loaded.dirty);
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads current layout with external ids") {
@@ -142,7 +141,6 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads current layout with external ids") 
   CHECK(loaded.progress == 364);
   CHECK(loaded.volumes == 42);
   CHECK(catalist::formatDate(loaded.finishDate) == "");
-  CHECK_FALSE(loaded.dirty);
   CHECK(loaded.malId == 2);
   CHECK(loaded.anilistId == 30002);
 }
@@ -311,34 +309,26 @@ TEST_CASE("backup exportCatalog writes both catalogues to exports") {
   CHECK(anime->find("Exported") != std::string::npos);
 }
 
-TEST_CASE_FIXTURE(tempDirFixture, "database remembers deleting a synced entry until each service settles") {
-  catalist::database db(fileSystem(), clock(), tempDir());
-  catalist::entry synced = catalist::test::makeEntry().id(7).malId(7).title("Seven");
-  synced.syncedWith = {"mal", "anilist"};
-  db.addEntry(synced);
-  db.addEntry(catalist::test::makeEntry().id(8).title("Local only"));
-  REQUIRE(db.removeEntry(mediaType::kAnime, 7));
-  REQUIRE(db.removeEntry(mediaType::kAnime, 8));
-  REQUIRE(db.pendingDeletions().size() == 1);
+TEST_CASE("database keeps sync bases per service and type in sync.csv") {
+  catalist::memoryFileSystem fs;
+  auto clock = catalist::test::makeTestClock();
+  catalist::database db(fs, clock, "/data");
+  REQUIRE(db.saveAll());
+  CHECK_FALSE(fs.exists("/data/sync.csv"));
+
+  db.setSyncBase("mal", 7, makeEntry().progress(3));
+  db.setSyncBase("mal", 7, makeEntry().progress(4));
+  db.setSyncBase("anilist", 7, makeEntry().progress(1));
+  db.setSyncBase("mal", 8, makeEntry().type(mediaType::kManga));
   REQUIRE(db.saveAll());
 
-  catalist::database reloaded(fileSystem(), clock(), tempDir());
+  catalist::database reloaded(fs, clock, "/data");
   reloaded.loadAll();
-  auto pending = reloaded.pendingDeletions();
-  REQUIRE(pending.size() == 1);
-  reloaded.settleDeletion(pending[0], "mal");
-  CHECK(reloaded.pendingDeletions()[0].pendingServices ==
-        std::set<std::string>{"anilist"});
-  reloaded.settleDeletion(pending[0], "anilist");
-  CHECK(reloaded.pendingDeletions().empty());
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "database re-adding a deleted entry cancels its remote deletion") {
-  catalist::database db(fileSystem(), clock(), tempDir());
-  catalist::entry synced = catalist::test::makeEntry().id(7).malId(7).title("Seven");
-  synced.syncedWith = {"mal"};
-  db.addEntry(synced);
-  REQUIRE(db.removeEntry(mediaType::kAnime, 7));
-  db.addEntry(synced);
-  CHECK(db.pendingDeletions().empty());
+  auto mal = reloaded.syncBases("mal", mediaType::kAnime);
+  REQUIRE(mal.size() == 1);
+  CHECK(mal.at(7).progress == 4);
+  CHECK(reloaded.syncBases("anilist", mediaType::kAnime).at(7).progress == 1);
+  reloaded.eraseSyncBase("mal", mediaType::kManga, 8);
+  CHECK(reloaded.syncBases("mal", mediaType::kManga).empty());
+  CHECK(reloaded.syncBases("mal", mediaType::kAnime).size() == 1);
 }

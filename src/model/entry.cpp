@@ -54,27 +54,4 @@ std::string formatDate(const std::optional<isoDate>& date) {
   return date ? date->toString() : "";
 }
 
-std::string serializeServiceSet(const std::set<std::string>& services) {
-  std::string text;
-  for (const auto& service : services)
-    text += (text.empty() ? "" : ";") + service;
-  return text;
-}
-
-std::set<std::string> deserializeServiceSet(const std::string& text) {
-  std::set<std::string> services;
-  size_t start = 0;
-  while (start <= text.size()) {
-    size_t end = text.find(';', start);
-    std::string service =
-        text.substr(start, end == std::string::npos ? std::string::npos : end - start);
-    if (!service.empty())
-      services.insert(service);
-    if (end == std::string::npos)
-      break;
-    start = end + 1;
-  }
-  return services;
-}
-
 }  // namespace catalist

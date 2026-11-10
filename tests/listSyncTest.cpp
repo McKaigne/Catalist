@@ -41,10 +41,7 @@ public:
   catalist::syncOutcome saveEntry(const entry& item) override {
     if (failSave)
       return catalist::syncOutcome::failure("refused");
-    entry stored = item;
-    stored.dirty = false;
-    stored.syncedWith.clear();
-    rows_[*idOf(item)] = stored;
+    rows_[*idOf(item)] = item;
     saved.push_back(item.title);
     return catalist::syncSucceeded();
   }
@@ -62,11 +59,7 @@ public:
     return std::nullopt;
   }
 
-  void put(entry item) {
-    item.dirty = false;
-    item.syncedWith.clear();
-    rows_[*idOf(item)] = item;
-  }
+  void put(const entry& item) { rows_[*idOf(item)] = item; }
   bool has(int id) const { return rows_.count(id) > 0; }
   const entry& row(int id) const { return rows_.at(id); }
 
@@ -119,6 +112,15 @@ struct syncFixture {
     return catalist::listSync(db, clock, {&mal, &anilist}, &mapper).run();
   }
   entry local(int id) { return *db.getById(mediaType::kAnime, id); }
+  std::map<int, entry> bases(const std::string& service) {
+    return db.syncBases(service, mediaType::kAnime);
+  }
+  void edit(int id, int progress, int score) {
+    entry edited = local(id);
+    edited.progress = progress;
+    edited.score = score;
+    db.updateEntry(edited);
+  }
 };
 
 }  // namespace
@@ -131,7 +133,9 @@ TEST_CASE_FIXTURE(syncFixture, "sync needs at least one connected service") {
   CHECK(report.problems.front() == "Log in to MyAnimeList or AniList first.");
 }
 
-TEST_CASE_FIXTURE(syncFixture, "sync adds remote rows and remembers the service") {
+// Local, base and remote: the rows of the table in ADR-012.
+
+TEST_CASE_FIXTURE(syncFixture, "sync adds remote rows and remembers the agreed values") {
   REQUIRE(db.saveAll());
   mal.put(makeEntry().malId(5).title("Remote").status(watchStatus::kCompleted).score(8));
   auto report = syncMalOnly();
@@ -140,49 +144,11 @@ TEST_CASE_FIXTURE(syncFixture, "sync adds remote rows and remembers the service"
   auto added = local(5);
   CHECK(added.title == "Remote");
   CHECK(added.score == 8);
-  CHECK(added.syncedWith == std::set<std::string>{"mal"});
-  CHECK_FALSE(added.dirty);
+  REQUIRE(bases("mal").count(5) == 1);
+  CHECK(bases("mal").at(5).score == 8);
   CHECK(fs.exists("/data/anime.csv"));
+  CHECK(fs.exists("/data/sync.csv"));
   CHECK_FALSE(catalist::backup::listSnapshots(fs, "/data").empty());
-}
-
-TEST_CASE_FIXTURE(syncFixture, "sync pushes local edits and then clears the dirty flag") {
-  mal.put(makeEntry().malId(5).title("Show").progress(1));
-  syncMalOnly();
-  entry edited = local(5);
-  edited.progress = 4;
-  edited.dirty = true;
-  db.updateEntry(edited);
-
-  auto report = syncMalOnly();
-  CHECK(report.pushed == 1);
-  CHECK(mal.row(5).progress == 4);
-  CHECK_FALSE(local(5).dirty);
-}
-
-TEST_CASE_FIXTURE(syncFixture, "sync keeps an edit dirty when the push fails") {
-  mal.put(makeEntry().malId(5).title("Show"));
-  syncMalOnly();
-  entry edited = local(5);
-  edited.score = 9;
-  edited.dirty = true;
-  db.updateEntry(edited);
-  mal.failSave = true;
-
-  auto report = syncMalOnly();
-  CHECK_FALSE(report.ok());
-  CHECK(local(5).dirty);
-}
-
-TEST_CASE_FIXTURE(syncFixture, "sync pulls remote changes into clean synced entries") {
-  mal.put(makeEntry().malId(5).title("Show").progress(1));
-  syncMalOnly();
-  mal.put(makeEntry().malId(5).title("Show").progress(7).notes("from web"));
-  auto report = syncMalOnly();
-  CHECK(report.updated == 1);
-  CHECK(local(5).progress == 7);
-  CHECK(local(5).notes == "from web");
-  CHECK(local(5).updatedAt->toString() == "2026-10-20");
 }
 
 TEST_CASE_FIXTURE(syncFixture, "sync on first contact lets the newer side win") {
@@ -195,6 +161,17 @@ TEST_CASE_FIXTURE(syncFixture, "sync on first contact lets the newer side win") 
   CHECK(local(6).progress == 6);
   CHECK(report.pushed == 1);
   CHECK(report.updated == 1);
+  CHECK(bases("mal").at(5).progress == 9);
+  CHECK(bases("mal").at(6).progress == 6);
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync on first contact with equal values sends nothing") {
+  db.addEntry(makeEntry().id(5).malId(5).title("Same").progress(3));
+  mal.put(makeEntry().malId(5).title("Same").progress(3));
+  auto report = syncMalOnly();
+  CHECK(report.pushed == 0);
+  CHECK(report.updated == 0);
+  CHECK(bases("mal").count(5) == 1);
 }
 
 TEST_CASE_FIXTURE(syncFixture, "sync sends entries the service has never seen") {
@@ -203,7 +180,7 @@ TEST_CASE_FIXTURE(syncFixture, "sync sends entries the service has never seen") 
   auto report = syncMalOnly();
   CHECK(mal.has(5));
   CHECK(report.pushed == 1);
-  CHECK(local(5).syncedWith.count("mal") == 1);
+  CHECK(bases("mal").count(5) == 1);
 }
 
 TEST_CASE_FIXTURE(syncFixture, "sync removes entries deleted remotely and deletes local removals remotely") {
@@ -219,18 +196,142 @@ TEST_CASE_FIXTURE(syncFixture, "sync removes entries deleted remotely and delete
   CHECK_FALSE(mal.has(6));
   CHECK(report.removedLocally == 1);
   CHECK(report.removedRemotely == 1);
-  CHECK(db.pendingDeletions().size() == 0);
+  CHECK(bases("mal").empty());
 }
 
+TEST_CASE_FIXTURE(syncFixture, "sync sends back an entry deleted there after it changed here") {
+  mal.put(makeEntry().malId(5).title("Show").progress(1));
+  mal.put(makeEntry().malId(6).title("Other"));
+  syncMalOnly();
+  REQUIRE(mal.deleteEntry({makeEntry().malId(5), std::nullopt}).ok());
+  edit(5, 2, 0);
+
+  auto report = syncMalOnly();
+  REQUIRE(mal.has(5));
+  CHECK(mal.row(5).progress == 2);
+  CHECK(local(5).progress == 2);
+  REQUIRE(report.problems.size() == 1);
+  CHECK(report.problems.front() ==
+        "mal (Anime): 'Show' was deleted there after it changed here; sent it back.");
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync forgets a base once the title is gone from both sides") {
+  mal.put(makeEntry().malId(5).title("Show"));
+  mal.put(makeEntry().malId(6).title("Other"));
+  syncMalOnly();
+  REQUIRE(db.removeEntry(mediaType::kAnime, 5));
+  REQUIRE(mal.deleteEntry({makeEntry().malId(5), std::nullopt}).ok());
+
+  auto report = syncMalOnly();
+  CHECK(report.ok());
+  CHECK(report.removedRemotely == 0);
+  CHECK(bases("mal").count(5) == 0);
+  CHECK(bases("mal").count(6) == 1);
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync keeps an entry whose delete was undone before syncing") {
+  mal.put(makeEntry().malId(5).title("Show").progress(1));
+  syncMalOnly();
+  entry kept = local(5);
+  REQUIRE(db.removeEntry(mediaType::kAnime, 5));
+  db.addEntry(kept);
+
+  auto report = syncMalOnly();
+  CHECK(report.ok());
+  CHECK(mal.has(5));
+  CHECK(db.getById(mediaType::kAnime, 5).has_value());
+  CHECK(mal.deleted.empty());
+}
+
+// Merging one field of a title both sides know.
+
+TEST_CASE_FIXTURE(syncFixture, "sync pulls remote changes into entries unchanged here") {
+  mal.put(makeEntry().malId(5).title("Show").progress(1));
+  syncMalOnly();
+  mal.put(makeEntry().malId(5).title("Show").progress(7).notes("from web"));
+  auto report = syncMalOnly();
+  CHECK(report.updated == 1);
+  CHECK(local(5).progress == 7);
+  CHECK(local(5).notes == "from web");
+  CHECK(local(5).updatedAt->toString() == "2026-10-20");
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync pushes local edits and remembers them as agreed") {
+  mal.put(makeEntry().malId(5).title("Show").progress(1));
+  syncMalOnly();
+  edit(5, 4, 0);
+
+  auto report = syncMalOnly();
+  CHECK(report.pushed == 1);
+  CHECK(mal.row(5).progress == 4);
+  CHECK(bases("mal").at(5).progress == 4);
+  CHECK(syncMalOnly().pushed == 0);
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync keeps the local value when both sides changed a field") {
+  mal.put(makeEntry().malId(5).title("Show").progress(1).score(5));
+  syncMalOnly();
+  mal.put(makeEntry().malId(5).title("Show").progress(1).score(6));
+  edit(5, 1, 9);
+
+  auto report = syncMalOnly();
+  CHECK(local(5).score == 9);
+  CHECK(mal.row(5).score == 9);
+  REQUIRE(report.problems.size() == 1);
+  CHECK(report.problems.front() ==
+        "mal (Anime): 'Show' changed here and there (score); kept this copy.");
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync keeps a remote edit to a field the local edit left alone") {
+  mal.put(makeEntry().malId(5).title("Show").progress(1).score(0));
+  syncMalOnly();
+  mal.put(makeEntry().malId(5).title("Show").progress(1).score(9));
+  edit(5, 2, 0);
+
+  syncMalOnly();
+  CHECK(mal.row(5).score == 9);
+  CHECK(mal.row(5).progress == 2);
+  CHECK(local(5).score == 9);
+}
+
+// Failures.
+
 TEST_CASE_FIXTURE(syncFixture, "sync failing to read a list changes nothing for it") {
-  db.addEntry(makeEntry().id(5).malId(5).title("Synced").dirty(true));
+  db.addEntry(makeEntry().id(5).malId(5).title("Synced"));
   mal.failFetch = true;
   auto report = syncMalOnly();
   CHECK_FALSE(report.ok());
   CHECK(report.problems.front() == "mal (Anime): offline");
-  CHECK(local(5).dirty);
   CHECK(mal.saved.empty());
+  CHECK(bases("mal").empty());
 }
+
+TEST_CASE_FIXTURE(syncFixture, "sync does not trust an empty list while entries are synced") {
+  for (int id = 1; id <= 5; ++id)
+    mal.put(makeEntry().malId(id).title("Show " + std::to_string(id)));
+  syncMalOnly();
+  mal.answerEmpty = true;
+  auto report = syncMalOnly();
+  CHECK(db.getEntries(mediaType::kAnime).size() == 5);
+  CHECK_FALSE(report.ok());
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync keeps an edit for the next run when the push fails") {
+  mal.put(makeEntry().malId(5).title("Show"));
+  syncMalOnly();
+  edit(5, 0, 9);
+  mal.failSave = true;
+
+  auto report = syncMalOnly();
+  CHECK_FALSE(report.ok());
+  CHECK(bases("mal").at(5).score == 0);
+
+  mal.failSave = false;
+  CHECK(syncMalOnly().pushed == 1);
+  CHECK(mal.row(5).score == 9);
+}
+
+// Two services.
 
 TEST_CASE_FIXTURE(syncFixture, "sync carries entries from one service to the other through the id map") {
   mal.put(makeEntry().malId(5).title("From MAL"));
@@ -241,7 +342,29 @@ TEST_CASE_FIXTURE(syncFixture, "sync carries entries from one service to the oth
   CHECK(mal.has(9));
   auto fromMal = local(5);
   CHECK(fromMal.anilistId == 100005);
-  CHECK(fromMal.syncedWith == std::set<std::string>{"anilist", "mal"});
+  CHECK(bases("mal").count(5) == 1);
+  CHECK(bases("anilist").count(100005) == 1);
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync carries a remote edit to the local copy and the other service") {
+  mal.put(makeEntry().malId(5).title("Show").progress(1));
+  anilist.put(makeEntry().anilistId(100005).malId(5).title("Show").progress(1));
+  syncBoth();
+  mal.put(makeEntry().malId(5).title("Show").progress(7));
+  syncBoth();
+  CHECK(local(5).progress == 7);
+  CHECK(anilist.row(100005).progress == 7);
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync carries an edit from the later service back to the earlier one") {
+  mal.put(makeEntry().malId(5).title("Show").progress(1));
+  anilist.put(makeEntry().anilistId(100005).malId(5).title("Show").progress(1));
+  syncBoth();
+  anilist.put(makeEntry().anilistId(100005).malId(5).title("Show").progress(4));
+  auto report = syncBoth();
+  CHECK(report.ok());
+  CHECK(local(5).progress == 4);
+  CHECK(mal.row(5).progress == 4);
 }
 
 TEST_CASE_FIXTURE(syncFixture, "import adds new rows and fills only what the user left empty") {
@@ -260,44 +383,6 @@ TEST_CASE_FIXTURE(syncFixture, "import adds new rows and fills only what the use
   CHECK(mine.progress == 3);
   CHECK(mine.notes == "theirs");
   CHECK(mine.totalUnits == 12);
-  CHECK(mine.syncedWith.empty());
+  CHECK(bases("mal").empty());
   CHECK(mal.saved.empty());
-}
-
-TEST_CASE_FIXTURE(syncFixture, "sync carries a remote edit to the local copy and the other service"
-                  * doctest::should_fail()) {
-  mal.put(makeEntry().malId(5).title("Show").progress(1));
-  anilist.put(makeEntry().anilistId(100005).malId(5).title("Show").progress(1));
-  syncBoth();
-  mal.put(makeEntry().malId(5).title("Show").progress(7));
-  syncBoth();
-  CHECK(local(5).progress == 7);
-  CHECK(anilist.row(100005).progress == 7);
-}
-
-TEST_CASE_FIXTURE(syncFixture, "sync keeps a remote edit to a field the local edit left alone"
-                  * doctest::should_fail()) {
-  mal.put(makeEntry().malId(5).title("Show").progress(1).score(0));
-  syncMalOnly();
-  mal.put(makeEntry().malId(5).title("Show").progress(1).score(9));
-  entry edited = local(5);
-  edited.progress = 2;
-  edited.dirty = true;
-  db.updateEntry(edited);
-
-  syncMalOnly();
-  CHECK(mal.row(5).score == 9);
-  CHECK(mal.row(5).progress == 2);
-  CHECK(local(5).score == 9);
-}
-
-TEST_CASE_FIXTURE(syncFixture, "sync does not trust an empty list while entries are synced"
-                  * doctest::should_fail()) {
-  for (int id = 1; id <= 5; ++id)
-    mal.put(makeEntry().malId(id).title("Show " + std::to_string(id)));
-  syncMalOnly();
-  mal.answerEmpty = true;
-  auto report = syncMalOnly();
-  CHECK(db.getEntries(mediaType::kAnime).size() == 5);
-  CHECK_FALSE(report.ok());
 }

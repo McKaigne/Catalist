@@ -9,13 +9,10 @@
 // Side-effecting user actions shared by several tabs and the command palette.
 namespace catalist {
 
-// Applies one edit the way every tab must: marks it for the next sync, then
-// undo record, database update, history entry and save.
+// Applies one edit the way every tab must: undo record, database update,
+// history entry and save.
 void commitEntryChange(appContext& ctx, const entry& before,
-                       const entry& edited);
-// An entry as undo or redo puts it back: it differs from what was last
-// synced, so the next sync must send it.
-[[nodiscard]] entry asLocalEdit(entry restored);
+                       const entry& after);
 void openInBrowser(appContext& ctx, const entry& target);
 void copyToClipboard(appContext& ctx, const std::string& text);
 [[nodiscard]] std::optional<std::string> pickXmlFile(appContext& ctx);

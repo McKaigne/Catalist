@@ -2,9 +2,7 @@
 #define CATALIST_NET_LIST_SYNC_HPP_
 
 #include <optional>
-#include <set>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "catalist/core/clock.hpp"
@@ -26,13 +24,11 @@ struct syncReport {
   [[nodiscard]] std::string summary() const;
 };
 
-// Two-way sync of the local catalogue with every connected list service:
-//  - remote rows not yet local are added; entries edited locally (dirty) are
-//    pushed; other matched entries take the remote values;
-//  - on first contact with a service the newer side wins, and a tie pushes;
-//  - local deletions of synced entries are deleted remotely; an entry that
-//    was synced with a service but is gone from it is deleted locally;
-//  - a backup snapshot is taken first, and the catalogue is saved after.
+// Two-way sync of the local catalogue with every connected list service.
+// For each title and service the database keeps the values both sides last
+// agreed on (the base); whichever side differs from it is the side that
+// changed (ADR-012). A backup snapshot is taken first, and the catalogue is
+// saved after.
 class listSync {
 public:
   // `mapper` (may be null) fills in missing MAL/AniList ids so one service's
@@ -51,11 +47,6 @@ public:
 private:
   void fillMissingIds(mediaType type, syncReport& report,
                       const std::vector<iListService*>& connected);
-  // Returns the number of entries added locally.
-  int syncList(iListService& service, mediaType type, syncReport& report,
-               const isoDate& today,
-               std::set<std::pair<mediaType, int>>& unpushed, bool& fetchFailed);
-  void clearPushedDirtyFlags(const std::set<std::pair<mediaType, int>>& unpushed);
 
   database& db_;
   const iClock& clock_;

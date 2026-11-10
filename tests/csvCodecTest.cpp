@@ -19,7 +19,7 @@ TEST_CASE("csvCodec reads the zero date sentinel as absent and writes it empty")
 
   auto encoded = csvCodec::encodeEntries(decoded);
   CHECK(encoded.find("0000-00-00") == std::string::npos);
-  CHECK(encoded.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,0,,,\n") !=
+  CHECK(encoded.find("1,1,0,anime,Old,Completed,7,1,1,0,0,0,,,n,,,,,\n") !=
         std::string::npos);
 }
 
@@ -60,7 +60,7 @@ TEST_CASE("csvCodec entries round trip through encode and decode") {
                                  .progress(3).totalUnits(9).volumes(1)
                                  .totalVolumes(2).rewatched(1)
                                  .startDate("2024-01-02").notes("n\nn")
-                                 .updatedAt("2024-02-03").dirty(true);
+                                 .updatedAt("2024-02-03");
   auto decoded =
       csvCodec::decodeEntries(csvCodec::encodeEntries({original}),
                               mediaType::kManga);
@@ -72,7 +72,6 @@ TEST_CASE("csvCodec entries round trip through encode and decode") {
   CHECK(formatDate(copy.startDate) == "2024-01-02");
   CHECK_FALSE(copy.finishDate.has_value());
   CHECK(copy.notes == "n\nn");
-  CHECK(copy.dirty);
   CHECK(copy.malId == 6);
   CHECK(copy.anilistId == 7);
 }
@@ -104,24 +103,25 @@ TEST_CASE("csvCodec queue position round trips and is absent in older files") {
   CHECK_FALSE(legacy[0].queuePos.has_value());
 }
 
-TEST_CASE("csvCodec round trips the synced services and deletion records") {
-  catalist::entry synced;
-  synced.id = 5;
-  synced.malId = 5;
-  synced.title = "Synced";
-  synced.syncedWith = {"mal", "anilist"};
-  auto decoded = csvCodec::decodeEntries(csvCodec::encodeEntries({synced}),
-                                         mediaType::kAnime);
+TEST_CASE("csvCodec round trips sync bases") {
+  catalist::entry values = catalist::test::makeEntry()
+                               .type(mediaType::kManga)
+                               .status(watchStatus::kOnHold).score(7)
+                               .progress(30).volumes(3).rewatched(1)
+                               .startDate("2024-01-02").notes("a, \"b\"\nc");
+  auto decoded = csvCodec::decodeSyncBases(
+      csvCodec::encodeSyncBases({{"anilist", 30002, values}}));
   REQUIRE(decoded.size() == 1);
-  CHECK(decoded[0].syncedWith == std::set<std::string>{"anilist", "mal"});
-
-  catalist::deletedEntry deleted{mediaType::kManga, 2, 30002, "Berserk, \"dark\"",
-                                 {"anilist"}};
-  auto records = csvCodec::decodeDeletions(csvCodec::encodeDeletions({deleted}));
-  REQUIRE(records.size() == 1);
-  CHECK(records[0].type == mediaType::kManga);
-  CHECK(records[0].malId == 2);
-  CHECK(records[0].anilistId == 30002);
-  CHECK(records[0].title == "Berserk, \"dark\"");
-  CHECK(records[0].pendingServices == std::set<std::string>{"anilist"});
+  CHECK(decoded[0].service == "anilist");
+  CHECK(decoded[0].remoteId == 30002);
+  const auto& copy = decoded[0].values;
+  CHECK(copy.type == mediaType::kManga);
+  CHECK(copy.status == watchStatus::kOnHold);
+  CHECK(copy.score == 7);
+  CHECK(copy.progress == 30);
+  CHECK(copy.volumes == 3);
+  CHECK(copy.rewatched == 1);
+  CHECK(formatDate(copy.startDate) == "2024-01-02");
+  CHECK_FALSE(copy.finishDate.has_value());
+  CHECK(copy.notes == "a, \"b\"\nc");
 }

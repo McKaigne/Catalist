@@ -13,20 +13,13 @@
 namespace catalist {
 
 void commitEntryChange(appContext& ctx, const entry& before,
-                       const entry& edited) {
-  entry after = edited;
-  after.dirty = true;
+                       const entry& after) {
   ctx.undo.record({historyAction::kMutate, after.type, before, after});
   ctx.db.updateEntry(after);
   ctx.db.logActivity({activityTimestamp(ctx.clock), after.type, after.title,
                       after.status, after.progress, after.totalUnits,
                       after.score});
   ctx.db.saveAll();
-}
-
-entry asLocalEdit(entry restored) {
-  restored.dirty = true;
-  return restored;
 }
 
 void openInBrowser(appContext& ctx, const entry& target) {

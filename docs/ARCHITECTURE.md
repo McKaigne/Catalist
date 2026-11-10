@@ -112,25 +112,46 @@
 - **Consequences:** No user-facing config format to keep compatible; old
   `catalist.kdl` files are ignored.
 
-## ADR-012: Two-Way List Sync
+## ADR-012: Two-Way List Sync Against a Base
 - **Context:** Catalist should stay usable offline and in the CLI while
-  keeping MyAnimeList and AniList lists current in both directions.
+  keeping MyAnimeList and AniList lists current in both directions. A single
+  "edited locally" flag could not say which service had not seen a change,
+  and nothing remembered what the two sides last agreed on, so remote edits
+  were lost or overwritten.
 - **Decision:** Each service implements `iListService` (fetch the whole list,
-  save one row, delete one row). `listSync` compares the full remote list
-  with the catalogue on every run instead of keeping a change log:
-  - `entry::dirty` marks local edits since the last successful sync; they
-    are pushed, and the flag clears only when every push succeeded.
-  - `entry::syncedWith` records which services have seen the entry, so a
-    missing remote row means "deleted there" (remove locally) when the
-    service saw it before, and "never sent" (push) otherwise.
-  - Local deletions of synced entries go to `deleted.csv` until each service
-    has removed them.
-  - On first contact the side with the later update date wins; ties push.
-  - AniList's public `idMal` lookups fill in missing ids so entries cross
-    between the services.
-  A backup snapshot is written before every run. Requests are paced through
-  an injected function, so tests run instantly.
-- **Consequences:** A sync costs one list fetch per service and media type
-  plus one request per change. The TUI runs it on the job thread and does not
-  draw the catalogue until it ends, because the worker writes the database.
+  save one row, delete one row). For every title and service, `sync.csv`
+  keeps the **base**: the status, score, progress, volumes, rewatches, dates
+  and notes both sides last agreed on. Whichever side differs from the base
+  is the side that changed. For one service and media type, `listSync`
+  fetches the list and settles every service id seen locally, in the bases
+  or in the list:
 
+  | Local | Base | Remote | Action |
+  | --- | --- | --- | --- |
+  | yes | yes | yes | Merge field by field; push and update as needed |
+  | yes | no | yes | First contact: if they differ, the later update date wins, a tie goes to local |
+  | yes | yes | no | Deleted there: remove locally, or push back (and report) if edited here |
+  | no | yes | yes | Deleted here: delete on the service |
+  | yes | no | no | Never sent: push |
+  | no | no | yes | New on the service: add locally |
+  | no | yes | no | Gone from both: forget the base |
+
+  A field equal to its base takes the other side's value; when both sides
+  changed it and disagree, the local value is kept and the report names the
+  title and the field. After an action succeeds the base becomes the agreed
+  values (or is erased); after a failed push it stays, so the next sync
+  reaches the same decision and no retry list is needed. A failed fetch, or
+  an empty list while bases exist, changes nothing for that service.
+  Totals and missing ids come from the service; the local title is kept.
+  AniList's public `idMal` lookups fill in missing ids so entries cross
+  between the services, and a second round runs when a pass changed the
+  catalogue, so a change pulled from the later service reaches the earlier
+  one. A backup snapshot is written before every run. Requests are paced
+  through an injected function, so tests run instantly.
+- **Consequences:** A sync costs one list fetch per service and media type
+  plus one request per change. `saveAll` writes the catalogue first and
+  `sync.csv` last; a crash between the two leaves old bases, which the next
+  sync repairs. Undoing a delete needs no special code: the entry is local
+  again, its base is still there, and the first row applies. The TUI runs
+  sync on the job thread and does not draw the catalogue until it ends,
+  because the worker writes the database.

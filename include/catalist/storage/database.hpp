@@ -2,6 +2,7 @@
 #define CATALIST_DATABASE_HPP_
 
 #include <filesystem>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -9,8 +10,8 @@
 
 #include "catalist/core/clock.hpp"
 #include "catalist/model/activity.hpp"
-#include "catalist/model/deletion.hpp"
 #include "catalist/model/entry.hpp"
+#include "catalist/model/syncBase.hpp"
 #include "catalist/platform/fileSystem.hpp"
 
 namespace catalist {
@@ -26,12 +27,7 @@ class database {
   const std::vector<entry>& getEntries(mediaType type) const;
   std::optional<entry> getById(mediaType type, int id) const;
   bool updateEntry(const entry& mediaEntry);
-  // Entries that had been synced are remembered in pendingDeletions() so
-  // the next sync can delete them remotely too.
   bool removeEntry(mediaType type, int id);
-  [[nodiscard]] std::vector<deletedEntry> pendingDeletions() const;
-  // Drops `service` from the matching deletion; forgets it once none remain.
-  void settleDeletion(const deletedEntry& deleted, const std::string& service);
   void clear(mediaType type);
   static void sortEntries(std::vector<entry>& v, sortKey key, bool reverse);
 
@@ -65,6 +61,14 @@ class database {
   bool loadHistory();
   bool saveHistory() const;
 
+  // The sync bases of `service` for `type`, by the service's id (see
+  // syncBase). They live in sync.csv, which saveAll() writes last.
+  [[nodiscard]] std::map<int, entry> syncBases(const std::string& service,
+                                               mediaType type) const;
+  void setSyncBase(const std::string& service, int remoteId,
+                   const entry& values);
+  void eraseSyncBase(const std::string& service, mediaType type, int remoteId);
+
   void createBackupSnapshot();
   void autoHealIds();
 
@@ -78,15 +82,14 @@ class database {
   std::vector<entry> animeEntries_;
   std::vector<entry> mangaEntries_;
   std::vector<activityRecord> historyRecords_;
-  std::vector<deletedEntry> deletions_;
+  std::vector<syncBase> syncBases_;
   int nextLocalId_ = 10001;
   mutable bool saveFailed_ = false;
 
   std::vector<entry>& getList(mediaType type);
   const std::vector<entry>& getList(mediaType type) const;
-  void forgetDeletionsOf(const entry& restored);
-  void loadDeletions();
-  bool saveDeletions() const;
+  void loadSyncBases();
+  bool saveSyncBases() const;
 };
 
 }  // namespace catalist

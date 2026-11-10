@@ -107,3 +107,26 @@
   defaults. Keys and tab order are fixed in code (`tui/keys`, the app shell).
 - **Consequences:** No user-facing config format to keep compatible; old
   `catalist.kdl` files are ignored.
+
+## ADR-012: Two-Way List Sync
+- **Context:** Catalist should stay usable offline and in the CLI while
+  keeping MyAnimeList and AniList lists current in both directions.
+- **Decision:** Each service implements `iListService` (fetch the whole list,
+  save one row, delete one row). `listSync` compares the full remote list
+  with the catalogue on every run instead of keeping a change log:
+  - `entry::dirty` marks local edits since the last successful sync; they
+    are pushed, and the flag clears only when every push succeeded.
+  - `entry::syncedWith` records which services have seen the entry, so a
+    missing remote row means "deleted there" (remove locally) when the
+    service saw it before, and "never sent" (push) otherwise.
+  - Local deletions of synced entries go to `deleted.csv` until each service
+    has removed them.
+  - On first contact the side with the later update date wins; ties push.
+  - AniList's public `idMal` lookups fill in missing ids so entries cross
+    between the services.
+  A backup snapshot is written before every run. Requests are paced through
+  an injected function, so tests run instantly.
+- **Consequences:** A sync costs one list fetch per service and media type
+  plus one request per change. The TUI runs it on the job thread and does not
+  draw the catalogue until it ends, because the worker writes the database.
+

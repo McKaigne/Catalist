@@ -46,11 +46,24 @@ Remove entries.
 .BR stats " [" \fB--json\fR ]
 Display watch time, completion ratios, and telemetry.
 .TP
-.BR export " <" \fIjson\fR | \fIcsv\fR >
-Dump database to standard output.
+.BR export " <" \fIjson\fR | \fIcsv\fR | \fIxml\fR > [\fB--type\fR \fITYPE\fR]
+Dump database to standard output; \fBxml\fR is the MyAnimeList format that
+MyAnimeList and AniList import.
 .TP
 .BR import " [" \fB--clean\fR "] <" \fIFILE.XML\fR "...>"
 Ingest MyAnimeList XML archives.
+.TP
+.BR import " <" \fImal\fR | \fIanilist\fR "> [" \fB--user\fR " " \fINAME\fR "] [" \fB--type\fR " " \fITYPE\fR ]
+Pull your list (or a public one) without sending anything back.
+.TP
+.BR login " [" \fImal\fR | \fIanilist\fR ]
+Log in; without an argument, show which accounts are logged in.
+.TP
+.BR logout " <" \fImal\fR | \fIanilist\fR >
+Forget a saved login.
+.TP
+.BR sync " [" \fImal\fR | \fIanilist\fR ]
+Two-way sync with the logged-in lists; a backup is taken first.
 .TP
 .BR config " [" \fIlist\fR | \fIget\fR | \fIset\fR ]
 Inspect or change preferences (mouse, theme, default_media, default_sort,
@@ -65,11 +78,12 @@ The number keys select the tabs in top-bar order.
 Catalogue with sidebar filters, sortable table and details card.
 .TP
 .B 3 Stats
-Totals, score histogram and entries per year; \fBm\fR toggles media.
+Status breakdown, totals, score and start-year charts and recent activity;
+\fBj\fR, \fBk\fR or \fBm\fR toggles media.
 .TP
 .B 4 Settings
-Themes with live preview, preferences, backups, import, export, MyAnimeList
-sync and MAL login.
+Themes with live preview, preferences, the MyAnimeList and AniList accounts
+with two-way sync, import, export and backups.
 .SH KEYS
 .TP
 .B j k g G h l
@@ -95,7 +109,22 @@ Catalogue and activity history (override the directory with
 .I ~/.config/catalist/settings.json
 Theme, mouse, default media and sort, and startup tab; written by Catalist.
 .TP
+.I ~/.config/catalist/mal_auth.json, anilist_auth.json
+Saved logins, readable only by you.
+.TP
+.I ~/.config/catalist/deleted.csv
+Deletions waiting for the next sync.
+.TP
 .I ~/.config/catalist/backups/
 Snapshot backups.
+.SH ENVIRONMENT
+.TP
+.B CATALIST_DATA_DIR
+Use this directory instead of ~/.config/catalist.
+.TP
+.B CATALIST_ANILIST_CLIENT_ID
+AniList API client id for logging in (register one at
+https://anilist.co/settings/developer with the redirect URL
+https://anilist.co/api/v2/oauth/pin).
 .SH AUTHORS
 McKaigne <https://github.com/McKaigne/Catalist>

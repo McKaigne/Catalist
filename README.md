@@ -2,7 +2,7 @@
 
 A fast, lightweight, and local-first anime and manga watchlist TUI built with **C++17** and **FTXUI**.
 
-Catalist keeps your watchlist saved on your computer in plaintext RFC 4180 CSV files. It supports modular metadata links across multiple providers (MyAnimeList, AniList, Kitsu), full KDL workspace configuration, and an integrated headless CLI for scripting.
+Catalist keeps your watchlist saved on your computer in plaintext RFC 4180 CSV files. It supports modular metadata links across multiple providers (MyAnimeList, AniList, Kitsu), two-way sync with your MyAnimeList and AniList lists, and an integrated headless CLI for scripting.
 
 ---
 
@@ -61,8 +61,11 @@ The number keys follow the order shown in the top bar.
 | :--- | :--- | :--- |
 | `1` | Anime | Your anime catalogue: sidebar filters, sortable table, details card |
 | `2` | Manga | The same for manga |
-| `3` | Stats | Totals, score histogram and entries per year (`m` toggles anime/manga) |
-| `4` | Settings | Themes (live preview), preferences, backups, import/export, MyAnimeList sync and login |
+| `3` | Stats | Status breakdown, totals, score and start-year charts, recent activity (`j`/`k`/`m` toggle anime/manga) |
+| `4` | Settings | Themes (live preview), preferences, MyAnimeList and AniList accounts with two-way sync, import/export, backups |
+
+Every tab uses the same cards: a sidebar on the left, the main cards in the
+middle and a details card on the right.
 
 The startup tab is set in Settings → Preferences, or with
 `catalist config set startup_tab stats`.
@@ -95,11 +98,39 @@ The startup tab is set in Settings → Preferences, or with
 ### Stats and Settings
 | Key | Action |
 | :--- | :--- |
-| `m` | Stats: toggle anime / manga |
-| `Enter` / `Space` | Settings: apply the theme, cycle the preference or run the Data action under the cursor |
+| `j` / `k` / `m` | Stats: toggle anime / manga |
+| `h` / `l` | Settings: move between the Themes, Preferences, Accounts & Sync and Data cards |
+| `Enter` / `Space` | Settings: apply the theme, cycle the preference or run the action under the cursor |
 
-Settings → Data → *Sync ongoing titles with MyAnimeList* fills in missing
-episode totals for anime you are still watching (the same as `:sync`).
+---
+
+## MyAnimeList & AniList
+
+Log in under **Settings → Accounts & Sync** (or `catalist login mal|anilist`),
+then choose **Sync now** (or `:sync`, or `catalist sync`). Sync is two-way:
+
+- entries on your online lists that Catalist lacks are added;
+- entries you change in Catalist are sent to every logged-in list;
+- other entries take the values from the list;
+- the first time an entry meets a list, whichever side changed more recently wins;
+- deleting a synced entry in Catalist deletes it online, and an entry deleted
+  online is removed from Catalist;
+- a backup snapshot is written before every sync.
+
+MyAnimeList ids and AniList ids are matched through AniList, so entries move
+between the two lists as well.
+
+**AniList login** needs an API client of your own (free): create one at
+<https://anilist.co/settings/developer> with the redirect URL
+`https://anilist.co/api/v2/oauth/pin`, then either export
+`CATALIST_ANILIST_CLIENT_ID=<id>` or build with
+`-DCATALIST_ANILIST_CLIENT_ID=<id>`. Logging in opens AniList in your browser;
+paste the token it shows back into Catalist. Tokens last a year.
+
+Without logging in you can still **import** a public list
+(`catalist import anilist --user NAME`, `catalist import mal --user NAME`) and
+**export** MyAnimeList XML (`catalist export xml --type anime`, or Settings →
+Data), which both MyAnimeList's and AniList's import pages accept.
 
 ---
 
@@ -124,7 +155,14 @@ catalist rm "Dungeon Meshi" -y          # Delete entry
 # Backup & Interop
 catalist export json > backup.json
 catalist export csv > backup.csv
+catalist export xml --type manga > manga.xml   # MAL format, for MAL or AniList import
 catalist import --clean myanimelist.xml  # Ingest MAL export with safe merging
+catalist import anilist --user someone   # Pull a public AniList list
+
+# Accounts
+catalist login mal                       # or: anilist
+catalist sync                            # two-way, every logged-in list
+catalist logout anilist
 ```
 
 ---
@@ -135,6 +173,7 @@ catalist import --clean myanimelist.xml  # Ingest MAL export with safe merging
 - **Atomic File Operations**: All disk writes write to a `.tmp` file before an atomic `rename`, preventing database corruption during power cuts or unexpected exits.
 - **Tier 1 / Tier 2 Merge Hierarchy**: Re-importing MyAnimeList XML archives never overwrites local progress, scores, or notes. Upstream metadata updates refresh total episodes and provider IDs without clobbering user edits.
 - **Preferences**: Theme, mouse support, default media and sort, and the startup tab are changed in Settings (or with `catalist config`) and saved to `~/.config/catalist/settings.json`. Keybindings are fixed.
+- **Accounts**: Logins are kept in `mal_auth.json` and `anilist_auth.json` (readable only by you). Deletions waiting to reach your online lists are kept in `deleted.csv`.
 - **Backups**: `Settings → Data` (or `:backup`) writes timestamped copies to `~/.config/catalist/backups/`; restoring one first backs up the current data.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.

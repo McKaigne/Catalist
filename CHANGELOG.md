@@ -7,13 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Two-way sync with MyAnimeList and AniList (Settings → Accounts & Sync,
+  `:sync`, `catalist sync`): pulls new and changed entries, sends local edits
+  and deletions, removes entries deleted online, and matches MyAnimeList and
+  AniList ids so entries reach both lists. A backup is taken before each sync.
+- AniList login (paste the token from AniList's PIN page) next to the
+  MyAnimeList login; MyAnimeList logins now refresh themselves.
+- `catalist login`, `logout`, `sync`, and `import mal|anilist [--user NAME]`
+  for importing your own or a public list without syncing.
+- MyAnimeList XML export (`catalist export xml`, Settings → Data), accepted
+  by both MyAnimeList's and AniList's import pages.
+
 ### Changed
+- Stats and Settings use the catalogue's cards: Stats has a media and status
+  sidebar, an overview, score and start-year charts and a recent-activity
+  card; Settings has Themes, Preferences, Accounts & Sync and Data cards.
+- The bottom bar shows the MyAnimeList and AniList login state.
+- curl now reads request headers and bodies from owner-only temporary files,
+  so login tokens never appear on its command line.
 - The TUI now has four tabs, always in this order: Anime, Manga, Stats and
   Settings.
 - Preferences (theme, mouse, default media and sort, startup tab) are saved
   to `settings.json`, which the app writes itself; `catalist config` reads
   and changes that file and rejects values outside the allowed choices.
-- Metadata sync is a row in Settings → Data (`:sync` still works).
 
 ### Fixed
 - Dates such as 2024-13-45 or 2023-02-29 are rejected instead of stored.
@@ -29,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The Anime and Manga tabs start in the default sort chosen in Settings.
 
 ### Removed
+- The episode-count refresh through Jikan, replaced by account sync.
 - The Queue, Search, Library, History and Help tabs, with `?` (help), `:help`
   and `a` (add, which opened Search) in the TUI. Add entries with
   `catalist add`. Stored `queue_pos` values are kept in the CSV files.

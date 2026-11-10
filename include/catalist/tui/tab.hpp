@@ -37,10 +37,6 @@ public:
   virtual ftxui::Component focusRoot() {
     return ftxui::Renderer([](bool) { return ftxui::text(""); });
   }
-  // Drawn above the whole screen, e.g. a modal dialog.
-  virtual std::optional<ftxui::Element> overlay(appContext&) {
-    return std::nullopt;
-  }
   // True while the tab owns the keyboard (text entry, confirmations), so the
   // shell must not treat keys like '1' or 'q' as global shortcuts.
   [[nodiscard]] virtual bool capturesInput() const { return false; }

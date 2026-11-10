@@ -131,8 +131,6 @@ public:
       return dbox({base, *popup});
     if (palette_.isOpen())
       return dbox({base, palette_.render(theme)});
-    if (auto modal = activeTab().overlay(ctx_))
-      return dbox({base, *modal});
     return base;
   }
 

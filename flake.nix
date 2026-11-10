@@ -1,5 +1,5 @@
 {
-  description = "Catalist - Anime and Manga Watchlist TUI (C++17 / FTXUI)";
+  description = "Catalist - local-first anime and manga tracker for the terminal (C++17 / FTXUI)";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -47,9 +47,6 @@
                     with pkgs;
                     [
                       curl
-                      wl-clipboard
-                      xclip
-                      xdg-utils
                     ]
                   )
                 }
@@ -83,9 +80,6 @@
               ftxui
               doctest
               curl
-              wl-clipboard
-              xclip
-              xdg-utils
               clang-tools
             ];
           };

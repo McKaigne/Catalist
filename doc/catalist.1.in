@@ -1,131 +1,84 @@
 .TH CATALIST 1 "November 2026" "v@PROJECT_VERSION@" "User Commands"
 .SH NAME
-catalist \- keyboard-driven anime and manga watchlist manager
+catalist \- local-first anime and manga tracker for the terminal
 .SH SYNOPSIS
 .B catalist
-[\fIOPTIONS\fR]
+.br
+.B catalist import
+\fIFILE.xml\fR...
+.br
+.B catalist export
+\fIanime\fR|\fImanga\fR
 .br
 .B catalist
-\fICOMMAND\fR [\fIARGS...\fR]
+\fB--help\fR | \fB--version\fR
 .SH DESCRIPTION
 .B catalist
-is a modal, local-first terminal interface and headless Unix CLI for tracking
-anime series and manga publications in RFC 4180 CSV files.
-Run without arguments to start the terminal interface.
-.SH OPTIONS
+tracks the anime you watch and the manga you read in two CSV files on your
+computer. Run without arguments, it opens the terminal interface. It goes
+online only to look up a title to add, through Jikan, the public
+MyAnimeList API.
+.SH COMMANDS
 .TP
-.BR --tab " <" \fIID\fR >
-Start the terminal interface on the given tab: anime, manga, stats or
-settings.
+.BR import " " \fIFILE.xml\fR...
+Add the titles of MyAnimeList XML exports. A title already in the catalogue
+keeps its score, progress, dates and notes. All files are read before
+anything is added, so a bad file changes nothing.
+.TP
+.BR export " " \fIanime\fR | \fImanga\fR
+Print that list as MyAnimeList XML, which the import pages of MyAnimeList
+and AniList read. Titles without a MyAnimeList id are left out and counted
+on standard error.
+.TP
+.BR -h ", " --help
+Print usage and the data directory.
 .TP
 .BR -v ", " --version
 Print the version.
-.TP
-.BR -h ", " --help
-Print usage.
-.SH COMMANDS
-.TP
-.BR ls " [" \fIFLAGS\fR ]
-List catalog entries in table, plain title, CSV, or JSON streams.
-.TP
-.BR show " <" \fIID\fR | \fITITLE\fR | - >
-Display record details. Pass \fB-\fR to read IDs from stdin.
-.TP
-.BR count " [" \fIFLAGS\fR ]
-Emit integer count of matching entries.
-.TP
-.BR add " <" \fITITLE\fR "> [" \fIFLAGS\fR ]
-Append a new entry.
-.TP
-.BR set " <" \fIID\fR | \fITITLE\fR | - > [" \fIFLAGS\fR ]
-Update fields or step progress (\fB-p +1\fR).
-.TP
-.BR rm " <" \fIID\fR | \fITITLE\fR | - > [\fB-y\fR|\fB--yes\fR]
-Remove entries.
-.TP
-.BR stats " [" \fB--json\fR ]
-Display watch time, completion ratios, and telemetry.
-.TP
-.BR export " <" \fIjson\fR | \fIcsv\fR | \fIxml\fR > [\fB--type\fR \fITYPE\fR]
-Dump database to standard output; \fBxml\fR is the MyAnimeList format that
-MyAnimeList and AniList import.
-.TP
-.BR import " [" \fB--clean\fR "] <" \fIFILE.XML\fR "...>"
-Ingest MyAnimeList XML archives.
-.TP
-.BR import " <" \fImal\fR | \fIanilist\fR "> [" \fB--user\fR " " \fINAME\fR "] [" \fB--type\fR " " \fITYPE\fR ]
-Pull your list (or a public one) without sending anything back.
-.TP
-.BR login " [" \fImal\fR | \fIanilist\fR ]
-Log in; without an argument, show which accounts are logged in.
-.TP
-.BR logout " <" \fImal\fR | \fIanilist\fR >
-Forget a saved login.
-.TP
-.BR sync " [" \fImal\fR | \fIanilist\fR ]
-Two-way sync with the logged-in lists; a backup is taken first.
-.TP
-.BR config " [" \fIlist\fR | \fIget\fR | \fIset\fR ]
-Inspect or change preferences (mouse, theme, default_media, default_sort,
-reverse_sort, startup_tab).
-.TP
-.BR completion " <" \fIbash\fR | \fIzsh\fR | \fIfish\fR >
-Emit shell completion definitions.
 .SH TABS
-The number keys select the tabs in top-bar order.
 .TP
 .B 1 Anime, 2 Manga
-Catalogue with sidebar filters, sortable table and details card.
+Sidebar filters by status and by rating from 10 to 0, the sortable list and
+a details card.
 .TP
 .B 3 Stats
-Status breakdown, totals, score and start-year charts and recent activity;
-\fBj\fR, \fBk\fR or \fBm\fR toggles media.
-.TP
-.B 4 Settings
-Themes with live preview, preferences, the MyAnimeList and AniList accounts
-with two-way sync, import, export and backups.
+Totals, the status breakdown and the score chart; \fBj\fR, \fBk\fR or
+\fBm\fR switches between anime and manga.
 .SH KEYS
 .TP
+.B 1 2 3 Tab
+Switch tab.
+.TP
 .B j k g G h l
-Move, jump and change pane on every tab.
+Move, jump, and change pane.
 .TP
-.B + - S R P
-Progress, status, rating and progress steps in the catalogue.
+.B + - P S R
+Progress, next status, one star more.
 .TP
-.B Space v
-Visual (batch) selection.
+.B e Enter
+Open the details card; edit the field under the cursor.
 .TP
-.B / d u U o y
-Filter, delete, undo, redo, open in browser, copy title.
+.B c t s r p
+Sort by date, title, status, rating or progress; again to reverse.
 .TP
-.B : q Tab
-Command palette, save and quit, next tab.
+.B / a d
+Filter by title, add a title, delete (asks first).
+.TP
+.B q
+Quit. Changes are saved as they are made.
 .SH FILES
 .TP
-.I ~/.config/catalist/anime.csv, manga.csv, history.csv
-Catalogue and activity history (override the directory with
-\fBCATALIST_DATA_DIR\fR).
-.TP
-.I ~/.config/catalist/settings.json
-Theme, mouse, default media and sort, and startup tab; written by Catalist.
-.TP
-.I ~/.config/catalist/mal_auth.json, anilist_auth.json
-Saved logins, readable only by you.
-.TP
-.I ~/.config/catalist/sync.csv
-What each entry looked like on each list when they last agreed; sync
-compares both sides with it.
-.TP
-.I ~/.config/catalist/backups/
-Snapshot backups.
+.I ~/.config/catalist/anime.csv, manga.csv
+The catalogue.
 .SH ENVIRONMENT
 .TP
 .B CATALIST_DATA_DIR
 Use this directory instead of ~/.config/catalist.
 .TP
-.B CATALIST_ANILIST_CLIENT_ID
-AniList API client id for logging in (register one at
-https://anilist.co/settings/developer with the redirect URL
-https://anilist.co/api/v2/oauth/pin).
+.B XDG_CONFIG_HOME
+When set, the catalogue is kept in $XDG_CONFIG_HOME/catalist.
+.SH EXIT STATUS
+0 on success, 1 when the work failed (a file could not be read or saved),
+2 when the command line is wrong.
 .SH AUTHORS
 McKaigne <https://github.com/McKaigne/Catalist>

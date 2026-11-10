@@ -7,83 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Catalist is now a small, local-first tracker: two CSV files, three tabs,
+and the network only to look up a title to add.
+
 ### Added
-- Two-way sync with MyAnimeList and AniList (Settings → Accounts & Sync,
-  `:sync`, `catalist sync`): pulls new and changed entries, sends local edits
-  and deletions, removes entries deleted online, and matches MyAnimeList and
-  AniList ids so entries reach both lists. A backup is taken before each sync.
-- AniList login (paste the token from AniList's PIN page) next to the
-  MyAnimeList login; MyAnimeList logins now refresh themselves.
-- `catalist login`, `logout`, `sync`, and `import mal|anilist [--user NAME]`
-  for importing your own or a public list without syncing.
-- MyAnimeList XML export (`catalist export xml`, Settings → Data), accepted
-  by both MyAnimeList's and AniList's import pages.
+- `a` in the Anime and Manga tabs adds a title: type it, look it up on
+  MyAnimeList through Jikan, and pick a match. The last row adds the title
+  by hand, which also works offline. A title already tracked is selected
+  instead of added twice.
+- `catalist export anime|manga` prints MyAnimeList XML, which the import
+  pages of MyAnimeList and AniList read.
+- The bottom-left pill shows the keyboard mode: `NOR`, `SCH` (search), `EDT`
+  (notes), `ADD` or `DEL` (confirm delete).
 
 ### Changed
-- Stats and Settings use the catalogue's cards: Stats has a media and status
-  sidebar, an overview, score and start-year charts and a recent-activity
-  card; Settings has Themes, Preferences, Accounts & Sync and Data cards.
-- The bottom bar shows the MyAnimeList and AniList login state.
-- curl now reads request headers and bodies from owner-only temporary files,
-  so login tokens never appear on its command line.
-- The TUI now has four tabs, always in this order: Anime, Manga, Stats and
-  Settings.
-- Preferences (theme, mouse, default media and sort, startup tab) are saved
-  to `settings.json`, which the app writes itself; `catalist config` reads
-  and changes that file and rejects values outside the allowed choices.
-- Sync remembers, per entry and list, the values both sides last agreed on
-  (in `sync.csv`, which replaces `deleted.csv`) and merges field by field:
-  a change made on either side reaches the other, and when the same field
-  changed on both sides the local value is kept and the report names the
-  entry and the field. The first sync after upgrading treats every entry as
-  a first contact; run one last sync on the old build before switching.
-- `anime.csv` and `manga.csv` now have the same 16 columns as
-  `catalist export csv`; the `dirty`, `external_ids`, `queue_pos` and
-  `synced` columns are no longer written. Older files still load and are
-  rewritten on the next save.
-- Editing notes in the catalogue now shows up in recent activity like other
-  edits.
+- The sidebar lists every rating from 10 down to 0.
+- Sorting a new column starts in its natural order: rating, progress and
+  date from high to low, title and status from A to Z (rating, progress and
+  date used to start from the low end). The date column sorts by the date it
+  shows.
+- Every change is saved at once; a failed save is shown in the status line.
+- `Esc` while editing notes now cancels the edit; `Enter` saves it. Editing
+  starts at the end of the existing notes.
+- `catalist import` takes only MyAnimeList XML files, reads them all before
+  adding anything, and reports per file how many titles were added.
+- New titles are numbered from 1 in each list; an imported title merges
+  with a tracked one only when they share a MyAnimeList or AniList id.
+- The theme is always Catppuccin Mocha, and the list starts sorted by rating.
 
 ### Fixed
 - Dates such as 2024-13-45 or 2023-02-29 are rejected instead of stored.
-- `--status` in `ls`, `count`, `add` and `set` rejects unknown values instead
-  of treating them as Plan to Watch; an unknown status in a CSV or MAL XML
-  file is still loaded as Plan to Watch but logged.
-- A remote edit no longer gets lost when both services are connected: it
-  reaches the local copy and the other list instead of being overwritten.
-- A local edit no longer overwrites an unrelated change made on the list
-  since the last sync (for example a score set online while progress was
-  raised here).
-- Adding a MyAnimeList title whose id equals a local-only entry's id no
-  longer merges the two; titles are matched only by MyAnimeList or AniList
-  id.
-- A list that comes back empty while entries are synced with it no longer
-  removes those entries; nothing is changed for that list.
 - A failed save (full disk, read-only folder) is reported instead of looking
-  like success: CLI commands exit with code 1 and an `io` error, and the TUI
-  shows a notice.
-- `ls` decides between the terminal table and the piped layout from the
-  stream it writes to, and error colour follows stderr.
-- `export json` no longer puts a line break before the comma between the
-  anime and manga lists.
-- The Anime and Manga tabs start in the default sort chosen in Settings.
+  like success: the CLI exits with code 1 and the TUI says so.
 
 ### Removed
-- The episode-count refresh through Jikan, replaced by account sync.
-- The Queue, Search, Library, History and Help tabs, with `?` (help), `:help`
-  and `a` (add, which opened Search) in the TUI. Add entries with
-  `catalist add`. Stored `queue_pos` values are dropped on the next save.
-- Kitsu links: the Kitsu badge and stored Kitsu ids, which only the Search
-  tab added. Entries with only a Kitsu id lose "open in browser".
+- Accounts, logins and sync with MyAnimeList and AniList, with `sync.csv`,
+  the backups and the activity history (`history.csv`).
+- The Settings tab, `settings.json`, `catalist config`, themes, the command
+  palette and the welcome message: the defaults are fixed.
+- The Queue, Search, Library, History and Help tabs.
+- The CLI commands other than `import` and `export`: `ls`, `count`, `show`,
+  `add`, `set`, `rm`, `stats`, `search`, `random`, `completion`, the CSV and
+  JSON exports, and `--tab`.
+- Undo and redo, visual (batch) selection, multiple sidebar filters, mouse
+  support, opening a title in the browser and copying it, and the log file.
+- `catalist.kdl` and its parser; an existing file is ignored, as are the
+  old `settings.json`, `history.csv`, `sync.csv`, `catalist.log`,
+  `mal_auth.json`, `anilist_auth.json` and `backups/`, which can be deleted.
+- Kitsu links and stored Kitsu ids, and stored `queue_pos` values (dropped
+  on the next save).
 - Reading the 7-column and 16-column CSV layouts of development builds
-  before 0.2.1; such a file now fails to load with a message naming it
-  (open and save it once with Catalist 0.3.0 to convert it).
-- Internal leftovers of the removed tabs and the KDL config: the search
-  provider classes, a second JSON parser, the rebindable key table and
-  unused functions.
-- `catalist.kdl`: custom keybindings, top-bar layout and the KDL parser. Keys
-  are fixed; an existing `catalist.kdl` is ignored (set your theme again in
-  Settings).
+  before 0.2.1; such a file fails to load with a message naming it (open and
+  save it once with Catalist 0.3.0 to convert it). Files from 0.2.1 to 0.3.0
+  load, `0000-00-00` dates included.
 
 ## [0.3.0] - 2026-11-10
 

@@ -28,7 +28,6 @@ public:
   [[nodiscard]] std::vector<remoteSearchResult> query(
       mediaType type, const std::string& searchQuery, std::string& outErr,
       size_t limit = 10) const;
-  [[nodiscard]] static std::string urlEncode(const std::string& value);
 
 private:
   [[nodiscard]] std::vector<remoteSearchResult> queryAniList(

@@ -57,7 +57,3 @@ TEST_CASE("remoteSearch reports an error when every provider fails") {
   CHECK(results.empty());
   CHECK(err.find("Failed to contact remote providers") == 0);
 }
-
-TEST_CASE("remoteSearch urlEncode escapes reserved characters") {
-  CHECK(remoteSearchEngine::urlEncode("a b&c/é") == "a%20b%26c%2f%c3%a9");
-}

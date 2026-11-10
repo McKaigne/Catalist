@@ -122,10 +122,6 @@ std::optional<std::string> fetchBody(iHttpClient& http,
 
 }  // namespace
 
-std::string remoteSearchEngine::urlEncode(const std::string& value) {
-  return url::encode(value);
-}
-
 std::vector<remoteSearchResult> remoteSearchEngine::queryAniList(
     mediaType type, const std::string& searchQuery, size_t limit) const {
   httpRequest request;
@@ -147,7 +143,7 @@ std::vector<remoteSearchResult> remoteSearchEngine::queryJikan(
   std::string endpoint = type == mediaType::kAnime ? "anime" : "manga";
   httpRequest request;
   request.url = "https://api.jikan.moe/v4/" + endpoint +
-                "?q=" + urlEncode(searchQuery) +
+                "?q=" + url::encode(searchQuery) +
                 "&limit=" + std::to_string(limit);
   request.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
   request.timeout = kSearchTimeout;

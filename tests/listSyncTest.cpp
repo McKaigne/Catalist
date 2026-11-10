@@ -29,6 +29,8 @@ public:
     if (failFetch)
       return catalist::result<std::vector<catalist::remoteListEntry>>::failure("offline");
     std::vector<catalist::remoteListEntry> rows;
+    if (answerEmpty)
+      return catalist::result<std::vector<catalist::remoteListEntry>>::success(rows);
     for (const auto& [id, item] : rows_) {
       if (item.type == type)
         rows.push_back({item, id});
@@ -71,6 +73,7 @@ public:
   bool connected = true;
   bool failFetch = false;
   bool failSave = false;
+  bool answerEmpty = false;
   std::optional<std::string> lastUser;
   std::vector<std::string> saved;
   std::vector<std::string> deleted;
@@ -259,4 +262,42 @@ TEST_CASE_FIXTURE(syncFixture, "import adds new rows and fills only what the use
   CHECK(mine.totalUnits == 12);
   CHECK(mine.syncedWith.empty());
   CHECK(mal.saved.empty());
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync carries a remote edit to the local copy and the other service"
+                  * doctest::should_fail()) {
+  mal.put(makeEntry().malId(5).title("Show").progress(1));
+  anilist.put(makeEntry().anilistId(100005).malId(5).title("Show").progress(1));
+  syncBoth();
+  mal.put(makeEntry().malId(5).title("Show").progress(7));
+  syncBoth();
+  CHECK(local(5).progress == 7);
+  CHECK(anilist.row(100005).progress == 7);
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync keeps a remote edit to a field the local edit left alone"
+                  * doctest::should_fail()) {
+  mal.put(makeEntry().malId(5).title("Show").progress(1).score(0));
+  syncMalOnly();
+  mal.put(makeEntry().malId(5).title("Show").progress(1).score(9));
+  entry edited = local(5);
+  edited.progress = 2;
+  edited.dirty = true;
+  db.updateEntry(edited);
+
+  syncMalOnly();
+  CHECK(mal.row(5).score == 9);
+  CHECK(mal.row(5).progress == 2);
+  CHECK(local(5).score == 9);
+}
+
+TEST_CASE_FIXTURE(syncFixture, "sync does not trust an empty list while entries are synced"
+                  * doctest::should_fail()) {
+  for (int id = 1; id <= 5; ++id)
+    mal.put(makeEntry().malId(id).title("Show " + std::to_string(id)));
+  syncMalOnly();
+  mal.answerEmpty = true;
+  auto report = syncMalOnly();
+  CHECK(db.getEntries(mediaType::kAnime).size() == 5);
+  CHECK_FALSE(report.ok());
 }

@@ -232,6 +232,22 @@ TEST_CASE_FIXTURE(tempDirFixture, "addEntry matches an existing entry by mal rem
   CHECK(db.getEntries(mediaType::kAnime)[0].totalUnits == 12);
 }
 
+TEST_CASE("addEntry never merges two titles that only share a local id"
+          * doctest::should_fail()) {
+  catalist::memoryFileSystem fs;
+  auto clock = catalist::test::makeTestClock();
+  catalist::database db(fs, clock, "/data");
+  db.addEntry(makeEntry().id(0).malId(52991).title("First"));
+  int titleOnly = db.addEntry(makeEntry().id(0).title("Title only"));
+  db.addEntry(makeEntry().id(titleOnly).malId(titleOnly).title("From MAL"));
+
+  CHECK(db.getEntries(mediaType::kAnime).size() == 3);
+  auto kept = db.getById(mediaType::kAnime, titleOnly);
+  REQUIRE(kept.has_value());
+  CHECK(kept->title == "Title only");
+  CHECK(kept->malId == 0);
+}
+
 TEST_CASE("database saves and reloads through an in-memory file system") {
   catalist::memoryFileSystem fs;
   auto clock = catalist::test::makeTestClock();

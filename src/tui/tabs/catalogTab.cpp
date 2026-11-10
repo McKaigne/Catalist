@@ -8,6 +8,7 @@
 
 #include "catalist/core/logger.hpp"
 #include "catalist/model/entryOps.hpp"
+#include "catalist/model/serviceLinks.hpp"
 #include "catalist/tui/actions.hpp"
 #include "catalist/tui/keys.hpp"
 #include "catalist/tui/theme/palettes.hpp"
@@ -878,7 +879,7 @@ Element catalogTab::renderHeaderCell(const std::string& name, sortKey key,
   return cell | reflect(box);
 }
 
-Element catalogTab::renderDetails(appContext& ctx) {
+Element catalogTab::renderDetails() {
   const auto& theme = themeRegistry::active();
   const entry* current = selectedEntry();
   if (!current)
@@ -902,14 +903,10 @@ Element catalogTab::renderDetails(appContext& ctx) {
   };
 
   Elements providerBadges;
-  for (const auto& provider : ctx.providers.getAllProviders()) {
-    std::string remoteId = e.getRemoteId(provider->getKey());
-    if (remoteId.empty())
-      continue;
+  for (const auto& badge : serviceBadges(e)) {
     if (!providerBadges.empty())
       providerBadges.push_back(text("  "));
-    providerBadges.push_back(
-        text(provider->getShortBadge() + " #" + remoteId) | color(theme.text));
+    providerBadges.push_back(text(badge) | color(theme.text));
   }
   if (providerBadges.empty())
     providerBadges.push_back(text("-") | color(theme.subtext));
@@ -1043,10 +1040,10 @@ Element catalogTab::renderCatalogCard() {
          color(focused ? theme.mauve : theme.surface0) | flex;
 }
 
-Element catalogTab::render(appContext& ctx) {
+Element catalogTab::render(appContext&) {
   return hbox({renderSidebarCard(),
                vbox({renderSearchCard(), renderCatalogCard() | flex}) | flex,
-               vbox({renderDetails(ctx) | flex}) | size(WIDTH, EQUAL, 42)});
+               vbox({renderDetails() | flex}) | size(WIDTH, EQUAL, 42)});
 }
 
 }  // namespace catalist

@@ -90,7 +90,7 @@ private:
   ftxui::Element renderHeaderCell(const std::string& name, sortKey key,
                                   int width, ftxui::Box& box,
                                   bool stretches) const;
-  ftxui::Element renderDetails(appContext& ctx);
+  ftxui::Element renderDetails();
   ftxui::Element renderSidebarCard() const;
   ftxui::Element renderSearchCard();
   ftxui::Element renderCatalogCard();

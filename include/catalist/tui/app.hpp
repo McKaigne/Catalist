@@ -9,7 +9,6 @@
 #include "catalist/core/clock.hpp"
 #include "catalist/model/undoStack.hpp"
 #include "catalist/net/accounts.hpp"
-#include "catalist/net/providers/providerRegistry.hpp"
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
@@ -24,7 +23,6 @@ struct tuiServices {
   iProcessLauncher& launcher;
   const iClock& clock;
   iHttpClient& http;
-  providerRegistry& providers;
   listAccounts& accounts;
 };
 

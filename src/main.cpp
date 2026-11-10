@@ -21,7 +21,6 @@
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
-#include "catalist/net/providers/providerRegistry.hpp"
 #include "catalist/core/version.hpp"
 #include "catalist/net/accounts.hpp"
 #include "catalist/tui/app.hpp"
@@ -121,7 +120,6 @@ int main(int argc, char* argv[]) {
   catalist::realFileSystem fileSystem;
   catalist::realProcessLauncher launcher;
   auto http = std::make_shared<catalist::curlHttpClient>();
-  catalist::providerRegistry providers(http);
   const auto dataDir = catalist::database::getDefaultConfigDir();
 
   catalist::logger::get().init(dataDir / "catalist.log", fileSystem, clock);
@@ -175,7 +173,7 @@ int main(int argc, char* argv[]) {
 
   LOG_INFO("Launching interactive TUI screen.");
   catalist::appTui app(db, settings,
-                       {fileSystem, launcher, clock, *http, providers, accounts});
+                       {fileSystem, launcher, clock, *http, accounts});
   app.run(startupTab);
   LOG_INFO("Catalist session exited cleanly.");
 

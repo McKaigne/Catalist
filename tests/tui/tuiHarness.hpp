@@ -30,7 +30,6 @@ struct tuiHarness {
   notifier notices;
   fakeProcessLauncher launcher;
   std::shared_ptr<mockHttpClient> http;
-  providerRegistry providers;
   accountFakes fakes;
   // After the fakes, so a running job is joined before they go away.
   jobRunner jobs;

@@ -10,10 +10,14 @@
 - **Context:** Magic values (`-1`, `"0000-00-00"`) caused error-prone checks.
 - **Decision:** Use `std::optional<T>` and `result<T>` instead of magic sentinels.
 
-## ADR-003: Decoupled Multi-Provider Subsystem
+## ADR-003: Decoupled Multi-Provider Subsystem (superseded)
 - **Context:** Remote search routines were split across ad-hoc curl routines.
 - **Decision:** Unify external providers behind the `iProvider` interface,
   managed by `providerRegistry`.
+- **Superseded:** Once the Search tab was removed, nothing called a
+  provider's search; only a badge and a web address per service were left.
+  Those are now a constant table in `model/serviceLinks`, and `catalist
+  search` keeps using `net/remoteSearch`.
 
 ## ADR-004: Explicit Unix Filter and Standard Stream Discipline
 - **Context:** Terminal tools must integrate smoothly into shell pipelines.

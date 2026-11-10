@@ -47,17 +47,13 @@ add_library(catalistCore STATIC
   src/model/activity.cpp
   src/model/entry.cpp
   src/model/entryOps.cpp
+  src/model/serviceLinks.cpp
   src/model/undoStack.cpp
   src/net/anilistAuth.cpp
   src/net/anilistListService.cpp
   src/net/listSync.cpp
   src/net/malAuth.cpp
   src/net/malListService.cpp
-  src/net/providers/anilistProvider.cpp
-  src/net/providers/engineSearch.cpp
-  src/net/providers/kitsuProvider.cpp
-  src/net/providers/malProvider.cpp
-  src/net/providers/providerRegistry.cpp
   src/net/remoteSearch.cpp
   src/platform/fileSystem.cpp
   src/platform/httpClient.cpp
@@ -161,11 +157,11 @@ add_executable(catalistTests
   tests/jsonTest.cpp
   tests/listServiceTest.cpp
   tests/listSyncTest.cpp
+  tests/serviceLinksTest.cpp
   tests/settingsTest.cpp
   tests/loggerTest.cpp
   tests/malAuthTest.cpp
   tests/malParserTest.cpp
-  tests/providerTest.cpp
   tests/remoteSearchTest.cpp
   tests/resolveEntryTest.cpp
   tests/resultTest.cpp

@@ -4,6 +4,7 @@
 
 #include "catalist/core/version.hpp"
 #include "catalist/model/activity.hpp"
+#include "catalist/model/serviceLinks.hpp"
 #include "catalist/net/listSync.hpp"
 #include "catalist/storage/backup.hpp"
 #include "catalist/storage/malParser.hpp"
@@ -29,7 +30,7 @@ entry asLocalEdit(entry restored) {
 }
 
 void openInBrowser(appContext& ctx, const entry& target) {
-  std::string url = ctx.providers.resolveUrl(target);
+  std::string url = webAddress(target);
   if (url.empty()) {
     ctx.notices.push(
         "Error: No external provider links associated with this entry.");

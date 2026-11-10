@@ -343,7 +343,6 @@ void appTui::run(const std::optional<std::string>& startupTab) {
                  services_.clock,
                  services_.fileSystem,
                  services_.http,
-                 services_.providers,
                  services_.accounts,
                  jobs};
 

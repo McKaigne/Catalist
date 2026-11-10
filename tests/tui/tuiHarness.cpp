@@ -11,12 +11,10 @@ tuiHarness::tuiHarness()
     : clock(makeTestClock()),
       db(fs, clock, "/data"),
       http(std::make_shared<mockHttpClient>()),
-      providers(http),
       fakes(fs, *http, clock, "/data"),
       jobs(notices, [] {}),
-      ctx{db,    settings, undo,  notices,   launcher,
-          clock, fs,       *http, providers, fakes.accounts,
-          jobs} {
+      ctx{db,    settings, undo,  notices,        launcher,
+          clock, fs,       *http, fakes.accounts, jobs} {
   themeRegistry::setActive(settings.theme);
 }
 

@@ -15,10 +15,14 @@ int runImport(const commandArgs& args, commandContext& ctx) {
   database& db = ctx.db;
   iFileSystem& fileSystem = ctx.fileSystem;
   if (args.empty()) {
-    emitError("usage", "usage: catalist import [--clean] <file.xml ...>",
+    emitError("usage",
+              "usage: catalist import [--clean] <file.xml ...> | "
+              "catalist import <mal|anilist> [--user NAME] [--type anime|manga]",
               false);
     return 2;
   }
+  if (ctx.accounts.find(args[0]))
+    return importFromAccount(args, ctx);
 
   bool clean = false;
   std::vector<std::string> files;

@@ -53,7 +53,6 @@ add_library(catalistCore STATIC
   src/net/listSync.cpp
   src/net/malAuth.cpp
   src/net/malListService.cpp
-  src/net/metadataSync.cpp
   src/net/providers/anilistProvider.cpp
   src/net/providers/engineSearch.cpp
   src/net/providers/kitsuProvider.cpp
@@ -76,6 +75,7 @@ target_compile_options(catalistCore PRIVATE ${CATALIST_WARNING_FLAGS})
 
 add_library(catalistCli STATIC
   src/cli/args.cpp
+  src/cli/commands/accounts.cpp
   src/cli/commands/add.cpp
   src/cli/commands/completion.cpp
   src/cli/commands/config.cpp
@@ -107,6 +107,7 @@ add_library(catalistTui STATIC
   src/tui/tabs/statsTab.cpp
   src/tui/theme/statusStyle.cpp
   src/tui/theme/themeRegistry.cpp
+  src/tui/widgets/card.cpp
   src/tui/widgets/commandPalette.cpp
   src/tui/widgets/marquee.cpp
   src/tui/widgets/notifier.cpp

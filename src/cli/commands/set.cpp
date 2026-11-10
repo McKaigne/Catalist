@@ -234,6 +234,7 @@ int runSet(const commandArgs& args, commandContext& ctx) {
       e.title = setTitle.value();
 
     e.updatedAt = today;
+    e.dirty = true;
 
     db.updateEntry(e);
     successCount++;

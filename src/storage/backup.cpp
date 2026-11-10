@@ -4,6 +4,7 @@
 #include <optional>
 
 #include "catalist/storage/csvCodec.hpp"
+#include "catalist/storage/malParser.hpp"
 
 namespace catalist::backup {
 
@@ -88,6 +89,23 @@ std::vector<std::filesystem::path> exportCatalog(iFileSystem& fileSystem,
       written.push_back(target);
   }
   return written;
+}
+
+xmlExportResult exportMalXml(iFileSystem& fileSystem, const iClock& clock,
+                             const database& db) {
+  auto directory = db.getConfigPath() / "exports";
+  fileSystem.createDirectories(directory);
+  std::string stamp = formatLocalTime(clock, "%Y%m%d_%H%M%S");
+  xmlExportResult exported;
+  for (auto type : {mediaType::kAnime, mediaType::kManga}) {
+    std::string kind = type == mediaType::kAnime ? "anime" : "manga";
+    auto target = directory / (kind + "_" + stamp + ".xml");
+    auto xml = malParser::exportXml(db.getEntries(type), type);
+    exported.skipped += xml.skipped;
+    if (fileSystem.writeFileAtomic(target, xml.xml))
+      exported.files.push_back(target);
+  }
+  return exported;
 }
 
 }  // namespace catalist::backup

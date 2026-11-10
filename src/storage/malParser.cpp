@@ -233,4 +233,86 @@ size_t malParser::importXml(const iFileSystem& fileSystem,
   return imported;
 }
 
+namespace {
+
+// CDATA cannot contain "]]>", so it is split across two sections.
+std::string cdata(const std::string& text) {
+  std::string escaped;
+  size_t start = 0;
+  for (size_t found = text.find("]]>"); found != std::string::npos;
+       found = text.find("]]>", start)) {
+    escaped += text.substr(start, found - start) + "]]]]><![CDATA[>";
+    start = found + 3;
+  }
+  return "<![CDATA[" + escaped + text.substr(start) + "]]>";
+}
+
+std::string xmlTag(const std::string& name, const std::string& value) {
+  return "\t\t<" + name + ">" + value + "</" + name + ">\n";
+}
+
+std::string xmlStatus(const entry& item) {
+  return statusToString(item.status, item.type);
+}
+
+std::string animeBlock(const entry& item) {
+  std::string block = "\t<anime>\n";
+  block += xmlTag("series_animedb_id", std::to_string(item.malId));
+  block += xmlTag("series_title", cdata(item.title));
+  block += xmlTag("series_episodes", std::to_string(item.totalUnits));
+  block += xmlTag("my_watched_episodes", std::to_string(item.progress));
+  block += xmlTag("my_times_watched", std::to_string(item.rewatched));
+  return block;
+}
+
+std::string mangaBlock(const entry& item) {
+  std::string block = "\t<manga>\n";
+  block += xmlTag("manga_mangadb_id", std::to_string(item.malId));
+  block += xmlTag("manga_title", cdata(item.title));
+  block += xmlTag("manga_volumes", std::to_string(item.totalVolumes));
+  block += xmlTag("manga_chapters", std::to_string(item.totalUnits));
+  block += xmlTag("my_read_volumes", std::to_string(item.volumes));
+  block += xmlTag("my_read_chapters", std::to_string(item.progress));
+  block += xmlTag("my_times_read", std::to_string(item.rewatched));
+  return block;
+}
+
+std::string entryBlock(const entry& item) {
+  bool anime = item.type == mediaType::kAnime;
+  std::string block = anime ? animeBlock(item) : mangaBlock(item);
+  if (item.startDate)
+    block += xmlTag("my_start_date", item.startDate->toString());
+  if (item.finishDate)
+    block += xmlTag("my_finish_date", item.finishDate->toString());
+  block += xmlTag("my_score", std::to_string(item.score));
+  block += xmlTag("my_status", xmlStatus(item));
+  block += xmlTag("my_comments", cdata(item.notes));
+  block += xmlTag("update_on_import", "1");
+  return block + (anime ? "\t</anime>\n" : "\t</manga>\n");
+}
+
+}  // namespace
+
+malXmlExport malParser::exportXml(const std::vector<entry>& entries,
+                                  mediaType type) {
+  malXmlExport exported;
+  exported.xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<myanimelist>\n"
+      "\t<myinfo>\n\t\t<user_export_type>" +
+      std::string(type == mediaType::kAnime ? "1" : "2") +
+      "</user_export_type>\n\t</myinfo>\n";
+  for (const auto& item : entries) {
+    if (item.type != type)
+      continue;
+    if (item.malId <= 0) {
+      ++exported.skipped;
+      continue;
+    }
+    exported.xml += entryBlock(item);
+    ++exported.written;
+  }
+  exported.xml += "</myanimelist>\n";
+  return exported;
+}
+
 }  // namespace catalist

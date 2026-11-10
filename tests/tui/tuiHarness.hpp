@@ -13,13 +13,6 @@
 
 namespace catalist::test {
 
-class noAuthServer : public iAuthCallbackServer {
-public:
-  std::optional<std::string> waitForCode(std::chrono::seconds) override {
-    return std::nullopt;
-  }
-};
-
 // A complete appContext over fakes: in-memory files under /data, the fixed
 // test clock, mock HTTP, a recording process launcher and no real network.
 struct tuiHarness {
@@ -38,8 +31,8 @@ struct tuiHarness {
   fakeProcessLauncher launcher;
   std::shared_ptr<mockHttpClient> http;
   providerRegistry providers;
-  noAuthServer authServer;
-  malAuth auth;
+  accountFakes fakes;
+  // After the fakes, so a running job is joined before they go away.
   jobRunner jobs;
   appContext ctx;
 };

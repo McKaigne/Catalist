@@ -25,7 +25,7 @@ _catalist_completions() {
   local cur prev subcommands
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  subcommands="ls show count random search add set rm stats export import config completion"
+  subcommands="ls show count random search add set rm stats export import config completion login logout sync"
 
   if [ $COMP_CWORD -eq 1 ]; then
     COMPREPLY=( $(compgen -W "${subcommands} --version --help -v -h" -- "${cur}") )
@@ -50,7 +50,11 @@ _catalist_completions() {
       return 0
       ;;
     export)
-      COMPREPLY=( $(compgen -W "json csv" -- "${cur}") )
+      COMPREPLY=( $(compgen -W "json csv xml" -- "${cur}") )
+      return 0
+      ;;
+    login|logout|sync)
+      COMPREPLY=( $(compgen -W "mal anilist" -- "${cur}") )
       return 0
       ;;
     config)
@@ -88,6 +92,9 @@ _catalist() {
     'export:Dump database to stdout'
     'import:Ingest MyAnimeList XML export'
     'config:Inspect or change preferences'
+    'login:Log in to MyAnimeList or AniList'
+    'logout:Forget a MyAnimeList or AniList login'
+    'sync:Two-way sync with MyAnimeList and AniList'
     'completion:Generate shell autocompletions'
   )
 
@@ -126,7 +133,10 @@ _catalist() {
             '-n[Notes]:notes:'
           ;;
         export)
-          _arguments '1:format:(json csv)'
+          _arguments '1:format:(json csv xml)'
+          ;;
+        login|logout|sync)
+          _arguments '1:service:(mal anilist)'
           ;;
         config)
           _arguments '1:action:(list get set)'
@@ -146,7 +156,7 @@ _catalist "$@"
 
   if (shell == "fish") {
     std::cout << R"fish(# Fish completion for catalist
-set -l commands ls show count random search add set rm stats export import config completion
+set -l commands ls show count random search add set rm stats export import config completion login logout sync
 
 complete -c catalist -f
 complete -c catalist -n "not __fish_seen_subcommand_from $commands" -a "ls" -d "List entries"
@@ -160,12 +170,16 @@ complete -c catalist -n "not __fish_seen_subcommand_from $commands" -a "rm" -d "
 complete -c catalist -n "not __fish_seen_subcommand_from $commands" -a "stats" -d "Analytics telemetry"
 complete -c catalist -n "not __fish_seen_subcommand_from $commands" -a "export" -d "Dump database"
 complete -c catalist -n "not __fish_seen_subcommand_from $commands" -a "config" -d "Modify configuration"
+complete -c catalist -n "not __fish_seen_subcommand_from $commands" -a "login" -d "Log in to MyAnimeList or AniList"
+complete -c catalist -n "not __fish_seen_subcommand_from $commands" -a "logout" -d "Forget a login"
+complete -c catalist -n "not __fish_seen_subcommand_from $commands" -a "sync" -d "Two-way sync"
 complete -c catalist -n "not __fish_seen_subcommand_from $commands" -a "completion" -d "Generate shell completion"
 
 complete -c catalist -n "__fish_seen_subcommand_from ls count random" -l type -s t -r -a "anime manga"
 complete -c catalist -n "__fish_seen_subcommand_from ls count random" -l status -s s -r -a "watching reading completed on-hold dropped planned"
 complete -c catalist -n "__fish_seen_subcommand_from ls count random" -l sort -r -a "date title status rating progress id"
-complete -c catalist -n "__fish_seen_subcommand_from export" -a "json csv"
+complete -c catalist -n "__fish_seen_subcommand_from export" -a "json csv xml"
+complete -c catalist -n "__fish_seen_subcommand_from login logout sync" -a "mal anilist"
 complete -c catalist -n "__fish_seen_subcommand_from completion" -a "bash zsh fish"
 complete -c catalist -n "__fish_seen_subcommand_from config" -a "list get set"
 )fish";

@@ -12,10 +12,10 @@ tuiHarness::tuiHarness()
       db(fs, clock, "/data"),
       http(std::make_shared<mockHttpClient>()),
       providers(http),
-      auth(fs, *http, launcher, authServer, clock, "/data/mal_auth.json"),
+      fakes(fs, *http, clock, "/data"),
       jobs(notices, [] {}),
       ctx{db,    settings, undo,  notices,   launcher,
-          clock, fs,     *http, providers, auth,
+          clock, fs,       *http, providers, fakes.accounts,
           jobs} {
   themeRegistry::setActive(settings.theme);
 }

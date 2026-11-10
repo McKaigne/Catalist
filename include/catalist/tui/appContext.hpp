@@ -4,7 +4,7 @@
 #include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/model/undoStack.hpp"
-#include "catalist/net/malAuth.hpp"
+#include "catalist/net/accounts.hpp"
 #include "catalist/net/providers/providerRegistry.hpp"
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
@@ -27,7 +27,7 @@ struct appContext {
   iFileSystem& fileSystem;
   iHttpClient& http;
   providerRegistry& providers;
-  malAuth& auth;
+  listAccounts& accounts;
   jobRunner& jobs;
 };
 

@@ -24,6 +24,11 @@ int runImport(const commandArgs& args, commandContext& ctx);
 int runSearch(const commandArgs& args, commandContext& ctx);
 int runConfig(const commandArgs& args, commandContext& ctx);
 int runCompletion(const commandArgs& args, commandContext& ctx);
+int runLogin(const commandArgs& args, commandContext& ctx);
+int runLogout(const commandArgs& args, commandContext& ctx);
+int runSync(const commandArgs& args, commandContext& ctx);
+// `import mal|anilist ...`: pulls a list without sending anything back.
+int importFromAccount(const commandArgs& args, commandContext& ctx);
 
 }  // namespace catalist::cli
 

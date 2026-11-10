@@ -25,6 +25,8 @@ const std::vector<commandEntry>& commandTable() {
       {"export", runExport}, {"import", runImport},
       {"search", runSearch}, {"find", runSearch},
       {"config", runConfig}, {"completion", runCompletion},
+      {"login", runLogin},   {"logout", runLogout},
+      {"sync", runSync},
   };
   return table;
 }

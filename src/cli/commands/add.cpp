@@ -164,6 +164,7 @@ int runAdd(const commandArgs& args, commandContext& ctx) {
   e.finishDate = finishDate;
   e.notes = notes;
   e.updatedAt = startDate;
+  e.dirty = true;
 
   int assignedId = db.addEntry(e);
   db.saveAll();

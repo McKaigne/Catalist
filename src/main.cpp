@@ -7,7 +7,10 @@
 #include <iostream>
 #include <optional>
 #include <string>
+#include <chrono>
+#include <functional>
 #include <memory>
+#include <thread>
 #include <unistd.h>
 
 #include "catalist/cli/dispatcher.hpp"
@@ -19,7 +22,8 @@
 #include "catalist/platform/httpClient.hpp"
 #include "catalist/platform/processLauncher.hpp"
 #include "catalist/net/providers/providerRegistry.hpp"
-#include "catalist/net/malAuth.hpp"
+#include "catalist/core/version.hpp"
+#include "catalist/net/accounts.hpp"
 #include "catalist/tui/app.hpp"
 
 namespace {
@@ -87,6 +91,22 @@ void setupCrashHandlers() {
   });
 }
 
+// MyAnimeList asks clients to keep to about one request a second; AniList
+// allows 90 a minute.
+constexpr auto kMalPause = std::chrono::milliseconds(1000);
+constexpr auto kAnilistPause = std::chrono::milliseconds(700);
+
+std::function<void()> paceRequests(std::chrono::milliseconds pause) {
+  return [pause] { std::this_thread::sleep_for(pause); };
+}
+
+std::string anilistClientId() {
+  const char* fromEnvironment = std::getenv("CATALIST_ANILIST_CLIENT_ID");
+  if (fromEnvironment && *fromEnvironment)
+    return fromEnvironment;
+  return catalist::kBuiltInAnilistClientId;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -132,22 +152,30 @@ int main(int argc, char* argv[]) {
     startupTab = argv[2];
   }
 
+  catalist::loopbackAuthServer authCallback(8080);
+  catalist::malAuth malLogin(fileSystem, *http, launcher, authCallback, clock,
+                             dataDir / "mal_auth.json");
+  catalist::anilistAuth anilistLogin(fileSystem, dataDir / "anilist_auth.json",
+                                     anilistClientId());
+  catalist::malListService malList(*http, malLogin, paceRequests(kMalPause));
+  catalist::anilistListService anilistList(*http, anilistLogin,
+                                           paceRequests(kAnilistPause));
+  catalist::listAccounts accounts{malLogin, anilistLogin, malList, anilistList};
+
   if (argc > 1 && !opensTab) {
     LOG_INFO("Dispatching CLI command: " + std::string(argv[1]));
     catalist::cli::commandContext cliContext{
-        db,         settings,   clock,
-        *http,      fileSystem, settingsPath,
+        db,         settings, clock,
+        *http,      fileSystem, launcher,
+        accounts,   settingsPath,
         catalist::cli::pickRandomIndex,
         isatty(STDOUT_FILENO) == 1};
     return catalist::cli::dispatch(argc, argv, cliContext);
   }
 
   LOG_INFO("Launching interactive TUI screen.");
-  catalist::loopbackAuthServer authCallback(8080);
-  catalist::malAuth auth(fileSystem, *http, launcher, authCallback, clock,
-                         dataDir / "mal_auth.json");
   catalist::appTui app(db, settings,
-                       {fileSystem, launcher, clock, *http, providers, auth});
+                       {fileSystem, launcher, clock, *http, providers, accounts});
   app.run(startupTab);
   LOG_INFO("Catalist session exited cleanly.");
 

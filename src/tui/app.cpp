@@ -22,6 +22,7 @@
 #include "catalist/tui/tabs/statsTab.hpp"
 #include "catalist/tui/theme/palettes.hpp"
 #include "catalist/tui/theme/themeRegistry.hpp"
+#include "catalist/tui/widgets/card.hpp"
 #include "catalist/tui/widgets/pill.hpp"
 
 namespace catalist {
@@ -91,13 +92,19 @@ public:
   }
 
   bool onEvent(const Event& event) {
-    if (event == Event::Custom)
+    if (event == Event::Custom) {
+      refreshAfterSync();
       return true;
+    }
     if (event.is_mouse() && !ctx_.settings.mouse)
       return true;
     if (ctx_.notices.hasPopup()) {
       if (isPopupDismissal(event))
         ctx_.notices.dismiss();
+      return true;
+    }
+    if (isSyncing(ctx_)) {
+      ctx_.notices.setStatus("Sync in progress; the catalogue is back when it ends.");
       return true;
     }
     if (palette_.isOpen())
@@ -111,7 +118,11 @@ public:
 
   Element render() {
     const auto& theme = themeRegistry::active();
-    auto base = vbox({renderTopBar(theme), activeTab().render(ctx_) | flex,
+    // The sync job writes the catalogue on its own thread, so nothing that
+    // reads entries is drawn until it ends.
+    bool syncing = isSyncing(ctx_);
+    Element body = syncing ? renderSyncCard() : activeTab().render(ctx_);
+    auto base = vbox({renderTopBar(theme, !syncing), body | flex,
                       renderBottomBar(theme)});
     if (auto popup = ctx_.notices.renderPopup(theme))
       return dbox({base, *popup});
@@ -123,6 +134,23 @@ public:
   }
 
 private:
+  void refreshAfterSync() {
+    bool syncing = isSyncing(ctx_);
+    if (wasSyncing_ && !syncing)
+      activeTab().onActivate(ctx_);
+    wasSyncing_ = syncing;
+  }
+
+  Element renderSyncCard() {
+    auto body = vbox({card::note("Pulling your MyAnimeList and AniList lists,"),
+                      card::note("sending local edits and deletions."),
+                      text(""),
+                      card::note("A backup was taken first; the result appears"),
+                      card::note("here when the sync ends.")});
+    return card::frame(icon::kSync + " SYNCING", body, true) |
+           size(WIDTH, EQUAL, 56) | size(HEIGHT, EQUAL, 10) | center | flex;
+  }
+
   bool handleGlobalKey(const Event& event) {
     int count = static_cast<int>(tabs_.size());
     if (event == Event::Tab) {
@@ -207,12 +235,12 @@ private:
     activeTab().onActivate(ctx_);
   }
 
-  Element renderTopBar(const themePalette& theme) {
+  Element renderTopBar(const themePalette& theme, bool showCounts) {
     Elements items;
     for (size_t i = 0; i < tabs_.size(); ++i) {
       iTab& tab = *tabs_[i];
       bool active = &tab == &activeTab();
-      std::string count = tab.countBadge(ctx_).value_or("");
+      std::string count = showCounts ? tab.countBadge(ctx_).value_or("") : "";
       items.push_back(tabLabel(static_cast<int>(i) + 1, active, tab.title(),
                                tab.icon(), count, theme));
       items.push_back(text("│") | color(theme.surface0));
@@ -225,10 +253,15 @@ private:
   }
 
   Element renderBottomBar(const themePalette& theme) {
+    auto accountPill = [&](const std::string& name, bool connected) {
+      return connected ? pill(icon::kSync + " " + name, theme.crust, theme.green)
+                       : pill(icon::kOffline + " " + name, Color::Black,
+                              theme.surface2);
+    };
     Element account =
-        ctx_.auth.isAuthenticated()
-            ? pill(icon::kSync + " MAL: Connected", theme.crust, theme.green)
-            : pill(icon::kOffline + " Offline", Color::Black, theme.surface2);
+        hbox({accountPill("MAL", ctx_.accounts.malLogin.isAuthenticated()),
+              text(" "),
+              accountPill("AniList", ctx_.accounts.anilistLogin.isAuthenticated())});
 
     Elements hintItems;
     for (const auto& item : activeTab().hints()) {
@@ -246,7 +279,7 @@ private:
                                       color(theme.green),
                                   text("│ ") | color(theme.surface1)});
 
-    int maxStatusLength = std::max(16, Terminal::Size().dimx - 76 - 28);
+    int maxStatusLength = std::max(16, Terminal::Size().dimx - 76 - 40);
     return hbox({text(" "), account, text(" │ ") | color(theme.surface1),
                  selectionElement,
                  text(truncated(ctx_.notices.status(), maxStatusLength)) |
@@ -260,6 +293,7 @@ private:
   commandPalette& palette_;
   ScreenInteractive& screen_;
   int activeIndex_ = 0;
+  bool wasSyncing_ = false;
 };
 
 std::vector<std::unique_ptr<iTab>> makeTabs(const appSettings& settings) {
@@ -309,7 +343,7 @@ void appTui::run(const std::optional<std::string>& startupTab) {
                  services_.fileSystem,
                  services_.http,
                  services_.providers,
-                 services_.auth,
+                 services_.accounts,
                  jobs};
 
   auto ownedTabs = makeTabs(settings_);

@@ -51,6 +51,16 @@ std::vector<std::filesystem::path> exportCatalog(iFileSystem& fileSystem,
                                                  const iClock& clock,
                                                  const database& db);
 
+struct xmlExportResult {
+  std::vector<std::filesystem::path> files;
+  size_t skipped = 0;
+};
+
+// Writes exports/<kind>_<YYYYmmdd_HHMMSS>.xml in the MyAnimeList format for
+// both catalogues; entries without a MyAnimeList id are counted as skipped.
+xmlExportResult exportMalXml(iFileSystem& fileSystem, const iClock& clock,
+                             const database& db);
+
 }  // namespace catalist::backup
 
 #endif  // CATALIST_STORAGE_BACKUP_HPP_

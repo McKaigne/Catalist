@@ -8,7 +8,7 @@
 #include "catalist/settings/settings.hpp"
 #include "catalist/core/clock.hpp"
 #include "catalist/model/undoStack.hpp"
-#include "catalist/net/malAuth.hpp"
+#include "catalist/net/accounts.hpp"
 #include "catalist/net/providers/providerRegistry.hpp"
 #include "catalist/platform/fileSystem.hpp"
 #include "catalist/platform/httpClient.hpp"
@@ -25,7 +25,7 @@ struct tuiServices {
   const iClock& clock;
   iHttpClient& http;
   providerRegistry& providers;
-  malAuth& auth;
+  listAccounts& accounts;
 };
 
 // Ids of the tabs this build provides, in default order.

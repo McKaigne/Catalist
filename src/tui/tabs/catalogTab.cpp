@@ -708,6 +708,7 @@ void catalogTab::commitNotes(appContext& ctx) {
     entry after = before;
     after.notes = notesBuffer_;
     after.updatedAt = localDate(ctx.clock);
+    after.dirty = true;
     ctx.undo.record({historyAction::kMutate, after.type, before, after});
     ctx.db.updateEntry(after);
     ctx.db.saveAll();
@@ -756,9 +757,9 @@ void catalogTab::undoLast(appContext& ctx) {
     return;
   }
   if (action->actionType == historyAction::kMutate)
-    ctx.db.updateEntry(action->before);
+    ctx.db.updateEntry(asLocalEdit(action->before));
   else if (action->actionType == historyAction::kDelete)
-    ctx.db.addEntry(action->before);
+    ctx.db.addEntry(asLocalEdit(action->before));
   else
     ctx.db.removeEntry(action->media, action->after.id);
   ctx.db.saveAll();
@@ -773,11 +774,11 @@ void catalogTab::redoLast(appContext& ctx) {
     return;
   }
   if (action->actionType == historyAction::kMutate)
-    ctx.db.updateEntry(action->after);
+    ctx.db.updateEntry(asLocalEdit(action->after));
   else if (action->actionType == historyAction::kDelete)
     ctx.db.removeEntry(action->media, action->before.id);
   else
-    ctx.db.addEntry(action->after);
+    ctx.db.addEntry(asLocalEdit(action->after));
   ctx.db.saveAll();
   ctx.notices.push("Action redone successfully.");
   refresh(ctx);

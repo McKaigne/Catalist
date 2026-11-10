@@ -1,8 +1,7 @@
 #include "catalist/tui/tabs/statsTab.hpp"
 
-#include <map>
-
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -10,6 +9,7 @@
 #include "catalist/tui/keys.hpp"
 #include "catalist/tui/theme/palettes.hpp"
 #include "catalist/tui/theme/themeRegistry.hpp"
+#include "catalist/tui/widgets/card.hpp"
 #include "catalist/tui/widgets/marquee.hpp"
 
 namespace catalist {
@@ -81,101 +81,94 @@ Element statusBar(const statusCounts& counts, const themePalette& theme) {
 
 Element legendRow(const std::string& label, size_t count, Color dot,
                   const themePalette& theme) {
-  return hbox({text("● ") | color(dot), text(label) | color(theme.blue),
-               filler(), text(formatCommas(count)) | color(theme.text)});
+  return hbox({text("  ● ") | color(dot), text(label) | color(theme.text),
+               filler(),
+               text("(" + formatCommas(static_cast<long long>(count)) + ")  ") |
+                   color(theme.subtext)});
 }
 
-Element totalRow(const std::string& label, long long value,
-                 const themePalette& theme) {
-  return hbox({text(label) | color(theme.subtext), filler(),
-               text(formatCommas(value)) | color(theme.text)});
+Element sidebarCard(const database& db, mediaType selected,
+                    const themePalette& theme) {
+  bool isAnime = selected == mediaType::kAnime;
+  auto counts = countStatuses(db, selected);
+  auto mediaChoice = [&](mediaType type, const std::string& label) {
+    std::string count =
+        " (" + std::to_string(db.getEntries(type).size()) + ")";
+    return card::choice(type == selected, label + count,
+                        type == selected ? theme.mauve : theme.text);
+  };
+  auto body = vbox({card::section("MEDIA"),
+                    mediaChoice(mediaType::kAnime, icon::kAnime + " Anime"),
+                    mediaChoice(mediaType::kManga, icon::kManga + " Manga"),
+                    text(""), card::section("STATUS"),
+                    legendRow(isAnime ? "Watching" : "Reading", counts.watching,
+                              theme.green, theme),
+                    legendRow("Completed", counts.completed, theme.blue, theme),
+                    legendRow("On-Hold", counts.onHold, theme.yellow, theme),
+                    legendRow("Dropped", counts.dropped, theme.red, theme),
+                    legendRow(isAnime ? "Plan to Watch" : "Plan to Read",
+                              counts.planned, theme.overlay0, theme),
+                    filler()});
+  return card::frame("Statistics", body, true) | size(WIDTH, EQUAL, 28);
 }
 
-Element recentActivity(const database& db, mediaType type,
-                       const themePalette& theme) {
-  bool isAnime = type == mediaType::kAnime;
-  Elements rows = {
-      hbox({text(isAnime ? "Last Anime Updates" : "Last Manga Updates") | bold |
-                color(theme.text),
-            filler(),
-            text(isAnime ? "Anime History" : "Manga History") |
-                color(theme.blue)}),
-      text("")};
-  auto recent = db.getRecentActivity(type, 3);
-  if (recent.empty())
-    rows.push_back(text(" No recent history logged.") | color(theme.subtext));
-
-  for (const auto& activity : recent) {
-    float ratio = activity.totalUnits > 0
-                      ? std::clamp(static_cast<float>(activity.progress) /
-                                       activity.totalUnits,
-                                   0.0f, 1.0f)
-                      : 0.0f;
-    const int gaugeWidth = 14;
-    int filled = static_cast<int>(std::round(ratio * gaugeWidth));
-    Color fill = activity.status == watchStatus::kCompleted ? theme.blue
-                                                            : theme.green;
-    auto miniBar =
-        hbox({text(std::string(filled, ' ')) | bgcolor(fill),
-              text(std::string(std::max(0, gaugeWidth - filled), ' ')) |
-                  bgcolor(theme.surface1)});
-    std::string summary =
-        statusToString(activity.status, activity.type) + " " +
-        std::to_string(activity.progress) + "/" +
-        (activity.totalUnits > 0 ? std::to_string(activity.totalUnits) : "?") +
-        " · Scored " +
-        (activity.score > 0 ? std::to_string(activity.score) : "-");
-    rows.push_back(
-        vbox({text(marquee::clip(activity.title, 42)) | bold | color(theme.blue),
-              hbox({miniBar, filler(),
-                    text(activity.timestamp) | color(theme.overlay0)}),
-              text(summary) | color(theme.subtext), text("")}));
-  }
-  return vbox(std::move(rows)) | size(WIDTH, EQUAL, 46);
+Element metric(const std::string& label, const std::string& value,
+               const themePalette& theme) {
+  return card::field(false, label, text(value) | bold | color(theme.text), 16);
 }
 
-Element mediaSection(const database& db, mediaType type,
-                     const std::string& heading, Color accent,
+Element overviewCard(const database& db, mediaType type,
                      const themePalette& theme) {
   bool isAnime = type == mediaType::kAnime;
   auto counts = countStatuses(db, type);
-  auto legend =
-      vbox({legendRow(isAnime ? "Watching" : "Reading", counts.watching,
-                      theme.green, theme),
-            legendRow("Completed", counts.completed, theme.blue, theme),
-            legendRow("On-Hold", counts.onHold, theme.yellow, theme),
-            legendRow("Dropped", counts.dropped, theme.red, theme),
-            legendRow(isAnime ? "Plan to Watch" : "Plan to Read",
-                      counts.planned, theme.overlay0, theme)}) |
-      size(WIDTH, EQUAL, 23);
-  auto totals =
-      vbox({totalRow("Total Entries", static_cast<long long>(counts.total),
-                     theme),
-            totalRow(isAnime ? "Rewatched" : "Reread", db.totalRewatched(type),
-                     theme),
-            totalRow(isAnime ? "Episodes" : "Chapters", db.totalProgress(type),
-                     theme),
-            isAnime ? text("")
-                    : totalRow("Volumes", db.totalVolumes(mediaType::kManga),
-                               theme)}) |
-      size(WIDTH, EQUAL, 20);
+  auto left = vbox(
+      {metric("Days spent:", formatDays(db.daysSpent(type)), theme),
+       metric("Mean score:", formatMean(db.averageScore(type)), theme),
+       metric("Entries:", formatCommas(static_cast<long long>(counts.total)),
+              theme)});
+  auto right = vbox(
+      {metric(isAnime ? "Episodes:" : "Chapters:",
+              formatCommas(db.totalProgress(type)), theme),
+       metric(isAnime ? "Rewatched:" : "Reread:",
+              formatCommas(db.totalRewatched(type)), theme),
+       isAnime ? text("")
+               : metric("Volumes:", formatCommas(db.totalVolumes(type)), theme)});
+  auto body = vbox({card::section("TOTALS"), hbox({left | flex, right | flex}),
+                    text(""), card::section("BY STATUS"),
+                    hbox({text("  "), statusBar(counts, theme), filler()})});
+  return card::frame(isAnime ? "ANIME OVERVIEW" : "MANGA OVERVIEW", body,
+                     false);
+}
 
-  auto statsPane =
-      vbox({hbox({text(heading) | bold | color(accent), filler(),
-                  text("All " + heading) | color(theme.blue)}),
-            text(""),
-            hbox({text("Days: ") | color(theme.subtext),
-                  text(formatDays(db.daysSpent(type))) | bold |
-                      color(theme.text),
-                  filler(), text("Mean Score: ") | color(theme.subtext),
-                  text(formatMean(db.averageScore(type))) | bold |
-                      color(theme.text)}),
-            text(""), statusBar(counts, theme), text(""),
-            hbox({legend, text("   "), totals})}) |
-      size(WIDTH, EQUAL, 48);
+Element activityItem(const activityRecord& activity, const themePalette& theme) {
+  float ratio = activity.totalUnits > 0
+                    ? std::clamp(static_cast<float>(activity.progress) /
+                                     activity.totalUnits,
+                                 0.0f, 1.0f)
+                    : 0.0f;
+  Color fill =
+      activity.status == watchStatus::kCompleted ? theme.green : theme.blue;
+  std::string summary =
+      statusToString(activity.status, activity.type) + " · " +
+      std::to_string(activity.progress) + "/" +
+      (activity.totalUnits > 0 ? std::to_string(activity.totalUnits) : "?") +
+      " · " + (activity.score > 0 ? std::to_string(activity.score) + "/10" : "unscored");
+  return vbox({text("  " + marquee::clip(activity.title, 36)) | bold |
+                   color(theme.mauve),
+               text("  " + activity.timestamp) | color(theme.overlay0),
+               hbox({text("  "), gauge(ratio) | color(fill) | flex, text("  ")}),
+               text("  " + summary) | color(theme.subtext), text("")});
+}
 
-  return hbox({statsPane, text("    "), separator() | color(theme.surface0),
-               text("    "), recentActivity(db, type, theme)});
+Element activityCard(const database& db, mediaType type,
+                     const themePalette& theme) {
+  Elements rows;
+  for (const auto& activity : db.getRecentActivity(type, 6))
+    rows.push_back(activityItem(activity, theme));
+  if (rows.empty())
+    rows.push_back(card::note("No updates logged yet."));
+  return card::frame("RECENT ACTIVITY", vbox(std::move(rows)) | frame, false) |
+         size(WIDTH, EQUAL, 42);
 }
 
 Element barChart(const std::vector<std::pair<std::string, size_t>>& rows,
@@ -226,11 +219,8 @@ std::vector<std::pair<std::string, size_t>> entriesPerYear(const database& db,
   return rows;
 }
 
-Element chartCard(const std::string& heading, Element chart,
-                  const themePalette& theme) {
-  return vbox({text(" " + heading) | bold | color(theme.lavender), text(""),
-               chart}) |
-         border | color(theme.surface0) | flex;
+Element chartCard(const std::string& heading, Element chart) {
+  return card::frame(heading, hbox({text("  "), std::move(chart)}), false) | flex;
 }
 
 }  // namespace
@@ -249,34 +239,19 @@ std::string statsTab::icon() const {
 
 Element statsTab::render(appContext& ctx) {
   const auto& theme = themeRegistry::active();
-  bool isAnime = media_ == mediaType::kAnime;
-  auto toggle = hbox({text(" Anime ") | (isAnime ? bold | color(theme.mauve)
-                                                 : color(theme.subtext)),
-                      text("│") | color(theme.surface1),
-                      text(" Manga ") | (isAnime ? color(theme.subtext)
-                                                 : bold | color(theme.mauve))});
   auto charts =
-      hbox({chartCard("Score Histogram",
-                      barChart(scoreHistogram(ctx.db, media_), theme.yellow, theme),
-                      theme),
-            text(" "),
-            chartCard("Entries per Start Year",
-                      barChart(entriesPerYear(ctx.db, media_), theme.blue, theme),
-                      theme)});
-  return vbox({hbox({text("Statistics") | bold | color(theme.text), filler(),
-                     toggle}),
-               text(""),
-               mediaSection(ctx.db, media_,
-                            isAnime ? "Anime Stats" : "Manga Stats",
-                            isAnime ? theme.lavender : theme.peach, theme),
-               text(""), charts, filler()}) |
-         size(WIDTH, EQUAL, 102) | center | flex;
+      hbox({chartCard("SCORES", barChart(scoreHistogram(ctx.db, media_),
+                                         theme.yellow, theme)),
+            chartCard("START YEARS", barChart(entriesPerYear(ctx.db, media_),
+                                              theme.blue, theme))});
+  return hbox({sidebarCard(ctx.db, media_, theme),
+               vbox({overviewCard(ctx.db, media_, theme), charts | flex}) | flex,
+               activityCard(ctx.db, media_, theme)});
 }
 
 bool statsTab::onEvent(const Event& event, appContext&) {
   bool toggles = keys::isBound(event, keyAction::kToggleMedia) ||
-                 keys::isMoveLeft(event) ||
-                 keys::isMoveRight(event);
+                 keys::isMoveUp(event) || keys::isMoveDown(event);
   if (!toggles)
     return false;
   media_ = media_ == mediaType::kAnime ? mediaType::kManga : mediaType::kAnime;
@@ -284,7 +259,7 @@ bool statsTab::onEvent(const Event& event, appContext&) {
 }
 
 std::vector<hint> statsTab::hints() const {
-  return {{"m/h/l", "anime/manga"}, {":", "cmd"}, {"q", "quit"}};
+  return {{"j/k/m", "anime/manga"}, {":", "cmd"}, {"q", "quit"}};
 }
 
 }  // namespace catalist

@@ -8,6 +8,7 @@
 #include "catalist/cli/args.hpp"
 #include "catalist/cli/output.hpp"
 #include "catalist/storage/csvCodec.hpp"
+#include "catalist/storage/malParser.hpp"
 
 namespace catalist::cli {
 
@@ -25,7 +26,7 @@ int runExport(const commandArgs& args, commandContext& ctx) {
   database& db = ctx.db;
   if (args.empty()) {
     emitError("usage",
-              "usage: catalist export <json|csv> [--type <anime|manga>]",
+              "usage: catalist export <json|csv|xml> [--type <anime|manga>]",
               false);
     return 2;
   }
@@ -83,9 +84,19 @@ int runExport(const commandArgs& args, commandContext& ctx) {
     return 0;
   }
 
+  if (formatStr == "xml") {
+    mediaType type = filterType.value_or(mediaType::kAnime);
+    auto exported = malParser::exportXml(db.getEntries(type), type);
+    std::cout << exported.xml;
+    if (exported.skipped > 0)
+      std::cerr << "note: " << exported.skipped
+                << " entries without a MyAnimeList id were left out.\n";
+    return 0;
+  }
+
   emitError("usage",
             "unsupported export format '" + formatStr +
-                "'. Expected 'json' or 'csv'.",
+                "'. Expected 'json', 'csv' or 'xml'.",
             false);
   return 2;
 }

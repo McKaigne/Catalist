@@ -185,6 +185,7 @@ int runSearch(const commandArgs& args, commandContext& ctx) {
   e.progress = (st == watchStatus::kCompleted) ? selected.totalUnits : 0;
   e.totalUnits = selected.totalUnits;
   e.startDate = isoDate::parse(selected.year + "-01-01");
+  e.dirty = true;
 
   db.addEntry(e);
   db.saveAll();

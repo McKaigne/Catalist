@@ -6,6 +6,7 @@
 
 #include "catalist/cli/commands/commands.hpp"
 #include "catalist/storage/database.hpp"
+#include "catalist/storage/malParser.hpp"
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"
 
@@ -144,4 +145,90 @@ TEST_CASE_FIXTURE(commandFixture, "cli stats text output lists both media") {
 
 TEST_CASE_FIXTURE(commandFixture, "cli completion rejects unknown shells") {
   CHECK(run(catalist::cli::runCompletion, {"tcsh"}) != 0);
+}
+
+TEST_CASE_FIXTURE(commandFixture, "cli login without arguments reports both accounts") {
+  CHECK(run(catalist::cli::runLogin, {}) == 0);
+  CHECK(out == "MyAnimeList: not logged in\nAniList: not logged in\n");
+  CHECK(run(catalist::cli::runLogin, {"kitsu"}) == 2);
+}
+
+TEST_CASE_FIXTURE(commandFixture, "cli login anilist stores a token AniList accepts") {
+  harness.http.setResponse("graphql.anilist.co",
+                           {200, R"({"data": {"Viewer": {"id": 7, "name": "me"}}})", ""});
+  catalist::test::stdinFeed typed("pasted-token\n");
+  CHECK(run(catalist::cli::runLogin, {"anilist"}) == 0);
+  CHECK(out.find("Logged in to AniList as me.") != std::string::npos);
+  CHECK(harness.fakes.anilistLogin.accessToken() == "pasted-token");
+  REQUIRE_FALSE(harness.fakes.launcher.calls().empty());
+
+  CHECK(run(catalist::cli::runLogout, {"anilist"}) == 0);
+  CHECK(out == "Logged out of AniList.\n");
+  CHECK_FALSE(harness.fakes.anilistLogin.isAuthenticated());
+}
+
+TEST_CASE_FIXTURE(commandFixture, "cli sync without a login explains what to do") {
+  CHECK(run(catalist::cli::runSync, {}) == 1);
+  CHECK(err == "error: Log in to MyAnimeList or AniList first.\n");
+  CHECK(run(catalist::cli::runSync, {"kitsu"}) == 2);
+}
+
+TEST_CASE_FIXTURE(commandFixture, "cli import anilist pulls a public list without sending") {
+  harness.http.setResponse(
+      "graphql.anilist.co",
+      {200, R"({"data": {"MediaListCollection": {"hasNextChunk": false, "lists": [
+        {"isCustomList": false, "entries": [
+          {"id": 1, "status": "COMPLETED", "score": 9, "progress": 26,
+           "media": {"id": 1, "idMal": 1, "episodes": 26,
+                     "title": {"romaji": "Cowboy Bebop"}}}]}]}}})", ""});
+  CHECK(run(catalist::cli::importFromAccount,
+            {"anilist", "--user", "someone", "--type", "anime"}) == 0);
+  CHECK(out == "Import: 1 added, 0 updated, 0 sent, 0 removed here, 0 removed there.\n");
+  auto bebop = db.getById(mediaType::kAnime, 1);
+  REQUIRE(bebop.has_value());
+  CHECK(bebop->title == "Cowboy Bebop");
+  CHECK(bebop->anilistId == 1);
+  CHECK(harness.http.requests().size() == 1);
+}
+
+TEST_CASE_FIXTURE(commandFixture, "cli import from an account needs a login or a user name") {
+  CHECK(run(catalist::cli::runImport, {"mal"}) == 1);
+  CHECK(err.find("log in first ('catalist login mal')") != std::string::npos);
+  CHECK(run(catalist::cli::runImport, {"mal", "--bogus"}) == 2);
+}
+
+TEST_CASE_FIXTURE(commandFixture, "cli export xml writes MAL XML that imports back") {
+  CHECK(run(catalist::cli::runExport, {"xml", "--type", "anime"}) == 0);
+  CHECK(out.find("<user_export_type>1</user_export_type>") != std::string::npos);
+  CHECK(out.find("<series_title><![CDATA[Sousou no Frieren]]></series_title>") !=
+        std::string::npos);
+  CHECK(err == "note: 2 entries without a MyAnimeList id were left out.\n");
+
+  auto exported = tempDir() / "export.xml";
+  catalist::test::writeTextFile(exported, out);
+  catalist::database fresh(fileSystem(), clock(), tempDir() / "fresh");
+  REQUIRE(catalist::malParser::importXml(fileSystem(), exported.string(), fresh) == 2);
+  auto frieren = fresh.getById(mediaType::kAnime, 52991);
+  REQUIRE(frieren.has_value());
+  auto original = *db.getById(mediaType::kAnime, 52991);
+  CHECK(frieren->score == original.score);
+  CHECK(frieren->progress == original.progress);
+  CHECK(frieren->status == original.status);
+  CHECK(frieren->rewatched == original.rewatched);
+  CHECK(frieren->startDate == original.startDate);
+  CHECK(frieren->finishDate == original.finishDate);
+  CHECK(frieren->notes == original.notes);
+}
+
+TEST_CASE("malParser export keeps CDATA intact and skips entries without a MAL id") {
+  catalist::entry tricky = catalist::test::makeEntry()
+                               .id(9).malId(9).type(mediaType::kManga)
+                               .title("A ]]> B").notes("x]]>y");
+  catalist::entry local = catalist::test::makeEntry().id(10001).type(mediaType::kManga);
+  auto exported = catalist::malParser::exportXml({tricky, local}, mediaType::kManga);
+  CHECK(exported.written == 1);
+  CHECK(exported.skipped == 1);
+  CHECK(exported.xml.find("<manga_title><![CDATA[A ]]]]><![CDATA[> B]]></manga_title>") !=
+        std::string::npos);
+  CHECK(exported.xml.find("<user_export_type>2</user_export_type>") != std::string::npos);
 }

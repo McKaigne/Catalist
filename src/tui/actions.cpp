@@ -4,7 +4,7 @@
 
 #include "catalist/core/version.hpp"
 #include "catalist/model/activity.hpp"
-#include "catalist/net/metadataSync.hpp"
+#include "catalist/net/listSync.hpp"
 #include "catalist/storage/backup.hpp"
 #include "catalist/storage/malParser.hpp"
 #include "catalist/tui/widgets/marquee.hpp"
@@ -12,13 +12,20 @@
 namespace catalist {
 
 void commitEntryChange(appContext& ctx, const entry& before,
-                       const entry& after) {
+                       const entry& edited) {
+  entry after = edited;
+  after.dirty = true;
   ctx.undo.record({historyAction::kMutate, after.type, before, after});
   ctx.db.updateEntry(after);
   ctx.db.logActivity({activityTimestamp(ctx.clock), after.type, after.title,
                       after.status, after.progress, after.totalUnits,
                       after.score});
   ctx.db.saveAll();
+}
+
+entry asLocalEdit(entry restored) {
+  restored.dirty = true;
+  return restored;
 }
 
 void openInBrowser(appContext& ctx, const entry& target) {
@@ -72,23 +79,33 @@ void createBackup(appContext& ctx) {
   ctx.notices.push("Created snapshot backup in ~/.config/catalist/backups/.");
 }
 
+bool isSyncing(const appContext& ctx) {
+  return ctx.jobs.runningName() == kSyncJob;
+}
+
 void startBackgroundSync(appContext& ctx) {
-  bool started = ctx.jobs.start("sync", [&ctx]() {
-    std::string outcome;
-    metadataSync::syncOngoing(ctx.db, ctx.http, outcome);
-    return outcome;
+  bool connected = ctx.accounts.malLogin.isAuthenticated() ||
+                   ctx.accounts.anilistLogin.isAuthenticated();
+  if (!connected) {
+    ctx.notices.push("Log in to MyAnimeList or AniList in Settings → Accounts & Sync first.");
+    return;
+  }
+  bool started = ctx.jobs.start(kSyncJob, [&ctx]() {
+    listSync sync(ctx.db, ctx.clock, ctx.accounts.services(),
+                  &ctx.accounts.anilist);
+    return "Sync: " + sync.run().summary();
   });
   if (!started) {
     ctx.notices.push("Another background task is still running...");
     return;
   }
-  ctx.notices.setStatus("Reconciling ongoing titles with MyAnimeList...");
+  ctx.notices.setStatus("Syncing with your MyAnimeList and AniList lists...");
 }
 
 void startMalLogin(appContext& ctx) {
   bool started = ctx.jobs.start("login", [&ctx]() {
     std::string outcome;
-    ctx.auth.authenticate(outcome);
+    ctx.accounts.malLogin.authenticate(outcome);
     return outcome;
   });
   if (!started) {
@@ -96,6 +113,51 @@ void startMalLogin(appContext& ctx) {
     return;
   }
   ctx.notices.setStatus("Waiting for MyAnimeList login in your browser...");
+}
+
+bool openAnilistLogin(appContext& ctx) {
+  auto loginUrl = ctx.accounts.anilistLogin.authorizeUrl();
+  if (!loginUrl) {
+    ctx.notices.push(
+        "AniList login needs an API client id: register one at "
+        "anilist.co/settings/developer and set CATALIST_ANILIST_CLIENT_ID.");
+    return false;
+  }
+  ctx.launcher.spawnDetached(browserOpenCommand(*loginUrl));
+  ctx.notices.setStatus("Approve Catalist on AniList, then paste the token here.");
+  return true;
+}
+
+void finishAnilistLogin(appContext& ctx, const std::string& token) {
+  if (!ctx.accounts.anilistLogin.storeToken(token)) {
+    ctx.notices.push("No AniList token was pasted.");
+    return;
+  }
+  bool started = ctx.jobs.start("login", [&ctx]() -> std::string {
+    auto viewer = ctx.accounts.anilist.viewer();
+    if (viewer.ok())
+      return "Logged in to AniList as " + viewer.value().name + ".";
+    ctx.accounts.anilistLogin.logout();
+    return "AniList rejected the token: " + viewer.errorMessage();
+  });
+  if (!started)
+    ctx.notices.push("Another background task is still running...");
+}
+
+void exportMalXml(appContext& ctx) {
+  auto written = backup::exportMalXml(ctx.fileSystem, ctx.clock, ctx.db);
+  if (written.files.empty()) {
+    ctx.notices.push("Export failed.");
+    return;
+  }
+  std::string message = "Exported " + std::to_string(written.files.size()) +
+                        " MyAnimeList XML files to " +
+                        written.files.front().parent_path().string() +
+                        " (import them on MyAnimeList or AniList).";
+  if (written.skipped > 0)
+    message += " " + std::to_string(written.skipped) +
+               " entries without a MyAnimeList id were left out.";
+  ctx.notices.push(message);
 }
 
 // The chosen snapshot is read before the safety snapshot is taken: both use

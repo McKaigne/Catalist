@@ -66,12 +66,23 @@ isoDate requireDate(const std::string& text) {
   return *parsed;
 }
 
+accountFakes::accountFakes(iFileSystem& fileSystem, iHttpClient& http,
+                           const iClock& clock,
+                           const std::filesystem::path& dataDir)
+    : malLogin(fileSystem, http, launcher, authServer, clock,
+               dataDir / "mal_auth.json"),
+      anilistLogin(fileSystem, dataDir / "anilist_auth.json", "1234"),
+      mal(http, malLogin, nullptr),
+      anilist(http, anilistLogin, nullptr),
+      accounts{malLogin, anilistLogin, mal, anilist} {}
+
 cliHarness::cliHarness(database& db, iFileSystem& fileSystem,
                        const iClock& clock,
                        const std::filesystem::path& dataDir)
-    : context{db,          settings,
-              clock,       http,
-              fileSystem,  dataDir / "settings.json",
+    : fakes(fileSystem, http, clock, dataDir),
+      context{db,          settings,         clock,
+              http,        fileSystem,       fakes.launcher,
+              fakes.accounts, dataDir / "settings.json",
               [](size_t) { return size_t{0}; }} {}
 
 entryBuilder makeEntry() {

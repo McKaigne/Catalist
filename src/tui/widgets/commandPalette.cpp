@@ -24,7 +24,7 @@ void commandPalette::initCatalog() {
               {"rename", "Rename active entry", "<new_title>"},
               {"open", "Open active entry in browser", ""},
               {"copy", "Copy active entry title to clipboard", ""},
-              {"sync", "Reconcile finished episode counts", ""},
+              {"sync", "Two-way sync with MyAnimeList and AniList", ""},
               {"backup", "Generate snapshot backup CSV", ""},
               {"export", "Dump database to stdout", "<json|csv>"},
               {"undo", "Undo last database mutation", ""},

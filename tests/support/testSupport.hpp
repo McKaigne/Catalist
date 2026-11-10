@@ -1,7 +1,9 @@
 #ifndef CATALIST_TESTS_SUPPORT_TEST_SUPPORT_HPP_
 #define CATALIST_TESTS_SUPPORT_TEST_SUPPORT_HPP_
 
+#include <chrono>
 #include <filesystem>
+#include <optional>
 #include <iosfwd>
 #include <sstream>
 #include <string>
@@ -14,8 +16,31 @@
 #include "catalist/storage/database.hpp"
 #include "catalist/model/entry.hpp"
 #include "catalist/platform/fileSystem.hpp"
+#include "catalist/platform/processLauncher.hpp"
 
 namespace catalist::test {
+
+class noAuthServer : public iAuthCallbackServer {
+public:
+  std::optional<std::string> waitForCode(std::chrono::seconds) override {
+    return std::nullopt;
+  }
+};
+
+// Logged-out MyAnimeList and AniList services over the given files and HTTP
+// client, with no request pacing.
+struct accountFakes {
+  accountFakes(iFileSystem& fileSystem, iHttpClient& http, const iClock& clock,
+               const std::filesystem::path& dataDir);
+
+  fakeProcessLauncher launcher;
+  noAuthServer authServer;
+  malAuth malLogin;
+  anilistAuth anilistLogin;
+  malListService mal;
+  anilistListService anilist;
+  listAccounts accounts;
+};
 
 std::filesystem::path makeUniqueTempDir(const std::string& prefix);
 
@@ -138,6 +163,7 @@ public:
 
   appSettings settings;
   mockHttpClient http;
+  accountFakes fakes;
   cli::commandContext context;
 };
 

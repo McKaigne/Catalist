@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <memory>
+#include <thread>
 
 #include "support/testSupport.hpp"
 #include "updater.hpp"
@@ -200,4 +202,29 @@ TEST_CASE("updater fetches a cover before the lookups still waiting") {
 	REQUIRE(web.requested.size() == 5);
 	// The lookups already under way finish; the cover goes before the rest.
 	CHECK(web.requested.back() == "https://api.jikan.moe/v4/anime/3");
+}
+
+TEST_CASE("updater does not hold up quitting while a request is slow") {
+	// Shared with the worker, which outlives the updater here.
+	auto finished = std::make_shared<std::atomic<bool>>(false);
+	auto woke = std::make_shared<std::atomic<bool>>(false);
+	auto start = std::chrono::steady_clock::now();
+	{
+		updater updates(
+		    [finished](const std::string&) {
+			    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+			    *finished = true;
+			    return std::optional<std::string>();
+		    },
+		    catalist::test::testToday,
+		    [](const std::string&, int, int) { return std::optional<std::string>(); },
+		    std::chrono::milliseconds(0), [woke] { *woke = true; });
+		updates.lookUp(mediaType::kAnime, 1);
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
+	CHECK(std::chrono::steady_clock::now() - start < std::chrono::milliseconds(500));
+	// The request ends later on its own, without calling back.
+	std::this_thread::sleep_for(std::chrono::milliseconds(800));
+	CHECK(finished->load());
+	CHECK_FALSE(woke->load());
 }

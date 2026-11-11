@@ -150,6 +150,9 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
   covers run on the `updater`'s worker thread, one request a second; the
   shell folds finished lookups into the catalogue on its tick. Nothing
   about the network is needed to use the lists.
+- **Quitting:** the worker's state is shared with its thread, so on exit
+  the updater waits only a moment for a request under way; a slow one
+  (offline, curl allows eight seconds) finishes alone and wakes nothing.
 - **Covers:** FTXUI cannot draw pictures. The cover card is drawn with only
   a note in it, and after each frame the shell writes the sixel picture
   (made by img2sixel, kept in memory) over the card's inside, saving and

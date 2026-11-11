@@ -2,16 +2,11 @@
 #define CATALIST_UPDATER_HPP_
 
 #include <chrono>
-#include <condition_variable>
-#include <deque>
 #include <functional>
-#include <map>
-#include <mutex>
+#include <memory>
 #include <optional>
-#include <set>
 #include <string>
 #include <thread>
-#include <tuple>
 #include <vector>
 
 #include "catalogue.hpp"
@@ -30,9 +25,11 @@ public:
 	                                                            int widthPx, int heightPx)>;
 
 	// `wake` is called on the worker thread whenever something finished, so
-	// the interface can redraw.
+	// the interface can redraw; never once the updater is being destroyed.
 	updater(jikan::fetcher fetch, std::function<isoDate()> today, sixelMaker toSixel,
 	        std::chrono::milliseconds pause, std::function<void()> wake = {});
+	// Waits a moment for a request under way; a slower one is left to finish
+	// on its own, so quitting never hangs on the network.
 	~updater();
 	updater(const updater&) = delete;
 	updater& operator=(const updater&) = delete;
@@ -62,40 +59,11 @@ public:
 	void waitUntilIdle();
 
 private:
-	using titleKey = std::pair<mediaType, int>;
-	using coverKey = std::tuple<mediaType, int, int, int>;
-	struct job {
-		bool isCover = false;
-		coverKey key;
-	};
-
-	void work();
-	void runLookup(const titleKey& title);
-	void runCover(const coverKey& key);
-	std::optional<std::string> pacedFetch(const std::string& url);
-	std::optional<std::string> imageUrlOf(const titleKey& title);
-
-	jikan::fetcher fetch_;
-	std::function<isoDate()> today_;
-	sixelMaker toSixel_;
-	std::chrono::milliseconds pause_;
-	std::function<void()> wake_;
-
-	// Everything below is shared with the worker thread and guarded by mutex_.
-	std::mutex mutex_;
-	std::condition_variable changed_;
-	std::deque<job> jobs_;
-	bool working_ = false;
-	bool stopping_ = false;
-	std::chrono::steady_clock::time_point lastRequest_;
-	std::set<titleKey> lookedUp_;
-	std::vector<finding> findings_;
-	std::map<titleKey, std::string> imageUrls_;
-	std::map<titleKey, std::string> images_;
-	std::set<titleKey> noImage_;
-	std::set<coverKey> asked_;
-	std::map<coverKey, std::string> sixels_;
-
+	// Everything the worker thread uses. It is shared with the thread, so a
+	// worker still waiting on a slow request when the program quits can
+	// finish on its own without touching a destroyed updater.
+	struct shared;
+	std::shared_ptr<shared> shared_;
 	std::thread worker_;
 };
 

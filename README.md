@@ -42,8 +42,8 @@ ctest --test-dir build --output-on-failure
 | `2` | Manga | The same for manga |
 | `3` | Stats | Totals, the status breakdown and the score chart (`j`/`k`/`m` switch anime and manga) |
 
-The bottom bar shows the current mode (`NOR`, `SCH` search, `EDT` notes,
-`ADD`, `DEL`), the last message and the keys that work right now.
+The bottom bar shows the current mode (`NOR`, `SCH` search, `EDT` typing a
+number, `ADD`, `DEL`), the last message and the keys that work right now.
 
 ## Keys
 
@@ -54,7 +54,7 @@ The bottom bar shows the current mode (`NOR`, `SCH` search, `EDT` notes,
 | `h` / `l` | Move between the sidebar, the list and the details card |
 | `+` / `-` (or `P`) | One episode or chapter more / less |
 | `S` / `R` | Next status / one star more |
-| `e` / `Enter` | Details card: `j`/`k` pick a field, `h`/`l` change it, `Enter` on Notes edits them |
+| `e` / `Enter` | Details card: `j`/`k` pick a field (status, rating, progress, total, volumes for manga, rewatches), `h`/`l` change it by one, `e`/`Enter` types a number |
 | `c` `t` `s` `r` `p` | Sort by date, title, status, rating or progress (again to reverse) |
 | `/` | Filter by title |
 | `a` | Add a title: type it, `Enter` looks it up on MyAnimeList, pick a match. The last row adds it by hand, which also works offline |
@@ -80,9 +80,8 @@ catalist export manga > manga.xml
   [AniPy](https://github.com/Jacekun/AniPy), then import that file.
 
 Importing never overwrites what you track: a title already in the catalogue
-(the same MyAnimeList or AniList id) keeps your score, progress, dates and
-notes, and only its totals and ids are refreshed. Importing the same file
-twice adds nothing. Titles without a MyAnimeList id are left out of an
+(the same MyAnimeList id) keeps your score, progress and dates, and only its
+totals are refreshed. Importing the same file twice adds nothing. Titles without a MyAnimeList id are left out of an
 export, with a note on stderr.
 
 ---
@@ -90,15 +89,15 @@ export, with a note on stderr.
 ## Data
 
 - `~/.config/catalist/anime.csv` and `manga.csv` (or `$XDG_CONFIG_HOME/catalist`,
-  or the directory in `CATALIST_DATA_DIR`). RFC 4180 CSV with 16 columns:
-  `id, mal_id, anilist_id, type, title, status, score, progress, total_units,
-  volumes, total_volumes, rewatched, start_date, finish_date, notes, updated_at`.
+  or the directory in `CATALIST_DATA_DIR`). RFC 4180 CSV with 14 columns:
+  `id, mal_id, type, title, status, score, progress, total_units, volumes,
+  total_volumes, rewatched, start_date, finish_date, updated_at`.
   They open in any spreadsheet.
 - Every save writes a temporary file and renames it over the old one, so a
   crash never leaves half a file. A save that fails is reported (the bottom
   bar in the TUI, exit code 1 in the CLI).
-- Files written by Catalist 0.2.1 to 0.3.0 load as they are; their extra
-  columns are dropped on the next save.
+- Files written by Catalist 0.2.1 to 0.3.0 load as they are; their AniList
+  ids, notes and other extra columns are dropped on the next save.
 
 There are no settings: the defaults are the settings. The theme is
 Catppuccin Mocha and the list starts sorted by rating.

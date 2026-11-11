@@ -16,8 +16,8 @@
 
 ## ADR-004: Explicit Unix Filter and Standard Stream Discipline
 - **Context:** Terminal tools must integrate smoothly into shell pipelines.
-- **Decision:** `catalist export` writes only the XML to `stdout`; notes and
-  errors go to `stderr`, and the exit code says what happened (0 done,
+- **Decision:** `catalist export` writes only the XML to `stdout`; warnings
+  and errors go to `stderr`, and the exit code says what happened (0 done,
   1 failed, 2 wrong command line).
 
 ## ADR-005: Dependency Injection at Every Side-Effect Boundary
@@ -107,12 +107,12 @@
 - **Decision:** The catalogue is the two CSV files and nothing else. Lists
   come in with `catalist import` (MyAnimeList XML; AniList lists after
   converting them to that format) and go out with `catalist export`; neither
-  touches an account. Re-importing merges by MyAnimeList or AniList id and
-  never overwrites the user's score, progress, dates or notes.
+  touches an account. Re-importing merges by MyAnimeList id and never
+  overwrites the user's score, progress or dates.
 - **Network:** only the add flow (`a`) uses it, for one Jikan title search;
   without a connection the title is added by hand. The search runs on the
   UI thread on the next redraw tick, after the "Searching" status is drawn,
   and curl gives up after 8 seconds, so no worker thread is needed.
 - **Ids:** an entry's id only numbers it within its list (a new title gets
   the highest id + 1); two titles are the same only when they share a
-  MyAnimeList or AniList id.
+  MyAnimeList id.

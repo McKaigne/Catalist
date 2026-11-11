@@ -22,7 +22,7 @@ MyAnimeList API.
 .TP
 .BR import " " \fIFILE.xml\fR...
 Add the titles of MyAnimeList XML exports. A title already in the catalogue
-keeps its score, progress, dates and notes. All files are read before
+keeps its score, progress and dates. All files are read before
 anything is added, so a bad file changes nothing.
 .TP
 .BR export " " \fIanime\fR | \fImanga\fR
@@ -56,7 +56,9 @@ Move, jump, and change pane.
 Progress, next status, one star more.
 .TP
 .B e Enter
-Open the details card; edit the field under the cursor.
+Open the details card. There, \fBj\fR and \fBk\fR pick a field (status,
+rating, progress, total, volumes for manga, rewatches), \fBh\fR and \fBl\fR
+change it by one, and \fBe\fR or \fBEnter\fR types a number.
 .TP
 .B c t s r p
 Sort by date, title, status, rating or progress; again to reverse.

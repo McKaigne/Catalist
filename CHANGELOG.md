@@ -18,7 +18,11 @@ and the network only to look up a title to add.
 - `catalist export anime|manga` prints MyAnimeList XML, which the import
   pages of MyAnimeList and AniList read.
 - The bottom-left pill shows the keyboard mode: `NOR`, `SCH` (search), `EDT`
-  (notes), `ADD` or `DEL` (confirm delete).
+  (typing a number), `ADD` or `DEL` (confirm delete).
+- The details card can set the episode or chapter total (for titles added
+  by hand), read volumes (manga) and the rewatch or reread count, by one
+  with `h`/`l` or by typing a number with `e`/`Enter`; progress can be typed
+  too.
 
 ### Changed
 - The sidebar lists every rating from 10 down to 0.
@@ -27,20 +31,26 @@ and the network only to look up a title to add.
   date used to start from the low end). The date column sorts by the date it
   shows.
 - Every change is saved at once; a failed save is shown in the status line.
-- `Esc` while editing notes now cancels the edit; `Enter` saves it. Editing
-  starts at the end of the existing notes.
 - `catalist import` takes only MyAnimeList XML files, reads them all before
   adding anything, and reports per file how many titles were added.
 - New titles are numbered from 1 in each list; an imported title merges
-  with a tracked one only when they share a MyAnimeList or AniList id.
+  with a tracked one only when they share a MyAnimeList id.
+- `anime.csv` and `manga.csv` have 14 columns; files from 0.2.1 to 0.3.0
+  still load.
 - The theme is always Catppuccin Mocha, and the list starts sorted by rating.
 
 ### Fixed
+- `+` on a finished title, `-` at zero and `R` at ten no longer stamp
+  today's date on the title (a finished title got today as its start and
+  finish date).
+- The score chart lines up 10 with the other scores.
 - Dates such as 2024-13-45 or 2023-02-29 are rejected instead of stored.
 - A failed save (full disk, read-only folder) is reported instead of looking
   like success: the CLI exits with code 1 and the TUI says so.
 
 ### Removed
+- Notes, and the stored AniList ids, which only sync used; both are dropped
+  from the CSV files on the next save, and notes are no longer exported.
 - Accounts, logins and sync with MyAnimeList and AniList, with `sync.csv`,
   the backups and the activity history (`history.csv`).
 - The Settings tab, `settings.json`, `catalist config`, themes, the command

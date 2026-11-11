@@ -38,12 +38,16 @@ and the network only to look up a title to add.
 - `anime.csv` and `manga.csv` have 14 columns; files from 0.2.1 to 0.3.0
   still load.
 - The theme is always Catppuccin Mocha, and the list starts sorted by rating.
+- Internal: the code lives in one flat `src/` folder of small modules, with
+  one interface (`iTab`); see docs/ARCHITECTURE.md for the module map.
 
 ### Fixed
 - `+` on a finished title, `-` at zero and `R` at ten no longer stamp
   today's date on the title (a finished title got today as its start and
   finish date).
 - The score chart lines up 10 with the other scores.
+- A folder where `anime.csv` or `manga.csv` should be no longer crashes
+  Catalist on start.
 - Dates such as 2024-13-45 or 2023-02-29 are rejected instead of stored.
 - A failed save (full disk, read-only folder) is reported instead of looking
   like success: the CLI exits with code 1 and the TUI says so.

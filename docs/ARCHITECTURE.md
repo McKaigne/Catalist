@@ -1,5 +1,24 @@
 # Catalist Architectural Decision Records (ADRs)
 
+## Module map
+Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
+
+| Module | Holds |
+| :--- | :--- |
+| `date`, `result` | `isoDate`; `result<T>`, a value or an error message |
+| `entry` | one anime or manga title, its statuses and the rules that change it (progress, status cycle, rating, counts, import merge) |
+| `catalogue` | the two lists in memory and their CSV files |
+| `malXml` | the MyAnimeList XML format lists are imported and exported in |
+| `json`, `jikan` | the title search on Jikan, the only network use |
+| `system` | everything that touches the OS: files, `httpGet` (curl), `today()` |
+| `cli` | `catalist import` and `catalist export` |
+| `tui/app` | `iTab`, `appContext` and the shell (tab bar, bottom bar, global keys) |
+| `tui/catalogTab`, `tui/catalogView.cpp` | the Anime and Manga tabs: keys and state, and drawing |
+| `tui/statsTab` | the Stats tab |
+| `tui/style` | colours, icons, pill, card, marquee, key names, `textField` |
+
+`main.cpp` loads the catalogue, then runs the command line or the TUI.
+
 ## ADR-001: Self-Documenting Code over Inline Code Comments
 - **Context:** Inline comments explaining step-by-step logic drifted over time.
 - **Decision:** Remove comments explaining *what* code does. Express intent
@@ -12,7 +31,7 @@
 
 ## ADR-003: Decoupled Multi-Provider Subsystem (superseded)
 - **Superseded** by ADR-013: the only online lookup left is the Jikan title
-  search in `net/jikan`.
+  search in `jikan`.
 
 ## ADR-004: Explicit Unix Filter and Standard Stream Discipline
 - **Context:** Terminal tools must integrate smoothly into shell pipelines.
@@ -20,46 +39,51 @@
   and errors go to `stderr`, and the exit code says what happened (0 done,
   1 failed, 2 wrong command line).
 
-## ADR-005: Dependency Injection at Every Side-Effect Boundary
-- **Context:** Domain code that reads files, the clock or the network cannot
-  be tested without a home directory, a fixed date or a connection.
-- **Decision:** Every side effect sits behind a small pure virtual
-  interface: `iFileSystem` (read, atomic write), `iHttpClient` (one GET) and
-  `iClock`. The real implementations (`realFileSystem`, `curlHttpClient`,
-  `realClock`) are the only code that touches file streams, `popen` or
-  `system_clock::now`. The fakes (`memoryFileSystem`, `mockHttpClient`,
-  `fixedClock`) live in `tests/support/fakes.hpp`, not in the program.
-- **Composition root:** `main.cpp` builds the real services and passes them
-  by reference (`database(fileSystem, dir)`, `runCli(...)`,
-  `runTui(db, clock, http)` → `appContext`). There are no singletons.
+## ADR-005: Side Effects in One Place, Passed as Functions Where Tests Swap Them
+- **Context:** Code that reads files, the clock or the network cannot be
+  tested without a home directory, a fixed date or a connection. Interfaces
+  with a real class and a fake for each (`iFileSystem`, `iHttpClient`,
+  `iClock`) did the job, but each wrapped only one or two calls.
+- **Decision:** `system.cpp` is the only code that touches file streams,
+  `popen` or the system clock, as plain functions: `readFile`,
+  `writeFileAtomic`, `httpGet`, `today`. Where a test must swap one, the
+  caller takes a function instead: `jikan::search` and `appContext` take a
+  `jikan::fetcher`, and `appContext` a `today` function. The catalogue
+  reads and writes its directory directly; tests give it a temporary one.
+- **Composition root:** `main.cpp` builds the catalogue on the data
+  directory; `runTui` puts `today` and `httpGet` into the `appContext`.
+  There are no singletons.
 - **Processes:** the only command run is curl, with the URL quoted by
-  `shell::escapeShellArg`.
+  `shellQuote`.
 
 ## ADR-006: Shallow Control Flow
 - **Decision:** Function bodies nest at most three levels. Preconditions and
   errors return early; loops skip with `continue`; each distinct subtask is a
-  small, named helper (`handleSearchTyping`, `moveSidebarCursor`,
-  `addPicked`). Declarative layout code (FTXUI element trees) may nest for
+  small, named helper (`onSearchKey`, `moveSidebarCursor`, `addPicked`). Declarative layout code (FTXUI element trees) may nest for
   readability.
 
-## ADR-007: Tabs Behind `iTab`
+## ADR-007: Tabs Behind `iTab`, Drawn and Routed by Hand
 - **Context:** The TUI was one 2,600-line function whose event handling was a
   single 700-line `CatchEvent` chain.
 - **Decision:** Each tab implements `iTab` (`title`, `icon`,
   `render(appContext&)`, `onEvent(const Event&, appContext&)`, `hints()`,
-  `onTick`, `mode()`). `appShell` owns the three tabs in a fixed order: it
-  switches tabs (number keys, `Tab`), quits, ignores the mouse, turns the
-  redraw timer into `onTick`, and yields every key while a tab
-  `capturesInput()`. It draws the tab bar and the bottom bar (mode pill,
-  status, hints). Shared pieces live in `tui/widgets` (pill, card, marquee)
-  and `tui/keys`. Tabs change the catalogue through `appContext::save`, which
-  writes it at once and reports a failure in the status line.
-- **Layering:** `catalistCore` (core, platform, model, storage, net, cli)
-  never includes FTXUI; `catalistTui` builds on it.
+  `onTick`, `mode()`), the program's one interface. `appShell` owns the
+  three tabs in a fixed order: it switches tabs (number keys, `Tab`), quits,
+  ignores the mouse, turns the redraw timer into `onTick`, and leaves every
+  key to the tab while its mode is not normal (`capturesInput()`). It draws
+  the tab bar and the bottom bar (mode pill, status, hints). Tabs change the
+  catalogue through `appContext::save`, which writes it at once and reports a
+  failure in the status line.
+- **No component tree:** FTXUI only runs the loop (`Renderer` +
+  `CatchEvent`). Text entry is a `textField` drawn by hand, so focus never
+  has to be managed.
+- **One state per tab:** `catalogTab` knows what the keyboard is doing from
+  one `step` (browse, search, type a number, the three add steps, confirm
+  delete); `onEvent`, `mode()` and `hints()` are switches over it.
 
 ## ADR-008: camelCase Everywhere
 - **Decision:** Types, functions, variables and files are camelCase;
-  interfaces are `i` + PascalCase (`iTab`, `iHttpClient`); private members end
+  interfaces are `i` + PascalCase (`iTab`); private members end
   in `_`; constants and enumerators are `kPascalCase`
   (`mediaType::kAnime`, `theme::kMauve`). Namespaces stay lower case and macros
   SCREAMING_SNAKE_CASE. When a type and a variable would share a name, the
@@ -68,7 +92,7 @@
 ## ADR-009: One Version, Bumped Only for User-Visible Change
 - **Decision:** `VERSION` holds `MAJOR.MINOR.PATCH` and is the only place
   the number is written. CMake reads it into `project(VERSION)`, generates
-  `catalist/core/version.hpp` (`kVersionString` and friends) and the man page;
+  `version.hpp` (`kVersionString`) and the man page;
   `flake.nix` reads it too, and CI checks `catalist --version` against it.
   PATCH is for fixes and small tweaks, MINOR for new tabs, commands or
   config keys (PATCH resets), MAJOR for big releases; the project stays on
@@ -80,16 +104,18 @@
 - **Decision:** Tests use doctest and are registered with ctest one case at a
   time. The test `main` points `CATALIST_DATA_DIR`, `HOME` and
   `XDG_CONFIG_HOME` at a throwaway sandbox and pins `TZ=UTC` before any test
-  code runs; each test that touches real files gets its own temp directory.
-  Everything runs offline and deterministically with the fakes from ADR-005.
+  code runs; each test that touches files gets its own temp directory, and
+  a failed write is simulated by a directory where the file should go.
+  Everything runs offline: tests pass a fixed date and a `fakeWeb`
+  (ADR-005).
 - **What a test checks:** the result the user would see: the saved CSV text,
   the order of the rows (`catalogTab::shown`), the status line, the exit code
   and output of a command. No test is skipped, expected to fail or switched
   off by an environment variable. `tests/fixtures/csv` holds the CSV layouts
   still read (those of 0.2.1 and later).
-- **Targets:** `catalistTests` links only `catalistCore`; tab, shell and
-  widget tests need FTXUI and live in `catalistTuiTests`. CI also runs the
-  suite under AddressSanitizer and UBSan.
+- **Targets:** one library (`catalistLib`, everything but `main.cpp`), the
+  program and one test binary (`catalistTests`). CI also runs the suite
+  under AddressSanitizer and UBSan.
 
 ## ADR-011: No Settings
 - **Context:** A settings tab, `settings.json`, themes and `catalist config`

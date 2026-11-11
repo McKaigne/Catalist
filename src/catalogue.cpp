@@ -14,8 +14,10 @@ namespace {
 
 const char* kCatalogHeader =
     "#id,mal_id,type,title,status,score,progress,total_units,volumes,"
-    "total_volumes,rewatched,start_date,finish_date,updated_at\n";
+    "total_volumes,rewatched,start_date,finish_date,updated_at,released,"
+    "checked_at\n";
 
+// The last two columns came later; rows without them are still read.
 constexpr size_t kCatalogFields = 14;
 // Catalist 0.2.1 to 0.3.0 wrote an AniList id after the MyAnimeList id and
 // notes before the last date; those columns are skipped.
@@ -174,6 +176,10 @@ std::optional<entry> decodeEntry(const std::vector<std::string>& fields,
   decoded.startDate = decodeDate(field(11));
   decoded.finishDate = decodeDate(field(12));
   decoded.updatedAt = decodeDate(fields[old ? 15 : 13]);
+  if (current && fields.size() > 15) {
+    decoded.released = intOrZero(fields[14]);
+    decoded.checkedAt = decodeDate(fields[15]);
+  }
   return decoded;
 }
 
@@ -201,7 +207,8 @@ std::string encodeEntries(const std::vector<entry>& entries) {
         << "," << e.progress << "," << e.totalUnits << "," << e.volumes << ","
         << e.totalVolumes << "," << e.rewatched << ","
         << formatDate(e.startDate) << "," << formatDate(e.finishDate) << ","
-        << formatDate(e.updatedAt) << "\n";
+        << formatDate(e.updatedAt) << "," << e.released << ","
+        << formatDate(e.checkedAt) << "\n";
   }
   return out.str();
 }
@@ -229,6 +236,14 @@ int nextId(const std::vector<entry>& list) {
 // back to the title so the order never depends on how the list was stored.
 bool comesBefore(const entry& a, const entry& b, sortKey key) {
   switch (key) {
+    case sortKey::kNew:
+      if (newReleases(a) != newReleases(b))
+        return newReleases(a) > newReleases(b);
+      [[fallthrough]];
+    case sortKey::kUpdated:
+      if (a.updatedAt != b.updatedAt)
+        return a.updatedAt > b.updatedAt;
+      break;
     case sortKey::kScore:
       if (a.score != b.score)
         return a.score > b.score;

@@ -27,7 +27,7 @@ TEST_CASE(
 
   auto encoded = csvCodec::encodeEntries(decoded);
   CHECK(encoded.find("0000-00-00") == std::string::npos);
-  CHECK(encoded.find("\n1,1,anime,Old,Completed,7,1,1,0,0,0,,,\n") !=
+  CHECK(encoded.find("\n1,1,anime,Old,Completed,7,1,1,0,0,0,,,,0,\n") !=
         std::string::npos);
 }
 
@@ -66,7 +66,7 @@ TEST_CASE("csvCodec decodeEntry rejects short rows and non numeric ids") {
       mediaType::kAnime));
 }
 
-TEST_CASE("csvCodec writes the 14 columns and reads them back") {
+TEST_CASE("csvCodec writes the 16 columns and reads them back") {
   catalist::entry original = catalist::test::makeEntry()
                                  .id(5)
                                  .malId(6)
@@ -80,13 +80,16 @@ TEST_CASE("csvCodec writes the 14 columns and reads them back") {
                                  .totalVolumes(2)
                                  .rewatched(1)
                                  .startDate("2024-01-02")
-                                 .updatedAt("2024-02-03");
+                                 .updatedAt("2024-02-03")
+                                 .released(7)
+                                 .checkedAt("2024-02-05");
   auto text = csvCodec::encodeEntries({original});
   CHECK(text ==
         "#id,mal_id,type,title,status,score,progress,total_units,volumes,"
-        "total_volumes,rewatched,start_date,finish_date,updated_at\n"
+        "total_volumes,rewatched,start_date,finish_date,updated_at,released,"
+        "checked_at\n"
         "5,6,manga,\"R, \"\"t\"\"\",On-Hold,4,3,9,1,2,1,2024-01-02,,"
-        "2024-02-03\n");
+        "2024-02-03,7,2024-02-05\n");
   auto decoded = csvCodec::decodeEntries(text, mediaType::kManga).value();
   REQUIRE(decoded.size() == 1);
   const auto& copy = decoded[0];
@@ -104,6 +107,21 @@ TEST_CASE("csvCodec writes the 14 columns and reads them back") {
   CHECK(formatDate(copy.startDate) == "2024-01-02");
   CHECK_FALSE(copy.finishDate.has_value());
   CHECK(formatDate(copy.updatedAt) == "2024-02-03");
+  CHECK(copy.released == 7);
+  CHECK(formatDate(copy.checkedAt) == "2024-02-05");
+}
+
+TEST_CASE("csvCodec reads rows from before the web check columns") {
+  auto decoded = csvCodec::decodeEntries(
+                     "1,2,manga,Older,Reading,0,5,0,0,0,0,,,2026-01-02\n",
+                     mediaType::kManga)
+                     .value();
+  REQUIRE(decoded.size() == 1);
+  CHECK(decoded[0].title == "Older");
+  CHECK(decoded[0].progress == 5);
+  CHECK(formatDate(decoded[0].updatedAt) == "2026-01-02");
+  CHECK(decoded[0].released == 0);
+  CHECK_FALSE(decoded[0].checkedAt.has_value());
 }
 
 TEST_CASE(
@@ -128,9 +146,10 @@ TEST_CASE(
   CHECK(formatDate(decoded[1].finishDate) == "2024-03-04");
   CHECK(csvCodec::encodeEntries(decoded) ==
         "#id,mal_id,type,title,status,score,progress,total_units,volumes,"
-        "total_volumes,rewatched,start_date,finish_date,updated_at\n"
-        "5,5,anime,Kept,Watching,7,3,12,0,0,2,2024-01-02,,2024-02-03\n"
-        "6,0,anime,Short,Dropped,0,1,0,0,0,0,,2024-03-04,\n");
+        "total_volumes,rewatched,start_date,finish_date,updated_at,released,"
+        "checked_at\n"
+        "5,5,anime,Kept,Watching,7,3,12,0,0,2,2024-01-02,,2024-02-03,0,\n"
+        "6,0,anime,Short,Dropped,0,1,0,0,0,0,,2024-03-04,,0,\n");
 }
 
 TEST_CASE(

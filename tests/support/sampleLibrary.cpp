@@ -18,7 +18,7 @@ void seedSampleLibrary(catalogue& db) {
                   .updatedAt("2026-10-17"));
   db.addEntry(makeEntry()
                   .malId(44265)
-                  .title("Odd Taxi")
+                  .title("Odd Taxi").released(13)
                   .status(watchStatus::kWatching)
                   .score(8)
                   .progress(5)

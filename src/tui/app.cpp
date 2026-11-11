@@ -4,8 +4,10 @@
 #include <atomic>
 #include <chrono>
 #include <ftxui/component/component.hpp>
+#include <ftxui/component/loop.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/screen/terminal.hpp>
+#include <iostream>
 #include <thread>
 
 #include "system.hpp"
@@ -59,7 +61,56 @@ Element modePill(appMode mode) {
   return text("");
 }
 
+// One request a second keeps well inside Jikan's limit of three.
+constexpr auto kRequestPause = std::chrono::milliseconds(1000);
+
+std::string coverProblem(const App& screen, bool canConvert) {
+  if (!canConvert)
+    return "Covers need img2sixel (libsixel).";
+  // The terminal lists 4 among its device attributes when it draws sixel.
+  const auto& abilities = screen.TerminalCapabilities();
+  if (std::find(abilities.begin(), abilities.end(), 4) == abilities.end())
+    return "This terminal cannot show sixel images.";
+  return "";
+}
+
+// Draws a sixel picture at a cell, then puts the cursor back where FTXUI
+// left it, so its next frame lands in the right place.
+void drawImage(const iTab::overlayImage& picture) {
+  std::cout << "\0337\033[" << picture.row + 1 << ";" << picture.column + 1
+            << "H" << picture.sixel << "\0338" << std::flush;
+}
+
 }  // namespace
+
+// Folds finished web lookups into the catalogue. A change the person can see
+// (a new total, new episodes or chapters) is named in the status line.
+void appShell::applyFindings() {
+  auto findings = ctx_.web.takeFindings();
+  if (findings.empty())
+    return;
+  isoDate today = ctx_.today();
+  std::vector<std::string> changedTitles;
+  for (const auto& found : findings) {
+    auto before = ctx_.db.findByMalId(found.type, found.malId);
+    if (!before)
+      continue;
+    entry after = applyWebFacts(*before, found.facts, today);
+    ctx_.db.updateEntry(after);
+    if (after.totalUnits != before->totalUnits ||
+        newReleases(after) != newReleases(*before))
+      changedTitles.push_back(after.title);
+  }
+  if (changedTitles.size() == 1)
+    ctx_.save("Updated from MyAnimeList: '" +
+              marquee::clip(changedTitles.front(), 36) + "'.");
+  else if (changedTitles.size() > 1)
+    ctx_.save("Updated from MyAnimeList: " +
+              std::to_string(changedTitles.size()) + " titles.");
+  else
+    ctx_.save(ctx_.status);
+  activeTab().onActivate(ctx_);
+}
 
 void appContext::save(const std::string& done) {
   status = db.saveAll() ? done
@@ -82,6 +133,7 @@ void appShell::activate(int index) {
 
 bool appShell::onEvent(const Event& event) {
   if (event == Event::Custom) {
+    applyFindings();
     activeTab().onTick(ctx_);
     return true;
   }
@@ -161,14 +213,30 @@ Element appShell::renderBottomBar() {
 }
 
 void runTui(catalogue& db) {
-  appContext ctx{db, today, httpGet};
+  auto screen = ScreenInteractive::Fullscreen();
+  screen.TrackMouse(false);
+
+  // Web lookups and covers run on the updater's thread; it wakes the loop
+  // when something arrives. Declared after the screen, so it stops first.
+  bool canConvert = hasProgram("img2sixel");
+  updater web(
+      httpGet, today,
+      [](const std::string& image, int widthPx, int heightPx) {
+        return runProgram({"img2sixel", "-w", std::to_string(widthPx), "-h",
+                           std::to_string(heightPx)},
+                          image);
+      },
+      kRequestPause, [&screen] { screen.PostEvent(Event::Custom); });
+  appContext ctx{db, today, httpGet, web};
+  if (auto cell = terminalCellSize()) {
+    ctx.cellWidth = cell->width;
+    ctx.cellHeight = cell->height;
+  }
+  checkFollowed(db, web, today());
 
   catalogTab anime(mediaType::kAnime);
   catalogTab manga(mediaType::kManga);
   std::vector<iTab*> tabs = {&anime, &manga};
-
-  auto screen = ScreenInteractive::Fullscreen();
-  screen.TrackMouse(false);
   appShell app(ctx, tabs, screen.ExitLoopClosure());
 
   // The shell draws everything and routes every key itself; FTXUI only
@@ -183,7 +251,15 @@ void runTui(catalogue& db) {
       screen.PostEvent(Event::Custom);
     }
   });
-  screen.Loop(root);
+  // The loop is run one event at a time, so the cover can be drawn over
+  // each new frame.
+  Loop loop(&screen, root);
+  while (!loop.HasQuitted()) {
+    ctx.coverProblem = coverProblem(screen, canConvert);
+    loop.RunOnceBlocking();
+    if (auto picture = app.image())
+      drawImage(*picture);
+  }
   running = false;
   ticker.join();
 }

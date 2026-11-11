@@ -80,6 +80,8 @@ libraryTotals sumUp(const catalogue& db, mediaType media) {
 // the reversed order is the ascending one.
 bool catalogTab::isSortAscending(sortKey key, bool reverse) {
   switch (key) {
+    case sortKey::kNew:
+    case sortKey::kUpdated:
     case sortKey::kScore:
     case sortKey::kProgress:
     case sortKey::kDate:
@@ -172,6 +174,10 @@ appMode catalogTab::mode() const {
   return appMode::kNor;
 }
 
+std::optional<iTab::overlayImage> catalogTab::image() const {
+  return cover_;
+}
+
 std::optional<std::string> catalogTab::countBadge(appContext& ctx) const {
   return std::to_string(ctx.db.getEntries(media_).size());
 }
@@ -199,10 +205,11 @@ std::vector<hint> catalogTab::hints() const {
             {"h/l", "adjust"},
             {"e/ret", "type"},
             {"Esc", "catalog"}};
-  return {{"Tab", "tabs"},       {"h/l", "panes"},   {"e/ret", "edit"},
-          {"c/t/s/r/p", "sort"}, {"S/R/P", "cycle"}, {"+/-", "ep"},
-          {"a", "add"},          {"d", "del"},       {"/", "find"},
-          {"q", "quit"}};
+  return {{"Tab", "tabs"},    {"h/l", "panes"},
+          {"e/ret", "edit"},  {"n/u/c/t/s/r/p", "sort"},
+          {"S/R/P", "cycle"}, {"+/-", "ep"},
+          {"a", "add"},       {"d", "del"},
+          {"/", "find"},      {"q", "quit"}};
 }
 
 bool catalogTab::passesFilters(const entry& candidate) const {
@@ -456,6 +463,8 @@ bool catalogTab::onEntryKey(const Event& event, appContext& ctx) {
 
 bool catalogTab::onSortKey(const Event& event, appContext& ctx) {
   const std::pair<char, std::pair<sortKey, const char*>> sortKeys[] = {
+      {'n', {sortKey::kNew, "New releases"}},
+      {'u', {sortKey::kUpdated, "Last updated"}},
       {'c', {sortKey::kDate, "Date"}},
       {'t', {sortKey::kTitle, "Title"}},
       {'s', {sortKey::kStatus, "Status"}},
@@ -549,6 +558,9 @@ void catalogTab::commit(appContext& ctx, const entry& changed,
   refresh(ctx);
   selectId(changed.id);
   ctx.save(done);
+  // Touching a title is the moment to see whether MyAnimeList knows more
+  // about it now (a final episode count, new chapters).
+  ctx.web.lookUp(media_, changed.malId);
 }
 
 void catalogTab::adjustDetailsField(appContext& ctx, int direction) {
@@ -678,6 +690,7 @@ void catalogTab::addPicked(appContext& ctx) {
   refresh(ctx);
   selectId(id);
   ctx.save("Added " + name + ".");
+  ctx.web.lookUp(media_, added.malId);
 }
 
 }  // namespace catalist

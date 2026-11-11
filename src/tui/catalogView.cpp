@@ -17,12 +17,15 @@ namespace {
 
 // Titles get whatever the fixed columns leave; off a terminal that is 16.
 size_t titleWidth() {
-  return static_cast<size_t>(std::max(16, Terminal::Size().dimx - 134));
+  return static_cast<size_t>(std::max(16, Terminal::Size().dimx - 141));
 }
 
-std::string formatListDate(const entry& e) {
-  auto shown = listDate(e);
-  return shown ? shown->toString() : "    -     ";
+// Wait this long after the selection last moved before asking for a cover,
+// so scrolling through the list fetches nothing.
+constexpr uint64_t kCoverDelayMs = 400;
+
+std::string formatDateCell(const std::optional<isoDate>& date) {
+  return date ? date->toString() : "    -     ";
 }
 
 Element styledText(const std::string& content, Color tint, bool emphasised) {
@@ -105,13 +108,14 @@ Element numberBox(const textField& field) {
 
 }  // namespace
 
-Element catalogTab::render(appContext&) {
+Element catalogTab::render(appContext& ctx) {
   bool picking = step_ == step::kAddSearching || step_ == step::kAddPicking;
   Element middle = picking ? renderPickCard() : renderCatalogCard();
   return hbox({vbox({renderSidebarCard() | flex, renderStatsCard()}) |
                    size(WIDTH, EQUAL, 28),
                vbox({renderSearchCard(), middle | flex}) | flex,
-               vbox({renderDetails() | flex}) | size(WIDTH, EQUAL, 42)});
+               vbox({renderCoverCard(ctx) | flex, renderDetails()}) |
+                   size(WIDTH, EQUAL, 42)});
 }
 
 Element catalogTab::renderSidebarRow(int row) const {
@@ -208,32 +212,39 @@ Element catalogTab::renderCatalogRow(int row) {
       hbox({text(statusToIcon(e.status) + " ") | color(statusToColor(e.status)),
             text(statusToString(e.status, e.type)) |
                 color(statusToColor(e.status))});
-  auto line =
-      hbox({text(rowActive ? "▌ " : "  ") | bold | color(theme::kMauve),
-            text(formatListDate(e)) | size(WIDTH, EQUAL, 10) |
-                color(theme::kSubtext),
-            text(" "),
-            hbox({text(" " + typeToIcon(e.type) + " "),
-                  highlightMatches(shownTitle, search_.value, rowActive)}) |
-                flex,
-            text(" "), statusCell | size(WIDTH, EQUAL, 14), text(" "),
-            text(" " + renderStarMeter(e.score)) | size(WIDTH, EQUAL, 12) |
-                color(theme::kYellow),
-            text(" "),
-            text(" " + icon::kGauge + " " + progressLabel(e)) |
-                size(WIDTH, EQUAL, 12) | color(theme::kLavender),
-            text(" ")});
+  auto line = hbox(
+      {text(rowActive ? "▌ " : "  ") | bold | color(theme::kMauve),
+       text(formatDateCell(sortBy_ == sortKey::kUpdated ? e.updatedAt
+                                                        : listDate(e))) |
+           size(WIDTH, EQUAL, 10) | color(theme::kSubtext),
+       text(" "),
+       hbox({text(" " + typeToIcon(e.type) + " "),
+             highlightMatches(shownTitle, search_.value, rowActive)}) |
+           flex,
+       text(" "), statusCell | size(WIDTH, EQUAL, 14), text(" "),
+       text(" " + renderStarMeter(e.score)) | size(WIDTH, EQUAL, 12) |
+           color(theme::kYellow),
+       text(" "),
+       text(" " + icon::kGauge + " " + progressLabel(e)) |
+           size(WIDTH, EQUAL, 12) | color(theme::kLavender),
+       text(" "),
+       text(newReleases(e) > 0 ? " +" + std::to_string(newReleases(e)) : "") |
+           bold | size(WIDTH, EQUAL, 6) | color(theme::kGreen),
+       text(" ")});
   return rowActive ? line | bgcolor(theme::kSurface0) | focus : line;
 }
 
 Element catalogTab::renderCatalogCard() {
   auto header = hbox(
       {text("   ") | size(WIDTH, EQUAL, 3),
-       renderHeaderCell("Date", sortKey::kDate, 10, false), text(" "),
-       renderHeaderCell("Title", sortKey::kTitle, 28, true), text(" "),
-       renderHeaderCell("Status", sortKey::kStatus, 14, false), text(" "),
-       renderHeaderCell("Rating", sortKey::kScore, 12, false), text(" "),
-       renderHeaderCell("Progress", sortKey::kProgress, 12, false), text(" ")});
+       sortBy_ == sortKey::kUpdated
+           ? renderHeaderCell("Updated", sortKey::kUpdated, 10, false)
+           : renderHeaderCell("Date", sortKey::kDate, 10, false),
+       text(" "), renderHeaderCell("Title", sortKey::kTitle, 28, true),
+       text(" "), renderHeaderCell("Status", sortKey::kStatus, 14, false),
+       text(" "), renderHeaderCell("Rating", sortKey::kScore, 12, false),
+       text(" "), renderHeaderCell("Progress", sortKey::kProgress, 12, false),
+       text(" "), renderHeaderCell("New", sortKey::kNew, 6, false), text(" ")});
   Element rows;
   if (displayed_.empty()) {
     rows = text(libraryEmpty_
@@ -407,13 +418,56 @@ Element catalogTab::renderDetails() {
   if (media_ == mediaType::kManga)
     tracking.push_back(countRow(detailsField::kVolumes));
   tracking.push_back(countRow(detailsField::kRewatched));
-  tracking.push_back(filler());
-
   Color trackingBorder = typing           ? theme::kPeach
                          : trackingActive ? theme::kMauve
                                           : theme::kSurface0;
-  return vbox({seriesCard, vbox(std::move(tracking)) | border |
-                               color(trackingBorder) | flex});
+  return vbox(
+      {seriesCard, vbox(std::move(tracking)) | border | color(trackingBorder)});
+}
+
+// The cover sits above the details. FTXUI cannot draw pictures, so this card
+// is drawn with only a note in it, and the shell paints the sixel over its
+// inside after every frame (see image()).
+Element catalogTab::renderCoverCard(appContext& ctx) {
+  cover_.reset();
+  const entry* current = selectedEntry();
+  std::string note;
+  int columns = coverBox_.x_max - coverBox_.x_min + 1;
+  int rows = coverBox_.y_max - coverBox_.y_min + 1;
+  bool resting = detailsTimer_.elapsedFor(catalogSelected_) >= kCoverDelayMs;
+  if (!current) {
+    note = "";
+  } else if (current->malId <= 0) {
+    note = "No cover: not on MyAnimeList.";
+  } else if (!ctx.coverProblem.empty()) {
+    note = ctx.coverProblem;
+  } else if (rows < 3 || columns < 3 || !resting) {
+    note = "Loading cover...";
+  } else {
+    // Covers are about 7 wide to 10 tall; fit that inside the card.
+    int heightPx = rows * ctx.cellHeight;
+    int widthPx = heightPx * 7 / 10;
+    if (widthPx > columns * ctx.cellWidth) {
+      widthPx = columns * ctx.cellWidth;
+      heightPx = widthPx * 10 / 7;
+    }
+    // Sixel draws six pixel rows at a time; round down so the picture never
+    // reaches the card's border.
+    heightPx -= heightPx % 6;
+    auto picture = ctx.web.coverFor(media_, current->malId, widthPx, heightPx);
+    if (picture.state == updater::coverState::kReady) {
+      int pictureColumns = (widthPx + ctx.cellWidth - 1) / ctx.cellWidth;
+      cover_ = overlayImage{coverBox_.x_min + (columns - pictureColumns) / 2,
+                            coverBox_.y_min, picture.sixel};
+    } else {
+      note = picture.state == updater::coverState::kLoading ? "Loading cover..."
+                                                            : "No cover found.";
+    }
+  }
+  Element inside =
+      text(note) | color(theme::kOverlay0) | center | flex | reflect(coverBox_);
+  return vbox({inside}) | border | color(theme::kSurface0) |
+         size(HEIGHT, GREATER_THAN, 6);
 }
 
 }  // namespace catalist

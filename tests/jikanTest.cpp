@@ -89,3 +89,73 @@ TEST_CASE("jikan search tells an unreachable server from no matches") {
   REQUIRE(online.ok());
   CHECK(online.value().size() == 1);
 }
+
+TEST_CASE("jikan details count everything as out once a title has ended") {
+  auto anime = jikan::parseDetails(
+      R"({"data": {"episodes": 28, "status": "Finished Airing",
+          "images": {"jpg": {"image_url": "https://img/a.jpg"}}}})",
+      mediaType::kAnime);
+  REQUIRE(anime.ok());
+  CHECK(anime.value().facts.totalUnits == 28);
+  CHECK(anime.value().facts.released == 28);
+  CHECK_FALSE(anime.value().ongoing);
+  CHECK(anime.value().imageUrl == "https://img/a.jpg");
+
+  auto stopped = jikan::parseDetails(
+      R"({"data": {"chapters": 120, "volumes": 12, "status": "Discontinued"}})",
+      mediaType::kManga);
+  REQUIRE(stopped.ok());
+  CHECK(stopped.value().facts.released == 120);
+  CHECK(stopped.value().facts.totalVolumes == 12);
+}
+
+TEST_CASE("jikan details leave the released count unknown while a title runs") {
+  for (const char* status : {"Publishing", "On Hiatus", "Not yet published"}) {
+    CAPTURE(status);
+    auto manga = jikan::parseDetails(
+        std::string(R"({"data": {"chapters": null, "status": ")") + status +
+            R"("}})",
+        mediaType::kManga);
+    REQUIRE(manga.ok());
+    CHECK(manga.value().facts.released == 0);
+    CHECK(manga.value().ongoing ==
+          (std::string(status) != "Not yet published"));
+  }
+  // An announced total is not a released one.
+  auto upcoming = jikan::parseDetails(
+      R"({"data": {"episodes": 12, "status": "Not yet aired"}})",
+      mediaType::kAnime);
+  REQUIRE(upcoming.ok());
+  CHECK(upcoming.value().facts.totalUnits == 12);
+  CHECK(upcoming.value().facts.released == 0);
+  CHECK_FALSE(
+      jikan::parseDetails(R"({"status": 404})", mediaType::kAnime).ok());
+}
+
+TEST_CASE("jikan episode pages count what aired by the given day") {
+  auto today = catalist::test::requireDate("2026-10-20");
+  auto page = jikan::parseEpisodes(
+      R"({"pagination": {"last_visible_page": 3}, "data": [
+          {"aired": "2026-10-20T00:00:00+00:00"}, {"aired": "2026-10-21"},
+          {"aired": null}]})",
+      today);
+  REQUIRE(page.ok());
+  CHECK(page.value().lastPage == 3);
+  CHECK(page.value().aired == 2);
+  CHECK(jikan::episodesUrl(9, 2) ==
+        "https://api.jikan.moe/v4/anime/9/episodes?page=2");
+  CHECK(jikan::detailsUrl(mediaType::kManga, 2) ==
+        "https://api.jikan.moe/v4/manga/2");
+}
+
+TEST_CASE("jikan lookUp does not guess when an episode page is missing") {
+  catalist::test::fakeWeb web;
+  web.respond("anime/9", R"({"data": {"status": "Currently Airing"}})");
+  web.respond("episodes?page=1",
+              R"({"pagination": {"last_visible_page": 2}, "data": []})");
+  auto found = jikan::lookUp(web.fetcher(), mediaType::kAnime, 9,
+                             catalist::test::requireDate("2026-10-20"));
+  REQUIRE(found.ok());
+  CHECK(found.value().facts.released == 0);
+  CHECK(web.requested.size() == 3);
+}

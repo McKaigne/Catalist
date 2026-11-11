@@ -10,6 +10,7 @@
 
 #include "catalogue.hpp"
 #include "jikan.hpp"
+#include "updater.hpp"
 
 namespace catalist {
 
@@ -20,8 +21,15 @@ struct appContext {
   catalogue& db;
   std::function<isoDate()> today;
   jikan::fetcher fetch;
+  // Web lookups and covers, fetched in the background.
+  updater& web;
   // The message in the bottom bar.
   std::string status = "Ready.";
+  // Why covers cannot be shown here, or empty when they can.
+  std::string coverProblem{};
+  // One terminal cell in pixels, for sizing covers.
+  int cellWidth = 10;
+  int cellHeight = 20;
 
   // Writes the catalogue after a change, then shows `done`, or the failure.
   void save(const std::string& done);
@@ -37,7 +45,8 @@ struct hint {
 };
 
 // What the keyboard currently does, shown as a pill in the bottom-left corner:
-// normal, search, editing notes, adding a title or a pending delete.
+// What the keyboard is doing, shown as a pill in the bottom-left corner:
+// normal, search, typing a number, adding a title or a pending delete.
 enum class appMode { kNor, kSch, kEdt, kAdd, kDel };
 
 class iTab {
@@ -64,6 +73,17 @@ public:
       appContext&) const {
     return std::nullopt;
   }
+
+  // A sixel picture to draw over the frame at a cell (0-based), which the
+  // shell writes to the terminal after every redraw.
+  struct overlayImage {
+    int column = 0;
+    int row = 0;
+    std::string sixel;
+  };
+  [[nodiscard]] virtual std::optional<overlayImage> image() const {
+    return std::nullopt;
+  }
 };
 
 }  // namespace catalist
@@ -86,9 +106,14 @@ public:
   // ignored: Catalist is driven by the keyboard.
   bool onEvent(const ftxui::Event& event);
   [[nodiscard]] ftxui::Element render();
+  // The active tab's picture, drawn over the frame after each redraw.
+  [[nodiscard]] std::optional<iTab::overlayImage> image() {
+    return activeTab().image();
+  }
 
 private:
   [[nodiscard]] iTab& activeTab() { return *tabs_[activeIndex_]; }
+  void applyFindings();
   bool handleGlobalKey(const ftxui::Event& event);
   [[nodiscard]] ftxui::Element renderTopBar();
   [[nodiscard]] ftxui::Element renderBottomBar();

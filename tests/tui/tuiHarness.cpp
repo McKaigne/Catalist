@@ -6,7 +6,16 @@
 namespace catalist::test {
 
 tuiHarness::tuiHarness()
-    : db(tempDir() / "data"), ctx{db, testToday, web.fetcher()} {}
+    : db(tempDir() / "data"),
+      updates(
+          web.fetcher(), testToday,
+          [](const std::string& image, int widthPx, int heightPx) {
+            return std::optional<std::string>("SIXEL[" + image + " " +
+                                              std::to_string(widthPx) + "x" +
+                                              std::to_string(heightPx) + "]");
+          },
+          std::chrono::milliseconds(0)),
+      ctx{db, testToday, web.fetcher(), updates} {}
 
 std::filesystem::path tuiHarness::dataDir() const {
   return tempDir() / "data";

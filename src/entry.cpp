@@ -59,6 +59,12 @@ std::optional<isoDate> listDate(const entry& shown) {
   return shown.startDate ? shown.startDate : shown.updatedAt;
 }
 
+int newReleases(const entry& shown) {
+  bool following = shown.status == watchStatus::kWatching ||
+                   shown.status == watchStatus::kOnHold;
+  return following ? std::max(0, shown.released - shown.progress) : 0;
+}
+
 }  // namespace catalist
 
 namespace catalist {
@@ -251,6 +257,17 @@ entry mergeImported(entry existing, const entry& incoming) {
   if (!existing.finishDate && incoming.finishDate)
     existing.finishDate = incoming.finishDate;
   return existing;
+}
+
+entry applyWebFacts(entry target, const webFacts& facts, const isoDate& today) {
+  if (facts.totalUnits > 0)
+    target.totalUnits = facts.totalUnits;
+  if (facts.totalVolumes > 0)
+    target.totalVolumes = facts.totalVolumes;
+  if (facts.released > 0)
+    target.released = facts.released;
+  target.checkedAt = today;
+  return target;
 }
 
 }  // namespace catalist

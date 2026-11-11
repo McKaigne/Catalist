@@ -2,6 +2,7 @@
 #define CATALIST_TUI_CATALOG_TAB_HPP_
 
 #include <array>
+#include <ftxui/screen/box.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -76,6 +77,7 @@ public:
   [[nodiscard]] appMode mode() const override;
   [[nodiscard]] std::optional<std::string> countBadge(
       appContext& ctx) const override;
+  [[nodiscard]] std::optional<overlayImage> image() const override;
 
   // The rows of the table, in the order shown.
   [[nodiscard]] const std::vector<entry>& shown() const { return displayed_; }
@@ -123,6 +125,7 @@ private:
   ftxui::Element renderSearchCard() const;
   ftxui::Element renderCatalogCard();
   ftxui::Element renderPickCard();
+  ftxui::Element renderCoverCard(appContext& ctx);
 
   // Text both halves need.
   static bool isSortAscending(sortKey key, bool reverse);
@@ -137,7 +140,7 @@ private:
   step step_ = step::kBrowse;
   focusedCard focus_ = focusedCard::kCatalog;
   detailsField detailsCursor_ = detailsField::kStatus;
-  sortKey sortBy_ = sortKey::kScore;
+  sortKey sortBy_ = sortKey::kNew;
   bool reverseSort_ = false;
 
   int sidebarSelected_ = 1;
@@ -155,6 +158,9 @@ private:
 
   marquee::selectionTimer rowTimer_;
   marquee::selectionTimer detailsTimer_;
+  // Where the cover card's inside was drawn last, and the picture for it.
+  ftxui::Box coverBox_;
+  std::optional<overlayImage> cover_;
 };
 
 }  // namespace catalist

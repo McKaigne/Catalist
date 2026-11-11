@@ -47,6 +47,7 @@
                     with pkgs;
                     [
                       curl
+                      libsixel
                     ]
                   )
                 }
@@ -80,6 +81,7 @@
               ftxui
               doctest
               curl
+              libsixel
               clang-tools
             ];
           };

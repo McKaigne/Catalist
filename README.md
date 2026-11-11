@@ -3,10 +3,12 @@
 A small, local-first anime and manga tracker for the terminal, written in
 **C++17** with **FTXUI**.
 
-Your lists live on your computer in two plain CSV files. Catalist only goes
-online when you look up a title to add, through
-[Jikan](https://jikan.moe), the public read-only MyAnimeList API. Lists move
-in and out as MyAnimeList XML, which both MyAnimeList and AniList read.
+Your lists live on your computer in two plain CSV files. Catalist asks
+[Jikan](https://jikan.moe), the public read-only MyAnimeList API, only to
+look up a title to add, to refresh what is known about a title (how many
+episodes or chapters it has and how many are out) and to show its cover;
+everything works offline too. Lists move in and out as MyAnimeList XML,
+which both MyAnimeList and AniList read.
 
 ---
 
@@ -22,8 +24,9 @@ nix run
 
 ### CMake
 
-You need a C++17 compiler, CMake 3.20 or later, Ninja or Make, and `curl` at
-run time (only for adding titles from MyAnimeList).
+You need a C++17 compiler, CMake 3.20 or later, Ninja or Make. At run time,
+`curl` reaches MyAnimeList and `img2sixel` (from libsixel) draws covers;
+without them Catalist works offline and without covers.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -38,8 +41,24 @@ ctest --test-dir build --output-on-failure
 
 | Key | Tab | What it shows |
 | :--- | :--- | :--- |
-| `1` | Anime | Sidebar filters with counts (status, rating 10 to 0) and totals (days spent, mean score, episodes, rewatches, a status bar), the sortable list and a details card |
+| `1` | Anime | Left: the filters with their counts (status, rating 10 to 0) and a stats card (days spent, mean score, episodes, rewatches, a status bar). Middle: the sortable list. Right: the cover, then the details and tracking cards |
 | `2` | Manga | The same for manga, with chapters, rereads and volumes |
+
+Covers are drawn with sixel graphics, so they need a terminal that shows
+sixel (foot, WezTerm, Konsole, xterm with `-ti vt340`, Windows Terminal,
+and others). They are fetched once the selection rests and are kept in
+memory only.
+
+## Staying current
+
+Whenever you change a title's status, rating or progress, Catalist asks
+MyAnimeList about it (once a run): a series that has ended gets its final
+episode or chapter count instead of `?`. Once a day, titles you are watching
+or reading (or have on hold) are checked in the background, one request a
+second. The **New** column shows episodes or chapters that are out but not
+yet watched, and the list starts with the titles that have the most.
+MyAnimeList only counts the chapters of a manga once it has ended, so new
+chapters of a running manga cannot be known.
 
 The bottom bar shows the current mode (`NOR`, `SCH` search, `EDT` typing a
 number, `ADD`, `DEL`), the last message and the keys that work right now.
@@ -54,7 +73,7 @@ number, `ADD`, `DEL`), the last message and the keys that work right now.
 | `+` / `-` (or `P`) | One episode or chapter more / less |
 | `S` / `R` | Next status / one star more |
 | `e` / `Enter` | Details card: `j`/`k` pick a field (status, rating, progress, total, volumes for manga, rewatches), `h`/`l` change it by one, `e`/`Enter` types a number |
-| `c` `t` `s` `r` `p` | Sort by date, title, status, rating or progress (again to reverse) |
+| `n` `u` `c` `t` `s` `r` `p` | Sort by new releases (the default), last updated, date, title, status, rating or progress (again to reverse) |
 | `/` | Filter by title |
 | `a` | Add a title: type it, `Enter` looks it up on MyAnimeList, pick a match. The last row adds it by hand, which also works offline |
 | `d` | Delete (asks first) |
@@ -88,9 +107,10 @@ export, with a note on stderr.
 ## Data
 
 - `~/.config/catalist/anime.csv` and `manga.csv` (or `$XDG_CONFIG_HOME/catalist`,
-  or the directory in `CATALIST_DATA_DIR`). RFC 4180 CSV with 14 columns:
+  or the directory in `CATALIST_DATA_DIR`). RFC 4180 CSV with 16 columns:
   `id, mal_id, type, title, status, score, progress, total_units, volumes,
-  total_volumes, rewatched, start_date, finish_date, updated_at`.
+  total_volumes, rewatched, start_date, finish_date, updated_at, released,
+  checked_at` (the last two from the web checks).
   They open in any spreadsheet.
 - Every save writes a temporary file and renames it over the old one, so a
   crash never leaves half a file. A save that fails is reported (the bottom
@@ -99,7 +119,7 @@ export, with a note on stderr.
   ids, notes and other extra columns are dropped on the next save.
 
 There are no settings: the defaults are the settings. The theme is
-Catppuccin Mocha and the list starts sorted by rating.
+Catppuccin Mocha and the list starts with new releases.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.

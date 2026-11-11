@@ -7,10 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Catalist is now a small, local-first tracker: two CSV files, two tabs,
-and the network only to look up a title to add.
+Catalist is now a small, local-first tracker: two CSV files, two tabs, and
+the network only to add titles, keep them current and show their covers.
 
 ### Added
+- A cover card at the top right of the Anime and Manga tabs, drawn with
+  sixel graphics through img2sixel (libsixel), fetched once the selection
+  rests and kept in memory.
+- Titles stay current from MyAnimeList: after any change to a title's
+  status, rating or progress, and once a day for titles being watched or on
+  hold, Catalist looks it up in the background and takes its episode or
+  chapter total (a finished series no longer shows `?`) and how many are out.
+- New-release and last-updated sorts (`n`, `u`), and a New column with the
+  episodes or chapters out but not yet seen. New releases are the default
+  order.
 - `a` in the Anime and Manga tabs adds a title: type it, look it up on
   MyAnimeList through Jikan, and pick a match. The last row adds the title
   by hand, which also works offline. A title already tracked is selected
@@ -35,9 +45,9 @@ and the network only to look up a title to add.
   adding anything, and reports per file how many titles were added.
 - New titles are numbered from 1 in each list; an imported title merges
   with a tracked one only when they share a MyAnimeList id.
-- `anime.csv` and `manga.csv` have 14 columns; files from 0.2.1 to 0.3.0
-  still load.
-- The theme is always Catppuccin Mocha, and the list starts sorted by rating.
+- `anime.csv` and `manga.csv` have 16 columns (the last two record the web
+  checks); files from 0.2.1 to 0.3.0 still load.
+- The theme is always Catppuccin Mocha.
 - Internal: the code lives in one flat `src/` folder of small modules, with
   one interface (`iTab`); see docs/ARCHITECTURE.md for the module map.
 
@@ -54,8 +64,9 @@ and the network only to look up a title to add.
 
 ### Removed
 - The Stats tab. Its totals (days spent, mean score, episodes or chapters,
-  rewatches, volumes and a status bar) sit under the sidebar of the Anime
-  and Manga tabs, whose filter rows already count each status and rating.
+  rewatches, volumes and a status bar) are in a stats card at the bottom
+  left of the Anime and Manga tabs, whose filter rows already count each
+  status and rating.
 - Notes, and the stored AniList ids, which only sync used; both are dropped
   from the CSV files on the next save, and notes are no longer exported.
 - Accounts, logins and sync with MyAnimeList and AniList, with `sync.csv`,

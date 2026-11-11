@@ -30,16 +30,23 @@ TEST_CASE_FIXTURE(
   CHECK_FALSE(std::filesystem::exists(tempDir() / "taken.tmp"));
 }
 
-using catalist::shellQuote;
-
-TEST_CASE("shellQuote wraps plain text in single quotes") {
-  CHECK(shellQuote("hello world") == "'hello world'");
-  CHECK(shellQuote("") == "''");
+TEST_CASE("runProgram passes input through and returns the output") {
+  CHECK(catalist::runProgram({"cat"}, "hello") == "hello");
+  // More than a pipe holds, so writing and reading must overlap.
+  std::string big(1 << 20, 'x');
+  CHECK(catalist::runProgram({"cat"}, big) == big);
 }
 
-TEST_CASE("shellQuote neutralises quotes and substitutions") {
-  CHECK(shellQuote("it's") == "'it'\\''s'");
-  CHECK(shellQuote("$(rm -rf ~); `x` \"y\"") == "'$(rm -rf ~); `x` \"y\"'");
+TEST_CASE("runProgram hands arguments over verbatim, without a shell") {
+  CHECK(catalist::runProgram({"printf", "%s", "$(echo hi); 'x' `y`"}) ==
+        "$(echo hi); 'x' `y`");
+}
+
+TEST_CASE("runProgram reports programs that fail or do not exist") {
+  CHECK_FALSE(catalist::runProgram({"sh", "-c", "exit 3"}).has_value());
+  CHECK_FALSE(catalist::runProgram({"catalist-no-such-program"}).has_value());
+  CHECK(catalist::hasProgram("sh"));
+  CHECK_FALSE(catalist::hasProgram("catalist-no-such-program"));
 }
 
 TEST_CASE("today follows the computer's calendar") {

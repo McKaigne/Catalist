@@ -282,3 +282,37 @@ TEST_CASE(
   CHECK(formatDate(merged.startDate) == "2026-01-01");
   CHECK(formatDate(merged.finishDate) == "2020-02-02");
 }
+
+TEST_CASE("newReleases counts only for titles being followed") {
+  auto withStatus = [](watchStatus status) {
+    return makeEntry().status(status).progress(5).released(12).build();
+  };
+  CHECK(catalist::newReleases(withStatus(watchStatus::kWatching)) == 7);
+  CHECK(catalist::newReleases(withStatus(watchStatus::kOnHold)) == 7);
+  CHECK(catalist::newReleases(withStatus(watchStatus::kCompleted)) == 0);
+  CHECK(catalist::newReleases(withStatus(watchStatus::kDropped)) == 0);
+  CHECK(catalist::newReleases(withStatus(watchStatus::kPlanToWatch)) == 0);
+  // Ahead of what is known to be out, or nothing known: no new releases.
+  CHECK(catalist::newReleases(makeEntry().progress(20).released(12).build()) ==
+        0);
+  CHECK(catalist::newReleases(makeEntry().progress(3).build()) == 0);
+}
+
+TEST_CASE("applyWebFacts keeps known values the check did not have") {
+  auto tracked = makeEntry()
+                     .totalUnits(24)
+                     .totalVolumes(3)
+                     .released(10)
+                     .updatedAt("2026-01-01")
+                     .build();
+  auto refreshed = catalist::applyWebFacts(tracked, {0, 0, 0}, kToday);
+  CHECK(refreshed.totalUnits == 24);
+  CHECK(refreshed.totalVolumes == 3);
+  CHECK(refreshed.released == 10);
+  CHECK(formatDate(refreshed.checkedAt) == "2026-10-20");
+  CHECK(formatDate(refreshed.updatedAt) == "2026-01-01");
+  auto finished = catalist::applyWebFacts(tracked, {26, 4, 26}, kToday);
+  CHECK(finished.totalUnits == 26);
+  CHECK(finished.totalVolumes == 4);
+  CHECK(finished.released == 26);
+}

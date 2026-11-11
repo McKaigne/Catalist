@@ -33,6 +33,10 @@ struct entry {
   std::optional<isoDate> startDate;
   std::optional<isoDate> finishDate;
   std::optional<isoDate> updatedAt;
+  // Episodes or chapters out so far, from the last web check (0: unknown),
+  // and when that check was.
+  int released = 0;
+  std::optional<isoDate> checkedAt;
 };
 
 std::string statusToString(watchStatus status,
@@ -49,6 +53,10 @@ std::string typeToString(mediaType type);
 // The one date the list shows for an entry: when it was finished if it is
 // completed, else when it was started, else when it was last changed.
 [[nodiscard]] std::optional<isoDate> listDate(const entry& shown);
+
+// Released episodes or chapters not yet watched or read, for titles being
+// followed (watching or on hold); 0 for everything else.
+[[nodiscard]] int newReleases(const entry& shown);
 
 }  // namespace catalist
 
@@ -87,6 +95,19 @@ enum class countField { kProgress, kTotalUnits, kVolumes, kRewatched };
 // MyAnimeList id are refreshed, but the user's own score, progress and dates
 // win: imported values only fill fields the user never set.
 [[nodiscard]] entry mergeImported(entry existing, const entry& incoming);
+
+// What a web check found out about a title; 0 means it did not say.
+struct webFacts {
+  int totalUnits = 0;
+  int totalVolumes = 0;
+  int released = 0;
+};
+
+// Takes the totals and the released count from a web check, keeping the
+// known values where the check had none, and stamps checkedAt. The user's
+// own fields, updatedAt included, are left alone.
+[[nodiscard]] entry applyWebFacts(entry target, const webFacts& facts,
+                                  const isoDate& today);
 
 }  // namespace catalist
 

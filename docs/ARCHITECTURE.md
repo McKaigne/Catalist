@@ -9,11 +9,12 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
 | `entry` | one anime or manga title, its statuses and the rules that change it (progress, status cycle, rating, counts, import merge) |
 | `catalogue` | the two lists in memory and their CSV files |
 | `malXml` | the MyAnimeList XML format lists are imported and exported in |
-| `json`, `jikan` | the title search on Jikan, the only network use |
-| `system` | everything that touches the OS: files, `httpGet` (curl), `today()` |
+| `json`, `jikan` | Jikan: the title search, and a title's details (totals, how much is out, the cover) |
+| `updater` | a worker thread for lookups and covers, one request a second, results collected on the interface's tick |
+| `system` | everything that touches the OS: files, `runProgram` (curl, img2sixel), `today()`, the terminal's cell size |
 | `cli` | `catalist import` and `catalist export` |
 | `tui/app` | `iTab`, `appContext` and the shell (tab bar, bottom bar, global keys) |
-| `tui/catalogTab`, `tui/catalogView.cpp` | the Anime and Manga tabs (with their totals): keys and state, and drawing |
+| `tui/catalogTab`, `tui/catalogView.cpp` | the Anime and Manga tabs (filters, stats card, list, cover, details): keys and state, and drawing |
 | `tui/style` | colours, icons, pill, marquee, key names, `textField` |
 
 `main.cpp` loads the catalogue, then runs the command line or the TUI.
@@ -134,10 +135,18 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
   converting them to that format) and go out with `catalist export`; neither
   touches an account. Re-importing merges by MyAnimeList id and never
   overwrites the user's score, progress or dates.
-- **Network:** only the add flow (`a`) uses it, for one Jikan title search;
-  without a connection the title is added by hand. The search runs on the
-  UI thread on the next redraw tick, after the "Searching" status is drawn,
-  and curl gives up after 8 seconds, so no worker thread is needed.
+- **Network:** the add flow (`a`) runs one Jikan search on the UI thread on
+  the next tick, after the "Searching" status is drawn; without a
+  connection the title is added by hand. Lookups (after every change to a
+  title, once a run per title, and once a day for followed titles) and
+  covers run on the `updater`'s worker thread, one request a second; the
+  shell folds finished lookups into the catalogue on its tick. Nothing
+  about the network is needed to use the lists.
+- **Covers:** FTXUI cannot draw pictures. The cover card is drawn with only
+  a note in it, and after each frame the shell writes the sixel picture
+  (made by img2sixel, kept in memory) over the card's inside, saving and
+  restoring the cursor so FTXUI's next frame lands in place. This is why
+  `runTui` runs FTXUI's `Loop` one event at a time.
 - **Ids:** an entry's id only numbers it within its list (a new title gets
   the highest id + 1); two titles are the same only when they share a
   MyAnimeList id.

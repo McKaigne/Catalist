@@ -73,11 +73,17 @@ void fakeWeb::respond(const std::string& urlFragment, const std::string& body) {
 
 std::optional<std::string> fakeWeb::get(const std::string& url) {
   requested.push_back(url);
+  // The longest matching fragment wins, so "anime/9/episodes" beats
+  // "anime/9".
+  const std::string* answer = nullptr;
+  size_t matched = 0;
   for (const auto& [fragment, body] : bodies) {
-    if (url.find(fragment) != std::string::npos)
-      return body;
+    if (url.find(fragment) != std::string::npos && fragment.size() >= matched) {
+      answer = &body;
+      matched = fragment.size();
+    }
   }
-  return std::nullopt;
+  return answer ? std::optional<std::string>(*answer) : std::nullopt;
 }
 
 jikan::fetcher fakeWeb::fetcher() {

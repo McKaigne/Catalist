@@ -15,9 +15,11 @@ catalist \- local-first anime and manga tracker for the terminal
 .SH DESCRIPTION
 .B catalist
 tracks the anime you watch and the manga you read in two CSV files on your
-computer. Run without arguments, it opens the terminal interface. It goes
-online only to look up a title to add, through Jikan, the public
-MyAnimeList API.
+computer. Run without arguments, it opens the terminal interface. It asks
+Jikan, the public MyAnimeList API, to look up a title to add, to refresh a
+title's episode or chapter count after it changes (and once a day for the
+titles being watched or read) and to fetch covers, which it draws with
+sixel graphics through img2sixel.
 .SH COMMANDS
 .TP
 .BR import " " \fIFILE.xml\fR...
@@ -38,9 +40,11 @@ Print the version.
 .SH TABS
 .TP
 .B 1 Anime, 2 Manga
-Sidebar filters by status and by rating from 10 to 0 with their counts,
-totals (days spent, mean score, episodes or chapters, rewatches, volumes for
-manga, a bar of the statuses), the sortable list and a details card.
+Left, the filters by status and by rating from 10 to 0 with their counts,
+and a stats card (days spent, mean score, episodes or chapters, rewatches,
+volumes for manga, a bar of the statuses); in the middle, the sortable list
+with a New column of released episodes or chapters not yet seen; right, the
+cover, then the details and tracking cards.
 .SH KEYS
 .TP
 .B 1 2 Tab
@@ -57,8 +61,9 @@ Open the details card. There, \fBj\fR and \fBk\fR pick a field (status,
 rating, progress, total, volumes for manga, rewatches), \fBh\fR and \fBl\fR
 change it by one, and \fBe\fR or \fBEnter\fR types a number.
 .TP
-.B c t s r p
-Sort by date, title, status, rating or progress; again to reverse.
+.B n u c t s r p
+Sort by new releases (the default), last updated, date, title, status,
+rating or progress; again to reverse.
 .TP
 .B / a d
 Filter by title, add a title, delete (asks first).

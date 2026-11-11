@@ -19,7 +19,7 @@ if(NOT ftxui_FOUND)
   FetchContent_Declare(
     ftxui
     GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
-    GIT_TAG v5.0.0
+    GIT_TAG v7.0.3
   )
   FetchContent_MakeAvailable(ftxui)
 endif()
@@ -44,6 +44,7 @@ add_library(catalistLib STATIC
   src/tui/catalogTab.cpp
   src/tui/catalogView.cpp
   src/tui/style.cpp
+  src/updater.cpp
 )
 target_include_directories(catalistLib PUBLIC src "${CATALIST_GENERATED_DIR}")
 target_link_libraries(catalistLib PUBLIC
@@ -94,6 +95,7 @@ add_executable(catalistTests
   tests/tui/catalogTabTest.cpp
   tests/tui/styleTest.cpp
   tests/tui/tuiHarness.cpp
+  tests/updaterTest.cpp
   tests/versionTest.cpp
 )
 target_include_directories(catalistTests PRIVATE tests)

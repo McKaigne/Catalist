@@ -1,8 +1,11 @@
 #include <doctest/doctest.h>
 
+#include <chrono>
+#include <thread>
+
+#include "support/sampleLibrary.hpp"
 #include "tui/catalogTab.hpp"
 #include "tui/style.hpp"
-#include "support/sampleLibrary.hpp"
 #include "tui/tuiHarness.hpp"
 
 using catalist::appMode;
@@ -21,9 +24,13 @@ const char* kLong = "A Very Long Title That Will Definitely Be Truncated";
 // Off a terminal the title column is 16 glyphs wide, so screen checks use
 // short names.
 struct catalogFixture : catalist::test::tuiHarness {
+  // Most tests were written against the rating order, so the fixture
+  // switches to it; the default order has tests of its own.
   catalogFixture() : tab(mediaType::kAnime) {
     catalist::test::seedSampleLibrary(db);
     tab.onActivate(ctx);
+    press(tab, Event::Character('r'));
+    ctx.status = "Ready.";
   }
   catalist::entry anime(const std::string& title) {
     return catalist::test::findTitle(db, mediaType::kAnime, title);
@@ -54,13 +61,92 @@ const char* kSearchReply = R"({"data": [
 }  // namespace
 
 TEST_CASE_FIXTURE(catalogFixture,
-                  "tui catalog lists only its media, best rated first") {
-  CHECK(rows() == rowList{kFrieren, kOddTaxi, kGhost, kLong});
-  CHECK(tab.countBadge(ctx) == "4");
-  auto shown = screen(tab);
+                  "tui catalog lists only its media, new releases first") {
+  catalogTab fresh(mediaType::kAnime);
+  fresh.onActivate(ctx);
+  // Odd Taxi has 8 episodes out that were not watched yet; the rest follow
+  // by their last change, newest first.
+  std::vector<std::string> titles;
+  for (const auto& e : fresh.shown())
+    titles.push_back(e.title);
+  CHECK(titles == rowList{kOddTaxi, kLong, kGhost, kFrieren});
+  CHECK(fresh.countBadge(ctx) == "4");
+  auto shown = screen(fresh);
   CHECK(shown.find("Sousou no Frie") != std::string::npos);
   CHECK(shown.find("Berserk") == std::string::npos);
-  CHECK(shown.find(" Rating ▼") != std::string::npos);
+  CHECK(shown.find(" New ▼") != std::string::npos);
+  CHECK(shown.find("+8") != std::string::npos);
+}
+
+TEST_CASE_FIXTURE(catalogFixture,
+                  "tui catalog sorts by new releases and by last change") {
+  REQUIRE(press(tab, Event::Character('u')));
+  CHECK(rows() == rowList{kLong, kGhost, kOddTaxi, kFrieren});
+  CHECK(ctx.status == "Sort: Last updated (Decreasing ▼)");
+  auto shown = screen(tab);
+  CHECK(shown.find(" Updated ▼") != std::string::npos);
+  CHECK(shown.find(" Date") == std::string::npos);
+  REQUIRE(press(tab, Event::Character('u')));
+  CHECK(rows() == rowList{kFrieren, kOddTaxi, kGhost, kLong});
+
+  REQUIRE(press(tab, Event::Character('n')));
+  CHECK(rows() == rowList{kOddTaxi, kLong, kGhost, kFrieren});
+  CHECK(ctx.status == "Sort: New releases (Decreasing ▼)");
+  // Catching up removes the title's new releases.
+  REQUIRE(press(tab, Event::Character('l')));
+  type(tab, "jj");
+  REQUIRE(press(tab, Event::Return));
+  REQUIRE(press(tab, Event::Backspace));
+  type(tab, "13");
+  REQUIRE(press(tab, Event::Return));
+  CHECK(anime(kOddTaxi).progress == 13);
+  CHECK(screen(tab).find("+8") == std::string::npos);
+}
+
+TEST_CASE_FIXTURE(catalogFixture,
+                  "tui catalog asks the web about a title after each change") {
+  type(tab, "j");
+  REQUIRE(press(tab, Event::Character('+')));
+  REQUIRE(press(tab, Event::Character('+')));
+  updates.waitUntilIdle();
+  // Once per run, however many changes.
+  REQUIRE(web.requested.size() == 1);
+  CHECK(web.requested[0] == "https://api.jikan.moe/v4/anime/44265");
+  // A title without a MyAnimeList id is not looked up.
+  type(tab, "jj");
+  REQUIRE(press(tab, Event::Character('+')));
+  updates.waitUntilIdle();
+  CHECK(web.requested.size() == 1);
+}
+
+TEST_CASE_FIXTURE(catalogFixture,
+                  "tui catalog shows the cover once the selection rests") {
+  web.respond("/anime/52991",
+              R"({"data": {"status": "Finished Airing", "episodes": 28,
+                  "images": {"jpg": {"image_url": "https://img/f.jpg"}}}})");
+  web.respond("img/f.jpg", "JPEG");
+  // The first frame measures the card; nothing is asked for at once.
+  CHECK(screen(tab).find("Loading cover...") != std::string::npos);
+  CHECK_FALSE(tab.image().has_value());
+  std::this_thread::sleep_for(std::chrono::milliseconds(450));
+  CHECK(screen(tab).find("Loading cover...") != std::string::npos);
+  updates.waitUntilIdle();
+  auto shown = screen(tab);
+  REQUIRE(tab.image().has_value());
+  CHECK(tab.image()->sixel.rfind("SIXEL[JPEG ", 0) == 0);
+  // Drawn in the right-hand column, near the top.
+  CHECK(tab.image()->column > 150);
+  CHECK(tab.image()->row < 10);
+  CHECK(shown.find("Loading cover...") == std::string::npos);
+
+  ctx.coverProblem = "Covers need img2sixel (libsixel).";
+  CHECK(screen(tab).find("Covers need img2sixel") != std::string::npos);
+  CHECK_FALSE(tab.image().has_value());
+
+  // A title without a MyAnimeList id has no cover to fetch.
+  ctx.coverProblem.clear();
+  type(tab, "jjj");
+  CHECK(screen(tab).find("No cover: not on MyAnimeList.") != std::string::npos);
 }
 
 TEST_CASE_FIXTURE(catalogFixture,

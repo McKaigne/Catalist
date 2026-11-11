@@ -26,7 +26,8 @@ namespace catalist::csvCodec {
 
 [[nodiscard]] std::optional<isoDate> decodeDate(const std::string& field);
 
-// The 14 columns of encodeEntries, or the 16 that Catalist 0.2.1 to 0.3.0
+// The 16 columns of encodeEntries (or their first 14, written before the
+// web checks), or the 16 that Catalist 0.2.1 to 0.3.0
 // wrote (their AniList id and notes are dropped). Columns after them are
 // ignored; a row without the type column where either layout has it is in an
 // older layout and is not read.
@@ -42,7 +43,15 @@ namespace catalist::csvCodec {
 
 namespace catalist {
 
-enum class sortKey { kScore, kStatus, kTitle, kProgress, kDate };
+enum class sortKey {
+  kNew,  // most new releases first, then the latest change
+  kUpdated,
+  kScore,
+  kStatus,
+  kTitle,
+  kProgress,
+  kDate
+};
 
 // The anime and manga lists in memory, and their two CSV files on disk.
 class catalogue {
@@ -60,8 +69,9 @@ public:
   bool updateEntry(const entry& changed);
   bool removeEntry(mediaType type, int id);
 
-  // Each key has a natural order: score, progress and date from high to low,
-  // title and status from first to last. `reverse` flips it.
+  // Each key has a natural order: new releases, last change, score, progress
+  // and date from high to low, title and status from first to last.
+  // `reverse` flips it.
   static void sortEntries(std::vector<entry>& entries, sortKey key,
                           bool reverse);
 

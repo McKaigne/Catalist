@@ -36,8 +36,9 @@ void writeText(const std::filesystem::path& file, const std::string& text);
 // Puts a directory where the file should go, so writing it fails.
 void makeUnwritable(const std::filesystem::path& file);
 
-// Answers a GET whose URL contains a registered fragment with its body, and
-// fails every other request, as if offline. Records every URL asked for.
+// Answers a GET whose URL contains a registered fragment with its body (the
+// longest such fragment), and fails every other request, as if offline.
+// Records every URL asked for.
 struct fakeWeb {
   void respond(const std::string& urlFragment, const std::string& body);
   [[nodiscard]] std::optional<std::string> get(const std::string& url);
@@ -107,6 +108,14 @@ public:
   }
   entryBuilder& updatedAt(const std::string& value) {
     built_.updatedAt = requireDate(value);
+    return *this;
+  }
+  entryBuilder& released(int value) {
+    built_.released = value;
+    return *this;
+  }
+  entryBuilder& checkedAt(const std::string& value) {
+    built_.checkedAt = requireDate(value);
     return *this;
   }
 

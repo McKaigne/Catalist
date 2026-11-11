@@ -142,3 +142,46 @@ TEST_CASE_FIXTURE(shellFixture,
   CHECK(shown.find("probe body") != std::string::npos);
   CHECK(shown.find("probe") != std::string::npos);
 }
+
+TEST_CASE_FIXTURE(
+    shellFixture,
+    "tui shell fills in a finished manga's chapters after a change") {
+  // Berserk was tracked while it ran, so its chapter total is unknown ("?").
+  web.respond("/manga/2", R"({"data": {"status": "Finished", "chapters": 380,
+      "volumes": 42, "images": {"jpg": {"image_url": ""}}}})");
+  REQUIRE(shell.onEvent(Event::Character('3')));
+  REQUIRE(manga.shown().front().title == "Berserk");
+  REQUIRE(shell.onEvent(Event::Character('+')));
+  CHECK(drawn().find("365/?") != std::string::npos);
+
+  updates.waitUntilIdle();
+  REQUIRE(shell.onEvent(Event::Custom));
+  auto berserk =
+      catalist::test::findTitle(db, catalist::mediaType::kManga, "Berserk");
+  CHECK(berserk.totalUnits == 380);
+  CHECK(berserk.totalVolumes == 42);
+  CHECK(berserk.released == 380);
+  CHECK(catalist::formatDate(berserk.checkedAt) == "2026-10-20");
+  CHECK(berserk.progress == 365);
+  CHECK(ctx.status == "Updated from MyAnimeList: 'Berserk'.");
+  auto shown = drawn();
+  CHECK(shown.find("365/380") != std::string::npos);
+  CHECK(shown.find("+15") != std::string::npos);
+  CHECK(catalist::test::readText(dataDir() / "manga.csv")
+            .find("Berserk,Reading,10,365,380,42,42,0,2019-05-01,,2026-10-20,"
+                  "380,2026-10-20") != std::string::npos);
+}
+
+TEST_CASE_FIXTURE(
+    shellFixture,
+    "tui shell keeps the status line when a lookup changes nothing visible") {
+  web.respond("/anime/44265",
+              R"({"data": {"status": "Finished Airing", "episodes": 13}})");
+  updates.lookUp(catalist::mediaType::kAnime, 44265);
+  updates.waitUntilIdle();
+  REQUIRE(shell.onEvent(Event::Custom));
+  CHECK(ctx.status == "Ready.");
+  CHECK(catalist::formatDate(catalist::test::findTitle(
+                                 db, catalist::mediaType::kAnime, "Odd Taxi")
+                                 .checkedAt) == "2026-10-20");
+}

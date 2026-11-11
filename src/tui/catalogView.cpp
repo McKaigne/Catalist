@@ -25,6 +25,11 @@ size_t titleWidth() {
 // so scrolling through the list fetches nothing.
 constexpr uint64_t kCoverDelayMs = 400;
 
+// Both side panels are this wide, the cover's card included.
+constexpr int kSidePanelWidth = 32;
+// Covers are about 7 wide to 10 tall.
+constexpr double kCoverAspect = 0.7;
+
 std::string formatDateCell(const std::optional<isoDate>& date) {
 	return date ? date->toString() : "    -     ";
 }
@@ -96,6 +101,22 @@ Element statusBar(const libraryTotals& totals, int width) {
 	return hbox(std::move(cells));
 }
 
+// What the cover card says while there is no picture to show.
+std::string coverNote(updater::coverState state) {
+	switch (state) {
+		case updater::coverState::kLoading:
+		case updater::coverState::kReady:
+			return "Loading cover...";
+		case updater::coverState::kUnreachable:
+			return "Could not reach MyAnimeList for the cover; trying again shortly.";
+		case updater::coverState::kNone:
+			return "MyAnimeList has no cover for this title.";
+		case updater::coverState::kUnreadable:
+			return "img2sixel could not read the cover image.";
+	}
+	return "";
+}
+
 Element numberBox(const textField& field) {
 	return field.render("0", true) | bgcolor(theme::kSurface0) | size(WIDTH, EQUAL, 8);
 }
@@ -105,9 +126,11 @@ Element numberBox(const textField& field) {
 Element catalogTab::render(appContext& ctx) {
 	bool picking = step_ == step::kAddSearching or step_ == step::kAddPicking;
 	Element middle = picking ? renderPickCard() : renderCatalogCard();
-	return hbox({vbox({renderSidebarCard() | flex, renderStatsCard()}) | size(WIDTH, EQUAL, 28),
+	return hbox({vbox({renderSidebarCard() | flex, renderStatsCard()}) |
+	                 size(WIDTH, EQUAL, kSidePanelWidth),
 	             vbox({renderSearchCard(), middle | flex}) | flex,
-	             vbox({renderCoverCard(ctx) | flex, renderDetails()}) | size(WIDTH, EQUAL, 42)});
+	             vbox({renderCoverCard(ctx), renderDetails(), filler()}) |
+	                 size(WIDTH, EQUAL, kSidePanelWidth)});
 }
 
 Element catalogTab::renderSidebarRow(int row) const {
@@ -153,7 +176,7 @@ Element catalogTab::renderStatsCard() const {
 	                  row(anime ? "Rewatched" : "Reread", withCommas(totals_.rewatched))};
 	if (not anime)
 		lines.push_back(row("Volumes", withCommas(totals_.volumes)));
-	lines.push_back(hbox({text("  "), statusBar(totals_, 24)}));
+	lines.push_back(hbox({text("  "), statusBar(totals_, kSidePanelWidth - 4)}));
 	return vbox(std::move(lines)) | border | color(theme::kSurface0);
 }
 
@@ -312,7 +335,7 @@ Element catalogTab::renderDetails() {
 	auto fieldRow = [&](detailsField field, const std::string& label, Element content) {
 		bool active = onDetails and detailsCursor_ == field;
 		return hbox({text(active ? "▌ " : "  ") | color(theme::kMauve) | bold,
-		             text(label) | size(WIDTH, EQUAL, 12) | (active ? bold : nothing) |
+		             text(label) | size(WIDTH, EQUAL, 11) | (active ? bold : nothing) |
 		                 color(active ? theme::kPeach : theme::kSubtext),
 		             content | flex});
 	};
@@ -323,11 +346,11 @@ Element catalogTab::renderDetails() {
 
 	// The details card: what the title is and when it was watched.
 	std::string shownTitle =
-	    marquee::scroll(e.title, 36, detailsTimer_.elapsedFor(catalogSelected_));
+	    marquee::scroll(e.title, kSidePanelWidth - 6, detailsTimer_.elapsedFor(catalogSelected_));
 	std::string unfinished = e.status == watchStatus::kCompleted ? "Completed" : "In progress";
 	auto seriesCard =
-	    vbox({text("  DETAILS") | bold | color(theme::kLavender), text(""),
-	          hbox({text(fmt::format("  {}", shownTitle)) | bold | color(theme::kMauve)}), text(""),
+	    vbox({text("  DETAILS") | bold | color(theme::kLavender),
+	          hbox({text(fmt::format("  {}", shownTitle)) | bold | color(theme::kMauve)}),
 	          hbox({text("  Type:     ") | color(theme::kSubtext),
 	                pill(fmt::format("{} {}", typeToIcon(e.type), typeToString(e.type)),
 	                     theme::kCrust, typeToColor(e.type)),
@@ -361,23 +384,16 @@ Element catalogTab::renderDetails() {
 	    hbox({text("  TRACKING") | bold | color(theme::kLavender), filler(),
 	          text(trackingActive ? (typing ? "[Editing]" : "[Active]") : "") |
 	              color(theme::kPeach)}),
-	    text(""),
-	    text("  STATUS") | bold | color(theme::kOverlay0),
 	    fieldRow(
 	        detailsField::kStatus, "Status:",
 	        pill(fmt::format("{} {}", statusToIcon(e.status), statusToString(e.status, e.type)),
 	             theme::kCrust, statusToColor(e.status))),
-	    text(""),
-	    text("  METRICS") | bold | color(theme::kOverlay0),
 	    fieldRow(detailsField::kRating, "Rating:",
 	             hbox({text(renderStarMeter(e.score)) | color(theme::kYellow),
 	                   text(fmt::format(" ({}/10)", e.score)) | color(theme::kText)})),
-	    text(""),
 	    fieldRow(detailsField::kProgress, "Progress:",
 	             vbox({hbox({progressLine, filler(), text(percent) | color(theme::kSubtext)}),
 	                   gauge(ratio) | color(finished ? theme::kGreen : theme::kBlue)})),
-	    text(""),
-	    text("  COUNTS") | bold | color(theme::kOverlay0),
 	    countRow(detailsField::kTotal)};
 	if (media_ == mediaType::kManga)
 		tracking.push_back(countRow(detailsField::kVolumes));
@@ -393,6 +409,12 @@ Element catalogTab::renderDetails() {
 // inside after every frame (see image()).
 Element catalogTab::renderCoverCard(appContext& ctx) {
 	cover_.reset();
+	// The card is as tall as a cover of its width, and gives way first when
+	// the terminal is short.
+	int insideColumns = kSidePanelWidth - 2;
+	int portraitRows =
+	    static_cast<int>(std::ceil(insideColumns * ctx.cellWidth / kCoverAspect / ctx.cellHeight));
+
 	const entry* current = selectedEntry();
 	std::string note;
 	int columns = coverBox_.x_max - coverBox_.x_min + 1;
@@ -407,15 +429,15 @@ Element catalogTab::renderCoverCard(appContext& ctx) {
 	} else if (rows < 3 or columns < 3 or not resting) {
 		note = "Loading cover...";
 	} else {
-		// Covers are about 7 wide to 10 tall; fit that inside the card.
+		// Fit a 7 by 10 picture inside the card.
 		int heightPx = rows * ctx.cellHeight;
-		int widthPx = heightPx * 7 / 10;
+		int widthPx = static_cast<int>(heightPx * kCoverAspect);
 		if (widthPx > columns * ctx.cellWidth) {
 			widthPx = columns * ctx.cellWidth;
-			heightPx = widthPx * 10 / 7;
+			heightPx = static_cast<int>(widthPx / kCoverAspect);
 		}
-		// Sixel draws six pixel rows at a time; round down so the picture never
-		// reaches the card's border.
+		// Sixel draws six pixel rows at a time; round down so the picture
+		// never reaches the card's border.
 		heightPx -= heightPx % 6;
 		auto picture = ctx.web.coverFor(media_, current->malId, widthPx, heightPx);
 		if (picture.state == updater::coverState::kReady) {
@@ -423,12 +445,13 @@ Element catalogTab::renderCoverCard(appContext& ctx) {
 			cover_ = overlayImage{coverBox_.x_min + (columns - pictureColumns) / 2, coverBox_.y_min,
 			                      picture.sixel};
 		} else {
-			note = picture.state == updater::coverState::kLoading ? "Loading cover..."
-			                                                      : "No cover found.";
+			note = coverNote(picture.state);
 		}
 	}
-	Element inside = text(note) | color(theme::kOverlay0) | center | flex | reflect(coverBox_);
-	return vbox({inside}) | border | color(theme::kSurface0) | size(HEIGHT, GREATER_THAN, 6);
+	Element inside =
+	    paragraphAlignCenter(note) | color(theme::kOverlay0) | vcenter | flex | reflect(coverBox_);
+	return vbox({inside}) | border | color(theme::kSurface0) |
+	       size(HEIGHT, EQUAL, portraitRows + 2) | yflex_shrink;
 }
 
 }  // namespace catalist

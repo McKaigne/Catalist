@@ -100,11 +100,13 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog sorts by new releases and by last
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog asks the web about a title after each change") {
+	web.respond("/anime/44265", R"({"data": {"status": "Finished Airing", "episodes": 13}})");
 	type(tab, "j");
 	REQUIRE(press(tab, Event::Character('+')));
+	updates.waitUntilIdle();
 	REQUIRE(press(tab, Event::Character('+')));
 	updates.waitUntilIdle();
-	// Once per run, however many changes.
+	// Once per run, however many changes, once it got an answer.
 	REQUIRE(web.requested.size() == 1);
 	CHECK(web.requested[0] == "https://api.jikan.moe/v4/anime/44265");
 	// A title without a MyAnimeList id is not looked up.

@@ -45,18 +45,21 @@ ctest --test-dir build --output-on-failure
 | `1` | Anime | Left: the filters with their counts (status, rating 10 to 0) and a stats card (days spent, mean score, episodes, rewatches, a status bar). Middle: the sortable list. Right: the cover, then the details and tracking cards |
 | `2` | Manga | The same for manga, with chapters, rereads and volumes |
 
-Covers are drawn with sixel graphics, so they need a terminal that shows
-sixel (foot, WezTerm, Konsole, xterm with `-ti vt340`, Windows Terminal,
-and others). They are fetched once the selection rests and are kept in
-memory only.
+Covers come from MyAnimeList: Catalist asks Jikan for the title's page,
+takes the cover's address from it, downloads the picture with curl and
+turns it into sixel graphics with `img2sixel`. They need a terminal that
+shows sixel (foot, WezTerm, Konsole, xterm with `-ti vt340`, Windows
+Terminal, and others), are fetched once the selection rests, and are kept
+in memory only. When there is no picture, the cover card says why; a cover
+that could not be fetched is tried again after a few seconds.
 
 ## Staying current
 
 Whenever you change a title's status, rating or progress, Catalist asks
 MyAnimeList about it (once a run): a series that has ended gets its final
 episode or chapter count instead of `?`. Once a day, titles you are watching
-or reading (or have on hold) are checked in the background, one request a
-second. The **New** column shows episodes or chapters that are out but not
+or reading (or have on hold) are checked in the background, one request
+every second and a half (Jikan allows sixty a minute). The **New** column shows episodes or chapters that are out but not
 yet watched, and the list starts with the titles that have the most.
 MyAnimeList only counts the chapters of a manga once it has ended, so new
 chapters of a running manga cannot be known.

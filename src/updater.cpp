@@ -26,17 +26,22 @@ struct job {
 
 struct updater::shared {
 	shared(jikan::fetcher fetch, std::function<isoDate()> today, sixelMaker toSixel,
-	       std::chrono::milliseconds pause, std::function<void()> wake)
+	       std::chrono::milliseconds pause, std::function<void()> wake,
+	       std::chrono::milliseconds retryAfter)
 	    : fetch(std::move(fetch)),
 	      today(std::move(today)),
 	      toSixel(std::move(toSixel)),
 	      pause(pause),
-	      wake(std::move(wake)) {}
+	      wake(std::move(wake)),
+	      retryAfter(retryAfter) {}
 
 	void work();
 	void runLookup(const titleKey& title);
 	void runCover(const coverKey& key);
 	std::optional<std::string> pacedFetch(const std::string& url);
+	// The cover's address: known, fetched from Jikan, absent because
+	// MyAnimeList has none (an empty string), or nothing when Jikan could
+	// not be reached.
 	std::optional<std::string> imageUrlOf(const titleKey& title);
 
 	const jikan::fetcher fetch;
@@ -44,6 +49,7 @@ struct updater::shared {
 	const sixelMaker toSixel;
 	const std::chrono::milliseconds pause;
 	const std::function<void()> wake;
+	const std::chrono::milliseconds retryAfter;
 
 	// Everything below is guarded by mutex.
 	std::mutex mutex;
@@ -57,15 +63,18 @@ struct updater::shared {
 	std::vector<finding> findings;
 	std::map<titleKey, std::string> imageUrls;
 	std::map<titleKey, std::string> images;
-	std::set<titleKey> noImage;
+	// Why a title has no cover, and when an unreachable one may be retried.
+	std::map<titleKey, coverState> failed;
+	std::map<titleKey, std::chrono::steady_clock::time_point> retryAt;
 	std::set<coverKey> asked;
 	std::map<coverKey, std::string> sixels;
 };
 
 updater::updater(jikan::fetcher fetch, std::function<isoDate()> today, sixelMaker toSixel,
-                 std::chrono::milliseconds pause, std::function<void()> wake)
+                 std::chrono::milliseconds pause, std::function<void()> wake,
+                 std::chrono::milliseconds retryAfter)
     : shared_(std::make_shared<shared>(std::move(fetch), std::move(today), std::move(toSixel),
-                                       pause, std::move(wake))) {
+                                       pause, std::move(wake), retryAfter)) {
 	worker_ = std::thread([state = shared_] { state->work(); });
 }
 
@@ -101,13 +110,26 @@ std::vector<updater::finding> updater::takeFindings() {
 
 updater::cover updater::coverFor(mediaType type, int malId, int widthPx, int heightPx) {
 	coverKey key{type, malId, widthPx, heightPx};
+	titleKey title{type, malId};
 	{
 		std::lock_guard<std::mutex> lock(shared_->mutex);
 		auto ready = shared_->sixels.find(key);
 		if (ready != shared_->sixels.end())
 			return {coverState::kReady, ready->second};
-		if (malId <= 0 or shared_->noImage.count({type, malId}))
+		if (malId <= 0)
 			return {coverState::kNone, ""};
+
+		// A failure stands, except that an unreachable cover is asked for
+		// again once its wait is over.
+		auto failure = shared_->failed.find(title);
+		if (failure != shared_->failed.end()) {
+			bool retry = failure->second == coverState::kUnreachable and
+			             std::chrono::steady_clock::now() >= shared_->retryAt[title];
+			if (not retry)
+				return {failure->second, ""};
+			shared_->failed.erase(failure);
+			shared_->asked.erase(key);
+		}
 		if (not shared_->asked.insert(key).second)
 			return {coverState::kLoading, ""};
 		// The person is looking at this one, so it goes before any lookups.
@@ -168,11 +190,13 @@ std::optional<std::string> updater::shared::pacedFetch(const std::string& url) {
 void updater::shared::runLookup(const titleKey& title) {
 	auto paced = [this](const std::string& url) { return pacedFetch(url); };
 	auto found = jikan::lookUp(paced, title.first, title.second, today());
-	if (not found.ok())
-		return;
 	std::lock_guard<std::mutex> lock(mutex);
-	if (not found.value().imageUrl.empty())
-		imageUrls[title] = found.value().imageUrl;
+	if (not found.ok()) {
+		// Not reached: a later change or check may try again.
+		lookedUp.erase(title);
+		return;
+	}
+	imageUrls[title] = found.value().imageUrl;
 	findings.push_back({title.first, title.second, found.value().facts});
 }
 
@@ -186,7 +210,7 @@ std::optional<std::string> updater::shared::imageUrlOf(const titleKey& title) {
 	auto body = pacedFetch(jikan::detailsUrl(title.first, title.second));
 	auto found = body ? jikan::parseDetails(*body, title.first)
 	                  : result<jikan::details>::failure("unreachable");
-	if (not found.ok() or found.value().imageUrl.empty())
+	if (not found.ok())
 		return std::nullopt;
 	std::lock_guard<std::mutex> lock(mutex);
 	imageUrls[title] = found.value().imageUrl;
@@ -205,19 +229,38 @@ void updater::shared::runCover(const coverKey& key) {
 		if (known != images.end())
 			image = known->second;
 	}
+	coverState outcome = coverState::kReady;
 	if (not image) {
 		auto url = imageUrlOf(title);
-		image = url ? pacedFetch(*url) : std::nullopt;
+		if (not url)
+			outcome = coverState::kUnreachable;
+		else if (url->empty())
+			outcome = coverState::kNone;
+		else {
+			// The image server is not Jikan, so no pause is needed.
+			image = fetch(*url);
+			if (not image)
+				outcome = coverState::kUnreachable;
+		}
 	}
-	auto sixel = image ? toSixel(*image, widthPx, heightPx) : std::nullopt;
+	std::optional<std::string> sixel;
+	if (image) {
+		sixel = toSixel(*image, widthPx, heightPx);
+		if (not sixel)
+			outcome = coverState::kUnreadable;
+	}
 
+	// Record what happened.
 	std::lock_guard<std::mutex> lock(mutex);
 	if (image)
 		images[title] = *image;
-	if (sixel)
+	if (sixel) {
 		sixels[key] = *sixel;
-	else
-		noImage.insert(title);
+		return;
+	}
+	failed[title] = outcome;
+	if (outcome == coverState::kUnreachable)
+		retryAt[title] = std::chrono::steady_clock::now() + retryAfter;
 }
 
 void checkFollowed(const catalogue& lists, updater& web, const isoDate& today) {

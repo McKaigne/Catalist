@@ -61,8 +61,9 @@ Element modePill(appMode mode) {
 	return text("");
 }
 
-// One request a second keeps well inside Jikan's limit of three.
-constexpr auto kRequestPause = std::chrono::milliseconds(1000);
+// Jikan allows three requests a second but only sixty a minute; one every
+// second and a half stays clear of both, even while the daily check runs.
+constexpr auto kRequestPause = std::chrono::milliseconds(1500);
 
 std::string coverProblem(const App& screen, bool canConvert) {
 	if (not canConvert)

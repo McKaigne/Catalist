@@ -11,9 +11,11 @@ Catalist is now a small, local-first tracker: two CSV files, two tabs, and
 the network only to add titles, keep them current and show their covers.
 
 ### Added
-- A cover card at the top right of the Anime and Manga tabs, drawn with
-  sixel graphics through img2sixel (libsixel), fetched once the selection
-  rests and kept in memory.
+- A cover card at the top right of the Anime and Manga tabs, shaped like a
+  cover and drawn with sixel graphics through img2sixel (libsixel), fetched
+  once the selection rests and kept in memory. The card says why when there
+  is no picture, and retries one that could not be fetched. Both side panels
+  have the same width.
 - Titles stay current from MyAnimeList: after any change to a title's
   status, rating or progress, and once a day for titles being watched or on
   hold, Catalist looks it up in the background and takes its episode or

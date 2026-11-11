@@ -132,14 +132,70 @@ TEST_CASE_FIXTURE(updaterFixture, "updater reuses the cover address from a looku
 	CHECK(requestsFor("/manga/2") == 1);
 }
 
-TEST_CASE_FIXTURE(updaterFixture, "updater says when there is no cover to be had") {
+TEST_CASE_FIXTURE(updaterFixture, "updater says why there is no cover") {
 	CHECK(updates.coverFor(mediaType::kAnime, 0, 70, 100).state == updater::coverState::kNone);
-	// Offline: the request fails, and the title is not asked for again.
+
+	// MyAnimeList answers but has no picture.
+	web.respond("/anime/8", R"({"data": {"images": {"jpg": {"image_url": null}}}})");
+	CHECK(updates.coverFor(mediaType::kAnime, 8, 70, 100).state == updater::coverState::kLoading);
+	updates.waitUntilIdle();
+	CHECK(updates.coverFor(mediaType::kAnime, 8, 70, 100).state == updater::coverState::kNone);
+
+	// Offline: unreachable, and not asked for again until the wait is over.
 	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state == updater::coverState::kLoading);
 	updates.waitUntilIdle();
-	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state == updater::coverState::kNone);
-	CHECK(updates.coverFor(mediaType::kAnime, 7, 140, 200).state == updater::coverState::kNone);
-	CHECK(web.requested.size() == 1);
+	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state ==
+	      updater::coverState::kUnreachable);
+	CHECK(updates.coverFor(mediaType::kAnime, 7, 140, 200).state ==
+	      updater::coverState::kUnreachable);
+	CHECK(requestsFor("/anime/7") == 1);
+}
+
+TEST_CASE("updater tries an unreachable cover again after a while") {
+	fakeWeb web;
+	updater updates(
+	    web.fetcher(), catalist::test::testToday,
+	    [](const std::string& image, int, int) { return std::optional<std::string>(image); },
+	    std::chrono::milliseconds(0), {}, std::chrono::milliseconds(50));
+	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state == updater::coverState::kLoading);
+	updates.waitUntilIdle();
+	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state ==
+	      updater::coverState::kUnreachable);
+
+	// Back online (Jikan was busy, say): the next ask after the wait works.
+	web.respond("/anime/7", R"({"data": {"images": {"jpg": {"image_url": "https://img/7.jpg"}}}})");
+	web.respond("img/7.jpg", "JPEG");
+	std::this_thread::sleep_for(std::chrono::milliseconds(80));
+	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state == updater::coverState::kLoading);
+	updates.waitUntilIdle();
+	auto ready = updates.coverFor(mediaType::kAnime, 7, 70, 100);
+	CHECK(ready.state == updater::coverState::kReady);
+	CHECK(ready.sixel == "JPEG");
+}
+
+TEST_CASE("updater says when the picture cannot be converted") {
+	fakeWeb web;
+	web.respond("/manga/2", kFinishedManga);
+	web.respond("img/berserk.jpg", "not really a JPEG");
+	updater updates(
+	    web.fetcher(), catalist::test::testToday,
+	    [](const std::string&, int, int) { return std::optional<std::string>(); },
+	    std::chrono::milliseconds(0));
+	CHECK(updates.coverFor(mediaType::kManga, 2, 70, 100).state == updater::coverState::kLoading);
+	updates.waitUntilIdle();
+	CHECK(updates.coverFor(mediaType::kManga, 2, 70, 100).state ==
+	      updater::coverState::kUnreadable);
+}
+
+TEST_CASE_FIXTURE(updaterFixture, "updater looks a title up again when Jikan was unreachable") {
+	updates.lookUp(mediaType::kManga, 2);
+	updates.waitUntilIdle();
+	CHECK(updates.takeFindings().empty());
+	web.respond("/manga/2", kFinishedManga);
+	updates.lookUp(mediaType::kManga, 2);
+	updates.waitUntilIdle();
+	CHECK(updates.takeFindings().size() == 1);
+	CHECK(requestsFor("/manga/2") == 2);
 }
 
 TEST_CASE("updater pauses between requests") {

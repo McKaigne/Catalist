@@ -14,7 +14,16 @@ namespace catalist {
 
 enum class focusedCard { kSidebar, kCatalog, kDetails };
 
-enum class detailsField { kStatus, kRating, kProgress, kNotes };
+// The rows of the details card the cursor can stop on. Volumes are shown for
+// manga only.
+enum class detailsField {
+  kStatus,
+  kRating,
+  kProgress,
+  kTotal,
+  kVolumes,
+  kRewatched
+};
 
 // Where the add flow is: typing a title, waiting for the search, or picking
 // one of the matches.
@@ -61,7 +70,7 @@ private:
 
   bool handlePendingDelete(const ftxui::Event& event, appContext& ctx);
   bool handleSearchTyping(const ftxui::Event& event, appContext& ctx);
-  bool handleNotesEditing(const ftxui::Event& event, appContext& ctx);
+  bool handleCountEditing(const ftxui::Event& event, appContext& ctx);
   bool handleAdding(const ftxui::Event& event, appContext& ctx);
   bool handleEntryKeys(const ftxui::Event& event, appContext& ctx);
   bool handleSortKeys(const ftxui::Event& event, appContext& ctx);
@@ -75,7 +84,11 @@ private:
   void toggleSort(sortKey key, const std::string& name, appContext& ctx);
   void moveSidebarCursor(int direction, appContext& ctx);
   void startSearch(appContext& ctx);
-  void commitNotes(appContext& ctx);
+  void moveDetailsCursor(int direction);
+  [[nodiscard]] std::vector<detailsField> detailsFields() const;
+  [[nodiscard]] std::string fieldLabel(detailsField field) const;
+  void stopEditingCount();
+  void commitCount(appContext& ctx);
   void requestDelete(appContext& ctx);
   void confirmDelete(appContext& ctx);
   void startAdding(appContext& ctx);
@@ -102,9 +115,9 @@ private:
   int sidebarSelected_ = 1;
   int catalogSelected_ = 0;
   std::string searchQuery_;
-  std::string notesBuffer_;
-  int notesCursor_ = 0;
-  bool editingNotes_ = false;
+  std::string countBuffer_;
+  int countCursor_ = 0;
+  bool editingCount_ = false;
   std::optional<int> pendingDeleteId_;
 
   addStage adding_ = addStage::kOff;
@@ -124,7 +137,7 @@ private:
   ftxui::Component idle_;
   ftxui::Component searchInput_;
   ftxui::Component addInput_;
-  ftxui::Component notesInput_;
+  ftxui::Component countInput_;
   ftxui::Component root_;
 };
 

@@ -15,7 +15,8 @@ TEST_CASE("json parses nested objects arrays and scalars") {
   CHECK(doc["data"].items()[0]["node"]["title"].asString() == "A\"b");
   CHECK(doc["data"].items()[0]["score"].asNumber() == doctest::Approx(7.5));
   CHECK_FALSE(doc["data"].items()[0]["score"].asInteger().has_value());
-  CHECK(doc["ok"].asBool() == true);
+  CHECK_FALSE(doc["ok"].isNull());
+  CHECK_FALSE(doc["ok"].asNumber().has_value());
   CHECK(doc["none"].isNull());
   CHECK(doc["neg"].asInteger() == -20);
   CHECK(doc["missing"]["deeper"].isNull());

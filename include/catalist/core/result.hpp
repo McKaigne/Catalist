@@ -8,17 +8,17 @@
 
 namespace catalist {
 
-// C++17 stand-in for std::expected. The error type defaults to a message
-// string; callers that must branch on the failure use a structured type.
-template <typename T, typename E = std::string>
+// C++17 stand-in for std::expected: a value, or a message saying why there
+// is none.
+template <typename T>
 class result {
-  static_assert(!std::is_same_v<T, E>,
-                "value and error types must differ to stay distinguishable");
+  static_assert(!std::is_same_v<T, std::string>,
+                "a string value would be indistinguishable from the error");
 
 public:
   static result success(T value) { return result(std::move(value)); }
-  static result failure(E failureValue) {
-    return result(error{std::move(failureValue)});
+  static result failure(std::string message) {
+    return result(error{std::move(message)});
   }
 
   [[nodiscard]] bool ok() const { return std::holds_alternative<T>(storage_); }
@@ -26,14 +26,13 @@ public:
   [[nodiscard]] const T& value() const { return std::get<T>(storage_); }
   [[nodiscard]] T& value() { return std::get<T>(storage_); }
 
-  [[nodiscard]] const E& errorValue() const {
-    return std::get<error>(storage_).payload;
+  [[nodiscard]] const std::string& errorMessage() const {
+    return std::get<error>(storage_).message;
   }
-  [[nodiscard]] const E& errorMessage() const { return errorValue(); }
 
 private:
   struct error {
-    E payload;
+    std::string message;
   };
   std::variant<T, error> storage_;
 

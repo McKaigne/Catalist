@@ -1,2 +1,2 @@
-#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at,dirty,external_ids
-2,2,30002,manga,Berserk,Reading,10,364,0,42,0,0,2019-05-01,,Dark fantasy.,2026-10-17,0,kitsu=1234;mal=2
+#id,mal_id,type,title,status,score,progress,total_units,volumes,total_volumes,rewatched,start_date,finish_date,updated_at
+2,2,manga,Berserk,Reading,10,364,0,42,0,1,2019-05-01,,2026-10-17

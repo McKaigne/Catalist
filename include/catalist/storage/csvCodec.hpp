@@ -25,9 +25,10 @@ namespace catalist::csvCodec {
 
 [[nodiscard]] std::optional<isoDate> decodeDate(const std::string& field);
 
-// The 16 columns of encodeEntries. Columns after them (written by 0.3 and
-// earlier builds) are ignored; a row without the type column is in an older
-// layout and is not read.
+// The 14 columns of encodeEntries, or the 16 that Catalist 0.2.1 to 0.3.0
+// wrote (their AniList id and notes are dropped). Columns after them are
+// ignored; a row without the type column where either layout has it is in an
+// older layout and is not read.
 [[nodiscard]] std::optional<entry> decodeEntry(
     const std::vector<std::string>& fields, mediaType type);
 // Fails on the first row decodeEntry cannot read, so a file is never loaded

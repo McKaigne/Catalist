@@ -37,15 +37,24 @@ void appendUtf8(std::string& out, std::uint32_t codePoint) {
 
 std::optional<char> simpleEscape(char escaped) {
   switch (escaped) {
-    case '"': return '"';
-    case '\\': return '\\';
-    case '/': return '/';
-    case 'b': return '\b';
-    case 'f': return '\f';
-    case 'n': return '\n';
-    case 'r': return '\r';
-    case 't': return '\t';
-    default: return std::nullopt;
+    case '"':
+      return '"';
+    case '\\':
+      return '\\';
+    case '/':
+      return '/';
+    case 'b':
+      return '\b';
+    case 'f':
+      return '\f';
+    case 'n':
+      return '\n';
+    case 'r':
+      return '\r';
+    case 't':
+      return '\t';
+    default:
+      return std::nullopt;
   }
 }
 
@@ -262,18 +271,8 @@ bool value::isNull() const {
   return std::holds_alternative<std::nullptr_t>(data_);
 }
 
-bool value::isObject() const {
-  return std::holds_alternative<object>(data_);
-}
-
 bool value::isArray() const {
   return std::holds_alternative<array>(data_);
-}
-
-std::optional<bool> value::asBool() const {
-  if (auto flag = std::get_if<bool>(&data_))
-    return *flag;
-  return std::nullopt;
 }
 
 std::optional<double> value::asNumber() const {
@@ -296,7 +295,10 @@ std::optional<std::string> value::asString() const {
 }
 
 const value& value::operator[](std::string_view key) const {
-  for (const auto& entry : members()) {
+  auto members = std::get_if<object>(&data_);
+  if (!members)
+    return nullValue();
+  for (const auto& entry : *members) {
     if (entry.key == key)
       return entry.item;
   }
@@ -306,12 +308,6 @@ const value& value::operator[](std::string_view key) const {
 const value::array& value::items() const {
   static const array kEmpty;
   auto found = std::get_if<array>(&data_);
-  return found ? *found : kEmpty;
-}
-
-const value::object& value::members() const {
-  static const object kEmpty;
-  auto found = std::get_if<object>(&data_);
   return found ? *found : kEmpty;
 }
 

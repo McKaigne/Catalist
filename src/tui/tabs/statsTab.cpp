@@ -157,7 +157,7 @@ std::vector<std::pair<std::string, size_t>> scoreHistogram(const database& db,
                                                            mediaType type) {
   std::vector<std::pair<std::string, size_t>> rows;
   for (int score = 10; score >= 1; --score)
-    rows.emplace_back(std::to_string(score) + " ★",
+    rows.emplace_back((score < 10 ? " " : "") + std::to_string(score) + " ★",
                       db.countByScore(type, score));
   return rows;
 }

@@ -22,7 +22,7 @@ TEST_CASE("malXml reads an anime block the way MyAnimeList writes it") {
       "    <my_finish_date>0000-00-00</my_finish_date>\n"
       "    <my_score>10</my_score>\n"
       "    <my_status>Watching</my_status>\n"
-      "    <my_comments><![CDATA[Slow & good.]]></my_comments>\n"
+      "    <my_comments><![CDATA[Not kept.]]></my_comments>\n"
       "    <my_times_watched>2</my_times_watched>\n"
       "  </anime>\n"
       "</myanimelist>\n");
@@ -40,7 +40,6 @@ TEST_CASE("malXml reads an anime block the way MyAnimeList writes it") {
   CHECK(frieren.status == watchStatus::kWatching);
   CHECK(catalist::formatDate(frieren.startDate) == "2023-09-29");
   CHECK_FALSE(frieren.finishDate.has_value());
-  CHECK(frieren.notes == "Slow & good.");
   CHECK(frieren.volumes == 0);
   CHECK(frieren.totalVolumes == 0);
 }
@@ -91,8 +90,10 @@ TEST_CASE("malXml reads every block, anime before manga") {
 
 TEST_CASE("malXml maps each MyAnimeList status") {
   auto statusOf = [](const std::string& text) {
-    auto titles = malXml::parse("<anime><series_title>T</series_title>"
-                                "<my_status>" + text + "</my_status></anime>");
+    auto titles = malXml::parse(
+        "<anime><series_title>T</series_title>"
+        "<my_status>" +
+        text + "</my_status></anime>");
     REQUIRE(titles.size() == 1);
     return titles[0].status;
   };
@@ -113,11 +114,11 @@ TEST_CASE("malXml decodes entities outside CDATA and leaves CDATA alone") {
       "<anime>\n"
       "  <series_title>  Tom &amp; Jerry &lt;3 &quot;x&quot; &#039;y&apos; "
       "&amp;lt;  </series_title>\n"
-      "  <my_comments><![CDATA[ a &amp; b ]]></my_comments>\n"
-      "</anime>\n");
-  REQUIRE(titles.size() == 1);
+      "</anime>\n"
+      "<anime><series_title><![CDATA[ a &amp; b ]]></series_title></anime>\n");
+  REQUIRE(titles.size() == 2);
   CHECK(titles[0].title == "Tom & Jerry <3 \"x\" 'y' &lt;");
-  CHECK(titles[0].notes == " a &amp; b ");
+  CHECK(titles[1].title == " a &amp; b ");
 }
 
 TEST_CASE("malXml keeps bad numbers and dates out of the catalogue") {
@@ -151,10 +152,16 @@ TEST_CASE("malXml skips untitled and unterminated blocks") {
 TEST_CASE("malXml writes one media type and leaves out titles without an id") {
   using catalist::test::makeEntry;
   std::vector<catalist::entry> entries = {
-      makeEntry().malId(52991).title("Sousou no Frieren").totalUnits(28)
-          .progress(28).rewatched(1).score(10)
-          .status(watchStatus::kCompleted).startDate("2023-09-29")
-          .finishDate("2024-03-22").notes("Great"),
+      makeEntry()
+          .malId(52991)
+          .title("Sousou no Frieren")
+          .totalUnits(28)
+          .progress(28)
+          .rewatched(1)
+          .score(10)
+          .status(watchStatus::kCompleted)
+          .startDate("2023-09-29")
+          .finishDate("2024-03-22"),
       makeEntry().title("Home video"),
       makeEntry().malId(2).title("Berserk").type(mediaType::kManga),
   };
@@ -178,7 +185,6 @@ TEST_CASE("malXml writes one media type and leaves out titles without an id") {
         "\t\t<my_finish_date>2024-03-22</my_finish_date>\n"
         "\t\t<my_score>10</my_score>\n"
         "\t\t<my_status>Completed</my_status>\n"
-        "\t\t<my_comments><![CDATA[Great]]></my_comments>\n"
         "\t\t<update_on_import>1</update_on_import>\n"
         "\t</anime>\n"
         "</myanimelist>\n");
@@ -197,13 +203,27 @@ TEST_CASE("malXml writes one media type and leaves out titles without an id") {
 TEST_CASE("malXml reads back exactly what it wrote") {
   using catalist::test::makeEntry;
   std::vector<catalist::entry> entries = {
-      makeEntry().malId(1).title("A <b> & ]]> \"title\"").totalUnits(12)
-          .progress(7).rewatched(3).score(8).status(watchStatus::kOnHold)
-          .startDate("2020-01-02").notes("line one\nline ]]> two"),
+      makeEntry()
+          .malId(1)
+          .title("A <b> & ]]> \"title\"")
+          .totalUnits(12)
+          .progress(7)
+          .rewatched(3)
+          .score(8)
+          .status(watchStatus::kOnHold)
+          .startDate("2020-01-02"),
       makeEntry().malId(9).title("Planned").status(watchStatus::kPlanToWatch),
-      makeEntry().malId(2).title("Berserk").type(mediaType::kManga)
-          .totalUnits(380).progress(364).totalVolumes(41).volumes(40)
-          .rewatched(2).score(10).status(watchStatus::kDropped)
+      makeEntry()
+          .malId(2)
+          .title("Berserk")
+          .type(mediaType::kManga)
+          .totalUnits(380)
+          .progress(364)
+          .totalVolumes(41)
+          .volumes(40)
+          .rewatched(2)
+          .score(10)
+          .status(watchStatus::kDropped)
           .finishDate("2021-12-31"),
   };
 
@@ -224,6 +244,5 @@ TEST_CASE("malXml reads back exactly what it wrote") {
     CHECK(readBack[i].rewatched == entries[i].rewatched);
     CHECK(readBack[i].startDate == entries[i].startDate);
     CHECK(readBack[i].finishDate == entries[i].finishDate);
-    CHECK(readBack[i].notes == entries[i].notes);
   }
 }

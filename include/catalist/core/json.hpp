@@ -30,10 +30,8 @@ public:
   value(object members) : data_(std::move(members)) {}
 
   [[nodiscard]] bool isNull() const;
-  [[nodiscard]] bool isObject() const;
   [[nodiscard]] bool isArray() const;
 
-  [[nodiscard]] std::optional<bool> asBool() const;
   [[nodiscard]] std::optional<double> asNumber() const;
   // Whole numbers only; 3.5 or a string is absent.
   [[nodiscard]] std::optional<long long> asInteger() const;
@@ -44,7 +42,6 @@ public:
   [[nodiscard]] const value& operator[](std::string_view key) const;
   // Elements of an array; empty for any other kind.
   [[nodiscard]] const array& items() const;
-  [[nodiscard]] const object& members() const;
 
 private:
   std::variant<std::nullptr_t, bool, double, std::string, array, object> data_;

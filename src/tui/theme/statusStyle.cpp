@@ -60,25 +60,14 @@ ftxui::Color typeToColor(mediaType type) {
 
 std::string renderStarMeter(int score) {
   score = std::clamp(score, 0, 10);
-  int full = score / 2;
-  bool half = (score % 2 == 1);
-  int empty = 5 - full - (half ? 1 : 0);
-
-  std::string meter = "";
-  for (int i = 0; i < full; ++i) {
-    if (!meter.empty())
-      meter += " ";
-    meter += icon::kStarFull;
-  }
-  if (half) {
-    if (!meter.empty())
-      meter += " ";
-    meter += icon::kStarHalf;
-  }
-  for (int i = 0; i < empty; ++i) {
-    if (!meter.empty())
-      meter += " ";
-    meter += icon::kStarEmpty;
+  std::string meter;
+  // Each of the five stars stands for two points.
+  for (int star = 0; star < 5; ++star) {
+    int points = score - star * 2;
+    meter += star > 0 ? " " : "";
+    meter += points >= 2   ? icon::kStarFull
+             : points == 1 ? icon::kStarHalf
+                           : icon::kStarEmpty;
   }
   return meter;
 }

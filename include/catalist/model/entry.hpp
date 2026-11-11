@@ -15,7 +15,6 @@ enum class watchStatus { kWatching, kCompleted, kOnHold, kDropped, kPlanToWatch 
 struct entry {
   int id = 0;
   int malId = 0;
-  int anilistId = 0;
   std::string title;
   mediaType type = mediaType::kAnime;
   watchStatus status = watchStatus::kWatching;
@@ -27,14 +26,13 @@ struct entry {
   int rewatched = 0;
   std::optional<isoDate> startDate;
   std::optional<isoDate> finishDate;
-  std::string notes;
   std::optional<isoDate> updatedAt;
 };
 
 std::string statusToString(watchStatus status,
                            mediaType type = mediaType::kAnime);
-// Accepts the display names, CLI spellings and MAL's 1-5 codes; absent for
-// anything else.
+// Accepts the display names and MyAnimeList's 1-5 codes, in any case;
+// absent for anything else.
 [[nodiscard]] std::optional<watchStatus> parseStatus(const std::string& str);
 
 std::string typeToString(mediaType type);

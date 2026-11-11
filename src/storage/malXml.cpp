@@ -122,7 +122,6 @@ void parseBlocks(const std::string& xml, const blockTags& tags,
     // MyAnimeList writes 0000-00-00 for "no date", which parses as absent.
     item.startDate = isoDate::parse(tagText(block, "my_start_date"));
     item.finishDate = isoDate::parse(tagText(block, "my_finish_date"));
-    item.notes = tagText(block, "my_comments");
     found.push_back(item);
   }
 }
@@ -178,7 +177,6 @@ std::string entryBlock(const entry& item) {
     block += xmlTag("my_finish_date", item.finishDate->toString());
   block += xmlTag("my_score", std::to_string(item.score));
   block += xmlTag("my_status", xmlStatus(item));
-  block += xmlTag("my_comments", cdata(item.notes));
   block += xmlTag("update_on_import", "1");
   return block + (anime ? "\t</anime>\n" : "\t</manga>\n");
 }

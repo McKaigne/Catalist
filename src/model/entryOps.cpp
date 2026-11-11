@@ -79,31 +79,8 @@ entry applyStatusDates(entry target, watchStatus previous,
   return target;
 }
 
-entry stepForward(entry target, int newProgress, const isoDate& today) {
-  if (!target.startDate)
-    target.startDate = today;
-  if (isPaused(target.status))
-    target.status = watchStatus::kWatching;
-  target = setProgress(target, newProgress, today);
-  if (isFinished(target))
-    target.finishDate = today;
-  return target;
-}
-
-entry stepBackward(entry target, int newProgress) {
-  bool reopens = isFinished(target) && newProgress < target.totalUnits;
-  if (reopens) {
-    target.status = watchStatus::kWatching;
-    target.finishDate.reset();
-  }
-  target.progress = newProgress;
-  return target;
-}
-
-}  // namespace
-
-entry setProgress(entry target, int progress, const isoDate& today) {
-  target.progress = std::max(0, progress);
+entry withProgress(entry target, int progress, const isoDate& today) {
+  target.progress = progress;
   if (isFinished(target)) {
     target.progress = target.totalUnits;
     target.status = watchStatus::kCompleted;
@@ -112,14 +89,36 @@ entry setProgress(entry target, int progress, const isoDate& today) {
   return target;
 }
 
-entry stepProgress(entry target, int delta, const isoDate& today) {
-  int newProgress = std::max(0, target.progress + delta);
-  if (delta > 0)
-    target = stepForward(target, newProgress, today);
-  if (delta < 0)
-    target = stepBackward(target, newProgress);
+entry stepForward(entry target, int newProgress, const isoDate& today) {
+  if (!target.startDate)
+    target.startDate = today;
+  if (isPaused(target.status))
+    target.status = watchStatus::kWatching;
+  target = withProgress(target, newProgress, today);
+  if (isFinished(target))
+    target.finishDate = today;
+  return target;
+}
+
+entry stepBackward(entry target, int newProgress, const isoDate& today) {
+  bool reopens = isFinished(target) && newProgress < target.totalUnits;
+  if (reopens) {
+    target.status = watchStatus::kWatching;
+    target.finishDate.reset();
+  }
+  target.progress = newProgress;
   target.updatedAt = today;
   return target;
+}
+
+}  // namespace
+
+entry stepProgress(entry target, int delta, const isoDate& today) {
+  int newProgress = std::max(0, target.progress + delta);
+  if (newProgress == target.progress || (delta > 0 && isFinished(target)))
+    return target;
+  return delta > 0 ? stepForward(target, newProgress, today)
+                   : stepBackward(target, newProgress, today);
 }
 
 entry cycleStatus(entry target, int direction, const isoDate& today) {
@@ -132,7 +131,47 @@ entry cycleStatus(entry target, int direction, const isoDate& today) {
 }
 
 entry adjustRating(entry target, int delta, const isoDate& today) {
-  target.score = std::clamp(target.score + delta, 0, 10);
+  int score = std::clamp(target.score + delta, 0, 10);
+  if (score == target.score)
+    return target;
+  target.score = score;
+  target.updatedAt = today;
+  return target;
+}
+
+int countOf(const entry& target, countField field) {
+  switch (field) {
+    case countField::kProgress:
+      return target.progress;
+    case countField::kTotalUnits:
+      return target.totalUnits;
+    case countField::kVolumes:
+      return target.volumes;
+    case countField::kRewatched:
+      return target.rewatched;
+  }
+  return 0;
+}
+
+entry setCount(entry target, countField field, int value,
+               const isoDate& today) {
+  value = std::max(0, value);
+  if (field == countField::kProgress)
+    return stepProgress(target, value - target.progress, today);
+  if (field == countField::kVolumes && target.totalVolumes > 0)
+    value = std::min(value, target.totalVolumes);
+  if (value == countOf(target, field))
+    return target;
+
+  if (field == countField::kTotalUnits) {
+    target.totalUnits = value;
+    if (value > 0)
+      target.progress = std::min(target.progress, value);
+  } else if (field == countField::kVolumes) {
+    target.volumes = value;
+  } else {
+    target.rewatched = value;
+  }
   target.updatedAt = today;
   return target;
 }
@@ -144,10 +183,6 @@ entry mergeImported(entry existing, const entry& incoming) {
     existing.totalVolumes = incoming.totalVolumes;
   if (incoming.malId > 0)
     existing.malId = incoming.malId;
-  if (incoming.anilistId > 0)
-    existing.anilistId = incoming.anilistId;
-  if (existing.notes.empty() && !incoming.notes.empty())
-    existing.notes = incoming.notes;
   if (existing.score == 0 && incoming.score > 0)
     existing.score = incoming.score;
   if (existing.progress == 0 && incoming.progress > 0)

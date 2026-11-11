@@ -141,35 +141,125 @@ TEST_CASE_FIXTURE(catalogFixture,
 }
 
 TEST_CASE_FIXTURE(catalogFixture,
-                  "tui catalog notes are saved on return and kept on escape") {
+                  "tui catalog plus on a finished title changes nothing") {
+  REQUIRE(press(tab, Event::Character('+')));
+  auto frieren = anime(kFrieren);
+  CHECK(frieren.progress == 28);
+  CHECK(catalist::formatDate(frieren.startDate) == "2023-09-29");
+  CHECK(catalist::formatDate(frieren.finishDate) == "2024-03-22");
+  CHECK(catalist::formatDate(frieren.updatedAt) == "2026-10-17");
+}
+
+TEST_CASE_FIXTURE(catalogFixture, "tui catalog details take a typed progress") {
+  type(tab, "j");
   REQUIRE(press(tab, Event::Character('l')));
-  type(tab, "jjj");
+  type(tab, "jj");
   REQUIRE(press(tab, Event::Character('e')));
   CHECK(tab.capturesInput());
   CHECK(tab.mode() == appMode::kEdt);
-  type(tab, "ok");
+  CHECK(ctx.status == "Progress: type a number.");
+  // The current value is there to edit; letters are ignored.
+  REQUIRE(press(tab, Event::Backspace));
+  type(tab, "1x0");
   REQUIRE(press(tab, Event::Return));
-  CHECK(anime(kFrieren).notes == "Masterpiece adaptation.ok");
-  CHECK(ctx.status == "Saved notes.");
-  CHECK(savedAnime().find("Masterpiece adaptation.ok") != std::string::npos);
-
-  REQUIRE(press(tab, Event::Character('e')));
-  type(tab, "zz");
-  REQUIRE(press(tab, Event::Escape));
-  CHECK(anime(kFrieren).notes == "Masterpiece adaptation.ok");
+  CHECK(anime(kOddTaxi).progress == 10);
+  CHECK(ctx.status == "Progress: 10/13");
+  CHECK(savedAnime().find("Odd Taxi,Watching,8,10,13,") != std::string::npos);
   CHECK_FALSE(tab.capturesInput());
+
+  REQUIRE(press(tab, Event::Return));
+  type(tab, "9");
+  REQUIRE(press(tab, Event::Escape));
+  CHECK(anime(kOddTaxi).progress == 10);
+  CHECK(ctx.status == "Progress: left unchanged.");
+
+  REQUIRE(press(tab, Event::Return));
+  type(tab, "99");
+  REQUIRE(press(tab, Event::Return));
+  CHECK(anime(kOddTaxi).progress == 13);
+  CHECK(anime(kOddTaxi).status == watchStatus::kCompleted);
 }
 
 TEST_CASE_FIXTURE(catalogFixture,
-                  "tui catalog notes edit appends after accented text") {
-  auto frieren = anime(kFrieren);
-  frieren.notes = "café";
-  REQUIRE(db.updateEntry(frieren));
-  tab.onActivate(ctx);
+                  "tui catalog details refuse an empty number") {
   REQUIRE(press(tab, Event::Character('l')));
-  type(tab, "jjje!");
+  type(tab, "jj");
   REQUIRE(press(tab, Event::Return));
-  CHECK(anime(kFrieren).notes == "café!");
+  REQUIRE(press(tab, Event::Backspace));
+  REQUIRE(press(tab, Event::Backspace));
+  REQUIRE(press(tab, Event::Return));
+  CHECK(ctx.status == "Type a number, or [Esc] to cancel.");
+  CHECK(tab.capturesInput());
+  // A paste arrives as one event: letters or more than six digits are
+  // refused whole, so the number always fits.
+  REQUIRE(press(tab, Event::Character("12a")));
+  REQUIRE(press(tab, Event::Character("99999999999")));
+  REQUIRE(press(tab, Event::Character("123456")));
+  REQUIRE(press(tab, Event::Character("7")));
+  REQUIRE(press(tab, Event::Return));
+  CHECK(anime(kFrieren).progress == 28);
+  CHECK(ctx.status == "Progress: 28/28");
+
+  REQUIRE(press(tab, Event::Return));
+  REQUIRE(press(tab, Event::Escape));
+  CHECK(anime(kFrieren).progress == 28);
+}
+
+TEST_CASE_FIXTURE(
+    catalogFixture,
+    "tui catalog details set the total of a title added by hand") {
+  type(tab, "jjj");
+  REQUIRE(tab.shown()[3].title == kLong);
+  REQUIRE(press(tab, Event::Character('l')));
+  type(tab, "jjj");
+  REQUIRE(press(tab, Event::Character('e')));
+  CHECK(ctx.status == "Episodes: type a number.");
+  type(tab, "12");
+  REQUIRE(press(tab, Event::Return));
+  CHECK(anime(kLong).totalUnits == 12);
+  CHECK(ctx.status == "Episodes: 12");
+  REQUIRE(press(tab, Event::Character('l')));
+  CHECK(anime(kLong).totalUnits == 13);
+  CHECK(screen(tab).find("0/13 eps") != std::string::npos);
+}
+
+TEST_CASE_FIXTURE(catalogFixture,
+                  "tui catalog anime details count rewatches but not volumes") {
+  REQUIRE(press(tab, Event::Character('l')));
+  type(tab, "jjjjjjj");
+  REQUIRE(press(tab, Event::Character('l')));
+  CHECK(anime(kFrieren).rewatched == 2);
+  CHECK(ctx.status == "Rewatched: 2");
+  REQUIRE(press(tab, Event::Character('h')));
+  REQUIRE(press(tab, Event::Character('h')));
+  REQUIRE(press(tab, Event::Character('h')));
+  CHECK(anime(kFrieren).rewatched == 0);
+  auto shown = screen(tab);
+  CHECK(shown.find("Rewatched:") != std::string::npos);
+  CHECK(shown.find("Volumes:") == std::string::npos);
+  CHECK(shown.find("NOTES") == std::string::npos);
+}
+
+TEST_CASE("tui catalog manga details count volumes and rereads") {
+  catalist::test::tuiHarness harness;
+  catalist::test::seedSampleLibrary(harness.db);
+  catalogTab manga(mediaType::kManga);
+  manga.onActivate(harness.ctx);
+  auto berserk = [&] {
+    return catalist::test::findTitle(harness.db, mediaType::kManga, "Berserk");
+  };
+  REQUIRE(harness.press(manga, Event::Character('l')));
+  harness.type(manga, "jjjj");
+  REQUIRE(harness.press(manga, Event::Character('l')));
+  CHECK(berserk().volumes == 43);
+  CHECK(harness.ctx.status == "Volumes: 43/?");
+  REQUIRE(harness.press(manga, Event::Character('j')));
+  REQUIRE(harness.press(manga, Event::Character('l')));
+  CHECK(berserk().rewatched == 1);
+  CHECK(harness.ctx.status == "Reread: 1");
+  auto shown = harness.screen(manga);
+  CHECK(shown.find("Chapters:") != std::string::npos);
+  CHECK(shown.find("43/?") != std::string::npos);
 }
 
 TEST_CASE_FIXTURE(catalogFixture,

@@ -18,6 +18,8 @@ using namespace ftxui;
 
 namespace {
 
+constexpr size_t kMaxCountDigits = 6;
+
 std::string lowercase(std::string text) {
   std::transform(text.begin(), text.end(), text.begin(),
                  [](unsigned char c) { return std::tolower(c); });
@@ -58,6 +60,42 @@ std::string formatListDate(const entry& e) {
 
 std::string unitName(mediaType type) {
   return type == mediaType::kAnime ? " eps" : " chs";
+}
+
+std::optional<countField> countFieldOf(detailsField field) {
+  switch (field) {
+    case detailsField::kProgress:
+      return countField::kProgress;
+    case detailsField::kTotal:
+      return countField::kTotalUnits;
+    case detailsField::kVolumes:
+      return countField::kVolumes;
+    case detailsField::kRewatched:
+      return countField::kRewatched;
+    case detailsField::kStatus:
+    case detailsField::kRating:
+      return std::nullopt;
+  }
+  return std::nullopt;
+}
+
+std::string knownOrUnknown(int count) {
+  return count > 0 ? std::to_string(count) : "?";
+}
+
+// How a count reads in the details card and the status line.
+std::string countLabel(const entry& e, countField field) {
+  switch (field) {
+    case countField::kProgress:
+      return progressLabel(e);
+    case countField::kTotalUnits:
+      return knownOrUnknown(e.totalUnits);
+    case countField::kVolumes:
+      return std::to_string(e.volumes) + "/" + knownOrUnknown(e.totalVolumes);
+    case countField::kRewatched:
+      return std::to_string(e.rewatched);
+  }
+  return "";
 }
 
 Element styledText(const std::string& content, Color tint, bool emphasised) {
@@ -142,10 +180,10 @@ catalogTab::catalogTab(mediaType media) : media_(media) {
   idle_ = Renderer([](bool) { return text(""); });
   searchInput_ = Input(&searchQuery_, "Press '/' to search...", fieldStyle());
   addInput_ = Input(&addQuery_, "Title to add...", fieldStyle());
-  InputOption notesOption;
-  notesOption.cursor_position = &notesCursor_;
-  notesInput_ = Input(&notesBuffer_, "Write notes here...", notesOption);
-  root_ = Container::Vertical({idle_, searchInput_, addInput_, notesInput_});
+  InputOption countOption;
+  countOption.cursor_position = &countCursor_;
+  countInput_ = Input(&countBuffer_, "0", countOption);
+  root_ = Container::Vertical({idle_, searchInput_, addInput_, countInput_});
 }
 
 std::string catalogTab::title() const {
@@ -209,7 +247,7 @@ void catalogTab::returnToCatalog() {
 
 bool catalogTab::capturesInput() const {
   return pendingDeleteId_.has_value() || mode_ == appMode::kSch ||
-         editingNotes_ || adding_ != addStage::kOff;
+         editingCount_ || adding_ != addStage::kOff;
 }
 
 appMode catalogTab::mode() const {
@@ -223,20 +261,21 @@ std::optional<std::string> catalogTab::countBadge(appContext& ctx) const {
 std::vector<hint> catalogTab::hints() const {
   if (pendingDeleteId_)
     return {{"y", "delete"}, {"n/Esc", "keep"}};
-  if (editingNotes_)
+  if (editingCount_)
     return {{"ret", "save"}, {"Esc", "cancel"}};
   if (mode_ == appMode::kSch)
     return {{"ret", "apply"}, {"Esc", "clear"}};
   if (adding_ == addStage::kTyping)
     return {{"ret", "search"}, {"Esc", "cancel"}};
+  // The search holds the keyboard until it answers.
   if (adding_ == addStage::kSearching)
-    return {{"Esc", "cancel"}};
+    return {};
   if (adding_ == addStage::kPicking)
     return {{"j/k", "move"}, {"ret", "add"}, {"Esc", "cancel"}};
   if (focus_ == focusedCard::kDetails)
     return {{"j/k", "field"},
             {"h/l", "adjust"},
-            {"e/ret", "notes"},
+            {"e/ret", "type"},
             {"Esc", "catalog"}};
   return {{"Tab", "tabs"},       {"h/l", "panes"},   {"e/ret", "edit"},
           {"c/t/s/r/p", "sort"}, {"S/R/P", "cycle"}, {"+/-", "ep"},
@@ -249,8 +288,8 @@ bool catalogTab::onEvent(const Event& event, appContext& ctx) {
     return handlePendingDelete(event, ctx);
   if (mode_ == appMode::kSch)
     return handleSearchTyping(event, ctx);
-  if (editingNotes_)
-    return handleNotesEditing(event, ctx);
+  if (editingCount_)
+    return handleCountEditing(event, ctx);
   if (adding_ != addStage::kOff)
     return handleAdding(event, ctx);
   if (handleEntryKeys(event, ctx))
@@ -322,19 +361,27 @@ bool catalogTab::handleSearchTyping(const Event& event, appContext& ctx) {
   return true;
 }
 
-bool catalogTab::handleNotesEditing(const Event& event, appContext& ctx) {
+bool catalogTab::handleCountEditing(const Event& event, appContext& ctx) {
   if (keys::isConfirm(event)) {
-    commitNotes(ctx);
+    commitCount(ctx);
     return true;
   }
   if (event == Event::Escape) {
-    editingNotes_ = false;
-    mode_ = appMode::kNor;
-    idle_->TakeFocus();
-    ctx.status = "Notes left unchanged.";
+    stopEditingCount();
+    ctx.status = fieldLabel(detailsCursor_) + " left unchanged.";
     return true;
   }
-  notesInput_->OnEvent(event);
+  // Digits only (a paste arrives as one event), and few enough that the
+  // number always fits in an int.
+  if (event.is_character()) {
+    const std::string& typed = event.character();
+    bool digits = std::all_of(typed.begin(), typed.end(), [](char c) {
+      return std::isdigit(static_cast<unsigned char>(c));
+    });
+    if (!digits || countBuffer_.size() + typed.size() > kMaxCountDigits)
+      return true;
+  }
+  countInput_->OnEvent(event);
   return true;
 }
 
@@ -430,8 +477,7 @@ bool catalogTab::handleCatalogFocus(const Event& event, appContext& ctx) {
   if (keys::isConfirm(event) || keys::isCharacter(event, 'e')) {
     focus_ = focusedCard::kDetails;
     detailsCursor_ = detailsField::kStatus;
-    ctx.status =
-        "Details: [j/k] Navigate properties, [h/l] Adjust, [e/ret] Notes";
+    ctx.status = "Details: [j/k] Field  [h/l] Change  [e/ret] Type a number";
     return true;
   }
   if (keys::isMoveDown(event))
@@ -464,50 +510,36 @@ bool catalogTab::handleSidebarFocus(const Event& event, appContext& ctx) {
 }
 
 bool catalogTab::handleDetailsFocus(const Event& event, appContext& ctx) {
-  int cursor = static_cast<int>(detailsCursor_);
   if (event == Event::Escape) {
     returnToCatalog();
     return true;
   }
-  if (keys::isMoveDown(event)) {
-    detailsCursor_ = static_cast<detailsField>(std::min(cursor + 1, 3));
-    return true;
-  }
-  if (keys::isMoveUp(event)) {
-    detailsCursor_ = static_cast<detailsField>(std::max(cursor - 1, 0));
+  if (keys::isMoveDown(event) || keys::isMoveUp(event)) {
+    moveDetailsCursor(keys::isMoveDown(event) ? 1 : -1);
     return true;
   }
   if (!selectedEntry())
     return false;
-
-  bool onNotes = detailsCursor_ == detailsField::kNotes;
-  if (keys::isMoveLeft(event)) {
-    if (onNotes)
-      focus_ = focusedCard::kCatalog;
-    else
-      adjustDetailsField(ctx, -1);
-    return true;
-  }
-  if (keys::isMoveRight(event)) {
-    if (!onNotes)
-      adjustDetailsField(ctx, 1);
+  if (keys::isMoveLeft(event) || keys::isMoveRight(event)) {
+    adjustDetailsField(ctx, keys::isMoveRight(event) ? 1 : -1);
     return true;
   }
   bool activates =
       keys::isConfirmOrSpace(event) || keys::isCharacter(event, 'e');
   if (!activates)
     return false;
-  if (!onNotes) {
+  auto field = countFieldOf(detailsCursor_);
+  if (!field) {
     adjustDetailsField(ctx, 1);
     return true;
   }
-  notesBuffer_ = selectedEntry()->notes;
-  // FTXUI counts the cursor in bytes; start at the end to add to the notes.
-  notesCursor_ = static_cast<int>(notesBuffer_.size());
-  editingNotes_ = true;
+  countBuffer_ = std::to_string(countOf(*selectedEntry(), *field));
+  // FTXUI counts the cursor in bytes; start at the end of the number.
+  countCursor_ = static_cast<int>(countBuffer_.size());
+  editingCount_ = true;
   mode_ = appMode::kEdt;
-  notesInput_->TakeFocus();
-  ctx.status = "Editing notes. [ret] Save  [Esc] Cancel";
+  countInput_->TakeFocus();
+  ctx.status = fieldLabel(detailsCursor_) + " type a number.";
   return true;
 }
 
@@ -547,9 +579,49 @@ void catalogTab::adjustDetailsField(appContext& ctx, int direction) {
     entry changed = adjustRating(*current, direction, today);
     commit(ctx, changed, "Rating: " + renderStarMeter(changed.score));
   } else {
-    entry changed = stepProgress(*current, direction, today);
-    commit(ctx, changed, "Progress: " + progressLabel(changed));
+    countField field = *countFieldOf(detailsCursor_);
+    entry changed =
+        setCount(*current, field, countOf(*current, field) + direction, today);
+    commit(ctx, changed,
+           fieldLabel(detailsCursor_) + " " + countLabel(changed, field));
   }
+}
+
+void catalogTab::moveDetailsCursor(int direction) {
+  auto fields = detailsFields();
+  auto at = std::find(fields.begin(), fields.end(), detailsCursor_);
+  int index = static_cast<int>(at - fields.begin()) + direction;
+  index = std::clamp(index, 0, static_cast<int>(fields.size()) - 1);
+  detailsCursor_ = fields[index];
+}
+
+std::vector<detailsField> catalogTab::detailsFields() const {
+  if (media_ == mediaType::kAnime)
+    return {detailsField::kStatus, detailsField::kRating,
+            detailsField::kProgress, detailsField::kTotal,
+            detailsField::kRewatched};
+  return {detailsField::kStatus,   detailsField::kRating,
+          detailsField::kProgress, detailsField::kTotal,
+          detailsField::kVolumes,  detailsField::kRewatched};
+}
+
+std::string catalogTab::fieldLabel(detailsField field) const {
+  bool anime = media_ == mediaType::kAnime;
+  switch (field) {
+    case detailsField::kStatus:
+      return "Status:";
+    case detailsField::kRating:
+      return "Rating:";
+    case detailsField::kProgress:
+      return "Progress:";
+    case detailsField::kTotal:
+      return anime ? "Episodes:" : "Chapters:";
+    case detailsField::kVolumes:
+      return "Volumes:";
+    case detailsField::kRewatched:
+      return anime ? "Rewatched:" : "Reread:";
+  }
+  return "";
 }
 
 // A new column starts in its natural order; choosing it again flips it.
@@ -581,17 +653,26 @@ void catalogTab::startSearch(appContext& ctx) {
   ctx.status = "Search title... [ret] Apply  [Esc] Clear";
 }
 
-void catalogTab::commitNotes(appContext& ctx) {
-  editingNotes_ = false;
+void catalogTab::stopEditingCount() {
+  editingCount_ = false;
   mode_ = appMode::kNor;
   idle_->TakeFocus();
+}
+
+void catalogTab::commitCount(appContext& ctx) {
   const entry* current = selectedEntry();
-  if (!current)
+  auto field = countFieldOf(detailsCursor_);
+  if (countBuffer_.empty()) {
+    ctx.status = "Type a number, or [Esc] to cancel.";
     return;
-  entry changed = *current;
-  changed.notes = notesBuffer_;
-  changed.updatedAt = localDate(ctx.clock);
-  commit(ctx, changed, "Saved notes.");
+  }
+  stopEditingCount();
+  if (!current || !field)
+    return;
+  entry changed =
+      setCount(*current, *field, std::stoi(countBuffer_), localDate(ctx.clock));
+  commit(ctx, changed,
+         fieldLabel(detailsCursor_) + " " + countLabel(changed, *field));
 }
 
 void catalogTab::requestDelete(appContext& ctx) {
@@ -752,12 +833,7 @@ Element catalogTab::renderDetails() {
                  content | flex});
   };
 
-  std::string links;
-  if (e.malId > 0)
-    links = "MAL #" + std::to_string(e.malId);
-  if (e.anilistId > 0)
-    links += (links.empty() ? "" : "  ") + std::string("AL #") +
-             std::to_string(e.anilistId);
+  std::string link = e.malId > 0 ? "MAL #" + std::to_string(e.malId) : "-";
 
   std::string shownTitle =
       marquee::scroll(e.title, 36, detailsTimer_.elapsedFor(catalogSelected_));
@@ -770,20 +846,14 @@ Element catalogTab::renderDetails() {
 
   auto seriesCard =
       vbox(
-          {hbox({text("  DETAILS") | bold | color(theme::kLavender), filler(),
-                 text("ID #" + std::to_string(e.id) + " ") |
-                     color(theme::kOverlay0)}),
-           text(""),
+          {text("  DETAILS") | bold | color(theme::kLavender), text(""),
            hbox({text("  " + shownTitle) | bold | color(theme::kMauve)}),
            text(""),
            hbox({text("  Type:     ") | color(theme::kSubtext),
                  pill(typeToIcon(e.type) + " " + typeToString(e.type),
                       theme::kCrust, typeToColor(e.type)),
                  filler()}),
-           hbox({text("  Links:    ") | color(theme::kSubtext),
-                 text(links.empty() ? "-" : links) |
-                     color(links.empty() ? theme::kSubtext : theme::kText),
-                 filler()}),
+           infoRow("  Link:     ", link),
            infoRow("  Updated:  ", e.updatedAt ? e.updatedAt->toString() : "-"),
            infoRow("  Started:  ",
                    e.startDate ? e.startDate->toString() : "Not started"),
@@ -791,61 +861,68 @@ Element catalogTab::renderDetails() {
                                                 : unfinishedLabel)}) |
       border | color(theme::kSurface0);
 
-  bool trackingActive = mode_ != appMode::kSch && onDetails &&
-                        detailsCursor_ != detailsField::kNotes;
+  bool trackingActive = mode_ != appMode::kSch && onDetails;
   std::string percent =
       e.totalUnits > 0 ? std::to_string(static_cast<int>(ratio * 100)) + "% "
                        : "Ongoing ";
-  auto trackingCard =
-      vbox(
-          {hbox(
-               {text("  TRACKING") | bold | color(theme::kLavender), filler(),
-                text(trackingActive ? "[Active]" : "") | color(theme::kPeach)}),
-           text(""), text("  STATUS") | bold | color(theme::kOverlay0),
-           fieldRow(detailsField::kStatus, "Status:",
-                    pill(statusToIcon(e.status) + " " +
-                             statusToString(e.status, e.type),
-                         theme::kCrust, statusToColor(e.status))),
-           text(""), text("  METRICS") | bold | color(theme::kOverlay0),
-           fieldRow(
-               detailsField::kRating, "Rating:",
+  auto countRow = [&](detailsField field) {
+    countField count = *countFieldOf(field);
+    bool editing = editingCount_ && onDetails && detailsCursor_ == field;
+    Element value = editing
+                        ? countInput_->Render() | bgcolor(theme::kSurface0) |
+                              color(theme::kPeach) | size(WIDTH, EQUAL, 8)
+                        : text(countLabel(e, count)) | color(theme::kText);
+    return fieldRow(field, fieldLabel(field), hbox({value, filler()}));
+  };
+  Elements counts = {text(""),
+                     text("  COUNTS") | bold | color(theme::kOverlay0),
+                     countRow(detailsField::kTotal)};
+  if (media_ == mediaType::kManga)
+    counts.push_back(countRow(detailsField::kVolumes));
+  counts.push_back(countRow(detailsField::kRewatched));
+
+  bool editingProgress =
+      editingCount_ && onDetails && detailsCursor_ == detailsField::kProgress;
+  Element progressLine =
+      editingProgress
+          ? hbox(
+                {countInput_->Render() | bgcolor(theme::kSurface0) |
+                     color(theme::kPeach) | size(WIDTH, EQUAL, 8),
+                 text(" / " + knownOrUnknown(e.totalUnits) + unitName(e.type)) |
+                     color(theme::kText)})
+          : text(progressLabel(e) + unitName(e.type)) | color(theme::kText);
+  Elements tracking = {
+      hbox({text("  TRACKING") | bold | color(theme::kLavender), filler(),
+            text(trackingActive ? (editingCount_ ? "[Editing]" : "[Active]")
+                                : "") |
+                color(theme::kPeach)}),
+      text(""),
+      text("  STATUS") | bold | color(theme::kOverlay0),
+      fieldRow(
+          detailsField::kStatus, "Status:",
+          pill(statusToIcon(e.status) + " " + statusToString(e.status, e.type),
+               theme::kCrust, statusToColor(e.status))),
+      text(""),
+      text("  METRICS") | bold | color(theme::kOverlay0),
+      fieldRow(detailsField::kRating, "Rating:",
                hbox({text(renderStarMeter(e.score)) | color(theme::kYellow),
                      text(" (" + std::to_string(e.score) + "/10)") |
                          color(theme::kText)})),
-           text(""),
-           fieldRow(
-               detailsField::kProgress, "Progress:",
-               vbox({hbox({text(std::to_string(e.progress) + " / " +
-                                (e.totalUnits > 0 ? std::to_string(e.totalUnits)
-                                                  : "?") +
-                                unitName(e.type)) |
-                               color(theme::kText),
-                           filler(), text(percent) | color(theme::kSubtext)}),
+      text(""),
+      fieldRow(detailsField::kProgress, "Progress:",
+               vbox({hbox({progressLine, filler(),
+                           text(percent) | color(theme::kSubtext)}),
                      gauge(ratio) |
-                         color(finished ? theme::kGreen : theme::kBlue)}))}) |
-      border | color(trackingActive ? theme::kMauve : theme::kSurface0);
+                         color(finished ? theme::kGreen : theme::kBlue)}))};
+  tracking.insert(tracking.end(), counts.begin(), counts.end());
+  tracking.push_back(filler());
+  Color trackingBorder = editingCount_    ? theme::kPeach
+                         : trackingActive ? theme::kMauve
+                                          : theme::kSurface0;
+  auto trackingCard =
+      vbox(std::move(tracking)) | border | color(trackingBorder) | flex;
 
-  bool notesActive = mode_ != appMode::kSch && onDetails &&
-                     detailsCursor_ == detailsField::kNotes;
-  Element notesBody =
-      editingNotes_
-          ? notesInput_->Render() | border | color(theme::kPeach)
-          : text(e.notes.empty() ? "(empty - press e or ret to edit)"
-                                 : e.notes) |
-                color(e.notes.empty() ? theme::kOverlay0 : theme::kSubtext);
-  std::string notesBadge =
-      notesActive ? (editingNotes_ ? "[Editing]" : "[Active]") : "";
-  Color notesBorder = notesActive
-                          ? (editingNotes_ ? theme::kPeach : theme::kMauve)
-                          : theme::kSurface0;
-  auto notesCard =
-      vbox({hbox({text("  NOTES") | bold | color(theme::kLavender), filler(),
-                  text(notesBadge) | color(theme::kPeach)}),
-            text(""), fieldRow(detailsField::kNotes, "Notes:", notesBody),
-            filler()}) |
-      border | color(notesBorder) | flex;
-
-  return vbox({seriesCard, trackingCard, notesCard});
+  return vbox({seriesCard, trackingCard});
 }
 
 Element catalogTab::renderSidebarCard() const {

@@ -11,12 +11,10 @@ namespace catalist {
 
 namespace {
 
-// A local id is only a row number, so two titles are the same only when a
-// list service says so.
-bool sharesRemoteId(const entry& existing, const entry& incoming) {
-  if (incoming.malId > 0 && existing.malId == incoming.malId)
-    return true;
-  return incoming.anilistId > 0 && existing.anilistId == incoming.anilistId;
+// A local id only numbers a title, so two titles are the same only when
+// MyAnimeList says so.
+bool sameMalTitle(const entry& existing, const entry& incoming) {
+  return incoming.malId > 0 && existing.malId == incoming.malId;
 }
 
 int nextId(const std::vector<entry>& list) {
@@ -100,7 +98,7 @@ void database::sortEntries(std::vector<entry>& entries, sortKey key,
 int database::addEntry(entry added) {
   auto& list = getList(added.type);
   for (auto& existing : list) {
-    if (!sharesRemoteId(existing, added))
+    if (!sameMalTitle(existing, added))
       continue;
     existing = mergeImported(existing, added);
     return existing.id;

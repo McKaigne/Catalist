@@ -7,10 +7,13 @@ namespace catalist::csvCodec {
 namespace {
 
 const char* kCatalogHeader =
-    "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,"
-    "volumes,total_volumes,rewatched,start_date,finish_date,notes,updated_at\n";
+    "#id,mal_id,type,title,status,score,progress,total_units,volumes,"
+    "total_volumes,rewatched,start_date,finish_date,updated_at\n";
 
-constexpr size_t kCatalogFields = 16;
+constexpr size_t kCatalogFields = 14;
+// Catalist 0.2.1 to 0.3.0 wrote an AniList id after the MyAnimeList id and
+// notes before the last date; those columns are skipped.
+constexpr size_t kOldCatalogFields = 16;
 
 std::optional<int> parseInt(const std::string& field) {
   try {
@@ -36,7 +39,8 @@ bool togglesQuoteState(const std::string& line, bool insideQuotes) {
   for (size_t i = 0; i < line.size(); ++i) {
     if (line[i] != '"')
       continue;
-    bool escapedQuote = insideQuotes && i + 1 < line.size() && line[i + 1] == '"';
+    bool escapedQuote =
+        insideQuotes && i + 1 < line.size() && line[i + 1] == '"';
     if (escapedQuote)
       ++i;
     else
@@ -111,8 +115,8 @@ std::vector<std::string> splitFields(std::string_view record) {
   bool inQuotes = false;
   for (size_t i = 0; i < record.size(); ++i) {
     char c = record[i];
-    bool escapedQuote = inQuotes && c == '"' && i + 1 < record.size() &&
-                        record[i + 1] == '"';
+    bool escapedQuote =
+        inQuotes && c == '"' && i + 1 < record.size() && record[i + 1] == '"';
     if (escapedQuote) {
       field += '"';
       ++i;
@@ -138,28 +142,32 @@ std::optional<isoDate> decodeDate(const std::string& field) {
 
 std::optional<entry> decodeEntry(const std::vector<std::string>& fields,
                                  mediaType type) {
-  bool currentLayout = fields.size() >= kCatalogFields && isTypeColumn(fields[3]);
-  auto id = currentLayout ? parseInt(fields[0]) : std::nullopt;
+  bool current = fields.size() >= kCatalogFields && isTypeColumn(fields[2]);
+  bool old = fields.size() >= kOldCatalogFields && isTypeColumn(fields[3]);
+  auto id = current || old ? parseInt(fields[0]) : std::nullopt;
   if (!id)
     return std::nullopt;
 
+  // Every column from the type on sits one further right in the old layout.
+  size_t shift = old ? 1 : 0;
+  auto field = [&](size_t index) -> const std::string& {
+    return fields[index + shift];
+  };
   entry decoded;
   decoded.type = type;
   decoded.id = *id;
   decoded.malId = intOrZero(fields[1]);
-  decoded.anilistId = intOrZero(fields[2]);
-  decoded.title = fields[4];
-  decoded.status = decodeStatus(fields[5]);
-  decoded.score = intOrZero(fields[6]);
-  decoded.progress = intOrZero(fields[7]);
-  decoded.totalUnits = intOrZero(fields[8]);
-  decoded.volumes = intOrZero(fields[9]);
-  decoded.totalVolumes = intOrZero(fields[10]);
-  decoded.rewatched = intOrZero(fields[11]);
-  decoded.startDate = decodeDate(fields[12]);
-  decoded.finishDate = decodeDate(fields[13]);
-  decoded.notes = fields[14];
-  decoded.updatedAt = decodeDate(fields[15]);
+  decoded.title = field(3);
+  decoded.status = decodeStatus(field(4));
+  decoded.score = intOrZero(field(5));
+  decoded.progress = intOrZero(field(6));
+  decoded.totalUnits = intOrZero(field(7));
+  decoded.volumes = intOrZero(field(8));
+  decoded.totalVolumes = intOrZero(field(9));
+  decoded.rewatched = intOrZero(field(10));
+  decoded.startDate = decodeDate(field(11));
+  decoded.finishDate = decodeDate(field(12));
+  decoded.updatedAt = decodeDate(fields[old ? 15 : 13]);
   return decoded;
 }
 
@@ -181,13 +189,13 @@ std::string encodeEntries(const std::vector<entry>& entries) {
   std::ostringstream out;
   out << kCatalogHeader;
   for (const auto& e : entries) {
-    out << e.id << "," << e.malId << "," << e.anilistId << ","
-        << typeKey(e.type) << "," << escapeField(e.title) << ","
+    out << e.id << "," << e.malId << "," << typeKey(e.type) << ","
+        << escapeField(e.title) << ","
         << escapeField(statusToString(e.status, e.type)) << "," << e.score
         << "," << e.progress << "," << e.totalUnits << "," << e.volumes << ","
         << e.totalVolumes << "," << e.rewatched << ","
         << formatDate(e.startDate) << "," << formatDate(e.finishDate) << ","
-        << escapeField(e.notes) << "," << formatDate(e.updatedAt) << "\n";
+        << formatDate(e.updatedAt) << "\n";
   }
   return out.str();
 }

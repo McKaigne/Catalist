@@ -83,13 +83,15 @@ TEST_CASE_FIXTURE(cliFixture, "cli --help lists the commands and data dir") {
   }
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli help and version work with a broken catalogue") {
+TEST_CASE_FIXTURE(cliFixture,
+                  "cli help and version work with a broken catalogue") {
   put("/data/anime.csv", "this,is,not,a,catalogue\n");
   CHECK(run({"--version"}) == 0);
   CHECK(run({"--help"}) == 0);
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli rejects a wrong command line with exit code 2") {
+TEST_CASE_FIXTURE(cliFixture,
+                  "cli rejects a wrong command line with exit code 2") {
   CHECK(run({"sync"}) == 2);
   CHECK(err.find("error: unknown command 'sync'") == 0);
   CHECK(err.find("Usage:") != std::string::npos);
@@ -129,7 +131,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli import adds the titles and saves them") {
   CHECK(manga[0].progress == 364);
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli importing again keeps what the user changed") {
+TEST_CASE_FIXTURE(cliFixture,
+                  "cli importing again keeps what the user changed") {
   put("/lists/anime.xml", kAnimeXml);
   REQUIRE(run({"import", "/lists/anime.xml"}) == 0);
 
@@ -140,7 +143,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli importing again keeps what the user changed")
     REQUIRE(taxi.title == "Odd Taxi");
     taxi.score = 9;
     taxi.progress = 13;
-    taxi.notes = "mine";
+    taxi.startDate = catalist::test::requireDate("2026-01-02");
     REQUIRE(db.updateEntry(taxi));
     REQUIRE(db.saveAll());
   }
@@ -152,10 +155,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli importing again keeps what the user changed")
   REQUIRE(anime.size() == 2);
   CHECK(anime[1].score == 9);
   CHECK(anime[1].progress == 13);
-  CHECK(anime[1].notes == "mine");
+  CHECK(catalist::formatDate(anime[1].startDate) == "2026-01-02");
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli import changes nothing when any file is bad") {
+TEST_CASE_FIXTURE(cliFixture,
+                  "cli import changes nothing when any file is bad") {
   put("/lists/anime.xml", kAnimeXml);
   put("/lists/empty.xml", "<myanimelist></myanimelist>");
 
@@ -164,20 +168,29 @@ TEST_CASE_FIXTURE(cliFixture, "cli import changes nothing when any file is bad")
   CHECK(out.empty());
   CHECK_FALSE(fs.readFile("/data/anime.csv").has_value());
 
+  put("/lists/anime.xml.gz", std::string("\x1f\x8b\x08\x00", 4) + "gz");
+  CHECK(run({"import", "/lists/anime.xml.gz"}) == 1);
+  CHECK(err ==
+        "error: /lists/anime.xml.gz is compressed; unpack it first "
+        "(gunzip /lists/anime.xml.gz)\n");
+
   CHECK(run({"import", "/lists/anime.xml", "/lists/empty.xml"}) == 1);
-  CHECK(err == "error: no anime or manga found in /lists/empty.xml (is it a "
-               "MyAnimeList XML export?)\n");
+  CHECK(err ==
+        "error: no anime or manga found in /lists/empty.xml (is it a "
+        "MyAnimeList XML export?)\n");
   CHECK_FALSE(fs.readFile("/data/anime.csv").has_value());
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli import exits 1 when the catalogue cannot be saved") {
+TEST_CASE_FIXTURE(cliFixture,
+                  "cli import exits 1 when the catalogue cannot be saved") {
   put("/lists/anime.xml", kAnimeXml);
   fs.failWritesTo("/data/anime.csv");
   CHECK(run({"import", "/lists/anime.xml"}) == 1);
   CHECK(err == "error: could not save the catalogue to /data\n");
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli refuses to work on a catalogue it cannot read") {
+TEST_CASE_FIXTURE(cliFixture,
+                  "cli refuses to work on a catalogue it cannot read") {
   put("/data/anime.csv", "this,is,not,a,catalogue\n");
   put("/lists/anime.xml", kAnimeXml);
   CHECK(run({"import", "/lists/anime.xml"}) == 1);
@@ -209,7 +222,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli export prints what import read") {
   CHECK(manga[0].title == "Berserk");
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli export notes the titles it had to leave out") {
+TEST_CASE_FIXTURE(cliFixture,
+                  "cli export notes the titles it had to leave out") {
   {
     catalist::database db(fs, "/data");
     db.addEntry(catalist::test::makeEntry().title("Home video"));
@@ -222,9 +236,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli export notes the titles it had to leave out")
   CHECK(out.find("<myanimelist>") != std::string::npos);
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli export of an empty catalogue is an empty list") {
+TEST_CASE_FIXTURE(cliFixture,
+                  "cli export of an empty catalogue is an empty list") {
   CHECK(run({"export", "manga"}) == 0);
   CHECK(err.empty());
-  CHECK(out.find("<user_export_type>2</user_export_type>") != std::string::npos);
+  CHECK(out.find("<user_export_type>2</user_export_type>") !=
+        std::string::npos);
   CHECK(catalist::malXml::parse(out).empty());
 }

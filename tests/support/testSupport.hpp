@@ -38,7 +38,6 @@ class entryBuilder {
 public:
   entryBuilder& id(int value) { built_.id = value; return *this; }
   entryBuilder& malId(int value) { built_.malId = value; return *this; }
-  entryBuilder& anilistId(int value) { built_.anilistId = value; return *this; }
   entryBuilder& title(std::string value) {
     built_.title = std::move(value);
     return *this;
@@ -66,10 +65,6 @@ public:
   }
   entryBuilder& finishDate(const std::string& value) {
     built_.finishDate = requireDate(value);
-    return *this;
-  }
-  entryBuilder& notes(std::string value) {
-    built_.notes = std::move(value);
     return *this;
   }
   entryBuilder& updatedAt(const std::string& value) {

@@ -24,8 +24,7 @@ std::optional<watchStatus> parseStatus(const std::string& str) {
   std::string lower = str;
   std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
-  if (lower.find("plan") != std::string::npos || lower == "5" ||
-      lower == "plan-to-watch" || lower == "plan-to-read") {
+  if (lower.find("plan") != std::string::npos || lower == "5") {
     return watchStatus::kPlanToWatch;
   } else if (lower.find("watch") != std::string::npos ||
              lower.find("read") != std::string::npos || lower == "1") {

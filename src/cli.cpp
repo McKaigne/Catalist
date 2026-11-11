@@ -27,7 +27,7 @@ void printHelp(std::ostream& out, const database& db) {
       << " - an anime and manga tracker for the terminal.\n\n"
       << kUsage
       << "\nImporting never overwrites what you already track: a title that "
-         "is in the\ncatalogue keeps its score, progress, dates and notes. "
+         "is in the\ncatalogue keeps its score, progress and dates. "
          "MyAnimeList and AniList\nboth read the exported file on their "
          "import pages.\n\nThe catalogue is kept in "
       << db.getConfigPath().string() << ".\n";
@@ -43,6 +43,12 @@ int importFiles(const std::vector<std::string>& files, database& db,
     auto content = fileSystem.readFile(file);
     if (!content) {
       err << "error: cannot read " << file << "\n";
+      return 1;
+    }
+    // MyAnimeList hands out its exports gzipped.
+    if (content->rfind("\x1f\x8b", 0) == 0) {
+      err << "error: " << file << " is compressed; unpack it first (gunzip "
+          << file << ")\n";
       return 1;
     }
     lists.push_back(malXml::parse(*content));

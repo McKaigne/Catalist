@@ -11,7 +11,6 @@ using catalist::database;
 using catalist::mediaType;
 using catalist::sortKey;
 using catalist::watchStatus;
-using catalist::test::findTitle;
 using catalist::test::makeEntry;
 using catalist::test::memoryFileSystem;
 using catalist::test::tempDirFixture;
@@ -37,7 +36,7 @@ void loadFixture(database& db, mediaType type, const std::string& name) {
 }  // namespace
 
 TEST_CASE_FIXTURE(tempDirFixture,
-                  "csv round trip keeps quotes commas and newlines") {
+                  "csv round trip keeps quotes, commas and dates") {
   database db(fileSystem(), tempDir());
   catalist::entry original =
       makeEntry()
@@ -47,9 +46,6 @@ TEST_CASE_FIXTURE(tempDirFixture,
           .score(10)
           .progress(3)
           .totalUnits(3)
-          .notes(
-              "Line 1, with embedded comma.\nLine 2 with \"escaped "
-              "quotes\".\nLine 3.")
           .startDate("2017-10-14")
           .finishDate("2020-08-15");
   int id = db.addEntry(original);
@@ -60,7 +56,6 @@ TEST_CASE_FIXTURE(tempDirFixture,
   auto loaded = reloaded.getById(mediaType::kAnime, id);
   REQUIRE(loaded.has_value());
   CHECK(loaded->title == original.title);
-  CHECK(loaded->notes == original.notes);
   CHECK(loaded->score == 10);
   CHECK(loaded->progress == 3);
   CHECK(loaded->startDate == original.startDate);
@@ -206,8 +201,7 @@ TEST_CASE("database loadAll says whether there was a catalogue") {
   CHECK(db.loadAll().value());
 }
 
-TEST_CASE_FIXTURE(tempDirFixture,
-                  "csv loads current layout with external ids") {
+TEST_CASE_FIXTURE(tempDirFixture, "csv loads the current layout") {
   database db(fileSystem(), tempDir());
   loadFixture(db, mediaType::kManga, "current.csv");
   const auto& entries = db.getEntries(mediaType::kManga);
@@ -218,9 +212,25 @@ TEST_CASE_FIXTURE(tempDirFixture,
   CHECK(loaded.status == watchStatus::kWatching);
   CHECK(loaded.progress == 364);
   CHECK(loaded.volumes == 42);
+  CHECK(loaded.rewatched == 1);
+  CHECK(catalist::formatDate(loaded.startDate) == "2019-05-01");
   CHECK(catalist::formatDate(loaded.finishDate) == "");
+  CHECK(catalist::formatDate(loaded.updatedAt) == "2026-10-17");
   CHECK(loaded.malId == 2);
-  CHECK(loaded.anilistId == 30002);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "csv loads a file written by Catalist 0.3") {
+  database db(fileSystem(), tempDir());
+  loadFixture(db, mediaType::kManga, "v03.csv");
+  const auto& entries = db.getEntries(mediaType::kManga);
+  REQUIRE(entries.size() == 1);
+  CHECK(entries[0].id == 2);
+  CHECK(entries[0].malId == 2);
+  CHECK(entries[0].title == "Berserk");
+  CHECK(entries[0].progress == 364);
+  CHECK(entries[0].volumes == 42);
+  CHECK(catalist::formatDate(entries[0].startDate) == "2019-05-01");
+  CHECK(catalist::formatDate(entries[0].updatedAt) == "2026-10-17");
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
@@ -229,19 +239,18 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
   const auto& entries = db.getEntries(mediaType::kAnime);
   REQUIRE(entries.size() == 1);
   CHECK(entries[0].title == "Odd Taxi");
-  CHECK(entries[0].notes == "Crlf notes");
   CHECK(catalist::formatDate(entries[0].updatedAt) == "2026-10-17");
   CHECK(entries[0].malId == 44265);
 }
 
-TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted multiline notes") {
+TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted fields that span lines") {
   database db(fileSystem(), tempDir());
   loadFixture(db, mediaType::kAnime, "multiline.csv");
   const auto& entries = db.getEntries(mediaType::kAnime);
   REQUIRE(entries.size() == 2);
   CHECK(entries[0].title == "Ghost, \"in\" the Shell");
-  CHECK(entries[0].notes ==
-        "Line one\nLine \"two\", with comma\n\nafter blank");
+  CHECK(entries[0].status == watchStatus::kDropped);
+  CHECK(catalist::formatDate(entries[0].updatedAt) == "2026-10-18");
   CHECK(entries[1].title == "Next");
 }
 
@@ -254,7 +263,6 @@ TEST_CASE("addEntry re-add keeps user fields and refreshes upstream metadata") {
                            .score(8)
                            .progress(5)
                            .totalUnits(0)
-                           .notes("mine")
                            .startDate("2023-09-29"));
   int mergedId = db.addEntry(makeEntry()
                                  .malId(52991)
@@ -263,7 +271,6 @@ TEST_CASE("addEntry re-add keeps user fields and refreshes upstream metadata") {
                                  .progress(20)
                                  .totalUnits(28)
                                  .totalVolumes(4)
-                                 .notes("remote notes")
                                  .startDate("1999-01-01"));
 
   CHECK(mergedId == id);
@@ -271,7 +278,6 @@ TEST_CASE("addEntry re-add keeps user fields and refreshes upstream metadata") {
   auto merged = *db.getById(mediaType::kAnime, id);
   CHECK(merged.score == 8);
   CHECK(merged.progress == 5);
-  CHECK(merged.notes == "mine");
   CHECK(catalist::formatDate(merged.startDate) == "2023-09-29");
   CHECK(merged.title == "Sousou no Frieren");
   CHECK(merged.totalUnits == 28);
@@ -282,36 +288,28 @@ TEST_CASE("addEntry re-add backfills empty user fields") {
   memoryFileSystem fs;
   database db(fs, "/data");
   int id = db.addEntry(makeEntry().malId(100).title("Blank"));
-  db.addEntry(makeEntry()
-                  .malId(100)
-                  .title("Blank")
-                  .score(7)
-                  .progress(3)
-                  .notes("filled")
-                  .finishDate("2024-01-01")
-                  .anilistId(55));
+  db.addEntry(
+      makeEntry().malId(100).title("Blank").score(7).progress(3).finishDate(
+          "2024-01-01"));
   auto merged = *db.getById(mediaType::kAnime, id);
   CHECK(merged.score == 7);
   CHECK(merged.progress == 3);
-  CHECK(merged.notes == "filled");
   CHECK(catalist::formatDate(merged.finishDate) == "2024-01-01");
-  CHECK(merged.anilistId == 55);
 }
 
-TEST_CASE("addEntry matches by MyAnimeList or AniList id, never by title") {
+TEST_CASE("addEntry matches by MyAnimeList id, never by title") {
   memoryFileSystem fs;
   database db(fs, "/data");
   db.addEntry(makeEntry().malId(777).title("Local"));
   db.addEntry(makeEntry().title("Remote").totalUnits(12).malId(777));
-  db.addEntry(makeEntry().anilistId(88).title("On AniList"));
-  db.addEntry(makeEntry().anilistId(88).title("On AniList").totalUnits(3));
   db.addEntry(makeEntry().title("Same title"));
   db.addEntry(makeEntry().title("Same title"));
+  db.addEntry(makeEntry().title("Local").malId(778));
 
   const auto& anime = db.getEntries(mediaType::kAnime);
   REQUIRE(anime.size() == 4);
-  CHECK(findTitle(db, mediaType::kAnime, "Local").totalUnits == 12);
-  CHECK(findTitle(db, mediaType::kAnime, "On AniList").totalUnits == 3);
+  CHECK(anime[0].title == "Local");
+  CHECK(anime[0].totalUnits == 12);
   CHECK(std::count_if(anime.begin(), anime.end(), [](const auto& e) {
           return e.title == "Same title";
         }) == 2);
@@ -320,14 +318,15 @@ TEST_CASE("addEntry matches by MyAnimeList or AniList id, never by title") {
 TEST_CASE("database saves both lists and reloads them") {
   memoryFileSystem fs;
   database db(fs, "/data");
-  int id = db.addEntry(makeEntry().title("Kept").notes("a, \"b\"\nc"));
+  int id = db.addEntry(makeEntry().title("Kept, \"quoted\"").rewatched(2));
   db.addEntry(makeEntry().title("Paper").type(mediaType::kManga));
   REQUIRE(db.saveAll());
   CHECK(fs.fileCount() == 2);
 
   database reloaded(fs, "/data");
   REQUIRE(reloaded.loadAll().value());
-  CHECK(reloaded.getById(mediaType::kAnime, id)->notes == "a, \"b\"\nc");
+  CHECK(reloaded.getById(mediaType::kAnime, id)->title == "Kept, \"quoted\"");
+  CHECK(reloaded.getById(mediaType::kAnime, id)->rewatched == 2);
   CHECK(reloaded.getEntries(mediaType::kManga)[0].title == "Paper");
   CHECK(reloaded.getEntries(mediaType::kManga)[0].type == mediaType::kManga);
 }

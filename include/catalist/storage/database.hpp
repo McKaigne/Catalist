@@ -18,9 +18,9 @@ class database {
 public:
   database(iFileSystem& fileSystem, std::filesystem::path dataDir);
 
-  // Adds a title under a fresh id and returns it. A title that shares a
-  // MyAnimeList or AniList id with a stored one is merged into that entry
-  // instead (see mergeImported), so importing a list twice adds nothing.
+  // Adds a title under a fresh id and returns it. A title that shares its
+  // MyAnimeList id with a stored one is merged into that entry instead (see
+  // mergeImported), so importing a list twice adds nothing.
   int addEntry(entry added);
   [[nodiscard]] const std::vector<entry>& getEntries(mediaType type) const;
   [[nodiscard]] std::optional<entry> getById(mediaType type, int id) const;

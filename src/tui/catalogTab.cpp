@@ -60,6 +60,20 @@ std::vector<sidebarRow> buildSidebarRows(const catalogue& db, mediaType media) {
   return rows;
 }
 
+libraryTotals sumUp(const catalogue& db, mediaType media) {
+  libraryTotals totals;
+  totals.daysSpent = db.daysSpent(media);
+  totals.meanScore = db.averageScore(media);
+  totals.units = db.totalProgress(media);
+  totals.rewatched = db.totalRewatched(media);
+  totals.volumes = db.totalVolumes(media);
+  for (size_t status = 0; status < totals.byStatus.size(); ++status)
+    totals.byStatus[status] =
+        db.countByStatus(media, static_cast<watchStatus>(status));
+  totals.titles = db.getEntries(media).size();
+  return totals;
+}
+
 }  // namespace
 
 // Score, progress and date start high-to-low (see sortEntries), so for them
@@ -209,6 +223,7 @@ bool catalogTab::passesFilters(const entry& candidate) const {
 void catalogTab::refresh(appContext& ctx) {
   sidebarRows_ = buildSidebarRows(ctx.db, media_);
   libraryEmpty_ = ctx.db.getEntries(media_).empty();
+  totals_ = sumUp(ctx.db, media_);
   displayed_.clear();
   for (const auto& candidate : ctx.db.getEntries(media_)) {
     if (passesFilters(candidate))

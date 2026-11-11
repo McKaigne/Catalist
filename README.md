@@ -38,9 +38,8 @@ ctest --test-dir build --output-on-failure
 
 | Key | Tab | What it shows |
 | :--- | :--- | :--- |
-| `1` | Anime | Sidebar filters (status, rating 10 to 0), the sortable list and a details card |
-| `2` | Manga | The same for manga |
-| `3` | Stats | Totals, the status breakdown and the score chart (`j`/`k`/`m` switch anime and manga) |
+| `1` | Anime | Sidebar filters with counts (status, rating 10 to 0) and totals (days spent, mean score, episodes, rewatches, a status bar), the sortable list and a details card |
+| `2` | Manga | The same for manga, with chapters, rereads and volumes |
 
 The bottom bar shows the current mode (`NOR`, `SCH` search, `EDT` typing a
 number, `ADD`, `DEL`), the last message and the keys that work right now.
@@ -49,7 +48,7 @@ number, `ADD`, `DEL`), the last message and the keys that work right now.
 
 | Key | Action |
 | :--- | :--- |
-| `1` `2` `3`, `Tab` / `Shift-Tab` | Switch tab |
+| `1` `2`, `Tab` / `Shift-Tab` | Switch tab |
 | `j` / `k`, `g` / `G` | Move down / up, jump to top / bottom |
 | `h` / `l` | Move between the sidebar, the list and the details card |
 | `+` / `-` (or `P`) | One episode or chapter more / less |

@@ -1,5 +1,6 @@
 #include "tui/tuiHarness.hpp"
 
+#include <cctype>
 #include <ftxui/screen/screen.hpp>
 
 namespace catalist::test {
@@ -31,6 +32,31 @@ std::string draw(const ftxui::Element& element) {
                                       ftxui::Dimension::Fixed(50));
   ftxui::Render(canvas, element);
   return canvas.ToString();
+}
+
+std::string plain(const std::string& screenText) {
+  std::string out;
+  for (size_t i = 0; i < screenText.size(); ++i) {
+    if (screenText[i] != '\x1b') {
+      out += screenText[i];
+      continue;
+    }
+    while (i < screenText.size() &&
+           !std::isalpha(static_cast<unsigned char>(screenText[i])))
+      ++i;
+  }
+  return out;
+}
+
+std::string valueAfter(const std::string& screenText,
+                       const std::string& label) {
+  std::string text = plain(screenText);
+  size_t at = text.find(label);
+  if (at == std::string::npos)
+    return "";
+  at = text.find_first_not_of(' ', at + label.size());
+  size_t end = text.find_first_of(" \n", at);
+  return at == std::string::npos ? "" : text.substr(at, end - at);
 }
 
 int lineOf(const std::string& screenText, const std::string& needle) {

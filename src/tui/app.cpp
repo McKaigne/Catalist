@@ -10,7 +10,6 @@
 
 #include "system.hpp"
 #include "tui/catalogTab.hpp"
-#include "tui/statsTab.hpp"
 #include "tui/style.hpp"
 #include "version.hpp"
 
@@ -166,8 +165,7 @@ void runTui(catalogue& db) {
 
   catalogTab anime(mediaType::kAnime);
   catalogTab manga(mediaType::kManga);
-  statsTab stats;
-  std::vector<iTab*> tabs = {&anime, &manga, &stats};
+  std::vector<iTab*> tabs = {&anime, &manga};
 
   auto screen = ScreenInteractive::Fullscreen();
   screen.TrackMouse(false);

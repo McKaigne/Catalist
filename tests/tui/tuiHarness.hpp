@@ -30,6 +30,13 @@ struct tuiHarness : tempDirFixture {
 // Draws an element on a 200x50 screen and returns the text.
 [[nodiscard]] std::string draw(const ftxui::Element& element);
 
+// Screen text without the colour codes, as a person would read it.
+[[nodiscard]] std::string plain(const std::string& screenText);
+
+// The word printed after `label` on the same line (spaces skipped), or "".
+[[nodiscard]] std::string valueAfter(const std::string& screenText,
+                                     const std::string& label);
+
 // The screen line on which `needle` first appears, or -1 when it is not shown.
 [[nodiscard]] int lineOf(const std::string& screenText,
                          const std::string& needle);

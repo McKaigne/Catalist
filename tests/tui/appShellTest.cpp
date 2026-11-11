@@ -2,12 +2,11 @@
 
 #include <ftxui/component/mouse.hpp>
 
-#include "version.hpp"
+#include "support/sampleLibrary.hpp"
 #include "tui/app.hpp"
 #include "tui/catalogTab.hpp"
-#include "tui/statsTab.hpp"
-#include "support/sampleLibrary.hpp"
 #include "tui/tuiHarness.hpp"
+#include "version.hpp"
 
 using catalist::appShell;
 using ftxui::Event;
@@ -44,13 +43,14 @@ struct seededHarness : catalist::test::tuiHarness {
 struct shellFixture : seededHarness {
   shellFixture()
       : anime(catalist::mediaType::kAnime),
-        shell(ctx, {&anime, &probe, &stats}, [this] { ++quits; }) {}
+        manga(catalist::mediaType::kManga),
+        shell(ctx, {&anime, &probe, &manga}, [this] { ++quits; }) {}
 
   std::string drawn() { return catalist::test::draw(shell.render()); }
 
   catalist::catalogTab anime;
   recordingTab probe;
-  catalist::statsTab stats;
+  catalist::catalogTab manga;
   int quits = 0;
   appShell shell;
 };
@@ -116,7 +116,7 @@ TEST_CASE_FIXTURE(shellFixture,
   auto shown = drawn();
   CHECK(shown.find("Anime (4)") != std::string::npos);
   CHECK(shown.find("Probe") != std::string::npos);
-  CHECK(shown.find("Stats") != std::string::npos);
+  CHECK(shown.find("Manga (2)") != std::string::npos);
   CHECK(shown.find(std::string("v") + catalist::kVersionString) !=
         std::string::npos);
   CHECK(shown.find(" NOR ") != std::string::npos);

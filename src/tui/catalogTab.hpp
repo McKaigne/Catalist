@@ -1,6 +1,7 @@
 #ifndef CATALIST_TUI_CATALOG_TAB_HPP_
 #define CATALIST_TUI_CATALOG_TAB_HPP_
 
+#include <array>
 #include <optional>
 #include <string>
 #include <vector>
@@ -36,6 +37,18 @@ enum class step {
   kConfirmDelete,  // y/n for the selected entry
 };
 
+// The numbers under the sidebar, worked out again on every refresh.
+struct libraryTotals {
+  double daysSpent = 0.0;
+  double meanScore = 0.0;
+  int units = 0;  // episodes or chapters
+  int rewatched = 0;
+  int volumes = 0;
+  // Titles per status, in watchStatus order, for the status bar.
+  std::array<size_t, 5> byStatus{};
+  size_t titles = 0;
+};
+
 // One sidebar row: a section header, "all", a status filter or a score filter.
 struct sidebarRow {
   std::string label;
@@ -44,8 +57,8 @@ struct sidebarRow {
   std::optional<int> score;
 };
 
-// The anime or manga catalogue: sidebar filters, searchable table, details
-// card, and adding titles found on MyAnimeList. Keys and state live in
+// The anime or manga catalogue: sidebar filters and totals, searchable table,
+// details card, and adding titles found on MyAnimeList. Keys and state live in
 // catalogTab.cpp, drawing in catalogView.cpp.
 class catalogTab : public iTab {
 public:
@@ -106,6 +119,7 @@ private:
                                   int width, bool stretches) const;
   ftxui::Element renderDetails();
   ftxui::Element renderSidebarCard() const;
+  ftxui::Element renderTotals() const;
   ftxui::Element renderSearchCard() const;
   ftxui::Element renderCatalogCard();
   ftxui::Element renderPickCard();
@@ -131,6 +145,7 @@ private:
   std::vector<sidebarRow> sidebarRows_;
   std::vector<entry> displayed_;
   bool libraryEmpty_ = true;
+  libraryTotals totals_;
 
   textField search_;
   textField number_;

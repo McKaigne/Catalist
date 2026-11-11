@@ -32,7 +32,6 @@ const auto kRed = ftxui::Color::RGB(0xf3, 0x8b, 0xa8);
 namespace icon {
 const std::string kLibrary = "󰓹";
 const std::string kSearch = "";
-const std::string kStats = "󰄫";
 
 const std::string kAnime = "󰴙";
 const std::string kManga = "󱥬";
@@ -71,28 +70,6 @@ namespace catalist {
                                   ftxui::Color bg, bool boldText = true);
 
 }  // namespace catalist
-
-// The building blocks of the catalogue's look, shared by every tab.
-namespace catalist::card {
-
-// A rounded card: bold lavender heading, an optional badge on the right, a
-// blank line and the body. The border turns mauve while the card has focus.
-[[nodiscard]] ftxui::Element frame(const std::string& heading,
-                                   ftxui::Element body, bool focused,
-                                   const std::string& badge = "");
-
-// An upper-case sub-heading inside a card ("STATUS", "METRICS").
-[[nodiscard]] ftxui::Element section(const std::string& label);
-
-// A labelled row; `active` draws the cursor bar and highlights the label.
-[[nodiscard]] ftxui::Element field(bool active, const std::string& label,
-                                   ftxui::Element value, int labelWidth = 14);
-
-// A selectable line in a list card, with the same cursor bar.
-[[nodiscard]] ftxui::Element choice(bool active, const std::string& label,
-                                    ftxui::Color tint);
-
-}  // namespace catalist::card
 
 namespace catalist::marquee {
 

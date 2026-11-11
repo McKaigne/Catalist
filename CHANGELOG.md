@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Catalist is now a small, local-first tracker: two CSV files, three tabs,
+Catalist is now a small, local-first tracker: two CSV files, two tabs,
 and the network only to look up a title to add.
 
 ### Added
@@ -53,6 +53,9 @@ and the network only to look up a title to add.
   like success: the CLI exits with code 1 and the TUI says so.
 
 ### Removed
+- The Stats tab. Its totals (days spent, mean score, episodes or chapters,
+  rewatches, volumes and a status bar) sit under the sidebar of the Anime
+  and Manga tabs, whose filter rows already count each status and rating.
 - Notes, and the stored AniList ids, which only sync used; both are dropped
   from the CSV files on the next save, and notes are no longer exported.
 - Accounts, logins and sync with MyAnimeList and AniList, with `sync.csv`,

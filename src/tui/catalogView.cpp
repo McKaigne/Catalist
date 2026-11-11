@@ -3,6 +3,7 @@
 // catalogTab.cpp.
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <ftxui/screen/terminal.hpp>
 
@@ -56,6 +57,47 @@ Element highlightMatches(const std::string& title, const std::string& query,
   return hbox(std::move(parts));
 }
 
+std::string withCommas(long long number) {
+  std::string digits = std::to_string(number);
+  for (int at = static_cast<int>(digits.size()) - 3; at > 0; at -= 3)
+    digits.insert(static_cast<size_t>(at), ",");
+  return digits;
+}
+
+std::string oneDecimal(double value) {
+  long long tenths = std::llround(value * 10.0);
+  return withCommas(tenths / 10) + "." + std::to_string(tenths % 10);
+}
+
+std::string twoDecimals(double value) {
+  char formatted[32];
+  std::snprintf(formatted, sizeof(formatted), "%.2f", value);
+  return formatted;
+}
+
+// One bar split by status, in the status colours; every status with titles
+// keeps at least one cell so it stays visible.
+Element statusBar(const libraryTotals& totals, int width) {
+  if (totals.titles == 0)
+    return text(std::string(width, ' ')) | bgcolor(theme::kSurface0);
+  Elements cells;
+  int used = 0;
+  for (size_t status = 0; status < totals.byStatus.size(); ++status) {
+    size_t count = totals.byStatus[status];
+    bool last = status + 1 == totals.byStatus.size();
+    int cellsWide =
+        last ? width - used : static_cast<int>(count * width / totals.titles);
+    if (count > 0 && cellsWide == 0)
+      cellsWide = 1;
+    cellsWide = std::min(cellsWide, width - used);
+    used += cellsWide;
+    if (cellsWide > 0)
+      cells.push_back(text(std::string(cellsWide, ' ')) |
+                      bgcolor(statusToColor(static_cast<watchStatus>(status))));
+  }
+  return hbox(std::move(cells));
+}
+
 Element numberBox(const textField& field) {
   return field.render("0", true) | bgcolor(theme::kSurface0) |
          size(WIDTH, EQUAL, 8);
@@ -95,10 +137,31 @@ Element catalogTab::renderSidebarCard() const {
   Elements rows;
   for (size_t row = 0; row < sidebarRows_.size(); ++row)
     rows.push_back(renderSidebarRow(static_cast<int>(row)));
+  // The rows scroll; the totals stay put underneath.
   return vbox({text("  Categories") | bold | color(theme::kLavender), text(""),
-               vbox(std::move(rows)) | vscroll_indicator | frame | flex}) |
+               vbox(std::move(rows)) | vscroll_indicator | frame | flex,
+               renderTotals()}) |
          border | color(focused ? theme::kMauve : theme::kSurface0) |
          size(WIDTH, EQUAL, 28);
+}
+
+Element catalogTab::renderTotals() const {
+  bool anime = media_ == mediaType::kAnime;
+  auto row = [](const std::string& label, const std::string& value) {
+    return hbox({text("  " + label) | color(theme::kSubtext), filler(),
+                 text(value) | bold | color(theme::kText), text("  ")});
+  };
+  Elements lines = {
+      text(""),
+      text("  TOTALS") | bold | color(theme::kOverlay0),
+      row("Days spent", oneDecimal(totals_.daysSpent)),
+      row("Mean score", twoDecimals(totals_.meanScore)),
+      row(anime ? "Episodes" : "Chapters", withCommas(totals_.units)),
+      row(anime ? "Rewatched" : "Reread", withCommas(totals_.rewatched))};
+  if (!anime)
+    lines.push_back(row("Volumes", withCommas(totals_.volumes)));
+  lines.push_back(hbox({text("  "), statusBar(totals_, 24)}));
+  return vbox(std::move(lines));
 }
 
 Element catalogTab::renderSearchCard() const {

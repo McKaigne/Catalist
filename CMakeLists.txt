@@ -43,7 +43,6 @@ add_library(catalistLib STATIC
   src/tui/app.cpp
   src/tui/catalogTab.cpp
   src/tui/catalogView.cpp
-  src/tui/statsTab.cpp
   src/tui/style.cpp
 )
 target_include_directories(catalistLib PUBLIC src "${CATALIST_GENERATED_DIR}")
@@ -93,7 +92,6 @@ add_executable(catalistTests
   tests/testMain.cpp
   tests/tui/appShellTest.cpp
   tests/tui/catalogTabTest.cpp
-  tests/tui/statsTabTest.cpp
   tests/tui/styleTest.cpp
   tests/tui/tuiHarness.cpp
   tests/versionTest.cpp

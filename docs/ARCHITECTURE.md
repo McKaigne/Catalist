@@ -13,9 +13,8 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
 | `system` | everything that touches the OS: files, `httpGet` (curl), `today()` |
 | `cli` | `catalist import` and `catalist export` |
 | `tui/app` | `iTab`, `appContext` and the shell (tab bar, bottom bar, global keys) |
-| `tui/catalogTab`, `tui/catalogView.cpp` | the Anime and Manga tabs: keys and state, and drawing |
-| `tui/statsTab` | the Stats tab |
-| `tui/style` | colours, icons, pill, card, marquee, key names, `textField` |
+| `tui/catalogTab`, `tui/catalogView.cpp` | the Anime and Manga tabs (with their totals): keys and state, and drawing |
+| `tui/style` | colours, icons, pill, marquee, key names, `textField` |
 
 `main.cpp` loads the catalogue, then runs the command line or the TUI.
 
@@ -68,7 +67,7 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
 - **Decision:** Each tab implements `iTab` (`title`, `icon`,
   `render(appContext&)`, `onEvent(const Event&, appContext&)`, `hints()`,
   `onTick`, `mode()`), the program's one interface. `appShell` owns the
-  three tabs in a fixed order: it switches tabs (number keys, `Tab`), quits,
+  two tabs in a fixed order: it switches tabs (number keys, `Tab`), quits,
   ignores the mouse, turns the redraw timer into `onTick`, and leaves every
   key to the tab while its mode is not normal (`capturesInput()`). It draws
   the tab bar and the bottom bar (mode pill, status, hints). Tabs change the

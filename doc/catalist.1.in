@@ -38,15 +38,12 @@ Print the version.
 .SH TABS
 .TP
 .B 1 Anime, 2 Manga
-Sidebar filters by status and by rating from 10 to 0, the sortable list and
-a details card.
-.TP
-.B 3 Stats
-Totals, the status breakdown and the score chart; \fBj\fR, \fBk\fR or
-\fBm\fR switches between anime and manga.
+Sidebar filters by status and by rating from 10 to 0 with their counts,
+totals (days spent, mean score, episodes or chapters, rewatches, volumes for
+manga, a bar of the statuses), the sortable list and a details card.
 .SH KEYS
 .TP
-.B 1 2 3 Tab
+.B 1 2 Tab
 Switch tab.
 .TP
 .B j k g G h l

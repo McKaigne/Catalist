@@ -343,6 +343,39 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog sidebar filters by any rating") {
   CHECK(rows() == rowList{kLong});
 }
 
+TEST_CASE_FIXTURE(catalogFixture,
+                  "tui catalog sidebar totals the anime and follow changes") {
+  using catalist::test::valueAfter;
+  auto shown = screen(tab);
+  CHECK(shown.find("TOTALS") != std::string::npos);
+  // The labels without a colon are the sidebar's; the details card's have one.
+  // 36 episodes at 24 minutes is 0.6 days; the mean of the rated 10, 8, 6.
+  CHECK(valueAfter(shown, "Days spent") == "0.6");
+  CHECK(valueAfter(shown, "Mean score") == "8.00");
+  CHECK(valueAfter(shown, "Episodes ") == "36");
+  CHECK(valueAfter(shown, "Rewatched ") == "1");
+  CHECK(shown.find("Volumes") == std::string::npos);
+
+  type(tab, "j");
+  REQUIRE(press(tab, Event::Character('+')));
+  CHECK(valueAfter(screen(tab), "Episodes ") == "37");
+}
+
+TEST_CASE("tui catalog sidebar totals the manga with volumes") {
+  using catalist::test::valueAfter;
+  catalist::test::tuiHarness harness;
+  catalist::test::seedSampleLibrary(harness.db);
+  catalogTab manga(mediaType::kManga);
+  manga.onActivate(harness.ctx);
+  auto shown = harness.screen(manga);
+  // 461 chapters at 5 minutes is 1.6 days; 42 + 11 volumes; mean of 10, 9.
+  CHECK(valueAfter(shown, "Days spent") == "1.6");
+  CHECK(valueAfter(shown, "Mean score") == "9.50");
+  CHECK(valueAfter(shown, "Chapters ") == "461");
+  CHECK(valueAfter(shown, "Reread ") == "0");
+  CHECK(valueAfter(shown, "Volumes ") == "53");
+}
+
 TEST_CASE(
     "tui catalog manga tab says reading and shows an empty library hint") {
   catalist::test::tuiHarness harness;

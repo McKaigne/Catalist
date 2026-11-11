@@ -3,7 +3,7 @@
 #include <sstream>
 #include <string>
 
-#include "catalist/core/version.hpp"
+#include "version.hpp"
 
 namespace {
 

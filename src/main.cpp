@@ -2,12 +2,10 @@
 #include <csignal>
 #include <iostream>
 
-#include "catalist/cli.hpp"
-#include "catalist/core/clock.hpp"
-#include "catalist/platform/fileSystem.hpp"
-#include "catalist/platform/httpClient.hpp"
-#include "catalist/storage/database.hpp"
-#include "catalist/tui/app.hpp"
+#include "catalogue.hpp"
+#include "cli.hpp"
+#include "system.hpp"
+#include "tui/app.hpp"
 
 int main(int argc, char* argv[]) {
   std::setlocale(LC_ALL, "");
@@ -15,7 +13,7 @@ int main(int argc, char* argv[]) {
   std::signal(SIGPIPE, SIG_IGN);
 
   catalist::realFileSystem fileSystem;
-  catalist::database db(fileSystem, catalist::database::getDefaultConfigDir());
+  catalist::catalogue db(fileSystem, catalist::catalogue::getDefaultConfigDir());
   if (argc > 1)
     return catalist::runCli({argv + 1, argv + argc}, db, fileSystem, std::cout,
                             std::cerr);

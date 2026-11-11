@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
-#include "catalist/core/clock.hpp"
-#include "catalist/platform/fileSystem.hpp"
-#include "catalist/platform/httpClient.hpp"
+#include "system.hpp"
+#include "system.hpp"
+#include "system.hpp"
 
 // In-memory stand-ins for the file system, the network and the clock.
 namespace catalist::test {

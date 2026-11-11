@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "catalist/core/result.hpp"
+#include "result.hpp"
 
 using catalist::result;
 

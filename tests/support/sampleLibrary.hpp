@@ -1,7 +1,7 @@
 #ifndef CATALIST_TESTS_SUPPORT_SAMPLE_LIBRARY_HPP_
 #define CATALIST_TESTS_SUPPORT_SAMPLE_LIBRARY_HPP_
 
-#include "catalist/storage/database.hpp"
+#include "catalogue.hpp"
 
 namespace catalist::test {
 
@@ -9,7 +9,7 @@ namespace catalist::test {
 // commas, unknown totals, unrated entries and manga volumes.
 // Anime: Sousou no Frieren (10), Odd Taxi (8), Ghost, "in" the Shell (6) and
 // the long title (unrated). Manga: Berserk (10) and Chainsaw Man (9).
-void seedSampleLibrary(database& db);
+void seedSampleLibrary(catalogue& db);
 
 }  // namespace catalist::test
 

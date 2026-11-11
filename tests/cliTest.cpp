@@ -4,9 +4,9 @@
 #include <string>
 #include <vector>
 
-#include "catalist/cli.hpp"
-#include "catalist/core/version.hpp"
-#include "catalist/storage/malXml.hpp"
+#include "cli.hpp"
+#include "version.hpp"
+#include "malXml.hpp"
 #include "support/testSupport.hpp"
 
 namespace {
@@ -36,14 +36,14 @@ const char* const kMangaXml =
     "</myanimelist>";
 
 // One `catalist ...` run over an in-memory data directory. Each run gets a
-// fresh database, as each real invocation does.
+// fresh catalogue, as each real invocation does.
 struct cliFixture {
   catalist::test::memoryFileSystem fs;
   std::string out;
   std::string err;
 
   int run(const std::vector<std::string>& args) {
-    catalist::database db(fs, "/data");
+    catalist::catalogue db(fs, "/data");
     std::ostringstream outStream;
     std::ostringstream errStream;
     int exitCode = catalist::runCli(args, db, fs, outStream, errStream);
@@ -53,7 +53,7 @@ struct cliFixture {
   }
 
   std::vector<catalist::entry> saved(mediaType type) {
-    catalist::database db(fs, "/data");
+    catalist::catalogue db(fs, "/data");
     REQUIRE(db.loadAll().ok());
     return db.getEntries(type);
   }
@@ -137,7 +137,7 @@ TEST_CASE_FIXTURE(cliFixture,
   REQUIRE(run({"import", "/lists/anime.xml"}) == 0);
 
   {
-    catalist::database db(fs, "/data");
+    catalist::catalogue db(fs, "/data");
     REQUIRE(db.loadAll().ok());
     auto taxi = db.getEntries(mediaType::kAnime)[1];
     REQUIRE(taxi.title == "Odd Taxi");
@@ -225,7 +225,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli export prints what import read") {
 TEST_CASE_FIXTURE(cliFixture,
                   "cli export notes the titles it had to leave out") {
   {
-    catalist::database db(fs, "/data");
+    catalist::catalogue db(fs, "/data");
     db.addEntry(catalist::test::makeEntry().title("Home video"));
     db.addEntry(catalist::test::makeEntry().title("Another one"));
     REQUIRE(db.saveAll());

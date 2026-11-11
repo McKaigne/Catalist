@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "catalist/tui/tabs/catalogTab.hpp"
-#include "catalist/tui/theme/statusStyle.hpp"
+#include "tui/catalogTab.hpp"
+#include "tui/style.hpp"
 #include "support/sampleLibrary.hpp"
 #include "tui/tuiHarness.hpp"
 

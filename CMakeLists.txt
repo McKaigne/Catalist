@@ -26,58 +26,35 @@ endif()
 
 set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 
-set(CATALIST_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
-configure_file(
-  include/catalist/core/version.hpp.in
-  "${CATALIST_GENERATED_INCLUDE_DIR}/catalist/core/version.hpp"
-  @ONLY
-)
+set(CATALIST_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+configure_file(src/version.hpp.in "${CATALIST_GENERATED_DIR}/version.hpp" @ONLY)
 configure_file(doc/catalist.1.in "${CMAKE_CURRENT_BINARY_DIR}/doc/catalist.1" @ONLY)
 
-# Everything but the terminal UI. Must stay free of FTXUI so its tests can
-# be built and run without one.
-add_library(catalistCore STATIC
+# Everything but main(), so the tests link the same code the program runs.
+add_library(catalistLib STATIC
+  src/catalogue.cpp
   src/cli.cpp
-  src/core/clock.cpp
-  src/core/date.cpp
-  src/core/json.cpp
-  src/core/shell.cpp
-  src/core/url.cpp
-  src/model/entry.cpp
-  src/model/entryOps.cpp
-  src/net/jikan.cpp
-  src/platform/fileSystem.cpp
-  src/platform/httpClient.cpp
-  src/storage/csvCodec.cpp
-  src/storage/database.cpp
-  src/storage/malXml.cpp
-)
-target_include_directories(catalistCore PUBLIC
-  include
-  "${CATALIST_GENERATED_INCLUDE_DIR}"
-)
-target_compile_options(catalistCore PRIVATE ${CATALIST_WARNING_FLAGS})
-
-add_library(catalistTui STATIC
+  src/date.cpp
+  src/entry.cpp
+  src/jikan.cpp
+  src/json.cpp
+  src/malXml.cpp
+  src/system.cpp
   src/tui/app.cpp
-  src/tui/keys.cpp
-  src/tui/tabs/catalogTab.cpp
-  src/tui/tabs/statsTab.cpp
-  src/tui/theme/statusStyle.cpp
-  src/tui/widgets/card.cpp
-  src/tui/widgets/marquee.cpp
-  src/tui/widgets/pill.cpp
+  src/tui/catalogTab.cpp
+  src/tui/statsTab.cpp
+  src/tui/style.cpp
 )
-target_link_libraries(catalistTui PUBLIC
-  catalistCore
+target_include_directories(catalistLib PUBLIC src "${CATALIST_GENERATED_DIR}")
+target_link_libraries(catalistLib PUBLIC
   ftxui::screen
   ftxui::dom
   ftxui::component
 )
-target_compile_options(catalistTui PRIVATE ${CATALIST_WARNING_FLAGS})
+target_compile_options(catalistLib PRIVATE ${CATALIST_WARNING_FLAGS})
 
 add_executable(catalist src/main.cpp)
-target_link_libraries(catalist PRIVATE catalistCore catalistTui)
+target_link_libraries(catalist PRIVATE catalistLib)
 target_compile_options(catalist PRIVATE ${CATALIST_WARNING_FLAGS})
 
 install(TARGETS catalist DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -101,58 +78,30 @@ else()
 endif()
 
 add_executable(catalistTests
+  tests/catalogueTest.cpp
   tests/cliTest.cpp
-  tests/csvCodecTest.cpp
-  tests/databaseTest.cpp
   tests/dateTest.cpp
-  tests/entryOpsTest.cpp
   tests/entryTest.cpp
-  tests/fileSystemTest.cpp
   tests/jikanTest.cpp
   tests/jsonTest.cpp
   tests/malXmlTest.cpp
   tests/resultTest.cpp
-  tests/shellTest.cpp
   tests/support/sampleLibrary.cpp
   tests/support/testSupport.cpp
+  tests/systemTest.cpp
   tests/testMain.cpp
-  tests/urlTest.cpp
+  tests/tui/appShellTest.cpp
+  tests/tui/catalogTabTest.cpp
+  tests/tui/statsTabTest.cpp
+  tests/tui/styleTest.cpp
+  tests/tui/tuiHarness.cpp
   tests/versionTest.cpp
 )
-
 target_include_directories(catalistTests PRIVATE tests)
 target_compile_definitions(catalistTests PRIVATE
   CATALIST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
 )
-target_link_libraries(catalistTests PRIVATE
-  doctest::doctest
-  catalistCore
-)
+target_link_libraries(catalistTests PRIVATE doctest::doctest catalistLib)
 target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 
 doctest_discover_tests(catalistTests)
-
-# Tab and widget tests need FTXUI, so they live in their own binary;
-# catalistTests stays free of it.
-add_executable(catalistTuiTests
-  tests/testMain.cpp
-  tests/support/sampleLibrary.cpp
-  tests/support/testSupport.cpp
-  tests/tui/appShellTest.cpp
-  tests/tui/catalogTabTest.cpp
-  tests/tui/statsTabTest.cpp
-  tests/tui/tuiHarness.cpp
-  tests/tui/widgetsTest.cpp
-)
-target_include_directories(catalistTuiTests PRIVATE tests)
-target_compile_definitions(catalistTuiTests PRIVATE
-  CATALIST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
-)
-target_link_libraries(catalistTuiTests PRIVATE
-  doctest::doctest
-  catalistCore
-  catalistTui
-)
-target_compile_options(catalistTuiTests PRIVATE ${CATALIST_WARNING_FLAGS})
-
-doctest_discover_tests(catalistTuiTests)

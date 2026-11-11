@@ -52,7 +52,7 @@ fixedClock makeTestClock() {
   return fixedClock(iClock::timePoint(std::chrono::seconds(1792497600)));
 }
 
-entry findTitle(const database& db, mediaType type, const std::string& title) {
+entry findTitle(const catalogue& db, mediaType type, const std::string& title) {
   for (const auto& e : db.getEntries(type)) {
     if (e.title == title)
       return e;

@@ -4,9 +4,9 @@
 #include <filesystem>
 #include <string>
 
-#include "catalist/model/entry.hpp"
-#include "catalist/platform/fileSystem.hpp"
-#include "catalist/storage/database.hpp"
+#include "entry.hpp"
+#include "system.hpp"
+#include "catalogue.hpp"
 #include "support/fakes.hpp"
 
 namespace catalist::test {
@@ -85,7 +85,7 @@ private:
 [[nodiscard]] fixedClock makeTestClock();
 
 // The entry titled `title`; fails the test when there is none.
-[[nodiscard]] entry findTitle(const database& db, mediaType type,
+[[nodiscard]] entry findTitle(const catalogue& db, mediaType type,
                               const std::string& title);
 
 std::filesystem::path fixturePath(const std::string& relativePath);

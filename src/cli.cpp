@@ -1,9 +1,9 @@
-#include "catalist/cli.hpp"
+#include "cli.hpp"
 
 #include <ostream>
 
-#include "catalist/core/version.hpp"
-#include "catalist/storage/malXml.hpp"
+#include "malXml.hpp"
+#include "version.hpp"
 
 namespace catalist {
 
@@ -22,7 +22,7 @@ int usageError(std::ostream& err, const std::string& message) {
   return 2;
 }
 
-void printHelp(std::ostream& out, const database& db) {
+void printHelp(std::ostream& out, const catalogue& db) {
   out << "Catalist " << kVersionString
       << " - an anime and manga tracker for the terminal.\n\n"
       << kUsage
@@ -33,7 +33,7 @@ void printHelp(std::ostream& out, const database& db) {
       << db.getConfigPath().string() << ".\n";
 }
 
-int importFiles(const std::vector<std::string>& files, database& db,
+int importFiles(const std::vector<std::string>& files, catalogue& db,
                 const iFileSystem& fileSystem, std::ostream& out,
                 std::ostream& err) {
   // Everything is read before anything is added, so a bad file leaves the
@@ -79,7 +79,7 @@ int importFiles(const std::vector<std::string>& files, database& db,
   return 0;
 }
 
-int exportList(mediaType type, const database& db, std::ostream& out,
+int exportList(mediaType type, const catalogue& db, std::ostream& out,
                std::ostream& err) {
   auto list = malXml::write(db.getEntries(type), type);
   out << list.xml;
@@ -91,7 +91,7 @@ int exportList(mediaType type, const database& db, std::ostream& out,
 
 }  // namespace
 
-int runCli(const std::vector<std::string>& args, database& db,
+int runCli(const std::vector<std::string>& args, catalogue& db,
            const iFileSystem& fileSystem, std::ostream& out,
            std::ostream& err) {
   const std::string& command = args.at(0);

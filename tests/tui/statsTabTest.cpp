@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "catalist/tui/tabs/statsTab.hpp"
+#include "tui/statsTab.hpp"
 #include "support/sampleLibrary.hpp"
 #include "tui/tuiHarness.hpp"
 

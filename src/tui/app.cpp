@@ -1,4 +1,4 @@
-#include "catalist/tui/app.hpp"
+#include "tui/app.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -8,12 +8,10 @@
 #include <ftxui/screen/terminal.hpp>
 #include <thread>
 
-#include "catalist/core/version.hpp"
-#include "catalist/tui/keys.hpp"
-#include "catalist/tui/tabs/catalogTab.hpp"
-#include "catalist/tui/tabs/statsTab.hpp"
-#include "catalist/tui/theme/palettes.hpp"
-#include "catalist/tui/widgets/pill.hpp"
+#include "tui/catalogTab.hpp"
+#include "tui/statsTab.hpp"
+#include "tui/style.hpp"
+#include "version.hpp"
 
 namespace catalist {
 
@@ -162,7 +160,7 @@ Element appShell::renderBottomBar() {
          border | color(theme::kSurface0) | size(HEIGHT, EQUAL, 3);
 }
 
-void runTui(database& db, const iClock& clock, iHttpClient& http) {
+void runTui(catalogue& db, const iClock& clock, iHttpClient& http) {
   appContext ctx{db, clock, http};
 
   catalogTab anime(mediaType::kAnime);

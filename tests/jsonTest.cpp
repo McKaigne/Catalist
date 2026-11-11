@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "catalist/core/json.hpp"
+#include "json.hpp"
 
 namespace json = catalist::json;
 

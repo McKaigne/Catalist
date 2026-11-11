@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "catalist/storage/malXml.hpp"
+#include "malXml.hpp"
 #include "support/testSupport.hpp"
 
 using catalist::mediaType;

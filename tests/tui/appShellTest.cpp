@@ -2,10 +2,10 @@
 
 #include <ftxui/component/mouse.hpp>
 
-#include "catalist/core/version.hpp"
-#include "catalist/tui/app.hpp"
-#include "catalist/tui/tabs/catalogTab.hpp"
-#include "catalist/tui/tabs/statsTab.hpp"
+#include "version.hpp"
+#include "tui/app.hpp"
+#include "tui/catalogTab.hpp"
+#include "tui/statsTab.hpp"
 #include "support/sampleLibrary.hpp"
 #include "tui/tuiHarness.hpp"
 

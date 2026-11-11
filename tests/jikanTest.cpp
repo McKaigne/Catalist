@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "catalist/net/jikan.hpp"
+#include "jikan.hpp"
 #include "support/fakes.hpp"
 
 namespace jikan = catalist::jikan;
@@ -11,6 +11,9 @@ TEST_CASE("jikan search url encodes the query and picks the media type") {
         "https://api.jikan.moe/v4/anime?q=Odd%20Taxi&limit=10");
   CHECK(jikan::searchUrl(mediaType::kManga, "a&b=c") ==
         "https://api.jikan.moe/v4/manga?q=a%26b%3dc&limit=10");
+  // Only unreserved characters pass through; UTF-8 is encoded byte by byte.
+  CHECK(jikan::searchUrl(mediaType::kAnime, "aZ09-_.~ /é") ==
+        "https://api.jikan.moe/v4/anime?q=aZ09-_.~%20%2f%c3%a9&limit=10");
 }
 
 TEST_CASE("jikan reads anime matches with their year from either field") {

@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "catalist/core/date.hpp"
+#include "date.hpp"
 
 using catalist::isoDate;
 

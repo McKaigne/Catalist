@@ -4,7 +4,7 @@
 
 namespace catalist::test {
 
-void seedSampleLibrary(database& db) {
+void seedSampleLibrary(catalogue& db) {
   db.addEntry(makeEntry()
                   .malId(52991)
                   .title("Sousou no Frieren")

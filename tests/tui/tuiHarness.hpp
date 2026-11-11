@@ -5,8 +5,8 @@
 #include <ftxui/dom/elements.hpp>
 #include <string>
 
-#include "catalist/tui/appContext.hpp"
-#include "catalist/tui/tab.hpp"
+#include "tui/app.hpp"
+#include "tui/app.hpp"
 #include "support/testSupport.hpp"
 
 namespace catalist::test {
@@ -23,7 +23,7 @@ struct tuiHarness {
   memoryFileSystem fs;
   fixedClock clock;
   mockHttpClient http;
-  database db;
+  catalogue db;
   appContext ctx;
 };
 

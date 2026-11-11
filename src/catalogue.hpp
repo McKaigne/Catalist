@@ -10,7 +10,6 @@
 #include "date.hpp"
 #include "entry.hpp"
 #include "result.hpp"
-#include "system.hpp"
 
 // RFC 4180 encoding and decoding of the catalogue files. Pure text in,
 // records out; reading and writing the files is the catalogue's job.
@@ -48,7 +47,7 @@ enum class sortKey { kScore, kStatus, kTitle, kProgress, kDate };
 // The anime and manga lists in memory, and their two CSV files on disk.
 class catalogue {
 public:
-  catalogue(iFileSystem& fileSystem, std::filesystem::path dataDir);
+  explicit catalogue(std::filesystem::path dataDir);
 
   // Adds a title under a fresh id and returns it. A title that shares its
   // MyAnimeList id with a stored one is merged into that entry instead (see
@@ -95,7 +94,6 @@ private:
   std::vector<entry>& getList(mediaType type);
   const std::vector<entry>& getList(mediaType type) const;
 
-  iFileSystem& fileSystem_;
   std::filesystem::path dataDir_;
   std::vector<entry> animeEntries_;
   std::vector<entry> mangaEntries_;

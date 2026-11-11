@@ -1,28 +1,28 @@
 #ifndef CATALIST_TESTS_TUI_TUI_HARNESS_HPP_
 #define CATALIST_TESTS_TUI_TUI_HARNESS_HPP_
 
+#include <filesystem>
 #include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <string>
 
-#include "tui/app.hpp"
-#include "tui/app.hpp"
 #include "support/testSupport.hpp"
+#include "tui/app.hpp"
 
 namespace catalist::test {
 
-// A complete appContext over fakes: in-memory files under /data, the fixed
-// test clock and an HTTP client that is offline until told otherwise.
-struct tuiHarness {
+// A complete appContext for tab tests: the catalogue in a temporary
+// directory, the fixed test date and a web that is offline until told
+// otherwise.
+struct tuiHarness : tempDirFixture {
   tuiHarness();
 
   bool press(iTab& tab, const ftxui::Event& event);
   bool type(iTab& tab, const std::string& keys);
   [[nodiscard]] std::string screen(iTab& tab);
+  [[nodiscard]] std::filesystem::path dataDir() const;
 
-  memoryFileSystem fs;
-  fixedClock clock;
-  mockHttpClient http;
+  fakeWeb web;
   catalogue db;
   appContext ctx;
 };

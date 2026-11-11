@@ -10,16 +10,17 @@
 #include <vector>
 
 #include "catalogue.hpp"
-#include "system.hpp"
+#include "jikan.hpp"
 
 namespace catalist {
 
 // Everything a tab may touch. Built once by runTui; tabs never reach for
-// globals.
+// globals. The date and the network are functions so the tests can pin the
+// one and fake the other.
 struct appContext {
   catalogue& db;
-  const iClock& clock;
-  iHttpClient& http;
+  std::function<isoDate()> today;
+  jikan::fetcher fetch;
   // The message in the bottom bar.
   std::string status = "Ready.";
 
@@ -106,7 +107,7 @@ private:
 };
 
 // Runs the full-screen interface until the user quits.
-void runTui(catalogue& db, const iClock& clock, iHttpClient& http);
+void runTui(catalogue& db);
 
 }  // namespace catalist
 

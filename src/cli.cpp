@@ -3,6 +3,7 @@
 #include <ostream>
 
 #include "malXml.hpp"
+#include "system.hpp"
 #include "version.hpp"
 
 namespace catalist {
@@ -34,13 +35,12 @@ void printHelp(std::ostream& out, const catalogue& db) {
 }
 
 int importFiles(const std::vector<std::string>& files, catalogue& db,
-                const iFileSystem& fileSystem, std::ostream& out,
-                std::ostream& err) {
+                std::ostream& out, std::ostream& err) {
   // Everything is read before anything is added, so a bad file leaves the
   // catalogue untouched.
   std::vector<std::vector<entry>> lists;
   for (const auto& file : files) {
-    auto content = fileSystem.readFile(file);
+    auto content = readFile(file);
     if (!content) {
       err << "error: cannot read " << file << "\n";
       return 1;
@@ -92,8 +92,7 @@ int exportList(mediaType type, const catalogue& db, std::ostream& out,
 }  // namespace
 
 int runCli(const std::vector<std::string>& args, catalogue& db,
-           const iFileSystem& fileSystem, std::ostream& out,
-           std::ostream& err) {
+           std::ostream& out, std::ostream& err) {
   const std::string& command = args.at(0);
   if (command == "--version" || command == "-v") {
     out << "Catalist v" << kVersionString << "\n";
@@ -121,7 +120,7 @@ int runCli(const std::vector<std::string>& args, catalogue& db,
   if (command == "export")
     return exportList(anime ? mediaType::kAnime : mediaType::kManga, db, out,
                       err);
-  return importFiles({args.begin() + 1, args.end()}, db, fileSystem, out, err);
+  return importFiles({args.begin() + 1, args.end()}, db, out, err);
 }
 
 }  // namespace catalist

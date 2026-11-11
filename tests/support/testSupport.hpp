@@ -2,12 +2,14 @@
 #define CATALIST_TESTS_SUPPORT_TEST_SUPPORT_HPP_
 
 #include <filesystem>
+#include <map>
+#include <optional>
 #include <string>
+#include <vector>
 
-#include "entry.hpp"
-#include "system.hpp"
 #include "catalogue.hpp"
-#include "support/fakes.hpp"
+#include "entry.hpp"
+#include "jikan.hpp"
 
 namespace catalist::test {
 
@@ -23,11 +25,26 @@ public:
   [[nodiscard]] const std::filesystem::path& tempDir() const {
     return tempDir_;
   }
-  [[nodiscard]] realFileSystem& fileSystem() { return fileSystem_; }
 
 private:
   std::filesystem::path tempDir_;
-  realFileSystem fileSystem_;
+};
+
+// The text of a file, or "" when there is none.
+[[nodiscard]] std::string readText(const std::filesystem::path& file);
+void writeText(const std::filesystem::path& file, const std::string& text);
+// Puts a directory where the file should go, so writing it fails.
+void makeUnwritable(const std::filesystem::path& file);
+
+// Answers a GET whose URL contains a registered fragment with its body, and
+// fails every other request, as if offline. Records every URL asked for.
+struct fakeWeb {
+  void respond(const std::string& urlFragment, const std::string& body);
+  [[nodiscard]] std::optional<std::string> get(const std::string& url);
+  [[nodiscard]] jikan::fetcher fetcher();
+
+  std::vector<std::string> requested;
+  std::map<std::string, std::string> bodies;
 };
 
 // Test data must spell dates correctly; a typo should fail loudly instead
@@ -36,29 +53,50 @@ isoDate requireDate(const std::string& text);
 
 class entryBuilder {
 public:
-  entryBuilder& id(int value) { built_.id = value; return *this; }
-  entryBuilder& malId(int value) { built_.malId = value; return *this; }
+  entryBuilder& id(int value) {
+    built_.id = value;
+    return *this;
+  }
+  entryBuilder& malId(int value) {
+    built_.malId = value;
+    return *this;
+  }
   entryBuilder& title(std::string value) {
     built_.title = std::move(value);
     return *this;
   }
-  entryBuilder& type(mediaType value) { built_.type = value; return *this; }
+  entryBuilder& type(mediaType value) {
+    built_.type = value;
+    return *this;
+  }
   entryBuilder& status(watchStatus value) {
     built_.status = value;
     return *this;
   }
-  entryBuilder& score(int value) { built_.score = value; return *this; }
-  entryBuilder& progress(int value) { built_.progress = value; return *this; }
+  entryBuilder& score(int value) {
+    built_.score = value;
+    return *this;
+  }
+  entryBuilder& progress(int value) {
+    built_.progress = value;
+    return *this;
+  }
   entryBuilder& totalUnits(int value) {
     built_.totalUnits = value;
     return *this;
   }
-  entryBuilder& volumes(int value) { built_.volumes = value; return *this; }
+  entryBuilder& volumes(int value) {
+    built_.volumes = value;
+    return *this;
+  }
   entryBuilder& totalVolumes(int value) {
     built_.totalVolumes = value;
     return *this;
   }
-  entryBuilder& rewatched(int value) { built_.rewatched = value; return *this; }
+  entryBuilder& rewatched(int value) {
+    built_.rewatched = value;
+    return *this;
+  }
   entryBuilder& startDate(const std::string& value) {
     built_.startDate = requireDate(value);
     return *this;
@@ -81,8 +119,8 @@ private:
 
 [[nodiscard]] entryBuilder makeEntry();
 
-// 2026-10-20 12:00:00 UTC; the test main pins TZ=UTC so local dates agree.
-[[nodiscard]] fixedClock makeTestClock();
+// The date every test runs on: 2026-10-20.
+[[nodiscard]] isoDate testToday();
 
 // The entry titled `title`; fails the test when there is none.
 [[nodiscard]] entry findTitle(const catalogue& db, mediaType type,

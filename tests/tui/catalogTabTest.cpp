@@ -35,7 +35,7 @@ struct catalogFixture : catalist::test::tuiHarness {
     return titles;
   }
   std::string savedAnime() {
-    return fs.readFile("/data/anime.csv").value_or("");
+    return catalist::test::readText(dataDir() / "anime.csv");
   }
   catalogTab tab;
 };
@@ -298,9 +298,10 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog delete asks first and saves") {
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog reports a failed save") {
-  fs.failWritesTo("/data/anime.csv");
+  catalist::test::makeUnwritable(dataDir() / "anime.csv");
   REQUIRE(press(tab, Event::Character('+')));
-  CHECK(ctx.status == "Could not save the catalogue to /data.");
+  CHECK(ctx.status ==
+        "Could not save the catalogue to " + dataDir().string() + ".");
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog sidebar filters by status") {
@@ -355,7 +356,7 @@ TEST_CASE(
 
 TEST_CASE_FIXTURE(catalogFixture,
                   "tui catalog add searches MyAnimeList and adds the pick") {
-  http.respond("api.jikan.moe/v4/anime?q=fullmetal", kSearchReply);
+  web.respond("api.jikan.moe/v4/anime?q=fullmetal", kSearchReply);
   REQUIRE(press(tab, Event::Character('a')));
   CHECK(tab.mode() == appMode::kAdd);
   CHECK(tab.capturesInput());
@@ -363,9 +364,9 @@ TEST_CASE_FIXTURE(catalogFixture,
   REQUIRE(press(tab, Event::Return));
   CHECK(ctx.status == "Searching MyAnimeList for 'fullmetal'...");
   // The request waits for the next tick, so the status above is drawn first.
-  CHECK(http.requested.empty());
+  CHECK(web.requested.empty());
   tab.onTick(ctx);
-  REQUIRE(http.requested.size() == 1);
+  REQUIRE(web.requested.size() == 1);
   CHECK(ctx.status == "2 matches for 'fullmetal'.");
   auto shown = screen(tab);
   CHECK(shown.find("2009") != std::string::npos);
@@ -392,7 +393,7 @@ TEST_CASE_FIXTURE(catalogFixture,
 
 TEST_CASE_FIXTURE(catalogFixture,
                   "tui catalog add does not duplicate a tracked title") {
-  http.respond("api.jikan.moe/v4/anime", kSearchReply);
+  web.respond("api.jikan.moe/v4/anime", kSearchReply);
   REQUIRE(press(tab, Event::Character('a')));
   type(tab, "frieren");
   REQUIRE(press(tab, Event::Return));
@@ -418,7 +419,7 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog add works offline by hand") {
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog add says when nothing matched") {
-  http.respond("api.jikan.moe", R"({"data": []})");
+  web.respond("api.jikan.moe", R"({"data": []})");
   REQUIRE(press(tab, Event::Character('a')));
   type(tab, "zzz");
   REQUIRE(press(tab, Event::Return));
@@ -444,7 +445,7 @@ TEST_CASE_FIXTURE(catalogFixture,
   REQUIRE(press(tab, Event::Return));
   REQUIRE(press(tab, Event::Escape));
   tab.onTick(ctx);
-  CHECK(http.requested.empty());
+  CHECK(web.requested.empty());
   CHECK(db.getEntries(mediaType::kAnime).size() == 4);
   CHECK(tab.mode() == appMode::kNor);
 }

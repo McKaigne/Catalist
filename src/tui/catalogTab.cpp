@@ -307,7 +307,7 @@ bool catalogTab::onEvent(const Event& event, appContext& ctx) {
 void catalogTab::onTick(appContext& ctx) {
   if (adding_ != addStage::kSearching)
     return;
-  auto found = jikan::search(ctx.http, media_, addQuery_);
+  auto found = jikan::search(ctx.fetch, media_, addQuery_);
   addResults_ = found.ok() ? found.value() : std::vector<jikan::title>{};
   addSelected_ = 0;
   adding_ = addStage::kPicking;
@@ -430,7 +430,7 @@ bool catalogTab::handleEntryKeys(const Event& event, appContext& ctx) {
   if (!current)
     return true;
 
-  isoDate today = localDate(ctx.clock);
+  isoDate today = ctx.today();
   if (keys::isCharacter(event, 'S')) {
     entry changed = cycleStatus(*current, 1, today);
     commit(ctx, changed, "Status: " + statusToString(changed.status, media_));
@@ -568,7 +568,7 @@ void catalogTab::adjustDetailsField(appContext& ctx, int direction) {
   const entry* current = selectedEntry();
   if (!current)
     return;
-  isoDate today = localDate(ctx.clock);
+  isoDate today = ctx.today();
   if (detailsCursor_ == detailsField::kStatus) {
     entry changed = cycleStatus(*current, direction, today);
     commit(ctx, changed, "Status: " + statusToString(changed.status, media_));
@@ -667,7 +667,7 @@ void catalogTab::commitCount(appContext& ctx) {
   if (!current || !field)
     return;
   entry changed =
-      setCount(*current, *field, std::stoi(countBuffer_), localDate(ctx.clock));
+      setCount(*current, *field, std::stoi(countBuffer_), ctx.today());
   commit(ctx, changed,
          fieldLabel(detailsCursor_) + " " + countLabel(changed, *field));
 }
@@ -712,7 +712,7 @@ void catalogTab::addPicked(appContext& ctx) {
   entry added;
   added.type = media_;
   added.status = watchStatus::kPlanToWatch;
-  added.updatedAt = localDate(ctx.clock);
+  added.updatedAt = ctx.today();
   added.title = addQuery_;
   std::optional<entry> existing;
   if (addSelected_ < static_cast<int>(addResults_.size())) {

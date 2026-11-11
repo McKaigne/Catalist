@@ -8,6 +8,7 @@
 #include <ftxui/screen/terminal.hpp>
 #include <thread>
 
+#include "system.hpp"
 #include "tui/catalogTab.hpp"
 #include "tui/statsTab.hpp"
 #include "tui/style.hpp"
@@ -160,8 +161,8 @@ Element appShell::renderBottomBar() {
          border | color(theme::kSurface0) | size(HEIGHT, EQUAL, 3);
 }
 
-void runTui(catalogue& db, const iClock& clock, iHttpClient& http) {
-  appContext ctx{db, clock, http};
+void runTui(catalogue& db) {
+  appContext ctx{db, today, httpGet};
 
   catalogTab anime(mediaType::kAnime);
   catalogTab manga(mediaType::kManga);

@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "entry.hpp"
+#include "system.hpp"
 
 namespace catalist::csvCodec {
 
@@ -268,8 +269,8 @@ std::filesystem::path catalogue::getDefaultConfigDir() {
   return std::filesystem::path("catalist-data");
 }
 
-catalogue::catalogue(iFileSystem& fileSystem, std::filesystem::path dataDir)
-    : fileSystem_(fileSystem), dataDir_(std::move(dataDir)) {}
+catalogue::catalogue(std::filesystem::path dataDir)
+    : dataDir_(std::move(dataDir)) {}
 
 std::filesystem::path catalogue::getConfigPath() const {
   return dataDir_;
@@ -403,7 +404,7 @@ double catalogue::daysSpent(mediaType type) const {
 
 result<bool> catalogue::loadCsv(mediaType type,
                                 const std::filesystem::path& path) {
-  auto content = fileSystem_.readFile(path);
+  auto content = readFile(path);
   if (!content)
     return result<bool>::success(false);
   auto decoded = csvCodec::decodeEntries(*content, type);
@@ -417,8 +418,7 @@ result<bool> catalogue::loadCsv(mediaType type,
 
 bool catalogue::saveCsv(mediaType type,
                         const std::filesystem::path& path) const {
-  return fileSystem_.writeFileAtomic(path,
-                                     csvCodec::encodeEntries(getList(type)));
+  return writeFileAtomic(path, csvCodec::encodeEntries(getList(type)));
 }
 
 result<bool> catalogue::loadAll() {

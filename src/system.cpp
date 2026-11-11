@@ -1,6 +1,7 @@
 #include "system.hpp"
 
 #include <array>
+#include <chrono>
 #include <cstdio>
 #include <ctime>
 #include <fstream>
@@ -8,7 +9,11 @@
 
 namespace catalist {
 
-std::optional<std::string> realFileSystem::readFile(const path& file) const {
+std::optional<std::string> readFile(const std::filesystem::path& file) {
+  // A directory opens as a stream on Linux but throws when read.
+  std::error_code ec;
+  if (!std::filesystem::is_regular_file(file, ec))
+    return std::nullopt;
   std::ifstream stream(file, std::ios::binary);
   if (!stream.is_open())
     return std::nullopt;
@@ -16,12 +21,12 @@ std::optional<std::string> realFileSystem::readFile(const path& file) const {
                      std::istreambuf_iterator<char>());
 }
 
-bool realFileSystem::writeFileAtomic(const path& file,
-                                     const std::string& content) {
+bool writeFileAtomic(const std::filesystem::path& file,
+                     const std::string& content) {
   std::error_code ec;
   if (!file.parent_path().empty())
     std::filesystem::create_directories(file.parent_path(), ec);
-  path tempFile = file.string() + ".tmp";
+  std::filesystem::path tempFile = file.string() + ".tmp";
   bool written = false;
   {
     std::ofstream stream(tempFile, std::ios::binary | std::ios::trunc);
@@ -37,30 +42,11 @@ bool realFileSystem::writeFileAtomic(const path& file,
   return false;
 }
 
-}  // namespace catalist
-
-namespace catalist {
-
-iClock::timePoint realClock::now() const {
-  return std::chrono::system_clock::now();
-}
-
-isoDate localDate(const iClock& clock) {
-  std::time_t seconds = std::chrono::system_clock::to_time_t(clock.now());
-  std::tm local{};
-  localtime_r(&seconds, &local);
-  return isoDate::fromLocalTm(local);
-}
-
-}  // namespace catalist
-
-namespace catalist {
-
-std::optional<std::string> curlHttpClient::get(const std::string& url) {
+std::optional<std::string> httpGet(const std::string& url) {
   // -f turns an HTTP error into a failed exit, -m bounds the whole request so
   // the interface never hangs longer than that.
-  std::string command = "curl -sfL -m 8 -A catalist " +
-                        shell::escapeShellArg(url) + " 2>/dev/null";
+  std::string command =
+      "curl -sfL -m 8 -A catalist " + shellQuote(url) + " 2>/dev/null";
   FILE* pipe = popen(command.c_str(), "r");
   if (!pipe)
     return std::nullopt;
@@ -73,20 +59,23 @@ std::optional<std::string> curlHttpClient::get(const std::string& url) {
   return pclose(pipe) == 0 ? std::optional<std::string>(body) : std::nullopt;
 }
 
-}  // namespace catalist
+isoDate today() {
+  std::time_t seconds =
+      std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+  std::tm local{};
+  localtime_r(&seconds, &local);
+  return isoDate::fromLocalTm(local);
+}
 
-namespace catalist::shell {
-
-std::string escapeShellArg(std::string_view arg) {
+std::string shellQuote(std::string_view text) {
   std::string quoted = "'";
-  for (char c : arg) {
+  for (char c : text) {
     if (c == '\'')
       quoted += "'\\''";
     else
       quoted += c;
   }
-  quoted += "'";
-  return quoted;
+  return quoted + "'";
 }
 
-}  // namespace catalist::shell
+}  // namespace catalist

@@ -5,7 +5,11 @@
 namespace catalist::test {
 
 tuiHarness::tuiHarness()
-    : clock(makeTestClock()), db(fs, "/data"), ctx{db, clock, http} {}
+    : db(tempDir() / "data"), ctx{db, testToday, web.fetcher()} {}
+
+std::filesystem::path tuiHarness::dataDir() const {
+  return tempDir() / "data";
+}
 
 bool tuiHarness::press(iTab& tab, const ftxui::Event& event) {
   return tab.onEvent(event, ctx);

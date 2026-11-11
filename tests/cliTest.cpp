@@ -1,13 +1,14 @@
 #include <doctest/doctest.h>
 
+#include <filesystem>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include "cli.hpp"
-#include "version.hpp"
 #include "malXml.hpp"
 #include "support/testSupport.hpp"
+#include "version.hpp"
 
 namespace {
 
@@ -35,32 +36,39 @@ const char* const kMangaXml =
     "<my_status>Reading</my_status></manga>"
     "</myanimelist>";
 
-// One `catalist ...` run over an in-memory data directory. Each run gets a
-// fresh catalogue, as each real invocation does.
-struct cliFixture {
-  catalist::test::memoryFileSystem fs;
-  std::string out;
-  std::string err;
+// One `catalist ...` run with the data in data/ of a temporary directory,
+// which is the working directory while the test runs, so file names in the
+// output stay short. Each run gets a fresh catalogue, as each real
+// invocation does.
+struct cliFixture : catalist::test::tempDirFixture {
+  cliFixture() : previousDir(std::filesystem::current_path()) {
+    std::filesystem::current_path(tempDir());
+  }
+  ~cliFixture() { std::filesystem::current_path(previousDir); }
 
   int run(const std::vector<std::string>& args) {
-    catalist::catalogue db(fs, "/data");
+    catalist::catalogue db("data");
     std::ostringstream outStream;
     std::ostringstream errStream;
-    int exitCode = catalist::runCli(args, db, fs, outStream, errStream);
+    int exitCode = catalist::runCli(args, db, outStream, errStream);
     out = outStream.str();
     err = errStream.str();
     return exitCode;
   }
 
   std::vector<catalist::entry> saved(mediaType type) {
-    catalist::catalogue db(fs, "/data");
+    catalist::catalogue db("data");
     REQUIRE(db.loadAll().ok());
     return db.getEntries(type);
   }
 
   void put(const std::string& path, const std::string& content) {
-    REQUIRE(fs.writeFileAtomic(path, content));
+    catalist::test::writeText(path, content);
   }
+
+  std::filesystem::path previousDir;
+  std::string out;
+  std::string err;
 };
 
 }  // namespace
@@ -78,14 +86,14 @@ TEST_CASE_FIXTURE(cliFixture, "cli --help lists the commands and data dir") {
     CHECK(run({flag}) == 0);
     CHECK(out.find("catalist import <file.xml>...") != std::string::npos);
     CHECK(out.find("catalist export <anime|manga>") != std::string::npos);
-    CHECK(out.find("The catalogue is kept in /data.") != std::string::npos);
+    CHECK(out.find("The catalogue is kept in data.") != std::string::npos);
     CHECK(err.empty());
   }
 }
 
 TEST_CASE_FIXTURE(cliFixture,
                   "cli help and version work with a broken catalogue") {
-  put("/data/anime.csv", "this,is,not,a,catalogue\n");
+  put("data/anime.csv", "this,is,not,a,catalogue\n");
   CHECK(run({"--version"}) == 0);
   CHECK(run({"--help"}) == 0);
 }
@@ -108,13 +116,13 @@ TEST_CASE_FIXTURE(cliFixture,
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli import adds the titles and saves them") {
-  put("/lists/anime.xml", kAnimeXml);
-  put("/lists/manga.xml", kMangaXml);
+  put("lists/anime.xml", kAnimeXml);
+  put("lists/manga.xml", kMangaXml);
 
-  CHECK(run({"import", "/lists/anime.xml", "/lists/manga.xml"}) == 0);
+  CHECK(run({"import", "lists/anime.xml", "lists/manga.xml"}) == 0);
   CHECK(out ==
-        "/lists/anime.xml: 2 titles, 2 added, 0 already in the catalogue\n"
-        "/lists/manga.xml: 1 titles, 1 added, 0 already in the catalogue\n");
+        "lists/anime.xml: 2 titles, 2 added, 0 already in the catalogue\n"
+        "lists/manga.xml: 1 titles, 1 added, 0 already in the catalogue\n");
   CHECK(err.empty());
 
   auto anime = saved(mediaType::kAnime);
@@ -133,11 +141,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli import adds the titles and saves them") {
 
 TEST_CASE_FIXTURE(cliFixture,
                   "cli importing again keeps what the user changed") {
-  put("/lists/anime.xml", kAnimeXml);
-  REQUIRE(run({"import", "/lists/anime.xml"}) == 0);
+  put("lists/anime.xml", kAnimeXml);
+  REQUIRE(run({"import", "lists/anime.xml"}) == 0);
 
   {
-    catalist::catalogue db(fs, "/data");
+    catalist::catalogue db("data");
     REQUIRE(db.loadAll().ok());
     auto taxi = db.getEntries(mediaType::kAnime)[1];
     REQUIRE(taxi.title == "Odd Taxi");
@@ -148,9 +156,9 @@ TEST_CASE_FIXTURE(cliFixture,
     REQUIRE(db.saveAll());
   }
 
-  CHECK(run({"import", "/lists/anime.xml"}) == 0);
+  CHECK(run({"import", "lists/anime.xml"}) == 0);
   CHECK(out ==
-        "/lists/anime.xml: 2 titles, 0 added, 2 already in the catalogue\n");
+        "lists/anime.xml: 2 titles, 0 added, 2 already in the catalogue\n");
   auto anime = saved(mediaType::kAnime);
   REQUIRE(anime.size() == 2);
   CHECK(anime[1].score == 9);
@@ -160,50 +168,51 @@ TEST_CASE_FIXTURE(cliFixture,
 
 TEST_CASE_FIXTURE(cliFixture,
                   "cli import changes nothing when any file is bad") {
-  put("/lists/anime.xml", kAnimeXml);
-  put("/lists/empty.xml", "<myanimelist></myanimelist>");
+  put("lists/anime.xml", kAnimeXml);
+  put("lists/empty.xml", "<myanimelist></myanimelist>");
 
-  CHECK(run({"import", "/lists/anime.xml", "/lists/missing.xml"}) == 1);
-  CHECK(err == "error: cannot read /lists/missing.xml\n");
+  CHECK(run({"import", "lists/anime.xml", "lists/missing.xml"}) == 1);
+  CHECK(err == "error: cannot read lists/missing.xml\n");
   CHECK(out.empty());
-  CHECK_FALSE(fs.readFile("/data/anime.csv").has_value());
+  CHECK(catalist::test::readText("data/anime.csv").empty());
 
-  put("/lists/anime.xml.gz", std::string("\x1f\x8b\x08\x00", 4) + "gz");
-  CHECK(run({"import", "/lists/anime.xml.gz"}) == 1);
+  put("lists/anime.xml.gz", std::string("\x1f\x8b\x08\x00", 4) + "gz");
+  CHECK(run({"import", "lists/anime.xml.gz"}) == 1);
   CHECK(err ==
-        "error: /lists/anime.xml.gz is compressed; unpack it first "
-        "(gunzip /lists/anime.xml.gz)\n");
+        "error: lists/anime.xml.gz is compressed; unpack it first "
+        "(gunzip lists/anime.xml.gz)\n");
 
-  CHECK(run({"import", "/lists/anime.xml", "/lists/empty.xml"}) == 1);
+  CHECK(run({"import", "lists/anime.xml", "lists/empty.xml"}) == 1);
   CHECK(err ==
-        "error: no anime or manga found in /lists/empty.xml (is it a "
+        "error: no anime or manga found in lists/empty.xml (is it a "
         "MyAnimeList XML export?)\n");
-  CHECK_FALSE(fs.readFile("/data/anime.csv").has_value());
+  CHECK(catalist::test::readText("data/anime.csv").empty());
 }
 
 TEST_CASE_FIXTURE(cliFixture,
                   "cli import exits 1 when the catalogue cannot be saved") {
-  put("/lists/anime.xml", kAnimeXml);
-  fs.failWritesTo("/data/anime.csv");
-  CHECK(run({"import", "/lists/anime.xml"}) == 1);
-  CHECK(err == "error: could not save the catalogue to /data\n");
+  put("lists/anime.xml", kAnimeXml);
+  catalist::test::makeUnwritable("data/anime.csv");
+  CHECK(run({"import", "lists/anime.xml"}) == 1);
+  CHECK(err == "error: could not save the catalogue to data\n");
 }
 
 TEST_CASE_FIXTURE(cliFixture,
                   "cli refuses to work on a catalogue it cannot read") {
-  put("/data/anime.csv", "this,is,not,a,catalogue\n");
-  put("/lists/anime.xml", kAnimeXml);
-  CHECK(run({"import", "/lists/anime.xml"}) == 1);
-  CHECK(err.find("error: /data/anime.csv: ") == 0);
+  put("data/anime.csv", "this,is,not,a,catalogue\n");
+  put("lists/anime.xml", kAnimeXml);
+  CHECK(run({"import", "lists/anime.xml"}) == 1);
+  CHECK(err.find("error: data/anime.csv: ") == 0);
   CHECK(run({"export", "anime"}) == 1);
   CHECK(out.empty());
-  CHECK(fs.readFile("/data/anime.csv") == "this,is,not,a,catalogue\n");
+  CHECK(catalist::test::readText("data/anime.csv") ==
+        "this,is,not,a,catalogue\n");
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli export prints what import read") {
-  put("/lists/anime.xml", kAnimeXml);
-  put("/lists/manga.xml", kMangaXml);
-  REQUIRE(run({"import", "/lists/anime.xml", "/lists/manga.xml"}) == 0);
+  put("lists/anime.xml", kAnimeXml);
+  put("lists/manga.xml", kMangaXml);
+  REQUIRE(run({"import", "lists/anime.xml", "lists/manga.xml"}) == 0);
 
   CHECK(run({"export", "anime"}) == 0);
   CHECK(err.empty());
@@ -225,7 +234,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli export prints what import read") {
 TEST_CASE_FIXTURE(cliFixture,
                   "cli export notes the titles it had to leave out") {
   {
-    catalist::catalogue db(fs, "/data");
+    catalist::catalogue db("data");
     db.addEntry(catalist::test::makeEntry().title("Home video"));
     db.addEntry(catalist::test::makeEntry().title("Another one"));
     REQUIRE(db.saveAll());

@@ -6,6 +6,7 @@
 #include "catalogue.hpp"
 #include "support/sampleLibrary.hpp"
 #include "support/testSupport.hpp"
+#include "system.hpp"
 
 using catalist::formatDate;
 using catalist::mediaType;
@@ -157,7 +158,6 @@ using catalist::mediaType;
 using catalist::sortKey;
 using catalist::watchStatus;
 using catalist::test::makeEntry;
-using catalist::test::memoryFileSystem;
 using catalist::test::tempDirFixture;
 
 namespace {
@@ -182,7 +182,7 @@ void loadFixture(catalogue& db, mediaType type, const std::string& name) {
 
 TEST_CASE_FIXTURE(tempDirFixture,
                   "csv round trip keeps quotes, commas and dates") {
-  catalogue db(fileSystem(), tempDir());
+  catalogue db(tempDir());
   catalist::entry original =
       makeEntry()
           .malId(9901)
@@ -196,7 +196,7 @@ TEST_CASE_FIXTURE(tempDirFixture,
   int id = db.addEntry(original);
   REQUIRE(db.saveAll());
 
-  catalogue reloaded(fileSystem(), tempDir());
+  catalogue reloaded(tempDir());
   REQUIRE(reloaded.loadAll().value());
   auto loaded = reloaded.getById(mediaType::kAnime, id);
   REQUIRE(loaded.has_value());
@@ -208,9 +208,10 @@ TEST_CASE_FIXTURE(tempDirFixture,
   CHECK_FALSE(loaded->updatedAt.has_value());
 }
 
-TEST_CASE("catalogue gives each new title the next free id per media type") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(
+    tempDirFixture,
+    "catalogue gives each new title the next free id per media type") {
+  catalogue db(tempDir() / "data");
   CHECK(db.addEntry(makeEntry().title("One")) == 1);
   CHECK(db.addEntry(makeEntry().title("Two").malId(5)) == 2);
   // An id the caller sets is not kept: ids are only row numbers.
@@ -225,19 +226,22 @@ TEST_CASE("catalogue gives each new title the next free id per media type") {
   CHECK_FALSE(db.removeEntry(mediaType::kAnime, 99));
 }
 
-TEST_CASE("catalogue continues numbering after the ids in the loaded file") {
-  memoryFileSystem fs;
-  REQUIRE(fs.writeFileAtomic("/data/anime.csv",
-                             "40,0,0,anime,Loaded,Watching,0,0,0,0,0,0,,,,\n"));
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(
+    tempDirFixture,
+    "catalogue continues numbering after the ids in the loaded file") {
+  REQUIRE(catalist::writeFileAtomic(
+      tempDir() / "data/anime.csv",
+      "40,0,0,anime,Loaded,Watching,0,0,0,0,0,0,,,,\n"));
+  catalogue db(tempDir() / "data");
   REQUIRE(db.loadAll().value());
   CHECK(db.getById(mediaType::kAnime, 40)->title == "Loaded");
   CHECK(db.addEntry(makeEntry().title("Next")) == 41);
 }
 
-TEST_CASE("catalogue getById and findByMalId look in one media type only") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(
+    tempDirFixture,
+    "catalogue getById and findByMalId look in one media type only") {
+  catalogue db(tempDir() / "data");
   int anime = db.addEntry(makeEntry().title("Anime").malId(1));
   db.addEntry(makeEntry().title("Manga").malId(1).type(mediaType::kManga));
   CHECK(db.getById(mediaType::kAnime, anime)->title == "Anime");
@@ -247,9 +251,9 @@ TEST_CASE("catalogue getById and findByMalId look in one media type only") {
   CHECK_FALSE(db.getById(mediaType::kAnime, 99).has_value());
 }
 
-TEST_CASE("catalogue updateEntry replaces the entry with the same id") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(tempDirFixture,
+                  "catalogue updateEntry replaces the entry with the same id") {
+  catalogue db(tempDir() / "data");
   int id = db.addEntry(makeEntry().title("Before"));
   auto changed = *db.getById(mediaType::kAnime, id);
   changed.title = "After";
@@ -259,10 +263,10 @@ TEST_CASE("catalogue updateEntry replaces the entry with the same id") {
   CHECK_FALSE(db.updateEntry(changed));
 }
 
-TEST_CASE(
+TEST_CASE_FIXTURE(
+    tempDirFixture,
     "sortEntries puts each key in its natural order and reverse flips it") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+  catalogue db(tempDir() / "data");
   catalist::test::seedSampleLibrary(db);
   const titleList byRating = {"Sousou no Frieren", "Odd Taxi",
                               "Ghost, \"in\" the Shell",
@@ -286,9 +290,8 @@ TEST_CASE(
                   "Sousou no Frieren", "Odd Taxi", "Ghost, \"in\" the Shell"});
 }
 
-TEST_CASE("sortEntries breaks ties by title") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(tempDirFixture, "sortEntries breaks ties by title") {
+  catalogue db(tempDir() / "data");
   db.addEntry(makeEntry().title("Charlie").score(7));
   db.addEntry(makeEntry().title("Alpha").score(7));
   db.addEntry(makeEntry().title("Bravo").score(9));
@@ -296,9 +299,9 @@ TEST_CASE("sortEntries breaks ties by title") {
         titleList{"Bravo", "Alpha", "Charlie"});
 }
 
-TEST_CASE("catalogue statistics count, average and estimate time") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(tempDirFixture,
+                  "catalogue statistics count, average and estimate time") {
+  catalogue db(tempDir() / "data");
   catalist::test::seedSampleLibrary(db);
   CHECK(db.countByStatus(mediaType::kAnime, watchStatus::kWatching) == 1);
   CHECK(db.countByStatus(mediaType::kAnime, watchStatus::kOnHold) == 0);
@@ -315,39 +318,40 @@ TEST_CASE("catalogue statistics count, average and estimate time") {
   CHECK(db.daysSpent(mediaType::kAnime) == doctest::Approx(36 * 24 / 1440.0));
   CHECK(db.daysSpent(mediaType::kManga) == doctest::Approx(461 * 5 / 1440.0));
 
-  catalogue empty(fs, "/elsewhere");
+  catalogue empty(tempDir() / "elsewhere");
   CHECK(empty.averageScore(mediaType::kAnime) == 0.0);
   CHECK(empty.daysSpent(mediaType::kAnime) == 0.0);
 }
 
-TEST_CASE("catalogue refuses a catalogue in an old layout and names the file") {
-  memoryFileSystem fs;
+TEST_CASE_FIXTURE(
+    tempDirFixture,
+    "catalogue refuses a catalogue in an old layout and names the file") {
   for (const char* oldRow :
        {"52991,52991,Sousou no Frieren,Completed,10,28,28\n",
         "52991,52991,154587,Sousou no Frieren,Completed,10,28,28,0,0,1,"
         "2023-09-29,2024-03-22,Masterpiece.,2026-10-17,1\n"}) {
-    REQUIRE(fs.writeFileAtomic("/data/anime.csv", oldRow));
-    catalogue db(fs, "/data");
+    REQUIRE(catalist::writeFileAtomic(tempDir() / "data/anime.csv", oldRow));
+    catalogue db(tempDir() / "data");
     auto loaded = db.loadAll();
     REQUIRE_FALSE(loaded.ok());
-    CHECK(loaded.errorMessage().find(
-              "/data/anime.csv: row 1 has a column layout") == 0);
+    CHECK(loaded.errorMessage().find((tempDir() / "data/anime.csv").string() +
+                                     ": row 1 has a column layout") == 0);
     CHECK(db.getEntries(mediaType::kAnime).empty());
   }
 }
 
-TEST_CASE("catalogue loadAll says whether there was a catalogue") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(tempDirFixture,
+                  "catalogue loadAll says whether there was a catalogue") {
+  catalogue db(tempDir() / "data");
   auto loaded = db.loadAll();
   REQUIRE(loaded.ok());
   CHECK_FALSE(loaded.value());
-  REQUIRE(fs.writeFileAtomic("/data/manga.csv", ""));
+  REQUIRE(catalist::writeFileAtomic(tempDir() / "data/manga.csv", ""));
   CHECK(db.loadAll().value());
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads the current layout") {
-  catalogue db(fileSystem(), tempDir());
+  catalogue db(tempDir());
   loadFixture(db, mediaType::kManga, "current.csv");
   const auto& entries = db.getEntries(mediaType::kManga);
   REQUIRE(entries.size() == 1);
@@ -365,7 +369,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads the current layout") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads a file written by Catalist 0.3") {
-  catalogue db(fileSystem(), tempDir());
+  catalogue db(tempDir());
   loadFixture(db, mediaType::kManga, "v03.csv");
   const auto& entries = db.getEntries(mediaType::kManga);
   REQUIRE(entries.size() == 1);
@@ -379,7 +383,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads a file written by Catalist 0.3") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
-  catalogue db(fileSystem(), tempDir());
+  catalogue db(tempDir());
   loadFixture(db, mediaType::kAnime, "crlf.csv");
   const auto& entries = db.getEntries(mediaType::kAnime);
   REQUIRE(entries.size() == 1);
@@ -389,7 +393,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads crlf line endings") {
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted fields that span lines") {
-  catalogue db(fileSystem(), tempDir());
+  catalogue db(tempDir());
   loadFixture(db, mediaType::kAnime, "multiline.csv");
   const auto& entries = db.getEntries(mediaType::kAnime);
   REQUIRE(entries.size() == 2);
@@ -399,9 +403,10 @@ TEST_CASE_FIXTURE(tempDirFixture, "csv loads quoted fields that span lines") {
   CHECK(entries[1].title == "Next");
 }
 
-TEST_CASE("addEntry re-add keeps user fields and refreshes upstream metadata") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(
+    tempDirFixture,
+    "addEntry re-add keeps user fields and refreshes upstream metadata") {
+  catalogue db(tempDir() / "data");
   int id = db.addEntry(makeEntry()
                            .malId(52991)
                            .title("Sousou no Frieren")
@@ -429,9 +434,9 @@ TEST_CASE("addEntry re-add keeps user fields and refreshes upstream metadata") {
   CHECK(merged.totalVolumes == 4);
 }
 
-TEST_CASE("addEntry re-add backfills empty user fields") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(tempDirFixture,
+                  "addEntry re-add backfills empty user fields") {
+  catalogue db(tempDir() / "data");
   int id = db.addEntry(makeEntry().malId(100).title("Blank"));
   db.addEntry(
       makeEntry().malId(100).title("Blank").score(7).progress(3).finishDate(
@@ -442,9 +447,9 @@ TEST_CASE("addEntry re-add backfills empty user fields") {
   CHECK(catalist::formatDate(merged.finishDate) == "2024-01-01");
 }
 
-TEST_CASE("addEntry matches by MyAnimeList id, never by title") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(tempDirFixture,
+                  "addEntry matches by MyAnimeList id, never by title") {
+  catalogue db(tempDir() / "data");
   db.addEntry(makeEntry().malId(777).title("Local"));
   db.addEntry(makeEntry().title("Remote").totalUnits(12).malId(777));
   db.addEntry(makeEntry().title("Same title"));
@@ -460,15 +465,16 @@ TEST_CASE("addEntry matches by MyAnimeList id, never by title") {
         }) == 2);
 }
 
-TEST_CASE("catalogue saves both lists and reloads them") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+TEST_CASE_FIXTURE(tempDirFixture,
+                  "catalogue saves both lists and reloads them") {
+  catalogue db(tempDir() / "data");
   int id = db.addEntry(makeEntry().title("Kept, \"quoted\"").rewatched(2));
   db.addEntry(makeEntry().title("Paper").type(mediaType::kManga));
   REQUIRE(db.saveAll());
-  CHECK(fs.fileCount() == 2);
+  CHECK(std::filesystem::exists(tempDir() / "data/anime.csv"));
+  CHECK(std::filesystem::exists(tempDir() / "data/manga.csv"));
 
-  catalogue reloaded(fs, "/data");
+  catalogue reloaded(tempDir() / "data");
   REQUIRE(reloaded.loadAll().value());
   CHECK(reloaded.getById(mediaType::kAnime, id)->title == "Kept, \"quoted\"");
   CHECK(reloaded.getById(mediaType::kAnime, id)->rewatched == 2);
@@ -476,19 +482,17 @@ TEST_CASE("catalogue saves both lists and reloads them") {
   CHECK(reloaded.getEntries(mediaType::kManga)[0].type == mediaType::kManga);
 }
 
-TEST_CASE("catalogue reports a failed write") {
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
-  fs.failWritesTo("/data/manga.csv");
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue reports a failed write") {
+  catalogue db(tempDir() / "data");
+  catalist::test::makeUnwritable(tempDir() / "data/manga.csv");
   CHECK_FALSE(db.saveAll());
-  CHECK_FALSE(fs.readFile("/data/manga.csv").has_value());
+  CHECK(catalist::test::readText(tempDir() / "data/manga.csv").empty());
 }
 
 TEST_CASE("catalogue data dir comes from CATALIST_DATA_DIR first") {
   // The test main points CATALIST_DATA_DIR at a sandbox.
   CHECK(catalogue::getDefaultConfigDir() == std::getenv("CATALIST_DATA_DIR"));
-  memoryFileSystem fs;
-  catalogue db(fs, "/data");
+  catalogue db("/data");
   CHECK(db.getConfigPath() == "/data");
   CHECK(db.getCsvPath(mediaType::kAnime) == "/data/anime.csv");
   CHECK(db.getCsvPath(mediaType::kManga) == "/data/manga.csv");

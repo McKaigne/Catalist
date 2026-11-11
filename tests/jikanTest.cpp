@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "jikan.hpp"
-#include "support/fakes.hpp"
+#include "support/testSupport.hpp"
 
 namespace jikan = catalist::jikan;
 using catalist::mediaType;
@@ -76,16 +76,16 @@ TEST_CASE("jikan rejects a reply that is not a search result") {
 }
 
 TEST_CASE("jikan search tells an unreachable server from no matches") {
-  catalist::test::mockHttpClient http;
-  auto offline = jikan::search(http, mediaType::kAnime, "frieren");
+  catalist::test::fakeWeb web;
+  auto offline = jikan::search(web.fetcher(), mediaType::kAnime, "frieren");
   REQUIRE_FALSE(offline.ok());
   CHECK(offline.errorMessage() == "could not reach Jikan");
-  REQUIRE(http.requested.size() == 1);
-  CHECK(http.requested[0] ==
+  REQUIRE(web.requested.size() == 1);
+  CHECK(web.requested[0] ==
         "https://api.jikan.moe/v4/anime?q=frieren&limit=10");
 
-  http.respond("q=frieren", R"({"data": [{"mal_id": 1, "title": "F"}]})");
-  auto online = jikan::search(http, mediaType::kAnime, "frieren");
+  web.respond("q=frieren", R"({"data": [{"mal_id": 1, "title": "F"}]})");
+  auto online = jikan::search(web.fetcher(), mediaType::kAnime, "frieren");
   REQUIRE(online.ok());
   CHECK(online.value().size() == 1);
 }

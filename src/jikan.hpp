@@ -1,12 +1,13 @@
 #ifndef CATALIST_JIKAN_HPP_
 #define CATALIST_JIKAN_HPP_
 
+#include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "entry.hpp"
 #include "result.hpp"
-#include "system.hpp"
 
 // Title search on Jikan, the public read-only API over MyAnimeList. It needs
 // no account and is the only thing Catalist uses the network for.
@@ -30,9 +31,13 @@ struct title {
 [[nodiscard]] result<std::vector<title>> parseSearch(const std::string& body,
                                                      mediaType type);
 
+// Fetches a URL: the body of the reply, or nothing when the request failed.
+// The program passes httpGet; tests pass a fake.
+using fetcher = std::function<std::optional<std::string>(const std::string&)>;
+
 // Up to ten matches, best first. Fails when Jikan cannot be reached, which
 // the caller must tell apart from a search that simply found nothing.
-[[nodiscard]] result<std::vector<title>> search(iHttpClient& http,
+[[nodiscard]] result<std::vector<title>> search(const fetcher& fetch,
                                                 mediaType type,
                                                 const std::string& query);
 

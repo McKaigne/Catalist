@@ -1,10 +1,12 @@
 #include "support/testSupport.hpp"
 
+#include <unistd.h>
+
 #include <atomic>
 #include <random>
 #include <stdexcept>
 
-#include <unistd.h>
+#include "system.hpp"
 
 namespace catalist::test {
 
@@ -48,8 +50,38 @@ entryBuilder makeEntry() {
   return entryBuilder{};
 }
 
-fixedClock makeTestClock() {
-  return fixedClock(iClock::timePoint(std::chrono::seconds(1792497600)));
+isoDate testToday() {
+  return requireDate("2026-10-20");
+}
+
+std::string readText(const std::filesystem::path& file) {
+  return readFile(file).value_or("");
+}
+
+void writeText(const std::filesystem::path& file, const std::string& text) {
+  if (!writeFileAtomic(file, text))
+    throw std::runtime_error("could not write " + file.string());
+}
+
+void makeUnwritable(const std::filesystem::path& file) {
+  std::filesystem::create_directories(file);
+}
+
+void fakeWeb::respond(const std::string& urlFragment, const std::string& body) {
+  bodies[urlFragment] = body;
+}
+
+std::optional<std::string> fakeWeb::get(const std::string& url) {
+  requested.push_back(url);
+  for (const auto& [fragment, body] : bodies) {
+    if (url.find(fragment) != std::string::npos)
+      return body;
+  }
+  return std::nullopt;
+}
+
+jikan::fetcher fakeWeb::fetcher() {
+  return [this](const std::string& url) { return get(url); };
 }
 
 entry findTitle(const catalogue& db, mediaType type, const std::string& title) {

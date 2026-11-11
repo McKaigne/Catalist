@@ -85,9 +85,9 @@ result<titles> parseSearch(const std::string& body, mediaType type) {
   return result<titles>::success(std::move(found));
 }
 
-result<titles> search(iHttpClient& http, mediaType type,
+result<titles> search(const fetcher& fetch, mediaType type,
                       const std::string& query) {
-  auto body = http.get(searchUrl(type, query));
+  auto body = fetch(searchUrl(type, query));
   if (!body)
     return result<titles>::failure("could not reach Jikan");
   return parseSearch(*body, type);

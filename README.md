@@ -24,7 +24,8 @@ nix run
 
 ### CMake
 
-You need a C++17 compiler, CMake 3.20 or later, Ninja or Make. At run time,
+You need a C++17 compiler, CMake 3.20 or later, Ninja or Make; FTXUI,
+doctest and fmt are used from the system or downloaded by CMake. At run time,
 `curl` reaches MyAnimeList and `img2sixel` (from libsixel) draws covers;
 without them Catalist works offline and without covers.
 

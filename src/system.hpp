@@ -15,19 +15,17 @@
 namespace catalist {
 
 // Absent when the file does not exist or cannot be read.
-[[nodiscard]] std::optional<std::string> readFile(
-    const std::filesystem::path& file);
+[[nodiscard]] std::optional<std::string> readFile(const std::filesystem::path& file);
 
 // Creates the parent directory if needed, writes a sibling temp file and
 // renames it over the target, so a crash never leaves a half-written file.
-[[nodiscard]] bool writeFileAtomic(const std::filesystem::path& file,
-                                   const std::string& content);
+[[nodiscard]] bool writeFileAtomic(const std::filesystem::path& file, const std::string& content);
 
 // Runs a program (looked up in PATH, no shell involved) with `input` on its
 // standard input, and returns what it wrote to standard output; nothing when
 // it could not be started or did not exit with 0. Standard error is dropped.
-[[nodiscard]] std::optional<std::string> runProgram(
-    const std::vector<std::string>& arguments, const std::string& input = "");
+[[nodiscard]] std::optional<std::string> runProgram(const std::vector<std::string>& arguments,
+                                                    const std::string& input = "");
 
 // Whether a program of that name is in PATH.
 [[nodiscard]] bool hasProgram(const std::string& name);
@@ -41,8 +39,8 @@ namespace catalist {
 
 // The size of one terminal cell in pixels, when the terminal reports it.
 struct cellSize {
-  int width = 0;
-  int height = 0;
+	int width = 0;
+	int height = 0;
 };
 [[nodiscard]] std::optional<cellSize> terminalCellSize();
 

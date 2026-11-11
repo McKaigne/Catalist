@@ -16,17 +16,17 @@ namespace catalist::test {
 // otherwise, and an updater over it that does not pause and turns images
 // into "SIXEL[...]" text.
 struct tuiHarness : tempDirFixture {
-  tuiHarness();
+	tuiHarness();
 
-  bool press(iTab& tab, const ftxui::Event& event);
-  bool type(iTab& tab, const std::string& keys);
-  [[nodiscard]] std::string screen(iTab& tab);
-  [[nodiscard]] std::filesystem::path dataDir() const;
+	bool press(iTab& tab, const ftxui::Event& event);
+	bool type(iTab& tab, const std::string& keys);
+	[[nodiscard]] std::string screen(iTab& tab);
+	[[nodiscard]] std::filesystem::path dataDir() const;
 
-  fakeWeb web;
-  catalogue db;
-  updater updates;
-  appContext ctx;
+	fakeWeb web;
+	catalogue db;
+	updater updates;
+	appContext ctx;
 };
 
 // Draws an element on a 200x50 screen and returns the text.
@@ -36,12 +36,10 @@ struct tuiHarness : tempDirFixture {
 [[nodiscard]] std::string plain(const std::string& screenText);
 
 // The word printed after `label` on the same line (spaces skipped), or "".
-[[nodiscard]] std::string valueAfter(const std::string& screenText,
-                                     const std::string& label);
+[[nodiscard]] std::string valueAfter(const std::string& screenText, const std::string& label);
 
 // The screen line on which `needle` first appears, or -1 when it is not shown.
-[[nodiscard]] int lineOf(const std::string& screenText,
-                         const std::string& needle);
+[[nodiscard]] int lineOf(const std::string& screenText, const std::string& needle);
 
 }  // namespace catalist::test
 

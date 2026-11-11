@@ -18,10 +18,10 @@ namespace catalist::malXml {
 [[nodiscard]] std::vector<entry> parse(const std::string& xml);
 
 struct exported {
-  std::string xml;
-  size_t written = 0;
-  // Entries without a MyAnimeList id, which the import pages cannot place.
-  size_t skipped = 0;
+	std::string xml;
+	size_t written = 0;
+	// Entries without a MyAnimeList id, which the import pages cannot place.
+	size_t skipped = 0;
 };
 
 // One file per media type, as the import pages expect.

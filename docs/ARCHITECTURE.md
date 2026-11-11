@@ -19,11 +19,11 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
 
 `main.cpp` loads the catalogue, then runs the command line or the TUI.
 
-## ADR-001: Self-Documenting Code over Inline Code Comments
+## ADR-001: Comments Say Why, and Label Long Sections
 - **Context:** Inline comments explaining step-by-step logic drifted over time.
-- **Decision:** Remove comments explaining *what* code does. Express intent
-  through semantic function names and boolean predicates. Reserve comments
-  strictly for *why*, invariants, and thread-safety contracts.
+- **Decision:** Names and small functions say *what* code does. Comments say
+  *why*, state invariants and thread-safety contracts, and label the parts
+  of longer functions ("The details card: ...") so they read in sections.
 
 ## ADR-002: Strong Types and Optionality over Magic Sentinels
 - **Context:** Magic values (`-1`, `"0000-00-00"`) caused error-prone checks.
@@ -81,13 +81,21 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
   one `step` (browse, search, type a number, the three add steps, confirm
   delete); `onEvent`, `mode()` and `hints()` are switches over it.
 
-## ADR-008: camelCase Everywhere
-- **Decision:** Types, functions, variables and files are camelCase;
-  interfaces are `i` + PascalCase (`iTab`); private members end
-  in `_`; constants and enumerators are `kPascalCase`
-  (`mediaType::kAnime`, `theme::kMauve`). Namespaces stay lower case and macros
-  SCREAMING_SNAKE_CASE. When a type and a variable would share a name, the
-  variable is renamed (`mediaEntry`, `shown`).
+## ADR-008: Naming and Formatting
+- **Names:** types, functions, variables and files are camelCase;
+  interfaces are `i` + PascalCase (`iTab`); private members end in `_`;
+  constants and enumerators are `kPascalCase` (`mediaType::kAnime`,
+  `theme::kMauve`). Namespaces stay lower case and macros
+  SCREAMING_SNAKE_CASE. Names are descriptive (`widthPx`, `changedTitles`).
+- **Formatting:** `.clang-format` (Google-based): tabs for indentation,
+  four wide, a 100-column limit, opening braces on the line of their
+  statement. Logical operators are written `and`, `or`, `not`.
+- **Idioms:** strings are built with `fmt::format`, not by concatenation;
+  resources are owned by objects that release them (RAII, e.g. the pipe
+  ends in `runProgram`); the standard algorithms replace hand-written loops
+  where they say it more plainly. A header is only added when nothing
+  already included does the job. Nothing is written to disk but the two
+  catalogue files.
 
 ## ADR-009: One Version, Bumped Only for User-Visible Change
 - **Decision:** `VERSION` holds `MAJOR.MINOR.PATCH` and is the only place

@@ -66,8 +66,8 @@ namespace catalist {
 namespace catalist {
 
 // A label with rounded powerline caps in the background colour.
-[[nodiscard]] ftxui::Element pill(const std::string& label, ftxui::Color fg,
-                                  ftxui::Color bg, bool boldText = true);
+[[nodiscard]] ftxui::Element pill(const std::string& label, ftxui::Color fg, ftxui::Color bg,
+                                  bool boldText = true);
 
 }  // namespace catalist
 
@@ -80,18 +80,17 @@ namespace catalist::marquee {
 
 // Shows the first maxGlyphs for pauseMs, then scrolls one glyph per stepMs
 // and loops. Text that fits is returned unchanged.
-[[nodiscard]] std::string scroll(const std::string& text, size_t maxGlyphs,
-                                 uint64_t elapsedMs, uint64_t pauseMs = 2000,
-                                 uint64_t stepMs = 250);
+[[nodiscard]] std::string scroll(const std::string& text, size_t maxGlyphs, uint64_t elapsedMs,
+                                 uint64_t pauseMs = 2000, uint64_t stepMs = 250);
 
 // Restarts the scroll whenever the highlighted row changes.
 class selectionTimer {
 public:
-  [[nodiscard]] uint64_t elapsedFor(int selectedIndex);
+	[[nodiscard]] uint64_t elapsedFor(int selectedIndex);
 
 private:
-  std::optional<int> trackedIndex_;
-  uint64_t changedAtMs_ = 0;
+	std::optional<int> trackedIndex_;
+	uint64_t changedAtMs_ = 0;
 };
 
 }  // namespace catalist::marquee
@@ -121,14 +120,13 @@ namespace keys {
 
 // A one-line text entry, drawn by hand: what was typed, then a block cursor.
 struct textField {
-  std::string value;
+	std::string value;
 
-  // Adds typed (or pasted) characters and removes the last glyph on
-  // Backspace; false for every other key.
-  bool handle(const ftxui::Event& event);
-  // The placeholder shows, dimmed, while the field is empty.
-  [[nodiscard]] ftxui::Element render(const std::string& placeholder,
-                                      bool active) const;
+	// Adds typed (or pasted) characters and removes the last glyph on
+	// Backspace; false for every other key.
+	bool handle(const ftxui::Event& event);
+	// The placeholder shows, dimmed, while the field is empty.
+	[[nodiscard]] ftxui::Element render(const std::string& placeholder, bool active) const;
 };
 
 }  // namespace catalist

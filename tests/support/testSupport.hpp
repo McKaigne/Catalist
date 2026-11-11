@@ -17,17 +17,15 @@ std::filesystem::path makeUniqueTempDir(const std::string& prefix);
 
 class tempDirFixture {
 public:
-  tempDirFixture();
-  ~tempDirFixture();
-  tempDirFixture(const tempDirFixture&) = delete;
-  tempDirFixture& operator=(const tempDirFixture&) = delete;
+	tempDirFixture();
+	~tempDirFixture();
+	tempDirFixture(const tempDirFixture&) = delete;
+	tempDirFixture& operator=(const tempDirFixture&) = delete;
 
-  [[nodiscard]] const std::filesystem::path& tempDir() const {
-    return tempDir_;
-  }
+	[[nodiscard]] const std::filesystem::path& tempDir() const { return tempDir_; }
 
 private:
-  std::filesystem::path tempDir_;
+	std::filesystem::path tempDir_;
 };
 
 // The text of a file, or "" when there is none.
@@ -40,12 +38,12 @@ void makeUnwritable(const std::filesystem::path& file);
 // longest such fragment), and fails every other request, as if offline.
 // Records every URL asked for.
 struct fakeWeb {
-  void respond(const std::string& urlFragment, const std::string& body);
-  [[nodiscard]] std::optional<std::string> get(const std::string& url);
-  [[nodiscard]] jikan::fetcher fetcher();
+	void respond(const std::string& urlFragment, const std::string& body);
+	[[nodiscard]] std::optional<std::string> get(const std::string& url);
+	[[nodiscard]] jikan::fetcher fetcher();
 
-  std::vector<std::string> requested;
-  std::map<std::string, std::string> bodies;
+	std::vector<std::string> requested;
+	std::map<std::string, std::string> bodies;
 };
 
 // Test data must spell dates correctly; a typo should fail loudly instead
@@ -54,76 +52,76 @@ isoDate requireDate(const std::string& text);
 
 class entryBuilder {
 public:
-  entryBuilder& id(int value) {
-    built_.id = value;
-    return *this;
-  }
-  entryBuilder& malId(int value) {
-    built_.malId = value;
-    return *this;
-  }
-  entryBuilder& title(std::string value) {
-    built_.title = std::move(value);
-    return *this;
-  }
-  entryBuilder& type(mediaType value) {
-    built_.type = value;
-    return *this;
-  }
-  entryBuilder& status(watchStatus value) {
-    built_.status = value;
-    return *this;
-  }
-  entryBuilder& score(int value) {
-    built_.score = value;
-    return *this;
-  }
-  entryBuilder& progress(int value) {
-    built_.progress = value;
-    return *this;
-  }
-  entryBuilder& totalUnits(int value) {
-    built_.totalUnits = value;
-    return *this;
-  }
-  entryBuilder& volumes(int value) {
-    built_.volumes = value;
-    return *this;
-  }
-  entryBuilder& totalVolumes(int value) {
-    built_.totalVolumes = value;
-    return *this;
-  }
-  entryBuilder& rewatched(int value) {
-    built_.rewatched = value;
-    return *this;
-  }
-  entryBuilder& startDate(const std::string& value) {
-    built_.startDate = requireDate(value);
-    return *this;
-  }
-  entryBuilder& finishDate(const std::string& value) {
-    built_.finishDate = requireDate(value);
-    return *this;
-  }
-  entryBuilder& updatedAt(const std::string& value) {
-    built_.updatedAt = requireDate(value);
-    return *this;
-  }
-  entryBuilder& released(int value) {
-    built_.released = value;
-    return *this;
-  }
-  entryBuilder& checkedAt(const std::string& value) {
-    built_.checkedAt = requireDate(value);
-    return *this;
-  }
+	entryBuilder& id(int value) {
+		built_.id = value;
+		return *this;
+	}
+	entryBuilder& malId(int value) {
+		built_.malId = value;
+		return *this;
+	}
+	entryBuilder& title(std::string value) {
+		built_.title = std::move(value);
+		return *this;
+	}
+	entryBuilder& type(mediaType value) {
+		built_.type = value;
+		return *this;
+	}
+	entryBuilder& status(watchStatus value) {
+		built_.status = value;
+		return *this;
+	}
+	entryBuilder& score(int value) {
+		built_.score = value;
+		return *this;
+	}
+	entryBuilder& progress(int value) {
+		built_.progress = value;
+		return *this;
+	}
+	entryBuilder& totalUnits(int value) {
+		built_.totalUnits = value;
+		return *this;
+	}
+	entryBuilder& volumes(int value) {
+		built_.volumes = value;
+		return *this;
+	}
+	entryBuilder& totalVolumes(int value) {
+		built_.totalVolumes = value;
+		return *this;
+	}
+	entryBuilder& rewatched(int value) {
+		built_.rewatched = value;
+		return *this;
+	}
+	entryBuilder& startDate(const std::string& value) {
+		built_.startDate = requireDate(value);
+		return *this;
+	}
+	entryBuilder& finishDate(const std::string& value) {
+		built_.finishDate = requireDate(value);
+		return *this;
+	}
+	entryBuilder& updatedAt(const std::string& value) {
+		built_.updatedAt = requireDate(value);
+		return *this;
+	}
+	entryBuilder& released(int value) {
+		built_.released = value;
+		return *this;
+	}
+	entryBuilder& checkedAt(const std::string& value) {
+		built_.checkedAt = requireDate(value);
+		return *this;
+	}
 
-  [[nodiscard]] entry build() const { return built_; }
-  operator entry() const { return built_; }
+	[[nodiscard]] entry build() const { return built_; }
+	operator entry() const { return built_; }
 
 private:
-  entry built_;
+	entry built_;
 };
 
 [[nodiscard]] entryBuilder makeEntry();
@@ -132,8 +130,7 @@ private:
 [[nodiscard]] isoDate testToday();
 
 // The entry titled `title`; fails the test when there is none.
-[[nodiscard]] entry findTitle(const catalogue& db, mediaType type,
-                              const std::string& title);
+[[nodiscard]] entry findTitle(const catalogue& db, mediaType type, const std::string& title);
 
 std::filesystem::path fixturePath(const std::string& relativePath);
 

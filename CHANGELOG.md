@@ -50,6 +50,8 @@ the network only to add titles, keep them current and show their covers.
 - The theme is always Catppuccin Mocha.
 - Internal: the code lives in one flat `src/` folder of small modules, with
   one interface (`iTab`); see docs/ARCHITECTURE.md for the module map.
+- Internal: tabs for indentation, `and`/`or`/`not`, fmt for building strings
+  (a new build dependency) and RAII around the pipes to other programs.
 
 ### Fixed
 - `+` on a finished title, `-` at zero and `R` at ten no longer stamp

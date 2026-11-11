@@ -24,6 +24,17 @@ if(NOT ftxui_FOUND)
   FetchContent_MakeAvailable(ftxui)
 endif()
 
+find_package(fmt QUIET)
+if(NOT fmt_FOUND)
+  include(FetchContent)
+  FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 12.2.0
+  )
+  FetchContent_MakeAvailable(fmt)
+endif()
+
 set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 
 set(CATALIST_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -48,6 +59,7 @@ add_library(catalistLib STATIC
 )
 target_include_directories(catalistLib PUBLIC src "${CATALIST_GENERATED_DIR}")
 target_link_libraries(catalistLib PUBLIC
+  fmt::fmt
   ftxui::screen
   ftxui::dom
   ftxui::component

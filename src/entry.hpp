@@ -10,37 +10,30 @@ namespace catalist {
 
 enum class mediaType { kAnime, kManga };
 
-enum class watchStatus {
-  kWatching,
-  kCompleted,
-  kOnHold,
-  kDropped,
-  kPlanToWatch
-};
+enum class watchStatus { kWatching, kCompleted, kOnHold, kDropped, kPlanToWatch };
 
 struct entry {
-  int id = 0;
-  int malId = 0;
-  std::string title;
-  mediaType type = mediaType::kAnime;
-  watchStatus status = watchStatus::kWatching;
-  int score = 0;
-  int progress = 0;
-  int totalUnits = 0;
-  int volumes = 0;
-  int totalVolumes = 0;
-  int rewatched = 0;
-  std::optional<isoDate> startDate;
-  std::optional<isoDate> finishDate;
-  std::optional<isoDate> updatedAt;
-  // Episodes or chapters out so far, from the last web check (0: unknown),
-  // and when that check was.
-  int released = 0;
-  std::optional<isoDate> checkedAt;
+	int id = 0;
+	int malId = 0;
+	std::string title;
+	mediaType type = mediaType::kAnime;
+	watchStatus status = watchStatus::kWatching;
+	int score = 0;
+	int progress = 0;
+	int totalUnits = 0;
+	int volumes = 0;
+	int totalVolumes = 0;
+	int rewatched = 0;
+	std::optional<isoDate> startDate;
+	std::optional<isoDate> finishDate;
+	std::optional<isoDate> updatedAt;
+	// Episodes or chapters out so far, from the last web check (0: unknown),
+	// and when that check was.
+	int released = 0;
+	std::optional<isoDate> checkedAt;
 };
 
-std::string statusToString(watchStatus status,
-                           mediaType type = mediaType::kAnime);
+std::string statusToString(watchStatus status, mediaType type = mediaType::kAnime);
 // Accepts the display names and MyAnimeList's 1-5 codes, in any case;
 // absent for anything else.
 [[nodiscard]] std::optional<watchStatus> parseStatus(const std::string& str);
@@ -74,8 +67,7 @@ namespace catalist {
 // Moves to the next (direction > 0) or previous status in the cycle
 // Watching -> Completed -> On-Hold -> Dropped -> Plan to Watch, keeping the
 // start/finish dates and progress consistent with the new status.
-[[nodiscard]] entry cycleStatus(entry target, int direction,
-                                const isoDate& today);
+[[nodiscard]] entry cycleStatus(entry target, int direction, const isoDate& today);
 
 // Changes the score by delta, kept within 0..10.
 [[nodiscard]] entry adjustRating(entry target, int delta, const isoDate& today);
@@ -88,8 +80,7 @@ enum class countField { kProgress, kTotalUnits, kVolumes, kRewatched };
 // Sets one count, never below zero. Progress follows the rules of
 // stepProgress; a total below the progress lowers the progress to it; volumes
 // stay within a known volume total.
-[[nodiscard]] entry setCount(entry target, countField field, int value,
-                             const isoDate& today);
+[[nodiscard]] entry setCount(entry target, countField field, int value, const isoDate& today);
 
 // Folds an imported row into an entry the user already has. Totals and the
 // MyAnimeList id are refreshed, but the user's own score, progress and dates
@@ -98,16 +89,15 @@ enum class countField { kProgress, kTotalUnits, kVolumes, kRewatched };
 
 // What a web check found out about a title; 0 means it did not say.
 struct webFacts {
-  int totalUnits = 0;
-  int totalVolumes = 0;
-  int released = 0;
+	int totalUnits = 0;
+	int totalVolumes = 0;
+	int released = 0;
 };
 
 // Takes the totals and the released count from a web check, keeping the
 // known values where the check had none, and stamps checkedAt. The user's
 // own fields, updatedAt included, are left alone.
-[[nodiscard]] entry applyWebFacts(entry target, const webFacts& facts,
-                                  const isoDate& today);
+[[nodiscard]] entry applyWebFacts(entry target, const webFacts& facts, const isoDate& today);
 
 }  // namespace catalist
 

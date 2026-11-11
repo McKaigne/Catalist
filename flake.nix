@@ -38,6 +38,7 @@
             buildInputs = with pkgs; [
               ftxui
               doctest
+              fmt
             ];
 
             postInstall = ''
@@ -80,6 +81,7 @@
               git
               ftxui
               doctest
+              fmt
               curl
               libsixel
               clang-tools

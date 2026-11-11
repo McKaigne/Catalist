@@ -363,6 +363,10 @@ TEST_CASE_FIXTURE(catalogFixture,
   type(tab, "fullmetal");
   REQUIRE(press(tab, Event::Return));
   CHECK(ctx.status == "Searching MyAnimeList for 'fullmetal'...");
+  // Until the search answers, keys other than Esc do nothing.
+  REQUIRE(press(tab, Event::Return));
+  REQUIRE(press(tab, Event::Character('j')));
+  CHECK(db.getEntries(mediaType::kAnime).size() == 4);
   // The request waits for the next tick, so the status above is drawn first.
   CHECK(web.requested.empty());
   tab.onTick(ctx);

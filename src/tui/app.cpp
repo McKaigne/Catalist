@@ -173,15 +173,10 @@ void runTui(catalogue& db) {
   screen.TrackMouse(false);
   appShell app(ctx, tabs, screen.ExitLoopClosure());
 
-  // FTXUI only draws a text cursor for components it knows about, so each
-  // tab's inputs sit in the tree; the shell sees every event before them.
-  Components focusRoots;
-  for (iTab* tab : tabs)
-    focusRoots.push_back(tab->focusRoot());
-  auto root =
-      CatchEvent(Renderer(Container::Tab(focusRoots, &app.activeIndex()),
-                          [&app] { return app.render(); }),
-                 [&app](Event event) { return app.onEvent(event); });
+  // The shell draws everything and routes every key itself; FTXUI only
+  // runs the loop.
+  auto root = CatchEvent(Renderer([&app] { return app.render(); }),
+                         [&app](Event event) { return app.onEvent(event); });
 
   std::atomic<bool> running{true};
   std::thread ticker([&]() {

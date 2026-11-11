@@ -138,6 +138,22 @@ namespace keys {
 [[nodiscard]] bool isCharacter(const ftxui::Event& event, char expected);
 
 }  // namespace keys
+
+// ASCII lower case, byte by byte, for matching titles without regard to case.
+[[nodiscard]] std::string lowercase(std::string text);
+
+// A one-line text entry, drawn by hand: what was typed, then a block cursor.
+struct textField {
+  std::string value;
+
+  // Adds typed (or pasted) characters and removes the last glyph on
+  // Backspace; false for every other key.
+  bool handle(const ftxui::Event& event);
+  // The placeholder shows, dimmed, while the field is empty.
+  [[nodiscard]] ftxui::Element render(const std::string& placeholder,
+                                      bool active) const;
+};
+
 }  // namespace catalist
 
 #endif  // CATALIST_TUI_STYLE_HPP_

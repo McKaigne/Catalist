@@ -1,6 +1,7 @@
 #include "tui/style.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <string>
 
@@ -246,3 +247,38 @@ bool isCharacter(const Event& event, char expected) {
 }
 
 }  // namespace catalist::keys
+
+namespace catalist {
+
+std::string lowercase(std::string text) {
+  std::transform(text.begin(), text.end(), text.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return text;
+}
+
+bool textField::handle(const ftxui::Event& event) {
+  if (event == ftxui::Event::Backspace) {
+    auto glyphs = marquee::splitGlyphs(value);
+    if (!glyphs.empty())
+      value.resize(value.size() - glyphs.back().size());
+    return true;
+  }
+  if (!event.is_character())
+    return false;
+  value += event.character();
+  return true;
+}
+
+ftxui::Element textField::render(const std::string& placeholder,
+                                 bool active) const {
+  using namespace ftxui;
+  Element shown = value.empty() ? text(placeholder) | color(theme::kOverlay0)
+                                : text(value) | color(active ? theme::kPeach
+                                                             : theme::kText);
+  if (!active)
+    return shown;
+  Element cursor = text(" ") | inverted;
+  return value.empty() ? hbox({cursor, shown}) : hbox({shown, cursor});
+}
+
+}  // namespace catalist

@@ -1,7 +1,6 @@
-#ifndef CATALIST_TUI_CATALOGTAB_HPP_
-#define CATALIST_TUI_CATALOGTAB_HPP_
+#ifndef CATALIST_TUI_CATALOG_TAB_HPP_
+#define CATALIST_TUI_CATALOG_TAB_HPP_
 
-#include <ftxui/component/component.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -25,9 +24,17 @@ enum class detailsField {
   kRewatched
 };
 
-// Where the add flow is: typing a title, waiting for the search, or picking
-// one of the matches.
-enum class addStage { kOff, kTyping, kSearching, kPicking };
+// What the keyboard is doing in the tab. Every step but browsing owns the
+// keyboard until it ends.
+enum class step {
+  kBrowse,
+  kSearch,         // typing a filter
+  kTypeNumber,     // typing a count in the details card
+  kAddTyping,      // typing a title to add
+  kAddSearching,   // waiting for the MyAnimeList search
+  kAddPicking,     // choosing one of its matches
+  kConfirmDelete,  // y/n for the selected entry
+};
 
 // One sidebar row: a section header, "all", a status filter or a score filter.
 struct sidebarRow {
@@ -38,7 +45,8 @@ struct sidebarRow {
 };
 
 // The anime or manga catalogue: sidebar filters, searchable table, details
-// card, and adding titles found on MyAnimeList.
+// card, and adding titles found on MyAnimeList. Keys and state live in
+// catalogTab.cpp, drawing in catalogView.cpp.
 class catalogTab : public iTab {
 public:
   explicit catalogTab(mediaType media);
@@ -52,8 +60,6 @@ public:
 
   void onActivate(appContext& ctx) override;
   void onTick(appContext& ctx) override;
-  ftxui::Component focusRoot() override { return root_; }
-  [[nodiscard]] bool capturesInput() const override;
   [[nodiscard]] appMode mode() const override;
   [[nodiscard]] std::optional<std::string> countBadge(
       appContext& ctx) const override;
@@ -62,51 +68,59 @@ public:
   [[nodiscard]] const std::vector<entry>& shown() const { return displayed_; }
 
 private:
+  // State.
   void refresh(appContext& ctx);
   [[nodiscard]] bool passesFilters(const entry& candidate) const;
   [[nodiscard]] const entry* selectedEntry() const;
   void selectId(int id);
-  void returnToCatalog();
+  void browse();
 
-  bool handlePendingDelete(const ftxui::Event& event, appContext& ctx);
-  bool handleSearchTyping(const ftxui::Event& event, appContext& ctx);
-  bool handleCountEditing(const ftxui::Event& event, appContext& ctx);
-  bool handleAdding(const ftxui::Event& event, appContext& ctx);
-  bool handleEntryKeys(const ftxui::Event& event, appContext& ctx);
-  bool handleSortKeys(const ftxui::Event& event, appContext& ctx);
-  bool handleCatalogFocus(const ftxui::Event& event, appContext& ctx);
-  bool handleSidebarFocus(const ftxui::Event& event, appContext& ctx);
-  bool handleDetailsFocus(const ftxui::Event& event, appContext& ctx);
-  bool handleCommands(const ftxui::Event& event, appContext& ctx);
+  // Keys, one handler per step; browsing splits by the focused card.
+  bool onBrowseKey(const ftxui::Event& event, appContext& ctx);
+  bool onSearchKey(const ftxui::Event& event, appContext& ctx);
+  bool onNumberKey(const ftxui::Event& event, appContext& ctx);
+  bool onAddTitleKey(const ftxui::Event& event, appContext& ctx);
+  bool onPickKey(const ftxui::Event& event, appContext& ctx);
+  bool onConfirmDeleteKey(const ftxui::Event& event, appContext& ctx);
+  bool onEntryKey(const ftxui::Event& event, appContext& ctx);
+  bool onSortKey(const ftxui::Event& event, appContext& ctx);
+  bool onCatalogKey(const ftxui::Event& event, appContext& ctx);
+  bool onSidebarKey(const ftxui::Event& event, appContext& ctx);
+  bool onDetailsKey(const ftxui::Event& event, appContext& ctx);
 
+  // Actions.
   void commit(appContext& ctx, const entry& changed, const std::string& done);
   void adjustDetailsField(appContext& ctx, int direction);
   void toggleSort(sortKey key, const std::string& name, appContext& ctx);
   void moveSidebarCursor(int direction, appContext& ctx);
-  void startSearch(appContext& ctx);
   void moveDetailsCursor(int direction);
+  void commitNumber(appContext& ctx);
+  void addPicked(appContext& ctx);
   [[nodiscard]] std::vector<detailsField> detailsFields() const;
   [[nodiscard]] std::string fieldLabel(detailsField field) const;
-  void stopEditingCount();
-  void commitCount(appContext& ctx);
-  void requestDelete(appContext& ctx);
-  void confirmDelete(appContext& ctx);
-  void startAdding(appContext& ctx);
-  void cancelAdding(appContext& ctx);
-  void addPicked(appContext& ctx);
 
+  // Drawing (catalogView.cpp).
   ftxui::Element renderSidebarRow(int row) const;
   ftxui::Element renderCatalogRow(int row);
   ftxui::Element renderHeaderCell(const std::string& name, sortKey key,
                                   int width, bool stretches) const;
   ftxui::Element renderDetails();
   ftxui::Element renderSidebarCard() const;
-  ftxui::Element renderSearchCard();
+  ftxui::Element renderSearchCard() const;
   ftxui::Element renderCatalogCard();
   ftxui::Element renderPickCard();
 
+  // Text both halves need.
+  static bool isSortAscending(sortKey key, bool reverse);
+  static std::string progressLabel(const entry& e);
+  static std::string unitName(mediaType type);
+  static std::optional<countField> countFieldOf(detailsField field);
+  static std::string countLabel(const entry& e, countField field);
+
+  [[nodiscard]] bool isAdding() const;
+
   mediaType media_;
-  appMode mode_ = appMode::kNor;
+  step step_ = step::kBrowse;
   focusedCard focus_ = focusedCard::kCatalog;
   detailsField detailsCursor_ = detailsField::kStatus;
   sortKey sortBy_ = sortKey::kScore;
@@ -114,33 +128,20 @@ private:
 
   int sidebarSelected_ = 1;
   int catalogSelected_ = 0;
-  std::string searchQuery_;
-  std::string countBuffer_;
-  int countCursor_ = 0;
-  bool editingCount_ = false;
-  std::optional<int> pendingDeleteId_;
-
-  addStage adding_ = addStage::kOff;
-  std::string addQuery_;
-  std::vector<jikan::title> addResults_;
-  int addSelected_ = 0;
-
   std::vector<sidebarRow> sidebarRows_;
   std::vector<entry> displayed_;
   bool libraryEmpty_ = true;
 
+  textField search_;
+  textField number_;
+  textField addTitle_;
+  std::vector<jikan::title> addResults_;
+  int addSelected_ = 0;
+
   marquee::selectionTimer rowTimer_;
   marquee::selectionTimer detailsTimer_;
-
-  // Only the text fields are components, so FTXUI draws their cursor; every
-  // key reaches them through onEvent.
-  ftxui::Component idle_;
-  ftxui::Component searchInput_;
-  ftxui::Component addInput_;
-  ftxui::Component countInput_;
-  ftxui::Component root_;
 };
 
 }  // namespace catalist
 
-#endif  // CATALIST_TUI_CATALOGTAB_HPP_
+#endif  // CATALIST_TUI_CATALOG_TAB_HPP_

@@ -1,7 +1,6 @@
 #ifndef CATALIST_TUI_APP_HPP_
 #define CATALIST_TUI_APP_HPP_
 
-#include <ftxui/component/component.hpp>
 #include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <functional>
@@ -57,16 +56,10 @@ public:
   // is shown; where slow work (the title search) runs, so the status line
   // has been drawn before it starts.
   virtual void onTick(appContext&) {}
-  // FTXUI children (menus, inputs) that need focus and default handling.
-  // FTXUI only routes keys to focusable components, so tabs without children
-  // get a focusable placeholder.
-  virtual ftxui::Component focusRoot() {
-    return ftxui::Renderer([](bool) { return ftxui::text(""); });
-  }
-  // True while the tab owns the keyboard (text entry, confirmations), so the
-  // shell must not treat keys like '1' or 'q' as global shortcuts.
-  [[nodiscard]] virtual bool capturesInput() const { return false; }
   [[nodiscard]] virtual appMode mode() const { return appMode::kNor; }
+  // True in every mode but normal (typing, confirming), so the shell must not
+  // treat keys like '1' or 'q' as global shortcuts.
+  [[nodiscard]] bool capturesInput() const { return mode() != appMode::kNor; }
   [[nodiscard]] virtual std::optional<std::string> countBadge(
       appContext&) const {
     return std::nullopt;
@@ -84,7 +77,7 @@ public:
   appShell(appContext& ctx, std::vector<iTab*> tabs,
            std::function<void()> quit);
 
-  [[nodiscard]] int& activeIndex() { return activeIndex_; }
+  [[nodiscard]] int activeIndex() const { return activeIndex_; }
   void activate(int index);
 
   // Tab, Shift-Tab and the number keys switch tabs and q quits, unless the

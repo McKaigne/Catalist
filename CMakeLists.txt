@@ -42,6 +42,7 @@ add_library(catalistLib STATIC
   src/system.cpp
   src/tui/app.cpp
   src/tui/catalogTab.cpp
+  src/tui/catalogView.cpp
   src/tui/statsTab.cpp
   src/tui/style.cpp
 )

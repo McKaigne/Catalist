@@ -347,7 +347,7 @@ TEST_CASE_FIXTURE(catalogFixture,
                   "tui catalog sidebar totals the anime and follow changes") {
   using catalist::test::valueAfter;
   auto shown = screen(tab);
-  CHECK(shown.find("TOTALS") != std::string::npos);
+  CHECK(shown.find("Stats") != std::string::npos);
   // The labels without a colon are the sidebar's; the details card's have one.
   // 36 episodes at 24 minutes is 0.6 days; the mean of the rated 10, 8, 6.
   CHECK(valueAfter(shown, "Days spent") == "0.6");

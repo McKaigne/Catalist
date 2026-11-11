@@ -108,7 +108,8 @@ Element numberBox(const textField& field) {
 Element catalogTab::render(appContext&) {
   bool picking = step_ == step::kAddSearching || step_ == step::kAddPicking;
   Element middle = picking ? renderPickCard() : renderCatalogCard();
-  return hbox({renderSidebarCard(),
+  return hbox({vbox({renderSidebarCard() | flex, renderStatsCard()}) |
+                   size(WIDTH, EQUAL, 28),
                vbox({renderSearchCard(), middle | flex}) | flex,
                vbox({renderDetails() | flex}) | size(WIDTH, EQUAL, 42)});
 }
@@ -137,23 +138,21 @@ Element catalogTab::renderSidebarCard() const {
   Elements rows;
   for (size_t row = 0; row < sidebarRows_.size(); ++row)
     rows.push_back(renderSidebarRow(static_cast<int>(row)));
-  // The rows scroll; the totals stay put underneath.
   return vbox({text("  Categories") | bold | color(theme::kLavender), text(""),
-               vbox(std::move(rows)) | vscroll_indicator | frame | flex,
-               renderTotals()}) |
-         border | color(focused ? theme::kMauve : theme::kSurface0) |
-         size(WIDTH, EQUAL, 28);
+               vbox(std::move(rows)) | vscroll_indicator | frame | flex}) |
+         border | color(focused ? theme::kMauve : theme::kSurface0);
 }
 
-Element catalogTab::renderTotals() const {
+// Below the categories, which shrink and scroll first on a short terminal.
+Element catalogTab::renderStatsCard() const {
   bool anime = media_ == mediaType::kAnime;
   auto row = [](const std::string& label, const std::string& value) {
     return hbox({text("  " + label) | color(theme::kSubtext), filler(),
                  text(value) | bold | color(theme::kText), text("  ")});
   };
   Elements lines = {
+      text("  Stats") | bold | color(theme::kLavender),
       text(""),
-      text("  TOTALS") | bold | color(theme::kOverlay0),
       row("Days spent", oneDecimal(totals_.daysSpent)),
       row("Mean score", twoDecimals(totals_.meanScore)),
       row(anime ? "Episodes" : "Chapters", withCommas(totals_.units)),
@@ -161,7 +160,7 @@ Element catalogTab::renderTotals() const {
   if (!anime)
     lines.push_back(row("Volumes", withCommas(totals_.volumes)));
   lines.push_back(hbox({text("  "), statusBar(totals_, 24)}));
-  return vbox(std::move(lines));
+  return vbox(std::move(lines)) | border | color(theme::kSurface0);
 }
 
 Element catalogTab::renderSearchCard() const {

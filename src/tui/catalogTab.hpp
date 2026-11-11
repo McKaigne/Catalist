@@ -119,7 +119,7 @@ private:
                                   int width, bool stretches) const;
   ftxui::Element renderDetails();
   ftxui::Element renderSidebarCard() const;
-  ftxui::Element renderTotals() const;
+  ftxui::Element renderStatsCard() const;
   ftxui::Element renderSearchCard() const;
   ftxui::Element renderCatalogCard();
   ftxui::Element renderPickCard();

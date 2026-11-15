@@ -35,6 +35,36 @@ if(NOT fmt_FOUND)
   FetchContent_MakeAvailable(fmt)
 endif()
 
+# The lists are kept in an SQLite file. Without a system library, SQLite's
+# single-file source is downloaded and built in.
+find_package(SQLite3 QUIET)
+if(NOT SQLite3_FOUND)
+  include(FetchContent)
+  if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+  endif()
+  FetchContent_Declare(
+    sqlite3
+    URL https://www.sqlite.org/2025/sqlite-amalgamation-3500400.zip
+    URL_HASH SHA256=1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032
+  )
+  FetchContent_MakeAvailable(sqlite3)
+  enable_language(C)
+  add_library(catalistSqlite STATIC "${sqlite3_SOURCE_DIR}/sqlite3.c")
+  target_include_directories(catalistSqlite PUBLIC "${sqlite3_SOURCE_DIR}")
+  target_compile_definitions(catalistSqlite PRIVATE SQLITE_OMIT_LOAD_EXTENSION)
+  # Not this project's code: its warnings are not ours to fix.
+  target_compile_options(catalistSqlite PRIVATE -w)
+  find_package(Threads REQUIRED)
+  target_link_libraries(catalistSqlite PUBLIC Threads::Threads)
+  set(CATALIST_SQLITE catalistSqlite)
+elseif(TARGET SQLite3::SQLite3)
+  set(CATALIST_SQLITE SQLite3::SQLite3)
+else()
+  # The target's name before CMake 4.3.
+  set(CATALIST_SQLITE SQLite::SQLite3)
+endif()
+
 set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 
 set(CATALIST_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -50,6 +80,7 @@ add_library(catalistLib STATIC
   src/entry.cpp
   src/json.cpp
   src/malXml.cpp
+  src/store.cpp
   src/system.cpp
   src/text.cpp
   src/tui/app.cpp
@@ -61,6 +92,7 @@ add_library(catalistLib STATIC
 target_include_directories(catalistLib PUBLIC src "${CATALIST_GENERATED_DIR}")
 target_link_libraries(catalistLib PUBLIC
   fmt::fmt
+  ${CATALIST_SQLITE}
   ftxui::screen
   ftxui::dom
   ftxui::component

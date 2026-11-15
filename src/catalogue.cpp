@@ -37,10 +37,6 @@ int intOrZero(const std::string& field) {
 	return parseInt(field).value_or(0);
 }
 
-std::string typeKey(mediaType type) {
-	return type == mediaType::kAnime ? "anime" : "manga";
-}
-
 bool isTypeColumn(const std::string& field) {
 	return field == "anime" or field == "manga";
 }
@@ -198,18 +194,20 @@ result<std::vector<entry>> decodeEntries(std::string_view text, mediaType type) 
 	return result<std::vector<entry>>::success(std::move(entries));
 }
 
+std::string encodeEntry(const entry& e) {
+	return fmt::format("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, e.malId,
+	                   typeKey(e.type), escapeField(e.title),
+	                   escapeField(statusToString(e.status, e.type)), e.score, e.progress,
+	                   e.totalUnits, e.volumes, e.totalVolumes, e.rewatched,
+	                   formatDate(e.startDate), formatDate(e.finishDate), formatDate(e.updatedAt),
+	                   e.released, formatDate(e.checkedAt), e.anilistId);
+}
+
 std::string encodeEntries(const std::vector<entry>& entries) {
-	std::ostringstream out;
-	out << kCatalogHeader;
-	for (const auto& e : entries) {
-		out << e.id << "," << e.malId << "," << typeKey(e.type) << "," << escapeField(e.title)
-		    << "," << escapeField(statusToString(e.status, e.type)) << "," << e.score << ","
-		    << e.progress << "," << e.totalUnits << "," << e.volumes << "," << e.totalVolumes << ","
-		    << e.rewatched << "," << formatDate(e.startDate) << "," << formatDate(e.finishDate)
-		    << "," << formatDate(e.updatedAt) << "," << e.released << "," << formatDate(e.checkedAt)
-		    << "," << e.anilistId << "\n";
-	}
-	return out.str();
+	std::string text = kCatalogHeader;
+	for (const auto& e : entries)
+		text += encodeEntry(e) + "\n";
+	return text;
 }
 
 }  // namespace catalist::csvCodec
@@ -218,7 +216,123 @@ namespace catalist {
 
 namespace {
 
+const char* kStoreFile = "catalist.db";
+// What Catalist 0.3 and earlier kept beside its two CSV files.
 const char* kSettingsFile = "settings";
+const char* kProviderKey = "provider";
+const char* kLinkedKey = "linked";
+
+// PRAGMA user_version of a store this code set up; 0 is a new, empty file.
+constexpr int kStoreVersion = 1;
+
+// `entry` holds both lists. `tx` and `change` are the undo history: one
+// row per command that changed something, and under it each entry before
+// and after, as csvCodec rows (empty: the entry did not exist).
+const char* kSchema =
+    "CREATE TABLE entry ("
+    " type TEXT NOT NULL, id INTEGER NOT NULL, mal_id INTEGER NOT NULL,"
+    " title TEXT NOT NULL, status TEXT NOT NULL, score INTEGER NOT NULL,"
+    " progress INTEGER NOT NULL, total_units INTEGER NOT NULL,"
+    " volumes INTEGER NOT NULL, total_volumes INTEGER NOT NULL,"
+    " rewatched INTEGER NOT NULL, start_date TEXT, finish_date TEXT,"
+    " updated_at TEXT, released INTEGER NOT NULL, checked_at TEXT,"
+    " anilist_id INTEGER NOT NULL, PRIMARY KEY (type, id));"
+    "CREATE TABLE setting (key TEXT PRIMARY KEY, value TEXT NOT NULL);"
+    "CREATE TABLE tx ("
+    " id INTEGER PRIMARY KEY AUTOINCREMENT, stamp TEXT NOT NULL,"
+    " label TEXT NOT NULL, undone INTEGER NOT NULL DEFAULT 0);"
+    "CREATE TABLE change ("
+    " tx INTEGER NOT NULL, seq INTEGER NOT NULL, type TEXT NOT NULL,"
+    " id INTEGER NOT NULL, before TEXT NOT NULL, after TEXT NOT NULL,"
+    " PRIMARY KEY (tx, seq));"
+    "PRAGMA user_version = 1;";
+
+const char* kSelectEntries =
+    "SELECT type, id, mal_id, title, status, score, progress, total_units,"
+    " volumes, total_volumes, rewatched, start_date, finish_date, updated_at,"
+    " released, checked_at, anilist_id FROM entry ORDER BY type, id";
+const char* kInsertEntry =
+    "INSERT OR REPLACE INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+const char* kInsertSetting = "INSERT OR REPLACE INTO setting VALUES (?, ?)";
+
+int storeVersion(const store::database& db) {
+	auto version = db.prepare("PRAGMA user_version");
+	return version.step() ? static_cast<int>(version.intAt(0)) : 0;
+}
+
+void bindDate(store::statement& into, const std::optional<isoDate>& date) {
+	if (date)
+		into.bind(date->toString());
+	else
+		into.bindNull();
+}
+
+// In the order of kSelectEntries.
+store::statement& bindEntry(store::statement& into, const entry& row) {
+	into.bind(typeKey(row.type)).bind(row.id).bind(row.malId).bind(row.title);
+	into.bind(statusKey(row.status)).bind(row.score).bind(row.progress).bind(row.totalUnits);
+	into.bind(row.volumes).bind(row.totalVolumes).bind(row.rewatched);
+	bindDate(into, row.startDate);
+	bindDate(into, row.finishDate);
+	bindDate(into, row.updatedAt);
+	into.bind(row.released);
+	bindDate(into, row.checkedAt);
+	return into.bind(row.anilistId);
+}
+
+entry readEntry(const store::statement& from) {
+	auto number = [&from](int column) { return static_cast<int>(from.intAt(column)); };
+	entry row;
+	row.type = from.textAt(0) == "manga" ? mediaType::kManga : mediaType::kAnime;
+	row.id = number(1);
+	row.malId = number(2);
+	row.title = from.textAt(3);
+	row.status = parseStatus(from.textAt(4)).value_or(watchStatus::kPlanToWatch);
+	row.score = number(5);
+	row.progress = number(6);
+	row.totalUnits = number(7);
+	row.volumes = number(8);
+	row.totalVolumes = number(9);
+	row.rewatched = number(10);
+	row.startDate = isoDate::parse(from.textAt(11));
+	row.finishDate = isoDate::parse(from.textAt(12));
+	row.updatedAt = isoDate::parse(from.textAt(13));
+	row.released = number(14);
+	row.checkedAt = isoDate::parse(from.textAt(15));
+	row.anilistId = number(16);
+	return row;
+}
+
+const entry* findById(const std::vector<entry>& list, int id) {
+	auto found =
+	    std::find_if(list.begin(), list.end(), [id](const entry& e) { return e.id == id; });
+	return found == list.end() ? nullptr : &*found;
+}
+
+bool hasOldFiles(const std::filesystem::path& dir) {
+	std::error_code ignored;
+	return std::filesystem::is_regular_file(dir / "anime.csv", ignored) or
+	       std::filesystem::is_regular_file(dir / "manga.csv", ignored) or
+	       std::filesystem::is_regular_file(dir / kSettingsFile, ignored);
+}
+
+std::vector<std::pair<std::string, std::string>> readOldSettings(
+    const std::filesystem::path& file) {
+	auto trim = [](std::string text) {
+		text.erase(0, text.find_first_not_of(" \t"));
+		text.erase(text.find_last_not_of(" \t\r") + 1);
+		return text;
+	};
+	std::vector<std::pair<std::string, std::string>> settings;
+	std::istringstream lines(readFile(file).value_or(""));
+	std::string line;
+	while (std::getline(lines, line)) {
+		auto equals = line.find('=');
+		if (equals != std::string::npos)
+			settings.emplace_back(trim(line.substr(0, equals)), trim(line.substr(equals + 1)));
+	}
+	return settings;
+}
 
 // A local id only numbers a title, so two titles are the same only when a
 // site's id says so.
@@ -277,30 +391,37 @@ bool comesBefore(const entry& a, const entry& b, sortKey key) {
 
 }  // namespace
 
-std::filesystem::path catalogue::getDefaultConfigDir() {
-	const char* custom = std::getenv("CATALIST_DATA_DIR");
-	if (custom and *custom)
-		return std::filesystem::path(custom);
-
-	const char* xdg = std::getenv("XDG_CONFIG_HOME");
-	if (xdg and *xdg)
-		return std::filesystem::path(xdg) / "catalist";
-
-	const char* home = std::getenv("HOME");
-	if (home and *home)
-		return std::filesystem::path(home) / ".config" / "catalist";
-
-	return std::filesystem::path("catalist-data");
+std::filesystem::path catalogue::getDefaultDataDir(const dataDirEnv& env) {
+	if (not env.catalistDataDir.empty())
+		return env.catalistDataDir;
+	// The XDG specification: a relative path there is invalid and ignored.
+	std::filesystem::path xdg = env.xdgDataHome;
+	if (xdg.is_absolute())
+		return xdg / "catalist";
+	if (not env.home.empty())
+		return std::filesystem::path(env.home) / ".local" / "share" / "catalist";
+	return "catalist-data";
 }
 
-catalogue::catalogue(std::filesystem::path dataDir) : dataDir_(std::move(dataDir)) {}
+std::filesystem::path catalogue::getOldDataDir(const dataDirEnv& env) {
+	if (not env.catalistDataDir.empty())
+		return {};
+	if (not env.xdgConfigHome.empty())
+		return std::filesystem::path(env.xdgConfigHome) / "catalist";
+	if (not env.home.empty())
+		return std::filesystem::path(env.home) / ".config" / "catalist";
+	return {};
+}
 
-std::filesystem::path catalogue::getConfigPath() const {
+catalogue::catalogue(std::filesystem::path dataDir, std::filesystem::path oldDir)
+    : dataDir_(std::move(dataDir)), oldDir_(std::move(oldDir)) {}
+
+std::filesystem::path catalogue::getDataDir() const {
 	return dataDir_;
 }
 
-std::filesystem::path catalogue::getCsvPath(mediaType type) const {
-	return dataDir_ / csvCodec::catalogFileName(type);
+std::filesystem::path catalogue::getStorePath() const {
+	return dataDir_ / kStoreFile;
 }
 
 std::vector<entry>& catalogue::getList(mediaType type) {
@@ -309,6 +430,10 @@ std::vector<entry>& catalogue::getList(mediaType type) {
 
 const std::vector<entry>& catalogue::getList(mediaType type) const {
 	return type == mediaType::kAnime ? animeEntries_ : mangaEntries_;
+}
+
+const std::vector<entry>& catalogue::getSaved(mediaType type) const {
+	return type == mediaType::kAnime ? savedAnime_ : savedManga_;
 }
 
 void catalogue::sortEntries(std::vector<entry>& entries, sortKey key, bool reverse) {
@@ -413,24 +538,6 @@ double catalogue::daysSpent(mediaType type) const {
 	return totalProgress(type) * minutesPerUnit / kMinutesPerDay;
 }
 
-result<bool> catalogue::loadCsv(mediaType type, const std::filesystem::path& path) {
-	auto content = readFile(path);
-	if (not content)
-		return result<bool>::success(false);
-	auto decoded = csvCodec::decodeEntries(*content, type);
-	if (not decoded.ok())
-		return result<bool>::failure(
-		    fmt::format("{}: {}. Open and save it once with Catalist 0.3.0 to "
-		                "convert it.",
-		                path.string(), decoded.errorMessage()));
-	getList(type) = std::move(decoded.value());
-	return result<bool>::success(true);
-}
-
-bool catalogue::saveCsv(mediaType type, const std::filesystem::path& path) const {
-	return writeFileAtomic(path, csvCodec::encodeEntries(getList(type)));
-}
-
 provider catalogue::getProvider() const {
 	return provider_;
 }
@@ -445,14 +552,6 @@ std::optional<isoDate> catalogue::getLinkedOn() const {
 
 void catalogue::setLinkedOn(std::optional<isoDate> day) {
 	linkedOn_ = day;
-}
-
-bool catalogue::saveSettings() const {
-	std::string name = provider_ == provider::kAniList ? "anilist" : "myanimelist";
-	std::string settings = fmt::format("provider = {}\n", name);
-	if (linkedOn_)
-		settings += fmt::format("linked = {}\n", linkedOn_->toString());
-	return writeFileAtomic(dataDir_ / kSettingsFile, settings);
 }
 
 int catalogue::fillIds(mediaType type, const std::vector<std::pair<int, int>>& anilistAndMal) {
@@ -475,43 +574,226 @@ int catalogue::fillIds(mediaType type, const std::vector<std::pair<int, int>>& a
 	return filled;
 }
 
-result<bool> catalogue::loadAll() {
-	// Settings: `key = value` lines; unknown keys and values are ignored, so
-	// a newer file still loads.
-	if (auto settings = readFile(dataDir_ / kSettingsFile)) {
-		std::istringstream lines(*settings);
-		std::string line;
-		while (std::getline(lines, line)) {
-			auto equals = line.find('=');
-			if (equals == std::string::npos)
-				continue;
-			auto trim = [](std::string text) {
-				text.erase(0, text.find_first_not_of(" \t"));
-				text.erase(text.find_last_not_of(" \t\r") + 1);
-				return text;
-			};
-			std::string key = trim(line.substr(0, equals));
-			std::string value = trim(line.substr(equals + 1));
-			auto site = parseProvider(value);
-			if (key == "provider" and site)
-				provider_ = *site;
-			if (key == "linked")
-				linkedOn_ = isoDate::parse(value);
-		}
-	}
-	auto anime = loadCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
-	if (not anime.ok())
-		return anime;
-	auto manga = loadCsv(mediaType::kManga, getCsvPath(mediaType::kManga));
-	if (not manga.ok())
-		return manga;
-	return result<bool>::success(anime.value() or manga.value());
+// Opening and setting up the store.
+
+result<bool> catalogue::openStore() {
+	if (db_.isOpen())
+		return result<bool>::success(true);
+	std::error_code ignored;
+	std::filesystem::create_directories(dataDir_, ignored);
+	if (not db_.open(getStorePath()))
+		return result<bool>::failure(
+		    fmt::format("cannot open {}: {}", getStorePath().string(), db_.lastError()));
+	auto ready = setUpStore();
+	if (not ready.ok())
+		db_.close();
+	return ready;
 }
 
-bool catalogue::saveAll() const {
-	bool anime = saveCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
-	bool manga = saveCsv(mediaType::kManga, getCsvPath(mediaType::kManga));
-	return anime and manga;
+// A new file gets its tables and, once, the lists of the CSV files that came
+// before it. All of that is one transaction, so two programs starting at
+// the same moment cannot both import.
+result<bool> catalogue::setUpStore() {
+	if (storeVersion(db_) == kStoreVersion)
+		return result<bool>::success(true);
+
+	store::transaction setup(db_);
+	if (not setup.active())
+		return result<bool>::failure(
+		    fmt::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
+	int version = storeVersion(db_);
+	if (version == kStoreVersion)
+		return result<bool>::success(true);
+	if (version != 0)
+		return result<bool>::failure(
+		    fmt::format("{} was written by a newer Catalist", getStorePath().string()));
+
+	if (not db_.run(kSchema))
+		return result<bool>::failure(
+		    fmt::format("cannot set up {}: {}", getStorePath().string(), db_.lastError()));
+	auto from = importSource();
+	if (not from.empty()) {
+		auto imported = importOldFiles(from);
+		if (not imported.ok())
+			return imported;
+	}
+	if (not setup.commit())
+		return result<bool>::failure(
+		    fmt::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
+	importedFrom_ = from;
+	return result<bool>::success(true);
+}
+
+// The directory whose CSV files are imported into a new store: the data
+// directory when it has any, else the old one; empty when neither has.
+std::filesystem::path catalogue::importSource() const {
+	if (hasOldFiles(dataDir_))
+		return dataDir_;
+	if (not oldDir_.empty() and hasOldFiles(oldDir_))
+		return oldDir_;
+	return {};
+}
+
+result<bool> catalogue::importOldFiles(const std::filesystem::path& from) {
+	std::vector<entry> rows;
+	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
+		auto file = from / csvCodec::catalogFileName(type);
+		auto content = readFile(file);
+		if (not content)
+			continue;
+		auto decoded = csvCodec::decodeEntries(*content, type);
+		if (not decoded.ok())
+			return result<bool>::failure(
+			    fmt::format("{}: {}. Open and save it once with Catalist 0.3.0 to "
+			                "convert it.",
+			                file.string(), decoded.errorMessage()));
+		rows.insert(rows.end(), decoded.value().begin(), decoded.value().end());
+	}
+	auto insert = db_.prepare(kInsertEntry);
+	for (const auto& row : rows) {
+		if (not bindEntry(insert, row).run())
+			return result<bool>::failure(
+			    fmt::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
+	}
+
+	// The settings file: `key = value` lines; unknown keys and values are
+	// ignored.
+	auto set = db_.prepare(kInsertSetting);
+	for (const auto& [key, value] : readOldSettings(from / kSettingsFile)) {
+		bool known = (key == kProviderKey and parseProvider(value)) or
+		             (key == kLinkedKey and isoDate::parse(value));
+		if (known and not set.bind(key).bind(value).run())
+			return result<bool>::failure(
+			    fmt::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
+	}
+	return result<bool>::success(true);
+}
+
+result<bool> catalogue::beginWrite() {
+	auto opened = openStore();
+	if (not opened.ok())
+		return opened;
+	write_.emplace(db_);
+	if (write_->active())
+		return result<bool>::success(true);
+	write_.reset();
+	return result<bool>::failure(fmt::format("{} is in use by another program ({})",
+	                                         getStorePath().string(), db_.lastError()));
+}
+
+// Reading.
+
+result<bool> catalogue::loadAll() {
+	std::error_code ignored;
+	bool stored = db_.isOpen() or std::filesystem::exists(getStorePath(), ignored);
+	if (not stored and importSource().empty())
+		return result<bool>::success(false);
+	auto opened = openStore();
+	if (not opened.ok())
+		return opened;
+	if (not readStore())
+		return result<bool>::failure(
+		    fmt::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
+	return result<bool>::success(true);
+}
+
+bool catalogue::readStore() {
+	std::vector<entry> anime;
+	std::vector<entry> manga;
+	auto rows = db_.prepare(kSelectEntries);
+	while (rows.step()) {
+		entry row = readEntry(rows);
+		(row.type == mediaType::kAnime ? anime : manga).push_back(std::move(row));
+	}
+	provider site = provider::kAniList;
+	std::optional<isoDate> linked;
+	auto settings = db_.prepare("SELECT key, value FROM setting");
+	while (settings.step()) {
+		std::string key = settings.textAt(0);
+		if (key == kProviderKey)
+			site = parseProvider(settings.textAt(1)).value_or(site);
+		if (key == kLinkedKey)
+			linked = isoDate::parse(settings.textAt(1));
+	}
+	// An error ends a statement the way its last row does.
+	if (not rows.ok() or not settings.ok())
+		return false;
+
+	animeEntries_ = std::move(anime);
+	mangaEntries_ = std::move(manga);
+	provider_ = site;
+	linkedOn_ = linked;
+	rememberSaved();
+	return true;
+}
+
+void catalogue::rememberSaved() {
+	savedAnime_ = animeEntries_;
+	savedManga_ = mangaEntries_;
+	savedProvider_ = provider_;
+	savedLinkedOn_ = linkedOn_;
+}
+
+// Writing.
+
+template <typename writer>
+bool catalogue::commit(writer work) {
+	if (not openStore().ok())
+		return false;
+	if (not write_)
+		write_.emplace(db_);
+	bool done = write_->active() and work() and write_->commit();
+	// A write that did not get that far is rolled back here.
+	write_.reset();
+	return done;
+}
+
+bool catalogue::writeRows() {
+	auto insert = db_.prepare(kInsertEntry);
+	auto remove = db_.prepare("DELETE FROM entry WHERE type = ? AND id = ?");
+	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
+		const auto& now = getList(type);
+		const auto& before = getSaved(type);
+		for (const auto& row : now) {
+			const entry* was = findById(before, row.id);
+			bool same = was and csvCodec::encodeEntry(*was) == csvCodec::encodeEntry(row);
+			if (not same and not bindEntry(insert, row).run())
+				return false;
+		}
+		for (const auto& row : before) {
+			bool gone = findById(now, row.id) == nullptr;
+			if (gone and not remove.bind(typeKey(type)).bind(row.id).run())
+				return false;
+		}
+	}
+	return true;
+}
+
+bool catalogue::writeSettings() {
+	auto set = db_.prepare(kInsertSetting);
+	auto unset = db_.prepare("DELETE FROM setting WHERE key = ?");
+	std::string site = provider_ == provider::kAniList ? "anilist" : "myanimelist";
+	if (not set.bind(std::string(kProviderKey)).bind(site).run())
+		return false;
+	if (linkedOn_)
+		return set.bind(std::string(kLinkedKey)).bind(linkedOn_->toString()).run();
+	return unset.bind(std::string(kLinkedKey)).run();
+}
+
+bool catalogue::saveSettings() {
+	if (not commit([this] { return writeSettings(); }))
+		return false;
+	savedProvider_ = provider_;
+	savedLinkedOn_ = linkedOn_;
+	return true;
+}
+
+bool catalogue::saveAll() {
+	bool settingsChanged = provider_ != savedProvider_ or linkedOn_ != savedLinkedOn_;
+	bool done = commit([&] { return writeRows() and (not settingsChanged or writeSettings()); });
+	if (done)
+		rememberSaved();
+	return done;
 }
 
 }  // namespace catalist

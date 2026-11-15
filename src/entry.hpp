@@ -41,11 +41,16 @@ struct entry {
 };
 
 std::string statusToString(watchStatus status, mediaType type = mediaType::kAnime);
+// The one word a status is stored and printed for scripts as: watching,
+// completed, on-hold, dropped or planned. parseStatus reads it back.
+[[nodiscard]] std::string statusKey(watchStatus status);
 // Accepts the display names and MyAnimeList's 1-5 codes, in any case;
 // absent for anything else.
 [[nodiscard]] std::optional<watchStatus> parseStatus(const std::string& str);
 
 std::string typeToString(mediaType type);
+// "anime" or "manga".
+[[nodiscard]] std::string typeKey(mediaType type);
 
 // "AniList" or "MyAnimeList", and the short form for tight spaces.
 [[nodiscard]] std::string providerName(provider site);

@@ -33,6 +33,10 @@ struct cliContext {
 	std::string txLabel{};
 };
 
+// One line for standard error when loadAll has just imported the CSV files
+// of an earlier version; empty when it has not.
+[[nodiscard]] std::string importNote(const catalogue& db);
+
 // Runs `catalist <args>` for a non-empty argument list and returns the exit
 // code: 0 on success, 1 when the work failed, 2 when the command line is
 // wrong. See `catalist help`.

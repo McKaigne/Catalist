@@ -22,6 +22,22 @@ std::string statusToString(watchStatus status, mediaType type) {
 	return "Unknown";
 }
 
+std::string statusKey(watchStatus status) {
+	switch (status) {
+		case watchStatus::kWatching:
+			return "watching";
+		case watchStatus::kCompleted:
+			return "completed";
+		case watchStatus::kOnHold:
+			return "on-hold";
+		case watchStatus::kDropped:
+			return "dropped";
+		case watchStatus::kPlanToWatch:
+			return "planned";
+	}
+	return "planned";
+}
+
 std::optional<watchStatus> parseStatus(const std::string& str) {
 	std::string lower = str;
 	std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
@@ -80,6 +96,10 @@ std::string typeToString(mediaType type) {
 			return "Manga";
 	}
 	return "Anime";
+}
+
+std::string typeKey(mediaType type) {
+	return type == mediaType::kAnime ? "anime" : "manga";
 }
 
 std::string formatDate(const std::optional<isoDate>& date) {

@@ -2,6 +2,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 #include "catalogue.hpp"
 #include "cli.hpp"
@@ -13,19 +14,24 @@ int main(int argc, char* argv[]) {
 	// `catalist export anime | head` must end quietly, not die on the signal.
 	std::signal(SIGPIPE, SIG_IGN);
 
-	catalist::catalogue db(catalist::catalogue::getDefaultConfigDir());
+	auto env = [](const char* name) {
+		const char* value = std::getenv(name);
+		return std::string(value ? value : "");
+	};
+	catalist::dataDirEnv dirs{env("CATALIST_DATA_DIR"), env("XDG_DATA_HOME"),
+	                          env("XDG_CONFIG_HOME"), env("HOME")};
+	catalist::catalogue db(catalist::catalogue::getDefaultDataDir(dirs),
+	                       catalist::catalogue::getOldDataDir(dirs));
 	if (argc > 1) {
 		catalist::cliContext ctx{db,        std::cin,        std::cout,
 		                         std::cerr, catalist::today, catalist::httpPost};
 		ctx.interactive = catalist::isInteractive();
 		ctx.columns = catalist::terminalColumns();
 		// https://no-color.org; a dumb terminal cannot show colours either.
-		const char* term = std::getenv("TERM");
-		ctx.color = ctx.columns > 0 and std::getenv("NO_COLOR") == nullptr and
-		            not(term and std::string(term) == "dumb");
+		ctx.color =
+		    ctx.columns > 0 and std::getenv("NO_COLOR") == nullptr and env("TERM") != "dumb";
 		ctx.nowStamp = catalist::nowStamp;
-		if (const char* group = std::getenv("CATALIST_TX"))
-			ctx.txLabel = group;
+		ctx.txLabel = env("CATALIST_TX");
 		return catalist::runCli({argv + 1, argv + argc}, ctx);
 	}
 
@@ -34,6 +40,7 @@ int main(int argc, char* argv[]) {
 		std::cerr << "error: " << loaded.errorMessage() << "\n";
 		return 1;
 	}
+	std::cerr << catalist::importNote(db);
 
 	catalist::runTui(db);
 	return 0;

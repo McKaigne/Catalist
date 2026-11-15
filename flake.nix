@@ -39,6 +39,7 @@
               ftxui
               doctest
               fmt
+              sqlite
             ];
 
             postInstall = ''
@@ -82,9 +83,14 @@
               ftxui
               doctest
               fmt
+              sqlite
               curl
               libsixel
               clang-tools
+              # The shells the command-line tests run under.
+              dash
+              zsh
+              fish
             ];
           };
         }

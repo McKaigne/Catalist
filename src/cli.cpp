@@ -191,10 +191,6 @@ const char* statusColor(watchStatus status) {
 	return "0";
 }
 
-std::string typeKey(mediaType type) {
-	return type == mediaType::kAnime ? "anime" : "manga";
-}
-
 std::string unitName(mediaType type, int count = 2) {
 	if (type == mediaType::kAnime)
 		return count == 1 ? "episode" : "episodes";
@@ -371,6 +367,7 @@ bool load(cliContext& ctx) {
 	auto loaded = ctx.db.loadAll();
 	if (not loaded.ok())
 		fail(ctx, loaded.errorMessage());
+	ctx.err << importNote(ctx.db);
 	return loaded.ok();
 }
 
@@ -406,7 +403,7 @@ void linkIfDue(cliContext& ctx) {
 bool save(cliContext& ctx) {
 	if (ctx.db.saveAll())
 		return true;
-	fail(ctx, fmt::format("could not save the catalogue to {}", ctx.db.getConfigPath().string()));
+	fail(ctx, fmt::format("could not save the catalogue to {}", ctx.db.getDataDir().string()));
 	return false;
 }
 
@@ -665,7 +662,7 @@ void printHelp(std::ostream& out, const catalogue& db) {
 	       "  catalist set 154587 --status completed --rating 9\n"
 	       "  catalist ls manga --status reading\n"
 	       "\nRun 'catalist help COMMAND' for its options. Your lists are kept in\n"
-	    << db.getConfigPath().string() << ".\n";
+	    << db.getDataDir().string() << ".\n";
 }
 
 int runList(const commandLine& line, cliContext& ctx) {
@@ -1060,8 +1057,8 @@ int runProvider(const commandLine& line, cliContext& ctx) {
 	}
 	ctx.db.setProvider(*chosen);
 	if (not ctx.db.saveSettings())
-		return fail(
-		    ctx, fmt::format("could not save the settings in {}", ctx.db.getConfigPath().string()));
+		return fail(ctx,
+		            fmt::format("could not save the settings in {}", ctx.db.getDataDir().string()));
 	ctx.out << fmt::format("Your provider is now {}: its ids are the ones shown and accepted.\n",
 	                       paint(ctx, providerName(*chosen), kBold));
 	return 0;
@@ -1123,6 +1120,15 @@ int runExport(const commandLine& line, cliContext& ctx) {
 }
 
 }  // namespace
+
+std::string importNote(const catalogue& db) {
+	if (db.importedFrom().empty())
+		return "";
+	return fmt::format(
+	    "note: imported the lists in {} into {}; the old files are left as "
+	    "they were.\n",
+	    db.importedFrom().string(), db.getStorePath().string());
+}
 
 int runCli(const std::vector<std::string>& args, cliContext& ctx) {
 	const std::string& first = args.at(0);

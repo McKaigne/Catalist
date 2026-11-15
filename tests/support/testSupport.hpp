@@ -141,6 +141,11 @@ private:
 // The entry titled `title`; fails the test when there is none.
 [[nodiscard]] entry findTitle(const catalogue& db, mediaType type, const std::string& title);
 
+// One list as the catalogue in that directory has it stored, as rows of
+// csvCodec::encodeEntry ("" when nothing is stored): what a new run would
+// read.
+[[nodiscard]] std::string storedRows(const std::filesystem::path& dataDir, mediaType type);
+
 std::filesystem::path fixturePath(const std::string& relativePath);
 
 }  // namespace catalist::test

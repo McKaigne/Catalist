@@ -41,7 +41,7 @@ struct catalogFixture : catalist::test::tuiHarness {
 			titles.push_back(e.title);
 		return titles;
 	}
-	std::string savedAnime() { return catalist::test::readText(dataDir() / "anime.csv"); }
+	std::string savedAnime() { return catalist::test::storedRows(dataDir(), mediaType::kAnime); }
 	catalogTab tab;
 };
 
@@ -367,7 +367,7 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog delete asks first and saves") {
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog reports a failed save") {
-	catalist::test::makeUnwritable(dataDir() / "anime.csv");
+	catalist::test::makeUnwritable(dataDir() / "catalist.db");
 	REQUIRE(press(tab, Event::Character('+')));
 	CHECK(ctx.status == "Could not save the catalogue to " + dataDir().string() + ".");
 }

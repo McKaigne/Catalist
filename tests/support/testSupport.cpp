@@ -116,6 +116,17 @@ entry findTitle(const catalogue& db, mediaType type, const std::string& title) {
 	throw std::runtime_error("no entry titled " + title);
 }
 
+std::string storedRows(const std::filesystem::path& dataDir, mediaType type) {
+	catalogue db(dataDir);
+	auto loaded = db.loadAll();
+	if (not loaded.ok())
+		throw std::runtime_error(loaded.errorMessage());
+	std::string rows;
+	for (const auto& row : db.getEntries(type))
+		rows += csvCodec::encodeEntry(row) + "\n";
+	return rows;
+}
+
 std::filesystem::path fixturePath(const std::string& relativePath) {
 	return std::filesystem::path(CATALIST_FIXTURE_DIR) / relativePath;
 }

@@ -151,7 +151,7 @@ TEST_CASE_FIXTURE(shellFixture, "tui shell fills in a finished manga's chapters 
 	auto shown = drawn();
 	CHECK(shown.find("365/380") != std::string::npos);
 	CHECK(shown.find("+15") != std::string::npos);
-	CHECK(catalist::test::readText(dataDir() / "manga.csv")
+	CHECK(catalist::test::storedRows(dataDir(), catalist::mediaType::kManga)
 	          .find("Berserk,Reading,10,365,380,42,42,0,2019-05-01,,2026-10-20,"
 	                "380,2026-10-20,30002") != std::string::npos);
 }

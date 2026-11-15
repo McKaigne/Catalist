@@ -165,6 +165,18 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(run({"help", "nope"}) == 1);
 }
 
+TEST_CASE_FIXTURE(cliFixture, "cli says once that it imported the lists of an earlier version") {
+	put("data/anime.csv", catalist::test::readText(catalist::test::fixturePath("csv/crlf.csv")));
+	CHECK(run({"ls"}) == 0);
+	CHECK(has(out, "\tOdd Taxi\t"));
+	CHECK(err ==
+	      "note: imported the lists in data into data/catalist.db; the old files are left as "
+	      "they were.\n");
+	CHECK(run({"ls"}) == 0);
+	CHECK(has(out, "\tOdd Taxi\t"));
+	CHECK(err.empty());
+}
+
 TEST_CASE_FIXTURE(cliFixture, "cli help and version work with a broken catalogue") {
 	put("data/anime.csv", "this,is,not,a,catalogue\n");
 	CHECK(run({"--version"}) == 0);
@@ -319,7 +331,6 @@ TEST_CASE_FIXTURE(cliFixture, "cli set checks its values before touching anythin
 TEST_CASE_FIXTURE(cliFixture, "cli refreshes a title from AniList before changing it") {
 	seed();
 	// Berserk has ended since it was last checked (on a fresh day).
-	put("data/settings", "provider = anilist\nlinked = 2026-10-20\n");
 	{
 		catalist::catalogue db("data");
 		REQUIRE(db.loadAll().ok());
@@ -464,7 +475,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli provider decides which ids are shown and acce
 	CHECK(out == "Your provider is AniList.\n");
 	CHECK(run({"provider", "mal"}) == 0);
 	CHECK(has(out, "now MyAnimeList"));
-	CHECK(has(catalist::test::readText("data/settings"), "provider = myanimelist\n"));
+	{
+		catalist::catalogue db("data");
+		REQUIRE(db.loadAll().ok());
+		CHECK(db.getProvider() == catalist::provider::kMyAnimeList);
+	}
 	CHECK(run({"show", "44265"}) == 0);
 	CHECK(has(out, "Anime, MyAnimeList #44265"));
 	CHECK(has(out, "https://myanimelist.net/anime/44265"));
@@ -488,7 +503,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli looks up missing ids once a day") {
 	CHECK(has(out, "anime\t-\tOdd Taxi"));
 	CHECK(savedTitle(mediaType::kAnime, "Sousou no Frieren").anilistId == 154587);
 	CHECK(web.posted.size() == 1);
-	CHECK(has(catalist::test::readText("data/settings"), "linked = 2026-10-20\n"));
+	{
+		catalist::catalogue db("data");
+		REQUIRE(db.loadAll().ok());
+		CHECK(db.getLinkedOn() == testToday());
+	}
 	// Odd Taxi still lacks its id, but it was asked about today.
 	CHECK(run({"ls"}) == 0);
 	CHECK(web.posted.size() == 1);
@@ -554,7 +573,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli import changes nothing when any file is bad")
 	CHECK(run({"import", "lists/anime.xml", "lists/missing.xml"}) == 1);
 	CHECK(err == "error: cannot read lists/missing.xml\n");
 	CHECK(out.empty());
-	CHECK(catalist::test::readText("data/anime.csv").empty());
+	CHECK(saved(mediaType::kAnime).empty());
 
 	put("lists/anime.xml.gz", std::string("\x1f\x8b\x08\x00", 4) + "gz");
 	CHECK(run({"import", "lists/anime.xml.gz"}) == 1);
@@ -566,14 +585,14 @@ TEST_CASE_FIXTURE(cliFixture, "cli import changes nothing when any file is bad")
 	CHECK(err ==
 	      "error: no anime or manga found in lists/empty.xml (is it a "
 	      "MyAnimeList XML export?)\n");
-	CHECK(catalist::test::readText("data/anime.csv").empty());
+	CHECK(saved(mediaType::kAnime).empty());
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli import exits 1 when the catalogue cannot be saved") {
 	put("lists/anime.xml", kAnimeXml);
-	catalist::test::makeUnwritable("data/anime.csv");
+	catalist::test::makeUnwritable("data/catalist.db");
 	CHECK(run({"import", "lists/anime.xml"}) == 1);
-	CHECK(err == "error: could not save the catalogue to data\n");
+	CHECK(err.find("error: cannot open data/catalist.db: ") == 0);
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli refuses to work on a catalogue it cannot read") {

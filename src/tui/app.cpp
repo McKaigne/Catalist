@@ -124,7 +124,7 @@ void appShell::applyFindings() {
 void appContext::save(const std::string& done) {
 	status = db.saveAll()
 	             ? done
-	             : fmt::format("Could not save the catalogue to {}.", db.getConfigPath().string());
+	             : fmt::format("Could not save the catalogue to {}.", db.getDataDir().string());
 }
 
 appShell::appShell(appContext& ctx, std::vector<iTab*> tabs, std::function<void()> quit)

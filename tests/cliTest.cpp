@@ -56,9 +56,13 @@ struct cliFixture : catalist::test::tempDirFixture {
 		std::istringstream inStream(input);
 		std::ostringstream outStream;
 		std::ostringstream errStream;
+		if (outClosed)
+			outStream.setstate(std::ios::badbit);
 		catalist::cliContext ctx{db, inStream, outStream, errStream, testToday, web.poster()};
 		ctx.interactive = not input.empty();
 		ctx.columns = columns;
+		ctx.color = color;
+		ctx.program = program;
 		int exitCode = catalist::runCli(args, ctx);
 		out = outStream.str();
 		err = errStream.str();
@@ -81,8 +85,9 @@ struct cliFixture : catalist::test::tempDirFixture {
 		catalist::test::writeText(path, content);
 	}
 
-	// Four titles, two of them called Frieren, all checked and linked today
-	// so no command asks AniList unless a test wants it to.
+	// Four titles, two of them called Frieren (anime a:1 and manga m:2; Odd
+	// Taxi is a:2 and Berserk m:1), all checked and linked today so no
+	// command asks AniList unless a test wants it to.
 	void seed() {
 		catalist::catalogue db("data");
 		db.addEntry(makeEntry()
@@ -126,6 +131,11 @@ struct cliFixture : catalist::test::tempDirFixture {
 
 	catalist::test::fakeWeb web;
 	std::filesystem::path previousDir;
+	// How the next runs are set up: the name the program goes by, colours,
+	// and a standard output whose reader has gone.
+	std::string program = "catalist";
+	bool color = false;
+	bool outClosed = false;
 	std::string out;
 	std::string err;
 };
@@ -137,7 +147,7 @@ bool has(const std::string& text, const std::string& part) {
 }  // namespace
 
 TEST_CASE_FIXTURE(cliFixture, "cli --version prints the version") {
-	for (const char* flag : {"--version", "-V", "-v", "version"}) {
+	for (const char* flag : {"--version", "-V", "-v"}) {
 		CHECK(run({flag}) == 0);
 		CHECK(out == std::string("Catalist v") + catalist::kVersionString + "\n");
 		CHECK(err.empty());
@@ -147,22 +157,70 @@ TEST_CASE_FIXTURE(cliFixture, "cli --version prints the version") {
 TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has its own") {
 	for (const char* flag : {"--help", "-h", "help"}) {
 		CHECK(run({flag}) == 0);
-		CHECK(has(out, "  ls        List your titles"));
-		CHECK(has(out, "  add       Add a title found on AniList"));
-		CHECK(has(out, "catalist next frieren"));
-		CHECK(has(out, "kept in\ndata."));
+		CHECK(has(out, "Usage: catalist [COMMAND] [ARG...]\n"));
+		CHECK(has(out, "  ls          List your titles\n"));
+		CHECK(has(out, "  help        Show help for a command\n"));
+		CHECK(has(out, "  add         Add a title found on AniList\n"));
+		CHECK(has(out, "  catalist show a:12\n"));
+		CHECK(has(out, "kept in\ndata.\n"));
 		CHECK(err.empty());
 	}
+	CHECK(run({"help", "ls"}) == 0);
+	CHECK(out.find("List your titles.\n\n"
+	               "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] "
+	               "[QUERY]\n") == 0);
+	CHECK(has(out, "ref type title status score progress total volumes rewatched\n"));
+	CHECK(has(out, "\nOptions:\n  -a                list anime only\n"));
+	CHECK(has(out, "  -s STATUS         only watching, completed, on-hold, dropped or planned\n"));
+	CHECK(has(out, "      --sort=KEY    new, updated, score, progress, date, status or title\n"));
+	CHECK(out.rfind("  -h, --help        show this help\n") + 35 == out.size());
+	CHECK(err.empty());
+	std::string fromHelp = out;
+	for (const char* flag : {"-h", "--help"}) {
+		CHECK(run({"ls", flag}) == 0);
+		CHECK(out == fromHelp);
+	}
+	// Asked for among other options, help is all that happens.
+	CHECK(run({"ls", "-qh", "--sort=title"}) == 0);
+	CHECK(out == fromHelp);
+	CHECK(run({"help", "show"}) == 0);
+	CHECK(has(out, "Usage: catalist show [-am] [--all] [--json] [--header] REF...\n"));
+	// A command that still has its old form.
 	CHECK(run({"help", "set"}) == 0);
 	CHECK(has(out, "Usage: catalist set [anime|manga] <TITLE|ID> <options>"));
-	CHECK(has(out, "-p, --progress N"));
-	CHECK(has(out, "Also: edit"));
-	std::string fromHelp = out;
-	CHECK(run({"edit", "--help"}) == 0);
-	CHECK(out == fromHelp);
-	CHECK(run({"set", "-h"}) == 0);
-	CHECK(out == fromHelp);
-	CHECK(run({"help", "nope"}) == 1);
+
+	CHECK(run({"help", "nope"}) == 2);
+	CHECK(err ==
+	      "error: no command 'nope'\n"
+	      "Usage: catalist help [COMMAND]\n"
+	      "Run 'catalist help help' for more.\n");
+	CHECK(out.empty());
+	CHECK(run({"help", "shwo"}) == 2);
+	CHECK(err.find("error: no command 'shwo' (did you mean 'show'?)\n") == 0);
+	CHECK(run({"help", "ls", "show"}) == 2);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli names itself as it was run") {
+	program = "cl";
+	CHECK(run({"help"}) == 0);
+	CHECK(has(out, "Usage: cl [COMMAND] [ARG...]\n"));
+	CHECK(has(out, "  cl show a:12\n"));
+	CHECK(has(out, "Run 'cl help COMMAND'"));
+	CHECK_FALSE(has(out, "catalist "));
+	CHECK(run({"help", "ls"}) == 0);
+	CHECK(has(out, "Usage: cl ls [-amrq]"));
+	CHECK(run({"lst"}) == 2);
+	CHECK(err ==
+	      "error: unknown command 'lst' (did you mean 'ls'?)\n"
+	      "Usage: cl [COMMAND] [ARG...]\n"
+	      "Run 'cl help' to see the commands.\n");
+	CHECK(run({"ls", "-x"}) == 2);
+	CHECK(err ==
+	      "error: unknown option '-x'\n"
+	      "Usage: cl ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] [QUERY]\n"
+	      "Run 'cl help ls' for more.\n");
+	CHECK(run({"show", "naruto"}) == 1);
+	CHECK(has(err, "See what is there with: cl ls\n"));
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli says once that it imported the lists of an earlier version") {
@@ -188,13 +246,35 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 	CHECK(run({"lst"}) == 2);
 	CHECK(err ==
 	      "error: unknown command 'lst' (did you mean 'ls'?)\n"
+	      "Usage: catalist [COMMAND] [ARG...]\n"
 	      "Run 'catalist help' to see the commands.\n");
 	CHECK(out.empty());
 	CHECK(run({"sync"}) == 2);
 	CHECK(err.find("error: unknown command 'sync'\n") == 0);
 	CHECK(run({"--frobnicate"}) == 2);
-	CHECK(err.find("error: unknown option '--frobnicate'") == 0);
+	CHECK(err.find("error: unknown option '--frobnicate'\nUsage: catalist [COMMAND]") == 0);
+	// The names the earlier command line had for ls and show are gone.
+	for (const char* gone : {"list", "info", "version"})
+		CHECK(run({gone}) == 2);
 
+	CHECK(run({"ls", "--jsno"}) == 2);
+	CHECK(err ==
+	      "error: unknown option '--jsno' (did you mean '--json'?)\n"
+	      "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] [QUERY]\n"
+	      "Run 'catalist help ls' for more.\n");
+	CHECK(run({"ls", "-ax"}) == 2);
+	CHECK(err.find("error: unknown option '-x'\n") == 0);
+	CHECK(run({"ls", "--sort"}) == 2);
+	CHECK(err.find("error: option '--sort' needs a value (KEY)\n") == 0);
+	CHECK(run({"ls", "-s"}) == 2);
+	CHECK(err.find("error: option '-s' needs a value (STATUS)\n") == 0);
+	CHECK(run({"ls", "--json=yes"}) == 2);
+	CHECK(err.find("error: option '--json' takes no value\n") == 0);
+	CHECK(run({"show", "--al", "taxi"}) == 2);
+	CHECK(err.find("error: unknown option '--al' (did you mean '--all'?)\n") == 0);
+	CHECK(out.empty());
+
+	// The commands that still have their old form.
 	CHECK(run({"set", "frieren", "--progres", "3"}) == 2);
 	CHECK(err ==
 	      "error: unknown option '--progres' (did you mean '--progress'?)\n"
@@ -202,8 +282,6 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 	      "Run 'catalist help set' for more.\n");
 	CHECK(run({"set", "frieren", "--rating"}) == 2);
 	CHECK(err.find("error: --rating needs a value (N)") == 0);
-	CHECK(run({"ls", "--reverse=yes"}) == 2);
-	CHECK(err.find("error: --reverse takes no value") == 0);
 	CHECK(run({"import"}) == 2);
 	CHECK(err.find("error: give at least one file") == 0);
 	CHECK(run({"export", "books"}) == 2);
@@ -214,67 +292,264 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 TEST_CASE_FIXTURE(cliFixture, "cli ls prints tab-separated lines into a pipe") {
 	seed();
 	CHECK(run({"ls"}) == 0);
-	// New releases first, then the latest change.
-	CHECK(out.find("anime\t128547\tOdd Taxi\tWatching\t8\t5\t13\t8\n") == 0);
-	CHECK(has(out, "manga\t30002\tBerserk\tReading\t0\t364\t0\t0\n"));
-	CHECK(std::count(out.begin(), out.end(), '\n') == 4);
+	// In title order; nothing but the titles, and every field holds something.
+	CHECK(out ==
+	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t-\t-\t-\t0\n"
+	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t-\t-\t-\t8\n"
+	      "a:1\tanime\tSousou no Frieren\tcompleted\t10\t28\t28\t0\t0\t-\t-\t-\t0\n"
+	      "m:2\tmanga\tSousou no Frieren\tplanned\t0\t0\t0\t0\t0\t-\t-\t-\t0\n");
 	CHECK(err.empty());
 
-	CHECK(run({"ls", "manga"}) == 0);
-	CHECK(std::count(out.begin(), out.end(), '\n') == 2);
-	CHECK(run({"ls", "FRIEREN"}) == 0);
-	CHECK(std::count(out.begin(), out.end(), '\n') == 2);
-	CHECK(run({"ls", "-s", "reading", "anime"}) == 0);
-	CHECK(out == "anime\t128547\tOdd Taxi\tWatching\t8\t5\t13\t8\n");
-	CHECK(run({"ls", "--sort", "title", "-n", "1"}) == 0);
-	CHECK(out.find("manga\t30002\tBerserk") == 0);
-	CHECK(std::count(out.begin(), out.end(), '\n') == 1);
-	CHECK(run({"ls", "--sort", "title", "--reverse", "--limit=1"}) == 0);
-	CHECK(has(out, "Sousou no Frieren"));
+	CHECK(run({"ls", "--header", "taxi"}) == 0);
+	CHECK(out ==
+	      "ref\ttype\ttitle\tstatus\tscore\tprogress\ttotal\tvolumes\trewatched\tstarted\t"
+	      "finished\tupdated\tnew\n"
+	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t-\t-\t-\t8\n");
+	// Nothing listed: nothing printed, and that is not a failure.
+	CHECK(run({"ls", "nothing like it"}) == 0);
+	CHECK(out.empty());
+	CHECK(err.empty());
+}
 
-	CHECK(run({"ls", "--status", "bored"}) == 2);
-	CHECK(err.find("error: unknown status 'bored'") == 0);
-	CHECK(run({"ls", "--sort", "colour"}) == 2);
+TEST_CASE_FIXTURE(cliFixture, "cli ls keeps to a list, a status or a part of the title") {
+	seed();
+	CHECK(run({"ls", "-q"}) == 0);
+	CHECK(out == "m:1\na:2\na:1\nm:2\n");
+	CHECK(run({"ls", "-qm"}) == 0);
+	CHECK(out == "m:1\nm:2\n");
+	CHECK(run({"ls", "-q", "-a"}) == 0);
+	CHECK(out == "a:2\na:1\n");
+	CHECK(run({"ls", "-qam"}) == 0);
+	CHECK(out == "m:1\na:2\na:1\nm:2\n");
+	CHECK(run({"ls", "-q", "FRIEREN"}) == 0);
+	CHECK(out == "a:1\nm:2\n");
+	CHECK(run({"ls", "-q", "no fri"}) == 0);
+	CHECK(out == "a:1\nm:2\n");
+	CHECK(run({"ls", "-q", "-s", "watching"}) == 0);
+	CHECK(out == "m:1\na:2\n");
+	CHECK(run({"ls", "-qas", "reading"}) == 0);
+	CHECK(out == "a:2\n");
+	CHECK(run({"ls", "-q", "-splanned", "sousou"}) == 0);
+	CHECK(out == "m:2\n");
+	CHECK(run({"ls", "-q", "-s", "on-hold"}) == 0);
+	CHECK(out.empty());
+	// After --, a title may start with a dash.
+	CHECK(run({"ls", "-q", "--", "-s"}) == 0);
+	CHECK(out.empty());
+
+	CHECK(run({"ls", "-s", "bored"}) == 2);
+	CHECK(err.find("error: unknown status 'bored'\n") == 0);
+	CHECK(run({"ls", "odd", "taxi"}) == 2);
+	CHECK(err.find("error: give one QUERY, after the options; quote a title of several words\n") ==
+	      0);
+	// Options come first.
+	CHECK(run({"ls", "taxi", "-q"}) == 2);
+	CHECK(out.empty());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli ls sorts by title, or by the key asked for") {
+	seed();
+	CHECK(run({"ls", "-q", "--sort=title"}) == 0);
+	CHECK(out == "m:1\na:2\na:1\nm:2\n");
+	CHECK(run({"ls", "-qr"}) == 0);
+	// Two titles that sort alike keep their order: anime, then manga.
+	CHECK(out == "a:1\nm:2\na:2\nm:1\n");
+	CHECK(run({"ls", "-q", "--sort=score"}) == 0);
+	CHECK(out.find("a:1\na:2\n") == 0);
+	CHECK(run({"ls", "-q", "--sort", "progress"}) == 0);
+	CHECK(out.find("m:1\na:1\na:2\n") == 0);
+	CHECK(run({"ls", "-qr", "--sort=progress"}) == 0);
+	CHECK(out == "m:2\na:2\na:1\nm:1\n");
+	CHECK(run({"ls", "-q", "--sort=new"}) == 0);
+	CHECK(out.find("a:2\n") == 0);
+	for (const char* key : {"updated", "date", "status"})
+		CHECK(run({"ls", "-q", std::string("--sort=") + key}) == 0);
+
+	CHECK(run({"ls", "--sort=colour"}) == 2);
+	CHECK(err.find("error: unknown sort key 'colour'\n") == 0);
+	CHECK(run({"ls", "--sort=Title"}) == 2);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli ls --json prints one object a line") {
+	seed();
+	CHECK(run({"ls", "--json", "taxi"}) == 0);
+	CHECK(out ==
+	      "{\"ref\":\"a:2\",\"type\":\"anime\",\"title\":\"Odd Taxi\",\"status\":\"watching\","
+	      "\"score\":8,\"progress\":5,\"total\":13,\"volumes\":0,\"rewatched\":0,"
+	      "\"started\":null,\"finished\":null,\"updated\":null,\"new\":8}\n");
+	// A total that is not known is null; --header is for the tabbed form.
+	CHECK(run({"ls", "--json", "--header", "berserk"}) == 0);
+	CHECK(out.find("{\"ref\":\"m:1\",\"type\":\"manga\",\"title\":\"Berserk\"") == 0);
+	CHECK(has(out, "\"progress\":364,\"total\":null,"));
+	CHECK(run({"ls", "--json"}) == 0);
+	CHECK(std::count(out.begin(), out.end(), '\n') == 4);
+	// The same at a terminal, and -q wins over it.
+	CHECK(run({"ls", "--json", "taxi"}, "", 100) == 0);
+	CHECK(out.find("{\"ref\":\"a:2\"") == 0);
+	CHECK(run({"ls", "--json", "-q", "taxi"}) == 0);
+	CHECK(out == "a:2\n");
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli ls keeps a tab or a quote in a title from breaking a line") {
+	{
+		catalist::catalogue db("data");
+		db.addEntry(makeEntry().title("Tab\there, \"quoted\"").startDate("2026-01-02"));
+		REQUIRE(db.saveAll());
+	}
+	CHECK(run({"ls"}) == 0);
+	CHECK(out ==
+	      "a:1\tanime\tTab here, \"quoted\"\twatching\t0\t0\t0\t0\t0\t2026-01-02\t-\t-\t0\n");
+	CHECK(run({"ls", "--json"}) == 0);
+	CHECK(has(out, "\"title\":\"Tab\\there, \\\"quoted\\\"\","));
+	CHECK(has(out, "\"started\":\"2026-01-02\",\"finished\":null,"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli stops quietly when nothing reads its output any more") {
+	seed();
+	outClosed = true;
+	for (const auto& args : {std::vector<std::string>{"ls"},
+	                         {"ls", "-q"},
+	                         {"ls", "--json"},
+	                         {"show", "taxi", "berserk"},
+	                         {"help"}}) {
+		CHECK(run(args) == 0);
+		CHECK(out.empty());
+		CHECK(err.empty());
+	}
+	CHECK(run({"ls"}, "", 100) == 0);
+	CHECK(run({"show", "--all", "frieren"}, "", 100) == 0);
+	CHECK(err.empty());
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli ls draws a table at a terminal") {
 	seed();
-	CHECK(run({"ls", "anime"}, "", 100) == 0);
-	CHECK(has(out, "ID  TITLE"));
-	CHECK(has(out, "STATUS"));
-	CHECK(has(out, "128547  Odd Taxi"));
-	CHECK(has(out, "5/13"));
-	CHECK(has(out, "+8"));
-	CHECK(has(out, "2 titles\n"));
-	// One type: no type column.
-	CHECK_FALSE(has(out, "TYPE"));
-	CHECK(run({"ls", "-n", "1"}, "", 100) == 0);
-	CHECK(has(out, "TYPE"));
-	CHECK(has(out, "1 of 4 titles"));
+	CHECK(run({"ls"}, "", 100) == 0);
+	CHECK(out ==
+	      "REF  TITLE              STATUS        SCORE  PROGRESS  NEW\n"
+	      "m:1  Berserk            Reading           -  364/?\n"
+	      "a:2  Odd Taxi           Watching          8  5/13      +8\n"
+	      "a:1  Sousou no Frieren  Completed        10  28/28\n"
+	      "m:2  Sousou no Frieren  Plan to Read      -  0/?\n");
+	CHECK(err.empty());
+
+	// A narrow terminal cuts the titles, not the other columns.
+	CHECK(run({"ls", "-a"}, "", 40) == 0);
+	CHECK(out ==
+	      "REF  TITLE       STATUS     SCORE  PROGRESS  NEW\n"
+	      "a:2  Odd Taxi    Watching       8  5/13      +8\n"
+	      "a:1  Sousou no…  Completed     10  28/28\n");
+
 	CHECK(run({"ls", "nothing like it"}, "", 100) == 0);
-	CHECK(out == "Nothing to show.\n");
+	CHECK(out.empty());
+	CHECK(err == "No titles to list.\n");
+	CHECK(run({"ls", "-q", "taxi"}, "", 100) == 0);
+	CHECK(out == "a:2\n");
+
+	color = true;
+	CHECK(run({"ls", "taxi"}, "", 100) == 0);
+	CHECK(has(out, "\x1b[2mREF\x1b[0m  "));
+	CHECK(has(out, "\x1b[36ma:2\x1b[0m  Odd Taxi  \x1b[32mWatching\x1b[0m  "));
+	CHECK(has(out, "  \x1b[32m+8\x1b[0m\n"));
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli show finds a title by words or by the provider's id") {
+TEST_CASE_FIXTURE(cliFixture, "cli show prints a title's line into a pipe") {
 	seed();
 	CHECK(run({"show", "taxi"}) == 0);
-	CHECK(out.find("Odd Taxi\n") == 0);
-	CHECK(has(out, "Anime, AniList #128547"));
-	CHECK(has(out, "https://anilist.co/anime/128547"));
-	CHECK(has(out, "5/13 episodes  (+8 new)"));
-	CHECK(has(out, "8/10"));
-	CHECK(run({"show", "30002"}) == 0);
-	CHECK(out.find("Berserk\n") == 0);
-	CHECK(has(out, "Volumes"));
-	// A title that is exactly the words wins over longer ones that hold them.
-	CHECK(run({"show", "manga", "sousou", "no", "frieren"}) == 0);
-	CHECK(has(out, "Manga, AniList #118586"));
+	CHECK(out ==
+	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t-\t-\t-\t8\t0\t13\t128547\t44265\t"
+	      "https://anilist.co/anime/128547\n");
+	CHECK(err.empty());
+	CHECK(run({"show", "--header", "m:1"}) == 0);
+	CHECK(out ==
+	      "ref\ttype\ttitle\tstatus\tscore\tprogress\ttotal\tvolumes\trewatched\tstarted\t"
+	      "finished\tupdated\tnew\ttotal_volumes\treleased\tanilist_id\tmal_id\turl\n"
+	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t-\t-\t-\t0\t0\t0\t30002\t2\t"
+	      "https://anilist.co/manga/30002\n");
+	CHECK(run({"show", "--json", "m:1"}) == 0);
+	CHECK(out ==
+	      "{\"ref\":\"m:1\",\"type\":\"manga\",\"title\":\"Berserk\",\"status\":\"watching\","
+	      "\"score\":0,\"progress\":364,\"total\":null,\"volumes\":0,\"rewatched\":0,"
+	      "\"started\":null,\"finished\":null,\"updated\":null,\"new\":0,"
+	      "\"total_volumes\":null,\"released\":null,\"anilist_id\":30002,\"mal_id\":2,"
+	      "\"url\":\"https://anilist.co/manga/30002\"}\n");
+}
 
+TEST_CASE_FIXTURE(cliFixture, "cli show takes several titles, by ref, by title or from a pipe") {
+	seed();
+	// Each once, in the order named.
+	CHECK(run({"show", "a:1", "taxi", "a:1", "ODD"}) == 0);
+	CHECK(out.find("a:1\t") == 0);
+	CHECK(has(out, "\na:2\t"));
+	CHECK(std::count(out.begin(), out.end(), '\n') == 2);
+	CHECK(run({"show", "-"}, "a:2\n\nberserk\n") == 0);
+	CHECK(out.find("a:2\t") == 0);
+	CHECK(has(out, "\nm:1\t"));
+	CHECK(run({"show", "m:2", "-"}, "a:2\n") == 0);
+	CHECK(out.find("m:2\t") == 0);
+	CHECK(has(out, "\na:2\t"));
+	// Nothing in the pipe is nothing to do.
+	CHECK(run({"show", "-"}) == 0);
+	CHECK(out.empty());
+	CHECK(err == "No titles named on standard input: nothing to do.\n");
+	// A title that starts with a dash goes after --.
+	CHECK(run({"show", "--", "-s"}) == 1);
+	CHECK(has(err, "error: nothing in your lists matches '-s'\n"));
+
+	CHECK(run({"show"}) == 2);
+	CHECK(err.find("error: name a title: a ref such as a:12, or part of it\n") == 0);
+	CHECK(run({"show", "taxi", ""}) == 2);
+	CHECK(err.find("error: a REF cannot be empty\n") == 0);
+	CHECK(out.empty());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli show draws a card at a terminal") {
+	seed();
+	CHECK(run({"show", "taxi"}, "", 100) == 0);
+	CHECK(out ==
+	      "Odd Taxi\n"
+	      "  Ref          a:2\n"
+	      "  Type         Anime\n"
+	      "  AniList      128547\n"
+	      "  MyAnimeList  44265\n"
+	      "  Page         https://anilist.co/anime/128547\n"
+	      "  Status       Watching\n"
+	      "  Score        8/10\n"
+	      "  Progress     5/13 episodes  (+8 new)\n"
+	      "  Rewatched    0\n"
+	      "  Started      -\n"
+	      "  Finished     -\n"
+	      "  Updated      -\n");
+	CHECK(run({"show", "m:2", "berserk"}, "", 100) == 0);
+	CHECK(out.find("Sousou no Frieren\n  Ref          m:2\n  Type         Manga\n") == 0);
+	CHECK(has(out, "  Status       Plan to Read\n  Score        -\n"));
+	CHECK(has(out, "  Progress     0/? chapters\n  Volumes      0/?\n  Reread       0\n"));
+	// A blank line between two cards.
+	CHECK(has(out, "  Updated      -\n\nBerserk\n"));
+	CHECK(run({"show", "--json", "taxi"}, "", 100) == 0);
+	CHECK(out.find("{\"ref\":\"a:2\"") == 0);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli says which title it could not find, and shows none of them") {
+	seed();
 	CHECK(run({"show", "naruto"}) == 1);
 	CHECK(err ==
 	      "error: nothing in your lists matches 'naruto'\n"
 	      "See what is there with: catalist ls\n");
-	CHECK(run({"show"}) == 2);
+	CHECK(run({"show", "-a", "berserk"}) == 1);
+	CHECK(err.find("error: nothing in your anime list matches 'berserk'\n") == 0);
+	CHECK(run({"show", "a:9"}) == 1);
+	CHECK(err.find("error: no title in your lists has the ref a:9\n") == 0);
+	CHECK(run({"show", "-m", "a:2"}) == 1);
+	CHECK(err.find("error: no title in your manga list has the ref a:2\n") == 0);
+	// One REF that fails stops them all.
+	CHECK(run({"show", "taxi", "naruto"}) == 1);
+	CHECK(out.empty());
+	// An option after the first title is read as a title.
+	CHECK(run({"show", "taxi", "--json"}) == 1);
+	CHECK(err ==
+	      "error: nothing in your lists matches '--json'\n"
+	      "Options go before the first operand.\n"
+	      "See what is there with: catalist ls\n");
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli asks which title was meant, or lists them into a pipe") {
@@ -282,17 +557,31 @@ TEST_CASE_FIXTURE(cliFixture, "cli asks which title was meant, or lists them int
 	CHECK(run({"show", "frieren"}) == 1);
 	CHECK(err ==
 	      "error: 'frieren' matches 2 titles:\n"
-	      "  anime   154587  Sousou no Frieren\n"
-	      "  manga   118586  Sousou no Frieren\n"
-	      "Name one by its AniList id, or with more of its title.\n");
+	      "  a:1  Sousou no Frieren\n"
+	      "  m:2  Sousou no Frieren\n"
+	      "Name one by its ref (-a and -m keep to one list), or pass --all for all of them.\n");
 	CHECK(out.empty());
+	CHECK(run({"show", "-m", "frieren"}) == 0);
+	CHECK(out.find("m:2\t") == 0);
+	CHECK(run({"show", "--all", "frieren"}) == 0);
+	CHECK(out.find("a:1\t") == 0);
+	CHECK(has(out, "\nm:2\t"));
 
 	CHECK(run({"show", "frieren"}, "2\n") == 0);
-	CHECK(has(err, "   2  manga   118586  Sousou no Frieren"));
-	CHECK(has(err, "Which one? [1-2, Enter to cancel]: "));
-	CHECK(has(out, "Manga, AniList #118586"));
-	CHECK(run({"show", "frieren"}, "\n") == 1);
-	CHECK(has(err, "Canceled."));
+	CHECK(err ==
+	      "'frieren' matches 2 titles:\n"
+	      "   1  a:1  Sousou no Frieren\n"
+	      "   2  m:2  Sousou no Frieren\n"
+	      "Which one? [1-2, Enter to cancel]: ");
+	CHECK(out.find("m:2\t") == 0);
+	for (const char* answer : {"\n", "7\n", "both\n"}) {
+		CHECK(run({"show", "frieren"}, answer) == 1);
+		CHECK(has(err, "]: Cancelled.\n"));
+		CHECK(out.empty());
+	}
+	// Standard input that names the titles cannot answer as well.
+	CHECK(run({"show", "-"}, "frieren\n") == 1);
+	CHECK(err.find("error: 'frieren' matches 2 titles:\n") == 0);
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli set changes a title and says what changed") {
@@ -480,16 +769,15 @@ TEST_CASE_FIXTURE(cliFixture, "cli provider decides which ids are shown and acce
 		REQUIRE(db.loadAll().ok());
 		CHECK(db.getProvider() == catalist::provider::kMyAnimeList);
 	}
-	CHECK(run({"show", "44265"}) == 0);
-	CHECK(has(out, "Anime, MyAnimeList #44265"));
-	CHECK(has(out, "https://myanimelist.net/anime/44265"));
-	CHECK(run({"ls", "anime", "taxi"}) == 0);
-	CHECK(out.find("anime\t44265\t") == 0);
-	CHECK(run({"show", "128547"}) == 1);
+	CHECK(run({"show", "taxi"}) == 0);
+	CHECK(has(out, "\thttps://myanimelist.net/anime/44265\n"));
+	CHECK(run({"show", "taxi"}, "", 100) == 0);
+	CHECK(has(out, "  Page         https://myanimelist.net/anime/44265\n"));
 
 	CHECK(run({"provider", "kitsu"}) == 2);
 	CHECK(run({"provider", "anilist"}) == 0);
-	CHECK(run({"show", "128547"}) == 0);
+	CHECK(run({"show", "taxi"}) == 0);
+	CHECK(has(out, "\thttps://anilist.co/anime/128547\n"));
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli looks up missing ids once a day") {
@@ -498,10 +786,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli looks up missing ids once a day") {
 	// AniList knows Frieren but not (in this test) Odd Taxi.
 	web.respond(R"("ids":[52991,44265])",
 	            R"({"data":{"Page":{"media":[{"id":154587,"idMal":52991}]}}})");
-	CHECK(run({"ls"}) == 0);
-	CHECK(has(out, "anime\t154587\tSousou no Frieren"));
-	CHECK(has(out, "anime\t-\tOdd Taxi"));
+	// A command that still has its old form looks them up; the answer "n"
+	// keeps the title.
+	CHECK(run({"rm", "taxi"}, "n\n") == 1);
 	CHECK(savedTitle(mediaType::kAnime, "Sousou no Frieren").anilistId == 154587);
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").anilistId == 0);
 	CHECK(web.posted.size() == 1);
 	{
 		catalist::catalogue db("data");
@@ -509,11 +798,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli looks up missing ids once a day") {
 		CHECK(db.getLinkedOn() == testToday());
 	}
 	// Odd Taxi still lacks its id, but it was asked about today.
-	CHECK(run({"ls"}) == 0);
+	CHECK(run({"rm", "taxi"}, "n\n") == 1);
 	CHECK(web.posted.size() == 1);
 	// A new import asks again on the next command.
 	REQUIRE(run({"import", "lists/anime.xml"}) == 0);
-	CHECK(run({"ls"}) == 0);
+	CHECK(run({"rm", "taxi"}, "n\n") == 1);
 	CHECK(web.posted.size() == 2);
 }
 

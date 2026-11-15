@@ -437,9 +437,12 @@ const std::vector<entry>& catalogue::getSaved(mediaType type) const {
 }
 
 void catalogue::sortEntries(std::vector<entry>& entries, sortKey key, bool reverse) {
-	std::sort(entries.begin(), entries.end(), [key, reverse](const entry& a, const entry& b) {
-		return reverse ? comesBefore(b, a, key) : comesBefore(a, b, key);
-	});
+	// Stable, so titles that compare equal keep the order they came in and
+	// the same command prints the same lines every time.
+	std::stable_sort(entries.begin(), entries.end(),
+	                 [key, reverse](const entry& a, const entry& b) {
+		                 return reverse ? comesBefore(b, a, key) : comesBefore(a, b, key);
+	                 });
 }
 
 int catalogue::addEntry(entry added) {

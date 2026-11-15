@@ -1,6 +1,7 @@
 #include <clocale>
 #include <csignal>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -32,6 +33,9 @@ int main(int argc, char* argv[]) {
 		    ctx.columns > 0 and std::getenv("NO_COLOR") == nullptr and env("TERM") != "dumb";
 		ctx.nowStamp = catalist::nowStamp;
 		ctx.txLabel = env("CATALIST_TX");
+		// `cl` is the same program under a shorter name.
+		std::string name = std::filesystem::path(argv[0]).filename().string();
+		ctx.program = name.empty() ? "catalist" : name;
 		return catalist::runCli({argv + 1, argv + argc}, ctx);
 	}
 

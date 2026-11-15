@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "anilist.hpp"
+#include "args.hpp"
 #include "catalogue.hpp"
 
 namespace catalist {
@@ -31,7 +32,37 @@ struct cliContext {
 	std::function<std::string()> nowStamp = [] { return std::string(); };
 	// CATALIST_TX: commands run with the same label share one undo step.
 	std::string txLabel{};
+	// The name the program was run by (`catalist` or `cl`), for its messages.
+	std::string program = "catalist";
 };
+
+// What a command's operands are, so the shell can complete them.
+enum class operandKind { kNone, kRefs, kQuery, kFiles, kWords, kCommands };
+
+// One command of the command line. The table of them (see commands) is what
+// the parser, the help, the manual page and the completion scripts all read.
+struct command {
+	std::string name;
+	std::vector<std::string> aliases;
+	std::string summary;
+	std::string details;
+	std::vector<args::option> options;
+	// The operands as the usage line shows them: "REF...".
+	std::string operands;
+	int (*run)(const command& self, const args::parsed& line, cliContext& ctx) = nullptr;
+	operandKind completes = operandKind::kNone;
+	// The words to choose from, for kWords.
+	std::vector<std::string> words{};
+	// Left out of the help: the completion scripts' own commands.
+	bool hidden = false;
+};
+
+[[nodiscard]] const std::vector<command>& commands();
+// "ls [-amqr] [-s STATUS] [--sort=KEY] [QUERY]": the command with its
+// options and operands, as the help and the manual page show it.
+[[nodiscard]] std::string usageLine(const command& shown);
+// The option every command takes besides its own.
+[[nodiscard]] const args::option& helpOption();
 
 // One line for standard error when loadAll has just imported the CSV files
 // of an earlier version; empty when it has not.
@@ -39,7 +70,8 @@ struct cliContext {
 
 // Runs `catalist <args>` for a non-empty argument list and returns the exit
 // code: 0 on success, 1 when the work failed, 2 when the command line is
-// wrong. See `catalist help`.
+// wrong. Data goes to `out`; questions, notes and errors go to `err`. See
+// `catalist help`.
 int runCli(const std::vector<std::string>& args, cliContext& ctx);
 
 }  // namespace catalist

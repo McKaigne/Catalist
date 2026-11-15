@@ -27,6 +27,10 @@ struct cliContext {
 	// The terminal's width, for tables; 0 when output goes to a pipe or a
 	// file, which gets tab-separated lines instead.
 	int columns = 0;
+	// The local date and time, stamped on what a command changes.
+	std::function<std::string()> nowStamp = [] { return std::string(); };
+	// CATALIST_TX: commands run with the same label share one undo step.
+	std::string txLabel{};
 };
 
 // Runs `catalist <args>` for a non-empty argument list and returns the exit

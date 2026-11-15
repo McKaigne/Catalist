@@ -52,3 +52,12 @@ TEST_CASE("today follows the computer's calendar") {
 	CHECK(date.year() >= 2024);
 	CHECK(catalist::isoDate::parse(date.toString()) == date);
 }
+
+TEST_CASE("nowStamp is the date and the time of day") {
+	auto stamp = catalist::nowStamp();
+	REQUIRE(stamp.size() == 19);
+	CHECK(catalist::isoDate::parse(stamp).has_value());
+	CHECK(stamp[10] == ' ');
+	CHECK(stamp[13] == ':');
+	CHECK(stamp[16] == ':');
+}

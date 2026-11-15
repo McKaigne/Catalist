@@ -23,6 +23,9 @@ int main(int argc, char* argv[]) {
 		const char* term = std::getenv("TERM");
 		ctx.color = ctx.columns > 0 and std::getenv("NO_COLOR") == nullptr and
 		            not(term and std::string(term) == "dumb");
+		ctx.nowStamp = catalist::nowStamp;
+		if (const char* group = std::getenv("CATALIST_TX"))
+			ctx.txLabel = group;
 		return catalist::runCli({argv + 1, argv + argc}, ctx);
 	}
 

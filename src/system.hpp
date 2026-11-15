@@ -41,6 +41,10 @@ namespace catalist {
 // The date on this computer's calendar.
 [[nodiscard]] isoDate today();
 
+// The local date and time, "YYYY-MM-DD HH:MM:SS": when a change was made,
+// for the undo history.
+[[nodiscard]] std::string nowStamp();
+
 // The size of one terminal cell in pixels, when the terminal reports it.
 struct cellSize {
 	int width = 0;

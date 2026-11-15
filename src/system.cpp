@@ -196,6 +196,14 @@ isoDate today() {
 	return isoDate::fromLocalTm(local);
 }
 
+std::string nowStamp() {
+	std::time_t seconds = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	std::tm local{};
+	localtime_r(&seconds, &local);
+	return fmt::format("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", local.tm_year + 1900,
+	                   local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min, local.tm_sec);
+}
+
 std::optional<cellSize> terminalCellSize() {
 	winsize window{};
 	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) != 0 or window.ws_col == 0 or

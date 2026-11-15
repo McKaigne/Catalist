@@ -25,7 +25,7 @@ TEST_CASE("csvCodec reads the zero date sentinel as absent and writes it empty")
 
 	auto encoded = csvCodec::encodeEntries(decoded);
 	CHECK(encoded.find("0000-00-00") == std::string::npos);
-	CHECK(encoded.find("\n1,1,anime,Old,Completed,7,1,1,0,0,0,,,,0,\n") != std::string::npos);
+	CHECK(encoded.find("\n1,1,anime,Old,Completed,7,1,1,0,0,0,,,,0,,0\n") != std::string::npos);
 }
 
 TEST_CASE("csvCodec escapeField quotes only when needed") {
@@ -61,10 +61,11 @@ TEST_CASE("csvCodec decodeEntry rejects short rows and non numeric ids") {
 	                                  mediaType::kAnime));
 }
 
-TEST_CASE("csvCodec writes the 16 columns and reads them back") {
+TEST_CASE("csvCodec writes the 17 columns and reads them back") {
 	catalist::entry original = catalist::test::makeEntry()
 	                               .id(5)
 	                               .malId(6)
+	                               .anilistId(306)
 	                               .title("R, \"t\"")
 	                               .type(mediaType::kManga)
 	                               .status(watchStatus::kOnHold)
@@ -82,14 +83,15 @@ TEST_CASE("csvCodec writes the 16 columns and reads them back") {
 	CHECK(text ==
 	      "#id,mal_id,type,title,status,score,progress,total_units,volumes,"
 	      "total_volumes,rewatched,start_date,finish_date,updated_at,released,"
-	      "checked_at\n"
+	      "checked_at,anilist_id\n"
 	      "5,6,manga,\"R, \"\"t\"\"\",On-Hold,4,3,9,1,2,1,2024-01-02,,"
-	      "2024-02-03,7,2024-02-05\n");
+	      "2024-02-03,7,2024-02-05,306\n");
 	auto decoded = csvCodec::decodeEntries(text, mediaType::kManga).value();
 	REQUIRE(decoded.size() == 1);
 	const auto& copy = decoded[0];
 	CHECK(copy.id == 5);
 	CHECK(copy.malId == 6);
+	CHECK(copy.anilistId == 306);
 	CHECK(copy.title == original.title);
 	CHECK(copy.type == mediaType::kManga);
 	CHECK(copy.status == watchStatus::kOnHold);
@@ -130,6 +132,7 @@ TEST_CASE("csvCodec reads the 0.3 layout and its extra columns, dropping them") 
 	                   .value();
 	REQUIRE(decoded.size() == 2);
 	CHECK(decoded[0].title == "Kept");
+	CHECK(decoded[0].anilistId == 105);
 	CHECK(decoded[0].score == 7);
 	CHECK(decoded[0].rewatched == 2);
 	CHECK(formatDate(decoded[0].startDate) == "2024-01-02");
@@ -139,9 +142,9 @@ TEST_CASE("csvCodec reads the 0.3 layout and its extra columns, dropping them") 
 	CHECK(csvCodec::encodeEntries(decoded) ==
 	      "#id,mal_id,type,title,status,score,progress,total_units,volumes,"
 	      "total_volumes,rewatched,start_date,finish_date,updated_at,released,"
-	      "checked_at\n"
-	      "5,5,anime,Kept,Watching,7,3,12,0,0,2,2024-01-02,,2024-02-03,0,\n"
-	      "6,0,anime,Short,Dropped,0,1,0,0,0,0,,2024-03-04,,0,\n");
+	      "checked_at,anilist_id\n"
+	      "5,5,anime,Kept,Watching,7,3,12,0,0,2,2024-01-02,,2024-02-03,0,,105\n"
+	      "6,0,anime,Short,Dropped,0,1,0,0,0,0,,2024-03-04,,0,,0\n");
 }
 
 TEST_CASE("csvCodec reads an unknown status as planned instead of dropping the row") {
@@ -241,15 +244,57 @@ TEST_CASE_FIXTURE(tempDirFixture,
 	CHECK(db.addEntry(makeEntry().title("Next")) == 41);
 }
 
-TEST_CASE_FIXTURE(tempDirFixture, "catalogue getById and findByMalId look in one media type only") {
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue getById and findByIds look in one media type only") {
 	catalogue db(tempDir() / "data");
-	int anime = db.addEntry(makeEntry().title("Anime").malId(1));
+	int anime = db.addEntry(makeEntry().title("Anime").malId(1).anilistId(11));
 	db.addEntry(makeEntry().title("Manga").malId(1).type(mediaType::kManga));
 	CHECK(db.getById(mediaType::kAnime, anime)->title == "Anime");
-	CHECK(db.findByMalId(mediaType::kManga, 1)->title == "Manga");
-	CHECK_FALSE(db.findByMalId(mediaType::kAnime, 2).has_value());
-	CHECK_FALSE(db.findByMalId(mediaType::kAnime, 0).has_value());
+	CHECK(db.findByIds(mediaType::kManga, 0, 1)->title == "Manga");
+	CHECK(db.findByIds(mediaType::kAnime, 11, 0)->title == "Anime");
+	CHECK(db.findByIds(mediaType::kAnime, 99, 1)->title == "Anime");
+	CHECK_FALSE(db.findByIds(mediaType::kAnime, 0, 2).has_value());
+	CHECK_FALSE(db.findByIds(mediaType::kAnime, 0, 0).has_value());
 	CHECK_FALSE(db.getById(mediaType::kAnime, 99).has_value());
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue finds a title by the provider's id") {
+	catalogue db(tempDir() / "data");
+	db.addEntry(makeEntry().title("Frieren").malId(52991).anilistId(154587));
+	db.addEntry(makeEntry().title("Berserk").malId(2).anilistId(30002).type(mediaType::kManga));
+	CHECK(db.findOn(catalist::provider::kAniList, 30002)->title == "Berserk");
+	CHECK(db.findOn(catalist::provider::kMyAnimeList, 52991)->title == "Frieren");
+	CHECK_FALSE(db.findOn(catalist::provider::kAniList, 52991).has_value());
+	CHECK_FALSE(db.findOn(catalist::provider::kAniList, 0).has_value());
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps the provider in its settings file") {
+	catalogue db(tempDir() / "data");
+	REQUIRE(db.loadAll().ok());
+	CHECK(db.getProvider() == catalist::provider::kAniList);
+	db.setProvider(catalist::provider::kMyAnimeList);
+	REQUIRE(db.saveSettings());
+	CHECK(catalist::test::readText(tempDir() / "data" / "settings") == "provider = myanimelist\n");
+
+	catalogue reread(tempDir() / "data");
+	REQUIRE(reread.loadAll().ok());
+	CHECK(reread.getProvider() == catalist::provider::kMyAnimeList);
+
+	// Unknown keys and values are ignored.
+	catalist::test::writeText(tempDir() / "data" / "settings",
+	                          "theme = dark\nprovider = kitsu\n  provider =  AniList \n");
+	catalogue tolerant(tempDir() / "data");
+	REQUIRE(tolerant.loadAll().ok());
+	CHECK(tolerant.getProvider() == catalist::provider::kAniList);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue merges an added title known by either id") {
+	catalogue db(tempDir() / "data");
+	db.addEntry(makeEntry().title("Frieren").malId(52991));
+	int merged = db.addEntry(makeEntry().title("Frieren").malId(52991).anilistId(154587));
+	CHECK(db.getEntries(mediaType::kAnime).size() == 1);
+	CHECK(db.getById(mediaType::kAnime, merged)->anilistId == 154587);
+	db.addEntry(makeEntry().title("Frieren").anilistId(154587));
+	CHECK(db.getEntries(mediaType::kAnime).size() == 1);
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "catalogue updateEntry replaces the entry with the same id") {

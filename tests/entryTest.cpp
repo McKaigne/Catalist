@@ -303,3 +303,26 @@ TEST_CASE("setStatus fills the dates like the cycle and ignores no change") {
 	CHECK(catalist::setScore(planned, 14, kToday).score == 10);
 	CHECK(catalist::setScore(planned, 7, kToday).score == 7);
 }
+
+TEST_CASE("entries show the chosen provider's id and page") {
+	entry frieren = makeEntry().malId(52991).anilistId(154587);
+	CHECK(catalist::idOn(frieren, catalist::provider::kAniList) == 154587);
+	CHECK(catalist::pageOn(frieren, catalist::provider::kAniList) ==
+	      "https://anilist.co/anime/154587");
+	CHECK(catalist::pageOn(frieren, catalist::provider::kMyAnimeList) ==
+	      "https://myanimelist.net/anime/52991");
+	CHECK(catalist::pageOn(makeEntry(), catalist::provider::kAniList).empty());
+	CHECK(catalist::parseProvider("MAL") == catalist::provider::kMyAnimeList);
+	CHECK(catalist::parseProvider("AniList") == catalist::provider::kAniList);
+	CHECK_FALSE(catalist::parseProvider("kitsu").has_value());
+}
+
+TEST_CASE("applyWebFacts fills in an id the entry lacked, never replaces one") {
+	entry known = makeEntry().malId(2);
+	catalist::webFacts facts;
+	facts.anilistId = 30002;
+	facts.malId = 999;
+	auto filled = catalist::applyWebFacts(known, facts, kToday);
+	CHECK(filled.anilistId == 30002);
+	CHECK(filled.malId == 2);
+}

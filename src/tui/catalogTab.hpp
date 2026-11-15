@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "jikan.hpp"
+#include "anilist.hpp"
 #include "tui/app.hpp"
 #include "tui/style.hpp"
 
@@ -26,7 +26,7 @@ enum class step {
 	kSearch,         // typing a filter
 	kTypeNumber,     // typing a count in the details card
 	kAddTyping,      // typing a title to add
-	kAddSearching,   // waiting for the MyAnimeList search
+	kAddSearching,   // waiting for the AniList search
 	kAddPicking,     // choosing one of its matches
 	kConfirmDelete,  // y/n for the selected entry
 };
@@ -61,7 +61,7 @@ struct sidebarRow {
 };
 
 // The anime or manga catalogue: sidebar filters and totals, searchable table,
-// details card, and adding titles found on MyAnimeList. Keys and state live in
+// details card, and adding titles found on AniList. Keys and state live in
 // catalogTab.cpp, drawing in catalogView.cpp.
 class catalogTab : public iTab {
 public:
@@ -120,7 +120,8 @@ private:
 	ftxui::Element renderCatalogRow(int row, const tableLayout& layout);
 	ftxui::Element renderHeaderCell(const std::string& name, sortKey key, int width,
 	                                bool stretches) const;
-	ftxui::Element renderDetails(bool withDetails);
+	// The ids shown are the provider's.
+	ftxui::Element renderDetails(bool withDetails, provider site);
 	ftxui::Element renderSideColumn(appContext& ctx);
 	ftxui::Element renderSidebarCard() const;
 	ftxui::Element renderStatsCard() const;
@@ -155,7 +156,7 @@ private:
 	textField search_;
 	textField number_;
 	textField addTitle_;
-	std::vector<jikan::title> addResults_;
+	std::vector<anilist::title> addResults_;
 	int addSelected_ = 0;
 
 	marquee::selectionTimer rowTimer_;

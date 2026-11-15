@@ -1,5 +1,7 @@
 #include "entry.hpp"
 
+#include <fmt/format.h>
+
 #include <algorithm>
 
 namespace catalist {
@@ -37,6 +39,37 @@ std::optional<watchStatus> parseStatus(const std::string& str) {
 		return watchStatus::kDropped;
 	}
 	return std::nullopt;
+}
+
+std::string providerName(provider site) {
+	return site == provider::kAniList ? "AniList" : "MyAnimeList";
+}
+
+std::string providerShortName(provider site) {
+	return site == provider::kAniList ? "AniList" : "MAL";
+}
+
+std::optional<provider> parseProvider(const std::string& name) {
+	std::string lower = name;
+	std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+	if (lower == "anilist" or lower == "al")
+		return provider::kAniList;
+	if (lower == "myanimelist" or lower == "mal")
+		return provider::kMyAnimeList;
+	return std::nullopt;
+}
+
+int idOn(const entry& shown, provider site) {
+	return site == provider::kAniList ? shown.anilistId : shown.malId;
+}
+
+std::string pageOn(const entry& shown, provider site) {
+	int id = idOn(shown, site);
+	if (id <= 0)
+		return "";
+	std::string kind = shown.type == mediaType::kAnime ? "anime" : "manga";
+	return site == provider::kAniList ? fmt::format("https://anilist.co/{}/{}", kind, id)
+	                                  : fmt::format("https://myanimelist.net/{}/{}", kind, id);
 }
 
 std::string typeToString(mediaType type) {
@@ -258,6 +291,8 @@ entry mergeImported(entry existing, const entry& incoming) {
 		existing.totalVolumes = incoming.totalVolumes;
 	if (incoming.malId > 0)
 		existing.malId = incoming.malId;
+	if (incoming.anilistId > 0)
+		existing.anilistId = incoming.anilistId;
 	if (existing.score == 0 and incoming.score > 0)
 		existing.score = incoming.score;
 	if (existing.progress == 0 and incoming.progress > 0)
@@ -270,6 +305,10 @@ entry mergeImported(entry existing, const entry& incoming) {
 }
 
 entry applyWebFacts(entry target, const webFacts& facts, const isoDate& today) {
+	if (target.anilistId == 0)
+		target.anilistId = facts.anilistId;
+	if (target.malId == 0)
+		target.malId = facts.malId;
 	if (facts.totalUnits > 0)
 		target.totalUnits = facts.totalUnits;
 	if (facts.totalVolumes > 0)

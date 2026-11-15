@@ -104,7 +104,7 @@ anilist::poster fakeWeb::poster() {
 	return [this](const std::string& url, const std::string& json) { return post(url, json); };
 }
 
-jikan::fetcher fakeWeb::fetcher() {
+updater::fetcher fakeWeb::fetcher() {
 	return [this](const std::string& url) { return get(url); };
 }
 

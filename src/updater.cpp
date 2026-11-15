@@ -14,19 +14,27 @@ namespace {
 // How long quitting waits for a request under way.
 constexpr auto kStopWait = std::chrono::milliseconds(200);
 
+// A title in the updater's maps: its AniList id, or minus its MyAnimeList id
+// while the AniList one is not known.
 using titleKey = std::pair<mediaType, int>;
 using coverKey = std::tuple<mediaType, int, int, int>;
 
+titleKey keyOf(const anilist::titleRef& title) {
+	return {title.type, title.anilistId > 0 ? title.anilistId : -title.malId};
+}
+
 struct job {
 	bool isCover = false;
-	coverKey key;
+	anilist::titleRef title;
+	int widthPx = 0;
+	int heightPx = 0;
 };
 
 }  // namespace
 
 struct updater::shared {
-	shared(jikan::fetcher fetch, anilist::poster post, std::function<isoDate()> today,
-	       sixelMaker toSixel, std::chrono::milliseconds pause, std::function<void()> wake,
+	shared(fetcher fetch, anilist::poster post, std::function<isoDate()> today, sixelMaker toSixel,
+	       std::chrono::milliseconds pause, std::function<void()> wake,
 	       std::chrono::milliseconds retryAfter)
 	    : fetch(std::move(fetch)),
 	      post(std::move(post)),
@@ -37,19 +45,21 @@ struct updater::shared {
 	      retryAfter(retryAfter) {}
 
 	void work();
-	void runLookup(const titleKey& title);
-	void runCover(const coverKey& key);
+	void runLookup(const anilist::titleRef& title);
+	void runCover(const job& next);
 	// Waits until the pause since the last request is over; false when the
 	// updater is stopping instead.
 	bool waitTurn();
-	// What AniList knows about the title, or else Jikan; fails when neither
-	// could be reached or knows it.
-	result<jikan::details> lookUpAnywhere(const titleKey& title);
+	// Asks AniList, then notes the AniList id of a title known only by its
+	// MyAnimeList id, so both name the same title from then on.
+	result<anilist::details> lookUpPaced(const anilist::titleRef& title);
 	// The cover's address: known, looked up, absent because there is none
-	// (an empty string), or nothing when no source could be reached.
-	std::optional<std::string> imageUrlOf(const titleKey& title);
+	// (an empty string), or nothing when AniList could not be reached.
+	std::optional<std::string> imageUrlOf(const anilist::titleRef& title);
+	// The key every map uses for the title (needs the lock).
+	titleKey canonical(const anilist::titleRef& title) const;
 
-	const jikan::fetcher fetch;
+	const fetcher fetch;
 	const anilist::poster post;
 	const std::function<isoDate()> today;
 	const sixelMaker toSixel;
@@ -65,6 +75,7 @@ struct updater::shared {
 	bool stopping = false;
 	bool done = false;
 	std::chrono::steady_clock::time_point lastRequest;
+	std::map<titleKey, titleKey> aliases;  // MyAnimeList key to AniList key
 	std::set<titleKey> lookedUp;
 	std::vector<finding> findings;
 	std::map<titleKey, std::string> imageUrls;
@@ -76,7 +87,7 @@ struct updater::shared {
 	std::map<coverKey, std::string> sixels;
 };
 
-updater::updater(jikan::fetcher fetch, anilist::poster post, std::function<isoDate()> today,
+updater::updater(fetcher fetch, anilist::poster post, std::function<isoDate()> today,
                  sixelMaker toSixel, std::chrono::milliseconds pause, std::function<void()> wake,
                  std::chrono::milliseconds retryAfter)
     : shared_(std::make_shared<shared>(std::move(fetch), std::move(post), std::move(today),
@@ -99,12 +110,13 @@ updater::~updater() {
 		worker_.detach();
 }
 
-void updater::lookUp(mediaType type, int malId) {
+void updater::lookUp(const anilist::titleRef& title) {
 	{
 		std::lock_guard<std::mutex> lock(shared_->mutex);
-		if (malId <= 0 or not shared_->lookedUp.insert({type, malId}).second)
+		bool hasId = title.anilistId > 0 or title.malId > 0;
+		if (not hasId or not shared_->lookedUp.insert(shared_->canonical(title)).second)
 			return;
-		shared_->jobs.push_back({false, {type, malId, 0, 0}});
+		shared_->jobs.push_back({false, title});
 	}
 	shared_->changed.notify_all();
 }
@@ -114,23 +126,23 @@ std::vector<updater::finding> updater::takeFindings() {
 	return std::exchange(shared_->findings, {});
 }
 
-updater::cover updater::coverFor(mediaType type, int malId, int widthPx, int heightPx) {
-	coverKey key{type, malId, widthPx, heightPx};
-	titleKey title{type, malId};
+updater::cover updater::coverFor(const anilist::titleRef& title, int widthPx, int heightPx) {
+	if (title.anilistId <= 0 and title.malId <= 0)
+		return {coverState::kNone, ""};
 	{
 		std::lock_guard<std::mutex> lock(shared_->mutex);
+		titleKey name = shared_->canonical(title);
+		coverKey key{name.first, name.second, widthPx, heightPx};
 		auto ready = shared_->sixels.find(key);
 		if (ready != shared_->sixels.end())
 			return {coverState::kReady, ready->second};
-		if (malId <= 0)
-			return {coverState::kNone, ""};
 
 		// A failure stands, except that an unreachable cover is asked for
 		// again once its wait is over.
-		auto failure = shared_->failed.find(title);
+		auto failure = shared_->failed.find(name);
 		if (failure != shared_->failed.end()) {
 			bool retry = failure->second == coverState::kUnreachable and
-			             std::chrono::steady_clock::now() >= shared_->retryAt[title];
+			             std::chrono::steady_clock::now() >= shared_->retryAt[name];
 			if (not retry)
 				return {failure->second, ""};
 			shared_->failed.erase(failure);
@@ -139,7 +151,7 @@ updater::cover updater::coverFor(mediaType type, int malId, int widthPx, int hei
 		if (not shared_->asked.insert(key).second)
 			return {coverState::kLoading, ""};
 		// The person is looking at this one, so it goes before any lookups.
-		shared_->jobs.push_front({true, key});
+		shared_->jobs.push_front({true, title, widthPx, heightPx});
 	}
 	shared_->changed.notify_all();
 	return {coverState::kLoading, ""};
@@ -148,6 +160,12 @@ updater::cover updater::coverFor(mediaType type, int malId, int widthPx, int hei
 void updater::waitUntilIdle() {
 	std::unique_lock<std::mutex> lock(shared_->mutex);
 	shared_->changed.wait(lock, [this] { return shared_->jobs.empty() and not shared_->working; });
+}
+
+titleKey updater::shared::canonical(const anilist::titleRef& title) const {
+	titleKey key = keyOf(title);
+	auto alias = aliases.find(key);
+	return alias == aliases.end() ? key : alias->second;
 }
 
 void updater::shared::work() {
@@ -169,9 +187,9 @@ void updater::shared::work() {
 
 		// The requests run without the lock, so the interface never waits.
 		if (next.isCover)
-			runCover(next.key);
+			runCover(next);
 		else
-			runLookup({std::get<0>(next.key), std::get<1>(next.key)});
+			runLookup(next.title);
 
 		// Report back; the interface is only woken while it still exists.
 		std::lock_guard<std::mutex> lock(mutex);
@@ -191,70 +209,73 @@ bool updater::shared::waitTurn() {
 	return true;
 }
 
-result<jikan::details> updater::shared::lookUpAnywhere(const titleKey& title) {
-	auto [type, malId] = title;
-	// AniList first: it is the more reliable of the two and counts the
-	// episodes of an airing anime directly.
+result<anilist::details> updater::shared::lookUpPaced(const anilist::titleRef& title) {
 	auto pacedPost = [this](const std::string& url, const std::string& json) {
 		return waitTurn() ? post(url, json) : std::nullopt;
 	};
-	auto found = anilist::lookUp(pacedPost, type, malId);
-	if (found.ok())
+	auto found = anilist::lookUp(pacedPost, title);
+	if (not found.ok())
 		return found;
-	auto pacedFetch = [this](const std::string& url) {
-		return waitTurn() ? fetch(url) : std::nullopt;
-	};
-	return jikan::lookUp(pacedFetch, type, malId, today());
+	std::lock_guard<std::mutex> lock(mutex);
+	titleKey asked = keyOf(title);
+	titleKey own{title.type, found.value().facts.anilistId};
+	if (own.second > 0 and asked != own) {
+		aliases[asked] = own;
+		// What was kept under the old key now belongs to the AniList one.
+		for (auto* known : {&imageUrls, &images}) {
+			auto kept = known->find(asked);
+			if (kept != known->end())
+				(*known)[own] = kept->second;
+		}
+		if (lookedUp.count(asked))
+			lookedUp.insert(own);
+	}
+	imageUrls[own.second > 0 ? own : asked] = found.value().imageUrl;
+	return found;
 }
 
-void updater::shared::runLookup(const titleKey& title) {
-	auto found = lookUpAnywhere(title);
+void updater::shared::runLookup(const anilist::titleRef& title) {
+	auto found = lookUpPaced(title);
 	std::lock_guard<std::mutex> lock(mutex);
 	if (not found.ok()) {
 		// Not reached: a later change or check may try again.
-		lookedUp.erase(title);
+		lookedUp.erase(canonical(title));
 		return;
 	}
-	imageUrls[title] = found.value().imageUrl;
-	findings.push_back({title.first, title.second, found.value().facts});
+	findings.push_back({title, found.value().facts});
 }
 
-std::optional<std::string> updater::shared::imageUrlOf(const titleKey& title) {
+std::optional<std::string> updater::shared::imageUrlOf(const anilist::titleRef& title) {
 	{
 		std::lock_guard<std::mutex> lock(mutex);
-		auto known = imageUrls.find(title);
+		auto known = imageUrls.find(canonical(title));
 		if (known != imageUrls.end())
 			return known->second;
 	}
-	auto found = lookUpAnywhere(title);
+	auto found = lookUpPaced(title);
 	if (not found.ok())
 		return std::nullopt;
-	std::lock_guard<std::mutex> lock(mutex);
-	imageUrls[title] = found.value().imageUrl;
 	return found.value().imageUrl;
 }
 
-void updater::shared::runCover(const coverKey& key) {
-	auto [type, malId, widthPx, heightPx] = key;
-	titleKey title{type, malId};
-
+void updater::shared::runCover(const job& next) {
 	// The image itself is fetched once; each size is converted from it.
 	std::optional<std::string> image;
 	{
 		std::lock_guard<std::mutex> lock(mutex);
-		auto known = images.find(title);
+		auto known = images.find(canonical(next.title));
 		if (known != images.end())
 			image = known->second;
 	}
 	coverState outcome = coverState::kReady;
 	if (not image) {
-		auto url = imageUrlOf(title);
+		auto url = imageUrlOf(next.title);
 		if (not url)
 			outcome = coverState::kUnreachable;
 		else if (url->empty())
 			outcome = coverState::kNone;
 		else {
-			// The image server is not Jikan, so no pause is needed.
+			// The image server is not the API, so no pause is needed.
 			image = fetch(*url);
 			if (not image)
 				outcome = coverState::kUnreachable;
@@ -262,17 +283,18 @@ void updater::shared::runCover(const coverKey& key) {
 	}
 	std::optional<std::string> sixel;
 	if (image) {
-		sixel = toSixel(*image, widthPx, heightPx);
+		sixel = toSixel(*image, next.widthPx, next.heightPx);
 		if (not sixel)
 			outcome = coverState::kUnreadable;
 	}
 
-	// Record what happened.
+	// Record what happened, under the key the lookup may just have settled.
 	std::lock_guard<std::mutex> lock(mutex);
+	titleKey title = canonical(next.title);
 	if (image)
 		images[title] = *image;
 	if (sixel) {
-		sixels[key] = *sixel;
+		sixels[{title.first, title.second, next.widthPx, next.heightPx}] = *sixel;
 		return;
 	}
 	failed[title] = outcome;
@@ -284,8 +306,8 @@ void checkFollowed(const catalogue& lists, updater& web, const isoDate& today) {
 	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
 		for (const auto& e : lists.getEntries(type)) {
 			bool following = e.status == watchStatus::kWatching or e.status == watchStatus::kOnHold;
-			if (following and e.malId > 0 and e.checkedAt != today)
-				web.lookUp(type, e.malId);
+			if (following and e.checkedAt != today)
+				web.lookUp(anilist::refOf(e));
 		}
 	}
 }

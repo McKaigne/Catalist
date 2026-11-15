@@ -26,9 +26,9 @@ namespace catalist::csvCodec {
 
 [[nodiscard]] std::optional<isoDate> decodeDate(const std::string& field);
 
-// The 16 columns of encodeEntries (or their first 14, written before the
-// web checks), or the 16 that Catalist 0.2.1 to 0.3.0
-// wrote (their AniList id and notes are dropped). Columns after them are
+// The 17 columns of encodeEntries (or their first 14 or 16, written before
+// the web checks and AniList ids), or the 16 that Catalist 0.2.1 to 0.3.0
+// wrote (their notes are dropped). Columns after them are
 // ignored; a row without the type column where either layout has it is in an
 // older layout and is not read.
 [[nodiscard]] std::optional<entry> decodeEntry(const std::vector<std::string>& fields,
@@ -58,12 +58,23 @@ public:
 	explicit catalogue(std::filesystem::path dataDir);
 
 	// Adds a title under a fresh id and returns it. A title that shares its
-	// MyAnimeList id with a stored one is merged into that entry instead (see
-	// mergeImported), so importing a list twice adds nothing.
+	// AniList or MyAnimeList id with a stored one is merged into that entry
+	// instead (see mergeImported), so importing a list twice adds nothing.
 	int addEntry(entry added);
 	[[nodiscard]] const std::vector<entry>& getEntries(mediaType type) const;
 	[[nodiscard]] std::optional<entry> getById(mediaType type, int id) const;
-	[[nodiscard]] std::optional<entry> findByMalId(mediaType type, int malId) const;
+	// The entry with either id (0 matches nothing).
+	[[nodiscard]] std::optional<entry> findByIds(mediaType type, int anilistId, int malId) const;
+	// The entry, anime or manga, with this id on the site. AniList ids are
+	// unique across both; a MyAnimeList id is looked for among anime first.
+	[[nodiscard]] std::optional<entry> findOn(provider site, int id) const;
+
+	// The site whose ids are shown, kept in the `settings` file beside the
+	// lists (AniList when there is none). loadAll reads it; saveSettings
+	// writes it.
+	[[nodiscard]] provider getProvider() const;
+	void setProvider(provider site);
+	[[nodiscard]] bool saveSettings() const;
 	bool updateEntry(const entry& changed);
 	bool removeEntry(mediaType type, int id);
 
@@ -102,6 +113,7 @@ private:
 	std::filesystem::path dataDir_;
 	std::vector<entry> animeEntries_;
 	std::vector<entry> mangaEntries_;
+	provider provider_ = provider::kAniList;
 };
 
 }  // namespace catalist

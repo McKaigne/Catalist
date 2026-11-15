@@ -10,7 +10,7 @@
 #include "anilist.hpp"
 #include "catalogue.hpp"
 #include "entry.hpp"
-#include "jikan.hpp"
+#include "updater.hpp"
 
 namespace catalist::test {
 
@@ -43,7 +43,7 @@ struct fakeWeb {
 	[[nodiscard]] std::optional<std::string> get(const std::string& url);
 	// A POST is answered the same way, matching against the URL and the body.
 	[[nodiscard]] std::optional<std::string> post(const std::string& url, const std::string& json);
-	[[nodiscard]] jikan::fetcher fetcher();
+	[[nodiscard]] updater::fetcher fetcher();
 	[[nodiscard]] anilist::poster poster();
 
 	std::vector<std::string> requested;  // GETs
@@ -63,6 +63,10 @@ public:
 	}
 	entryBuilder& malId(int value) {
 		built_.malId = value;
+		return *this;
+	}
+	entryBuilder& anilistId(int value) {
+		built_.anilistId = value;
 		return *this;
 	}
 	entryBuilder& title(std::string value) {

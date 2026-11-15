@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "anilist.hpp"
 #include "catalogue.hpp"
-#include "jikan.hpp"
 #include "updater.hpp"
 
 namespace catalist {
@@ -21,7 +21,6 @@ namespace catalist {
 struct appContext {
 	catalogue& db;
 	std::function<isoDate()> today;
-	jikan::fetcher fetch;
 	anilist::poster post;
 	// Web lookups and covers, fetched in the background.
 	updater& web;
@@ -46,9 +45,8 @@ struct hint {
 	std::string description;
 };
 
-// What the keyboard currently does, shown as a pill in the bottom-left corner:
-// What the keyboard is doing, shown as a pill in the bottom-left corner:
-// normal, search, typing a number, adding a title or a pending delete.
+// What the keyboard is doing: normal, search, typing a number, adding a title
+// or a pending delete. Every mode but normal owns the keyboard.
 enum class appMode { kNor, kSch, kEdt, kAdd, kDel };
 
 class iTab {

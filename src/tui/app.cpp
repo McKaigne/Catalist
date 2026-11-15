@@ -47,27 +47,21 @@ std::string truncated(const std::string& message, int maxLength) {
 	return fmt::format("{}...", utf8::clip(message, std::max(0, maxLength - 3)));
 }
 
-Element modePill(appMode mode) {
-	switch (mode) {
-		case appMode::kNor:
-			return pill(" NOR ", theme::kCrust, theme::kMauve);
-		case appMode::kSch:
-			return pill(" SCH ", theme::kCrust, theme::kPeach);
-		case appMode::kEdt:
-			return pill(" EDT ", theme::kCrust, theme::kGreen);
-		case appMode::kAdd:
-			return pill(" ADD ", theme::kCrust, theme::kBlue);
-		case appMode::kDel:
-			return pill(" DEL ", theme::kCrust, theme::kRed);
-	}
-	return text("");
+// The provider whose ids are shown; where a sync's state will show too.
+std::string providerLabel(provider site) {
+	return fmt::format(" {} ", providerShortName(site));
+}
+
+Element providerPill(provider site) {
+	return pill(providerLabel(site), theme::kCrust,
+	            site == provider::kAniList ? theme::kBlue : theme::kLavender);
 }
 
 // The status line keeps at least this much of the bottom bar.
 constexpr int kMinStatusWidth = 30;
 
-// Jikan allows sixty requests a minute and AniList thirty when it is busy;
-// one every two seconds stays clear of both, even while the daily check
+// AniList allows thirty requests a minute when it is busy; one every two
+// seconds stays clear of that, even while the daily check
 // runs.
 constexpr auto kRequestPause = std::chrono::milliseconds(2000);
 
@@ -99,7 +93,7 @@ void appShell::applyFindings() {
 	isoDate today = ctx_.today();
 	std::vector<std::string> changedTitles;
 	for (const auto& found : findings) {
-		auto before = ctx_.db.findByMalId(found.type, found.malId);
+		auto before = ctx_.db.findByIds(found.asked.type, found.asked.anilistId, found.asked.malId);
 		if (not before)
 			continue;
 		entry after = applyWebFacts(*before, found.facts, today);
@@ -109,9 +103,9 @@ void appShell::applyFindings() {
 	}
 	if (changedTitles.size() == 1)
 		ctx_.save(
-		    fmt::format("Updated from MyAnimeList: '{}'.", utf8::clip(changedTitles.front(), 36)));
+		    fmt::format("Updated from AniList: '{}'.", utf8::clip(changedTitles.front(), 36)));
 	else if (changedTitles.size() > 1)
-		ctx_.save(fmt::format("Updated from MyAnimeList: {} titles.", changedTitles.size()));
+		ctx_.save(fmt::format("Updated from AniList: {} titles.", changedTitles.size()));
 	else
 		ctx_.save(ctx_.status);
 	activeTab().onActivate(ctx_);
@@ -190,11 +184,12 @@ Element appShell::renderTopBar() {
 }
 
 Element appShell::renderBottomBar() {
-	// The pill, the separators and the borders take about 14 columns; the
-	// width is the bar's own, measured on the last frame. Before the first,
-	// nothing is left out.
+	// The pill and its caps, the separators and the borders take the rest;
+	// the width is the bar's own, measured on the last frame. Before the
+	// first, nothing is left out.
+	int pillWidth = static_cast<int>(providerLabel(ctx_.db.getProvider()).size()) + 2;
 	int width = bottomBox_.x_max - bottomBox_.x_min + 1;
-	int room = width > 1 ? width - 14 : std::numeric_limits<int>::max() / 2;
+	int room = width > 1 ? width - pillWidth - 9 : std::numeric_limits<int>::max() / 2;
 
 	// The status line comes first (it answers what was just done); hints go
 	// in order while they fit beside it, and the last ones are dropped on a
@@ -216,7 +211,8 @@ Element appShell::renderBottomBar() {
 	}
 
 	int maxStatusLength = std::max(kMinStatusWidth, room - hintsWidth - 2);
-	return hbox({text(" "), modePill(activeTab().mode()), text(" │ ") | color(theme::kSurface1),
+	return hbox({text(" "), providerPill(ctx_.db.getProvider()),
+	             text(" │ ") | color(theme::kSurface1),
 	             text(truncated(ctx_.status, maxStatusLength)) | color(theme::kYellow), filler(),
 	             text("  "), hbox(std::move(hintItems)), text(" ")}) |
 	       border | color(theme::kSurface0) | size(HEIGHT, EQUAL, 3) | reflect(bottomBox_);
@@ -237,7 +233,7 @@ void runTui(catalogue& db) {
 		        image);
 	    },
 	    kRequestPause, [&screen] { screen.PostEvent(Event::Custom); });
-	appContext ctx{db, today, httpGet, httpPost, web};
+	appContext ctx{db, today, httpPost, web};
 	if (auto cell = terminalCellSize()) {
 		ctx.cellWidth = cell->width;
 		ctx.cellHeight = cell->height;

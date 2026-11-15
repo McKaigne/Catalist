@@ -14,7 +14,7 @@ tuiHarness::tuiHarness()
 	                                            "x" + std::to_string(heightPx) + "]");
           },
           std::chrono::milliseconds(0)),
-      ctx{db, testToday, web.fetcher(), web.poster(), updates} {}
+      ctx{db, testToday, web.poster(), updates} {}
 
 std::filesystem::path tuiHarness::dataDir() const {
 	return tempDir() / "data";

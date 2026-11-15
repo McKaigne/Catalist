@@ -48,13 +48,11 @@ struct catalogFixture : catalist::test::tuiHarness {
 using rowList = std::vector<std::string>;
 
 // A Jikan search reply: Frieren is already tracked, Fullmetal is not.
-const char* kSearchReply = R"({"data": [
-  {"mal_id": 52991, "title": "Sousou no Frieren", "episodes": 28,
-   "score": 9.3, "year": 2023},
-  {"mal_id": 5114, "title": "Fullmetal Alchemist: Brotherhood",
-   "episodes": 64, "score": 9.1, "year": null,
-   "aired": {"from": "2009-04-05T00:00:00+00:00"}}
-]})";
+const char* kSearchReply = R"({"data":{"Page":{"media":[
+  {"id":154587,"idMal":52991,"title":{"romaji":"Sousou no Frieren"},"episodes":28,
+   "averageScore":93,"startDate":{"year":2023}},
+  {"id":5114,"idMal":5114,"title":{"romaji":"Fullmetal Alchemist: Brotherhood"},
+   "episodes":64,"averageScore":91,"startDate":{"year":2009}}]}}})";
 
 }  // namespace
 
@@ -100,26 +98,27 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog sorts by new releases and by last
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog asks the web about a title after each change") {
-	web.respond("/anime/44265", R"({"data": {"status": "Finished Airing", "episodes": 13}})");
+	web.respond(R"({"id":44265,"type":"ANIME"})",
+	            R"({"data":{"Media":{"status":"FINISHED","episodes":13}}})");
 	type(tab, "j");
 	REQUIRE(press(tab, Event::Character('+')));
 	updates.waitUntilIdle();
 	REQUIRE(press(tab, Event::Character('+')));
 	updates.waitUntilIdle();
 	// Once per run, however many changes, once it got an answer.
-	REQUIRE(web.requested.size() == 1);
-	CHECK(web.requested[0] == "https://api.jikan.moe/v4/anime/44265");
-	// A title without a MyAnimeList id is not looked up.
+	REQUIRE(web.posted.size() == 1);
+	CHECK(web.posted[0].find("Media(idMal:$id") != std::string::npos);
+	// A title with no id at all is not looked up.
 	type(tab, "jj");
 	REQUIRE(press(tab, Event::Character('+')));
 	updates.waitUntilIdle();
-	CHECK(web.requested.size() == 1);
+	CHECK(web.posted.size() == 1);
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog shows the cover once the selection rests") {
-	web.respond("/anime/52991",
-	            R"({"data": {"status": "Finished Airing", "episodes": 28,
-                  "images": {"jpg": {"image_url": "https://img/f.jpg"}}}})");
+	web.respond(R"({"id":52991,"type":"ANIME"})",
+	            R"({"data":{"Media":{"id":154587,"status":"FINISHED","episodes":28,
+                  "coverImage":{"large":"https://img/f.jpg"}}}})");
 	web.respond("img/f.jpg", "JPEG");
 	// The first frame measures the card; nothing is asked for at once.
 	CHECK(screen(tab).find("Loading cover...") != std::string::npos);
@@ -139,10 +138,10 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog shows the cover once the selectio
 	CHECK(screen(tab).find("Covers need img2sixel") != std::string::npos);
 	CHECK_FALSE(tab.image().has_value());
 
-	// A title without a MyAnimeList id has no cover to fetch.
+	// A title added by hand has no cover to fetch.
 	ctx.coverProblem.clear();
 	type(tab, "jjj");
-	CHECK(screen(tab).find("No cover: not on MyAnimeList.") != std::string::npos);
+	CHECK(screen(tab).find("No cover: added by hand") != std::string::npos);
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog new sort column starts in its natural order") {
@@ -452,22 +451,22 @@ TEST_CASE("tui catalog manga tab says reading and shows an empty library hint") 
 	CHECK(shown.find("Nothing here yet. Press a to add a title") != std::string::npos);
 }
 
-TEST_CASE_FIXTURE(catalogFixture, "tui catalog add searches MyAnimeList and adds the pick") {
-	web.respond("api.jikan.moe/v4/anime?q=fullmetal", kSearchReply);
+TEST_CASE_FIXTURE(catalogFixture, "tui catalog add searches AniList and adds the pick") {
+	web.respond(R"("search":"fullmetal","type":"ANIME")", kSearchReply);
 	REQUIRE(press(tab, Event::Character('a')));
 	CHECK(tab.mode() == appMode::kAdd);
 	CHECK(tab.capturesInput());
 	type(tab, "fullmetal");
 	REQUIRE(press(tab, Event::Return));
-	CHECK(ctx.status == "Searching MyAnimeList for 'fullmetal'...");
+	CHECK(ctx.status == "Searching AniList for 'fullmetal'...");
 	// Until the search answers, keys other than Esc do nothing.
 	REQUIRE(press(tab, Event::Return));
 	REQUIRE(press(tab, Event::Character('j')));
 	CHECK(db.getEntries(mediaType::kAnime).size() == 4);
 	// The request waits for the next tick, so the status above is drawn first.
-	CHECK(web.requested.empty());
+	CHECK(web.posted.empty());
 	tab.onTick(ctx);
-	REQUIRE(web.requested.size() == 1);
+	REQUIRE(web.posted.size() == 1);
 	CHECK(ctx.status == "2 matches for 'fullmetal'.");
 	auto shown = screen(tab);
 	CHECK(shown.find("2009") != std::string::npos);
@@ -478,6 +477,7 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog add searches MyAnimeList and adds
 	REQUIRE(press(tab, Event::Return));
 	auto added = anime("Fullmetal Alchemist: Brotherhood");
 	CHECK(added.malId == 5114);
+	CHECK(added.anilistId == 5114);
 	CHECK(added.totalUnits == 64);
 	CHECK(added.progress == 0);
 	CHECK(added.status == watchStatus::kPlanToWatch);
@@ -492,7 +492,7 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog add searches MyAnimeList and adds
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog add does not duplicate a tracked title") {
-	web.respond("api.jikan.moe/v4/anime", kSearchReply);
+	web.respond(R"("type":"ANIME")", kSearchReply);
 	REQUIRE(press(tab, Event::Character('a')));
 	type(tab, "frieren");
 	REQUIRE(press(tab, Event::Return));
@@ -508,7 +508,7 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog add works offline by hand") {
 	REQUIRE(press(tab, Event::Return));
 	tab.onTick(ctx);
 	CHECK(ctx.status ==
-	      "Could not reach MyAnimeList; the last row adds 'Homemade OVA' by "
+	      "Could not reach AniList; the last row adds 'Homemade OVA' by "
 	      "hand.");
 	REQUIRE(press(tab, Event::Return));
 	auto added = anime("Homemade OVA");
@@ -518,7 +518,7 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog add works offline by hand") {
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog add says when nothing matched") {
-	web.respond("api.jikan.moe", R"({"data": []})");
+	web.respond(R"("search":"zzz")", R"({"data":{"Page":{"media":[]}}})");
 	REQUIRE(press(tab, Event::Character('a')));
 	type(tab, "zzz");
 	REQUIRE(press(tab, Event::Return));
@@ -543,7 +543,7 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog add can be canceled at any stage"
 	REQUIRE(press(tab, Event::Return));
 	REQUIRE(press(tab, Event::Escape));
 	tab.onTick(ctx);
-	CHECK(web.requested.empty());
+	CHECK(web.posted.empty());
 	CHECK(db.getEntries(mediaType::kAnime).size() == 4);
 	CHECK(tab.mode() == appMode::kNor);
 }

@@ -17,12 +17,12 @@ namespace {
 const char* kCatalogHeader =
     "#id,mal_id,type,title,status,score,progress,total_units,volumes,"
     "total_volumes,rewatched,start_date,finish_date,updated_at,released,"
-    "checked_at\n";
+    "checked_at,anilist_id\n";
 
-// The last two columns came later; rows without them are still read.
+// The last three columns came later; rows without them are still read.
 constexpr size_t kCatalogFields = 14;
 // Catalist 0.2.1 to 0.3.0 wrote an AniList id after the MyAnimeList id and
-// notes before the last date; those columns are skipped.
+// notes before the last date; the notes are skipped.
 constexpr size_t kOldCatalogFields = 16;
 
 std::optional<int> parseInt(const std::string& field) {
@@ -163,6 +163,11 @@ std::optional<entry> decodeEntry(const std::vector<std::string>& fields, mediaTy
 	decoded.type = type;
 	decoded.id = *id;
 	decoded.malId = intOrZero(fields[1]);
+	// The AniList id: third in the old layout, last in the current one.
+	if (old)
+		decoded.anilistId = intOrZero(fields[2]);
+	else if (fields.size() > 16)
+		decoded.anilistId = intOrZero(fields[16]);
 	decoded.title = field(3);
 	decoded.status = decodeStatus(field(4));
 	decoded.score = intOrZero(field(5));
@@ -202,7 +207,7 @@ std::string encodeEntries(const std::vector<entry>& entries) {
 		    << e.progress << "," << e.totalUnits << "," << e.volumes << "," << e.totalVolumes << ","
 		    << e.rewatched << "," << formatDate(e.startDate) << "," << formatDate(e.finishDate)
 		    << "," << formatDate(e.updatedAt) << "," << e.released << "," << formatDate(e.checkedAt)
-		    << "\n";
+		    << "," << e.anilistId << "\n";
 	}
 	return out.str();
 }
@@ -213,10 +218,13 @@ namespace catalist {
 
 namespace {
 
-// A local id only numbers a title, so two titles are the same only when
-// MyAnimeList says so.
-bool sameMalTitle(const entry& existing, const entry& incoming) {
-	return incoming.malId > 0 and existing.malId == incoming.malId;
+const char* kSettingsFile = "settings";
+
+// A local id only numbers a title, so two titles are the same only when a
+// site's id says so.
+bool sameTitle(const entry& existing, const entry& incoming) {
+	return (incoming.anilistId > 0 and existing.anilistId == incoming.anilistId) or
+	       (incoming.malId > 0 and existing.malId == incoming.malId);
 }
 
 int nextId(const std::vector<entry>& list) {
@@ -312,7 +320,7 @@ void catalogue::sortEntries(std::vector<entry>& entries, sortKey key, bool rever
 int catalogue::addEntry(entry added) {
 	auto& list = getList(added.type);
 	for (auto& existing : list) {
-		if (not sameMalTitle(existing, added))
+		if (not sameTitle(existing, added))
 			continue;
 		existing = mergeImported(existing, added);
 		return existing.id;
@@ -333,11 +341,26 @@ std::optional<entry> catalogue::getById(mediaType type, int id) const {
 	return found == list.end() ? std::nullopt : std::optional<entry>(*found);
 }
 
-std::optional<entry> catalogue::findByMalId(mediaType type, int malId) const {
+std::optional<entry> catalogue::findByIds(mediaType type, int anilistId, int malId) const {
+	entry wanted;
+	wanted.anilistId = anilistId;
+	wanted.malId = malId;
 	const auto& list = getList(type);
 	auto found = std::find_if(list.begin(), list.end(),
-	                          [malId](const entry& e) { return malId > 0 and e.malId == malId; });
+	                          [&wanted](const entry& e) { return sameTitle(e, wanted); });
 	return found == list.end() ? std::nullopt : std::optional<entry>(*found);
+}
+
+std::optional<entry> catalogue::findOn(provider site, int id) const {
+	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
+		const auto& list = getList(type);
+		auto found = std::find_if(list.begin(), list.end(), [site, id](const entry& e) {
+			return id > 0 and idOn(e, site) == id;
+		});
+		if (found != list.end())
+			return *found;
+	}
+	return std::nullopt;
 }
 
 bool catalogue::updateEntry(const entry& changed) {
@@ -420,7 +443,39 @@ bool catalogue::saveCsv(mediaType type, const std::filesystem::path& path) const
 	return writeFileAtomic(path, csvCodec::encodeEntries(getList(type)));
 }
 
+provider catalogue::getProvider() const {
+	return provider_;
+}
+
+void catalogue::setProvider(provider site) {
+	provider_ = site;
+}
+
+bool catalogue::saveSettings() const {
+	std::string name = provider_ == provider::kAniList ? "anilist" : "myanimelist";
+	return writeFileAtomic(dataDir_ / kSettingsFile, fmt::format("provider = {}\n", name));
+}
+
 result<bool> catalogue::loadAll() {
+	// Settings: `key = value` lines; unknown keys and values are ignored, so
+	// a newer file still loads.
+	if (auto settings = readFile(dataDir_ / kSettingsFile)) {
+		std::istringstream lines(*settings);
+		std::string line;
+		while (std::getline(lines, line)) {
+			auto equals = line.find('=');
+			if (equals == std::string::npos)
+				continue;
+			auto trim = [](std::string text) {
+				text.erase(0, text.find_first_not_of(" \t"));
+				text.erase(text.find_last_not_of(" \t\r") + 1);
+				return text;
+			};
+			auto site = parseProvider(trim(line.substr(equals + 1)));
+			if (trim(line.substr(0, equals)) == "provider" and site)
+				provider_ = *site;
+		}
+	}
 	auto anime = loadCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));
 	if (not anime.ok())
 		return anime;

@@ -9,7 +9,8 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
 | `entry` | one anime or manga title, its statuses and the rules that change it (progress, status cycle, rating, counts, import merge) |
 | `catalogue` | the two lists in memory and their CSV files |
 | `malXml` | the MyAnimeList XML format lists are imported and exported in |
-| `json`, `jikan`, `anilist` | the two web sources, both keyed on MyAnimeList ids: title search, and a title's details (totals, how much is out, the cover) |
+| `json`, `anilist` | the web source: title search, and a title's details (both ids, totals, how much is out, the cover) |
+| `sync` | `iListSync`, where a future account sync with the provider plugs in (no implementation yet) |
 | `updater` | a worker thread for lookups and covers, one request every 2 s, results collected on the interface's tick |
 | `system` | everything that touches the OS: files, `runProgram` (curl, img2sixel), `today()`, the terminal's cell size |
 | `cli` | `catalist import` and `catalist export` |
@@ -141,16 +142,15 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
 - **Decision:** The catalogue is the two CSV files and nothing else. Lists
   come in with `catalist import` (MyAnimeList XML; AniList lists after
   converting them to that format) and go out with `catalist export`; neither
-  touches an account. Re-importing merges by MyAnimeList id and never
+  touches an account. Re-importing merges by AniList or MyAnimeList id and never
   overwrites the user's score, progress or dates.
-- **Network:** the add flow (`a`) runs one Jikan search on the UI thread on
+- **Network:** the add flow (`a`) runs one AniList search on the UI thread on
   the next tick, after the "Searching" status is drawn; without a
   connection the title is added by hand. Lookups (after every change to a
   title, once a run per title, and once a day for followed titles) and
-  covers run on the `updater`'s worker thread, one request every 2 s; they
-  ask AniList first (it counts an airing anime's episodes directly) and
-  Jikan when AniList cannot help, while the add search asks Jikan first; a fetch that failed is tried again after 15 s
-  rather than given up; the
+  covers run on the `updater`'s worker thread, one AniList request every
+  2 s; a fetch that failed is tried again after 15 s rather than given up;
+  the
   shell folds finished lookups into the catalogue on its tick. Nothing
   about the network is needed to use the lists.
 - **Quitting:** the worker's state is shared with its thread, so on exit
@@ -162,5 +162,23 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
   restoring the cursor so FTXUI's next frame lands in place. This is why
   `runTui` runs FTXUI's `Loop` one event at a time.
 - **Ids:** an entry's id only numbers it within its list (a new title gets
-  the highest id + 1); two titles are the same only when they share a
-  MyAnimeList id.
+  the highest id + 1) and is never shown; two titles are the same only when
+  they share an AniList or a MyAnimeList id. The updater keys a title by its
+  AniList id, or by its MyAnimeList id until a lookup reveals the AniList
+  one, after which both keys name the same title.
+
+## ADR-014: AniList Only; a Provider, Ready for Sync
+- **Context:** Jikan (MyAnimeList's unofficial API) could not be reached
+  from some networks, and many users have moved to AniList. AniList's
+  public API needs no account and also returns every title's MyAnimeList
+  id.
+- **Decision:** AniList is the only web source. Entries store both ids. The
+  user picks one provider (AniList by default, or MyAnimeList); its ids are
+  the ones the interfaces show and accept, and its name is the bottom-left
+  pill. The provider lives in the catalogue (`getProvider`, `setProvider`,
+  `saveSettings`, the `settings` file).
+- **Room for sync:** `sync.hpp` declares `iListSync` (`pull`, `push`,
+  `remove`) for one site. A sync would be one class per site, made for the
+  chosen provider only, matching titles with `idOn(entry, site)`, its token
+  kept outside the catalogue, its requests queued on the updater's worker
+  thread, its state shown in the provider pill. Nothing implements it yet.

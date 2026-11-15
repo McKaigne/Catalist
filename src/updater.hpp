@@ -11,27 +11,27 @@
 
 #include "anilist.hpp"
 #include "catalogue.hpp"
-#include "jikan.hpp"
 
 namespace catalist {
 
-// Keeps titles current without making the interface wait, from AniList or,
-// failing that, Jikan (both keyed on MyAnimeList ids):
-// a worker thread runs the web requests one at a time, pausing between them
-// (Jikan allows three a second), and the interface collects the answers on
-// its next tick. Covers are kept in memory only.
+// Keeps titles current from AniList without making the interface wait: a
+// worker thread runs the web requests one at a time, pausing between them,
+// and the interface collects the answers on its next tick. Covers are kept
+// in memory only.
 class updater {
 public:
+	// Fetches a URL (an image here): the body, or nothing when it failed.
+	using fetcher = std::function<std::optional<std::string>(const std::string&)>;
 	// Turns an image into sixel graphics of the given size in pixels.
 	using sixelMaker = std::function<std::optional<std::string>(const std::string& image,
 	                                                            int widthPx, int heightPx)>;
 
-	// `pause` is the wait between two Jikan requests; a fetch that failed
-	// (offline, Jikan busy) may be tried again after `retryAfter`. `wake` is
+	// `pause` is the wait between two AniList requests; a fetch that failed
+	// (offline, AniList busy) may be tried again after `retryAfter`. `wake` is
 	// called on the worker thread whenever something finished, so the
 	// interface can redraw; never once the updater is being destroyed.
-	updater(jikan::fetcher fetch, anilist::poster post, std::function<isoDate()> today,
-	        sixelMaker toSixel, std::chrono::milliseconds pause, std::function<void()> wake = {},
+	updater(fetcher fetch, anilist::poster post, std::function<isoDate()> today, sixelMaker toSixel,
+	        std::chrono::milliseconds pause, std::function<void()> wake = {},
 	        std::chrono::milliseconds retryAfter = std::chrono::seconds(15));
 	// Waits a moment for a request under way; a slower one is left to finish
 	// on its own, so quitting never hangs on the network.
@@ -40,13 +40,14 @@ public:
 	updater& operator=(const updater&) = delete;
 
 	// Looks the title up once in this run; asking again does nothing, unless
-	// the earlier lookup could not reach Jikan.
-	void lookUp(mediaType type, int malId);
+	// the earlier lookup could not reach AniList. A title with no id is not
+	// looked up.
+	void lookUp(const anilist::titleRef& title);
 
-	// What a lookup found.
+	// What a lookup found: the title as asked for, and the facts, which
+	// carry both its ids.
 	struct finding {
-		mediaType type;
-		int malId;
+		anilist::titleRef asked;
 		webFacts facts;
 	};
 	// The lookups that finished since the last call.
@@ -55,8 +56,8 @@ public:
 	enum class coverState {
 		kLoading,
 		kReady,
-		kUnreachable,  // Jikan or the image could not be fetched; retried later
-		kNone,         // MyAnimeList has no cover for the title
+		kUnreachable,  // AniList or the image could not be fetched; retried later
+		kNone,         // the title has no id, or AniList no cover for it
 		kUnreadable,   // the image could not be turned into sixel
 	};
 	struct cover {
@@ -65,7 +66,7 @@ public:
 	};
 	// The title's cover at this size: ready, still on its way (and asked
 	// for), or why there is none.
-	[[nodiscard]] cover coverFor(mediaType type, int malId, int widthPx, int heightPx);
+	[[nodiscard]] cover coverFor(const anilist::titleRef& title, int widthPx, int heightPx);
 
 	// Blocks until every queued request is done; for tests.
 	void waitUntilIdle();
@@ -79,8 +80,8 @@ private:
 	std::thread worker_;
 };
 
-// Asks for a lookup of every followed title (watching or on hold) with a
-// MyAnimeList id that has not been checked today.
+// Asks for a lookup of every followed title (watching or on hold) with an
+// id that has not been checked today.
 void checkFollowed(const catalogue& lists, updater& web, const isoDate& today);
 
 }  // namespace catalist

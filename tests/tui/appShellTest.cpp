@@ -103,29 +103,25 @@ TEST_CASE_FIXTURE(shellFixture, "tui shell ignores the mouse") {
 	CHECK(probe.events == 0);
 }
 
-TEST_CASE_FIXTURE(shellFixture, "tui shell bars show tabs, mode, status and hints") {
+TEST_CASE_FIXTURE(shellFixture, "tui shell bars show tabs, provider, status and hints") {
 	auto shown = drawn();
 	CHECK(shown.find("Anime (4)") != std::string::npos);
 	CHECK(shown.find("Probe") != std::string::npos);
 	CHECK(shown.find("Manga (2)") != std::string::npos);
 	CHECK(shown.find(std::string("v") + catalist::kVersionString) != std::string::npos);
-	CHECK(shown.find(" NOR ") != std::string::npos);
+	CHECK(shown.find(" AniList ") != std::string::npos);
 	CHECK(shown.find("Ready.") != std::string::npos);
 	CHECK(shown.find("add") != std::string::npos);
 
 	REQUIRE(shell.onEvent(Event::Character('/')));
 	shown = drawn();
-	CHECK(shown.find(" SCH ") != std::string::npos);
 	CHECK(shown.find("Search title...") != std::string::npos);
 	REQUIRE(shell.onEvent(Event::Escape));
 
-	REQUIRE(shell.onEvent(Event::Character('a')));
-	CHECK(drawn().find(" ADD ") != std::string::npos);
-	REQUIRE(shell.onEvent(Event::Escape));
-
-	REQUIRE(shell.onEvent(Event::Character('d')));
-	CHECK(drawn().find(" DEL ") != std::string::npos);
-	REQUIRE(shell.onEvent(Event::Character('n')));
+	// The pill names whichever provider is chosen.
+	db.setProvider(catalist::provider::kMyAnimeList);
+	CHECK(drawn().find(" MAL ") != std::string::npos);
+	db.setProvider(catalist::provider::kAniList);
 
 	REQUIRE(shell.onEvent(Event::Character('2')));
 	shown = drawn();
@@ -135,8 +131,8 @@ TEST_CASE_FIXTURE(shellFixture, "tui shell bars show tabs, mode, status and hint
 
 TEST_CASE_FIXTURE(shellFixture, "tui shell fills in a finished manga's chapters after a change") {
 	// Berserk was tracked while it ran, so its chapter total is unknown ("?").
-	web.respond("/manga/2", R"({"data": {"status": "Finished", "chapters": 380,
-      "volumes": 42, "images": {"jpg": {"image_url": ""}}}})");
+	web.respond(R"({"id":2,"type":"MANGA"})", R"({"data":{"Media":{"id":30002,"idMal":2,
+      "status":"FINISHED","chapters":380,"volumes":42}}})");
 	REQUIRE(shell.onEvent(Event::Character('3')));
 	REQUIRE(manga.shown().front().title == "Berserk");
 	REQUIRE(shell.onEvent(Event::Character('+')));
@@ -150,19 +146,21 @@ TEST_CASE_FIXTURE(shellFixture, "tui shell fills in a finished manga's chapters 
 	CHECK(berserk.released == 380);
 	CHECK(catalist::formatDate(berserk.checkedAt) == "2026-10-20");
 	CHECK(berserk.progress == 365);
-	CHECK(ctx.status == "Updated from MyAnimeList: 'Berserk'.");
+	CHECK(berserk.anilistId == 30002);
+	CHECK(ctx.status == "Updated from AniList: 'Berserk'.");
 	auto shown = drawn();
 	CHECK(shown.find("365/380") != std::string::npos);
 	CHECK(shown.find("+15") != std::string::npos);
 	CHECK(catalist::test::readText(dataDir() / "manga.csv")
 	          .find("Berserk,Reading,10,365,380,42,42,0,2019-05-01,,2026-10-20,"
-	                "380,2026-10-20") != std::string::npos);
+	                "380,2026-10-20,30002") != std::string::npos);
 }
 
 TEST_CASE_FIXTURE(shellFixture,
                   "tui shell keeps the status line when a lookup changes nothing visible") {
-	web.respond("/anime/44265", R"({"data": {"status": "Finished Airing", "episodes": 13}})");
-	updates.lookUp(catalist::mediaType::kAnime, 44265);
+	web.respond(R"({"id":44265,"type":"ANIME"})",
+	            R"({"data":{"Media":{"status":"FINISHED","episodes":13}}})");
+	updates.lookUp({catalist::mediaType::kAnime, 0, 44265});
 	updates.waitUntilIdle();
 	REQUIRE(shell.onEvent(Event::Custom));
 	CHECK(ctx.status == "Ready.");

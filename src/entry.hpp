@@ -10,10 +10,17 @@ namespace catalist {
 
 enum class mediaType { kAnime, kManga };
 
+// The site whose ids the program shows and accepts, and which a future sync
+// would keep the catalogue in step with. Only one is chosen at a time.
+enum class provider { kAniList, kMyAnimeList };
+
 enum class watchStatus { kWatching, kCompleted, kOnHold, kDropped, kPlanToWatch };
 
 struct entry {
-	int id = 0;
+	int id = 0;  // local, never shown
+	// The title on each site; 0 while not known. AniList knows both, so a
+	// lookup fills in whichever is missing.
+	int anilistId = 0;
 	int malId = 0;
 	std::string title;
 	mediaType type = mediaType::kAnime;
@@ -39,6 +46,16 @@ std::string statusToString(watchStatus status, mediaType type = mediaType::kAnim
 [[nodiscard]] std::optional<watchStatus> parseStatus(const std::string& str);
 
 std::string typeToString(mediaType type);
+
+// "AniList" or "MyAnimeList", and the short form for tight spaces.
+[[nodiscard]] std::string providerName(provider site);
+[[nodiscard]] std::string providerShortName(provider site);
+// "anilist", "al", "myanimelist" or "mal", in any case.
+[[nodiscard]] std::optional<provider> parseProvider(const std::string& name);
+// The title's id on the site, 0 when not known, and its page there (empty
+// then).
+[[nodiscard]] int idOn(const entry& shown, provider site);
+[[nodiscard]] std::string pageOn(const entry& shown, provider site);
 
 // The display and file form of an optional date: ISO text, or empty.
 [[nodiscard]] std::string formatDate(const std::optional<isoDate>& date);
@@ -90,7 +107,7 @@ enum class countField { kProgress, kTotalUnits, kVolumes, kRewatched };
 [[nodiscard]] entry setCount(entry target, countField field, int value, const isoDate& today);
 
 // Folds an imported row into an entry the user already has. Totals and the
-// MyAnimeList id are refreshed, but the user's own score, progress and dates
+// ids are refreshed, but the user's own score, progress and dates
 // win: imported values only fill fields the user never set.
 [[nodiscard]] entry mergeImported(entry existing, const entry& incoming);
 
@@ -99,10 +116,13 @@ struct webFacts {
 	int totalUnits = 0;
 	int totalVolumes = 0;
 	int released = 0;
+	int anilistId = 0;
+	int malId = 0;
 };
 
 // Takes the totals and the released count from a web check, keeping the
-// known values where the check had none, and stamps checkedAt. The user's
+// known values where the check had none, fills in an id the entry lacked,
+// and stamps checkedAt. The user's
 // own fields, updatedAt included, are left alone.
 [[nodiscard]] entry applyWebFacts(entry target, const webFacts& facts, const isoDate& today);
 

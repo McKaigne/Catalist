@@ -145,9 +145,9 @@ std::string coverNote(updater::coverState state) {
 		case updater::coverState::kReady:
 			return "Loading cover...";
 		case updater::coverState::kUnreachable:
-			return "Could not reach MyAnimeList for the cover; trying again shortly.";
+			return "Could not reach AniList for the cover; trying again shortly.";
 		case updater::coverState::kNone:
-			return "MyAnimeList has no cover for this title.";
+			return "AniList has no cover for this title.";
 		case updater::coverState::kUnreadable:
 			return "img2sixel could not read the cover image.";
 	}
@@ -334,7 +334,7 @@ Element catalogTab::renderPickCard() {
 	                    heading("Score", 12), text(" ")});
 	if (step_ == step::kAddSearching)
 		return vbox({header, text(""),
-		             text(" Searching MyAnimeList...") | color(theme::kSubtext) | center | flex}) |
+		             text(" Searching AniList...") | color(theme::kSubtext) | center | flex}) |
 		       border | color(theme::kBlue) | flex | reflect(tableBox_);
 
 	// Titles get what the year, length and score columns leave.
@@ -380,7 +380,7 @@ Element catalogTab::renderPickCard() {
 	       border | color(theme::kBlue) | flex | reflect(tableBox_);
 }
 
-Element catalogTab::renderDetails(bool withDetails) {
+Element catalogTab::renderDetails(bool withDetails, provider site) {
 	const entry* current = selectedEntry();
 	if (not current)
 		return vbox({text("  DETAILS") | bold | color(theme::kLavender),
@@ -418,7 +418,10 @@ Element catalogTab::renderDetails(bool withDetails) {
 	                pill(fmt::format("{} {}", typeToIcon(e.type), typeToString(e.type)),
 	                     theme::kCrust, typeToColor(e.type)),
 	                filler()}),
-	          infoRow("  Link:     ", e.malId > 0 ? fmt::format("MAL #{}", e.malId) : "-"),
+	          infoRow("  Link:     ",
+	                  idOn(e, site) > 0
+	                      ? fmt::format("{} #{}", providerShortName(site), idOn(e, site))
+	                      : fmt::format("Not on {}", providerShortName(site))),
 	          infoRow("  Updated:  ", e.updatedAt ? e.updatedAt->toString() : "-"),
 	          infoRow("  Started:  ", e.startDate ? e.startDate->toString() : "Not started"),
 	          infoRow("  Finished: ", e.finishDate ? e.finishDate->toString() : unfinished)}) |
@@ -482,8 +485,8 @@ Element catalogTab::renderCoverCard(appContext& ctx) {
 	bool resting = detailsTimer_.elapsedFor(catalogSelected_) >= kCoverDelayMs;
 	if (not current) {
 		note = "";
-	} else if (current->malId <= 0) {
-		note = "No cover: not on MyAnimeList.";
+	} else if (current->anilistId <= 0 and current->malId <= 0) {
+		note = "No cover: added by hand, so it has no AniList or MyAnimeList id.";
 	} else if (not ctx.coverProblem.empty()) {
 		note = ctx.coverProblem;
 	} else if (rows < 3 or columns < 3 or not resting) {
@@ -499,7 +502,7 @@ Element catalogTab::renderCoverCard(appContext& ctx) {
 		// Sixel draws six pixel rows at a time; round down so the picture
 		// never reaches the card's border.
 		heightPx -= heightPx % 6;
-		auto picture = ctx.web.coverFor(media_, current->malId, widthPx, heightPx);
+		auto picture = ctx.web.coverFor(anilist::refOf(*current), widthPx, heightPx);
 		if (picture.state == updater::coverState::kReady) {
 			// Centred both ways in the card.
 			int pictureColumns = (widthPx + ctx.cellWidth - 1) / ctx.cellWidth;
@@ -523,7 +526,7 @@ Element catalogTab::renderSideColumn(appContext& ctx) {
 	int trackingRows = media_ == mediaType::kManga ? 10 : 9;
 	bool measured = height > 1;
 	bool withDetails = not measured or height >= kMinCoverRows + trackingRows + kDetailsRows;
-	return vbox({renderCoverCard(ctx) | flex, renderDetails(withDetails)}) |
+	return vbox({renderCoverCard(ctx) | flex, renderDetails(withDetails, ctx.db.getProvider())}) |
 	       size(WIDTH, EQUAL, kSidePanelWidth) | reflect(sideBox_);
 }
 

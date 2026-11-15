@@ -12,18 +12,31 @@
 using catalist::mediaType;
 using catalist::updater;
 using catalist::watchStatus;
+using catalist::anilist::titleRef;
 using catalist::test::fakeWeb;
 using catalist::test::makeEntry;
 
 namespace {
 
-const char* kFinishedManga = R"({"data": {"mal_id": 2, "title": "Berserk",
-  "chapters": 380, "volumes": 42, "status": "Finished",
-  "images": {"jpg": {"image_url": "https://img/berserk.jpg"}}}})";
+// Berserk, known to the catalogue by its MyAnimeList id (2) only; AniList's
+// own id for it is 30002.
+const titleRef kBerserk{mediaType::kManga, 0, 2};
+const char* kFinishedManga = R"({"data":{"Media":{"id":30002,"idMal":2,
+  "title":{"romaji":"Berserk"},"chapters":380,"volumes":42,"status":"FINISHED",
+  "coverImage":{"large":"https://img/berserk.jpg"}}}})";
 
-const char* kAiringAnime = R"({"data": {"mal_id": 9, "title": "Long Runner",
-  "episodes": null, "status": "Currently Airing",
-  "images": {"jpg": {"image_url": "https://img/runner.jpg"}}}})";
+const char* kAiringAnime = R"({"data":{"Media":{"id":21,"idMal":21,
+  "episodes":null,"status":"RELEASING","nextAiringEpisode":{"episode":1181},
+  "coverImage":{"large":"https://img/op.jpg"}}}})";
+
+// The request body AniList gets for the title, which the fake web answers.
+std::string asks(const titleRef& title) {
+	return catalist::anilist::lookupRequest(title);
+}
+
+titleRef anime(int anilistId) {
+	return {mediaType::kAnime, anilistId, 0};
+}
 
 // A fake converter that shows what it was given.
 struct fakeSixel {
@@ -43,11 +56,14 @@ struct updaterFixture {
 	          [this](const std::string& image, int w, int h) { return sixel(image, w, h); },
 	          std::chrono::milliseconds(0)) {}
 
-	size_t requestsFor(const std::string& fragment) {
-		size_t count = 0;
-		for (const auto& url : web.requested)
-			count += url.find(fragment) != std::string::npos ? 1 : 0;
-		return count;
+	size_t downloadsOf(const std::string& fragment) {
+		return static_cast<size_t>(std::count_if(
+		    web.requested.begin(), web.requested.end(),
+		    [&](const std::string& url) { return url.find(fragment) != std::string::npos; }));
+	}
+
+	size_t lookupsOf(const titleRef& title) {
+		return static_cast<size_t>(std::count(web.posted.begin(), web.posted.end(), asks(title)));
 	}
 
 	fakeWeb web;
@@ -57,98 +73,98 @@ struct updaterFixture {
 
 }  // namespace
 
-TEST_CASE_FIXTURE(updaterFixture, "updater looks a title up once per run") {
-	web.respond("/manga/2", kFinishedManga);
-	updates.lookUp(mediaType::kManga, 2);
-	updates.lookUp(mediaType::kManga, 2);
-	updates.lookUp(mediaType::kManga, 0);
+TEST_CASE_FIXTURE(updaterFixture, "updater looks a title up once per run and learns its ids") {
+	web.respond(asks(kBerserk), kFinishedManga);
+	updates.lookUp(kBerserk);
+	updates.lookUp(kBerserk);
+	updates.lookUp({mediaType::kManga, 0, 0});
 	updates.waitUntilIdle();
 
 	auto findings = updates.takeFindings();
 	REQUIRE(findings.size() == 1);
-	CHECK(findings[0].type == mediaType::kManga);
-	CHECK(findings[0].malId == 2);
+	CHECK(findings[0].asked.type == mediaType::kManga);
+	CHECK(findings[0].asked.malId == 2);
+	CHECK(findings[0].facts.anilistId == 30002);
+	CHECK(findings[0].facts.malId == 2);
 	CHECK(findings[0].facts.totalUnits == 380);
 	CHECK(findings[0].facts.totalVolumes == 42);
 	CHECK(findings[0].facts.released == 380);
-	CHECK(web.requested.size() == 1);
+	CHECK(web.posted.size() == 1);
 	CHECK(updates.takeFindings().empty());
+
+	// Asked again by its AniList id, it is the same title: no new request.
+	updates.lookUp({mediaType::kManga, 30002, 2});
+	updates.waitUntilIdle();
+	CHECK(web.posted.size() == 1);
 }
 
 TEST_CASE_FIXTURE(updaterFixture, "updater counts the episodes an airing anime has out") {
-	web.respond("anime/9/episodes?page=1",
-	            R"({"pagination": {"last_visible_page": 2}, "data": []})");
-	// The last page: 3 aired by the test date (2026-10-20), 1 still to come.
-	web.respond("anime/9/episodes?page=2", R"({"data": [
-      {"mal_id": 101, "aired": "2026-10-06T00:00:00+00:00"},
-      {"mal_id": 102, "aired": "2026-10-13T00:00:00+00:00"},
-      {"mal_id": 103, "aired": null},
-      {"mal_id": 104, "aired": "2026-10-27T00:00:00+00:00"}]})");
-	web.respond("anime/9", kAiringAnime);
-	updates.lookUp(mediaType::kAnime, 9);
+	web.respond(asks(anime(21)), kAiringAnime);
+	updates.lookUp(anime(21));
 	updates.waitUntilIdle();
 
 	auto findings = updates.takeFindings();
 	REQUIRE(findings.size() == 1);
 	CHECK(findings[0].facts.totalUnits == 0);
-	CHECK(findings[0].facts.released == 103);
+	CHECK(findings[0].facts.released == 1180);
 }
 
-TEST_CASE_FIXTURE(updaterFixture, "updater finds nothing when Jikan cannot be reached") {
-	updates.lookUp(mediaType::kAnime, 5);
+TEST_CASE_FIXTURE(updaterFixture, "updater finds nothing when AniList cannot be reached") {
+	updates.lookUp(anime(5));
 	updates.waitUntilIdle();
 	CHECK(updates.takeFindings().empty());
-	CHECK(requestsFor("/anime/5") == 1);
+	CHECK(lookupsOf(anime(5)) == 1);
 }
 
 TEST_CASE_FIXTURE(updaterFixture, "updater fetches a cover once and converts it per size") {
-	web.respond("/manga/2", kFinishedManga);
+	web.respond(asks(kBerserk), kFinishedManga);
 	web.respond("img/berserk.jpg", "JPEG");
-	CHECK(updates.coverFor(mediaType::kManga, 2, 70, 100).state == updater::coverState::kLoading);
+	CHECK(updates.coverFor(kBerserk, 70, 100).state == updater::coverState::kLoading);
 	updates.waitUntilIdle();
-	auto ready = updates.coverFor(mediaType::kManga, 2, 70, 100);
+	auto ready = updates.coverFor(kBerserk, 70, 100);
 	CHECK(ready.state == updater::coverState::kReady);
 	CHECK(ready.sixel == "SIXEL[JPEG 70x100]");
 
+	// Once the entry knows its AniList id, the cover is still the same one.
+	CHECK(updates.coverFor({mediaType::kManga, 30002, 2}, 70, 100).sixel == "SIXEL[JPEG 70x100]");
+
 	// Another size converts again, but the image is not fetched again.
-	CHECK(updates.coverFor(mediaType::kManga, 2, 140, 200).state == updater::coverState::kLoading);
+	CHECK(updates.coverFor(kBerserk, 140, 200).state == updater::coverState::kLoading);
 	updates.waitUntilIdle();
-	CHECK(updates.coverFor(mediaType::kManga, 2, 140, 200).sixel == "SIXEL[JPEG 140x200]");
-	CHECK(requestsFor("berserk.jpg") == 1);
-	CHECK(requestsFor("/manga/2") == 1);
+	CHECK(updates.coverFor(kBerserk, 140, 200).sixel == "SIXEL[JPEG 140x200]");
+	CHECK(downloadsOf("berserk.jpg") == 1);
+	CHECK(lookupsOf(kBerserk) == 1);
 	CHECK(sixel.calls == 2);
 	// Covers never change the catalogue.
 	CHECK(updates.takeFindings().empty());
 }
 
 TEST_CASE_FIXTURE(updaterFixture, "updater reuses the cover address from a lookup") {
-	web.respond("/manga/2", kFinishedManga);
+	web.respond(asks(kBerserk), kFinishedManga);
 	web.respond("img/berserk.jpg", "JPEG");
-	updates.lookUp(mediaType::kManga, 2);
+	updates.lookUp(kBerserk);
 	updates.waitUntilIdle();
-	CHECK(updates.coverFor(mediaType::kManga, 2, 70, 100).state == updater::coverState::kLoading);
+	CHECK(updates.coverFor(kBerserk, 70, 100).state == updater::coverState::kLoading);
 	updates.waitUntilIdle();
-	CHECK(updates.coverFor(mediaType::kManga, 2, 70, 100).state == updater::coverState::kReady);
-	CHECK(requestsFor("/manga/2") == 1);
+	CHECK(updates.coverFor(kBerserk, 70, 100).state == updater::coverState::kReady);
+	CHECK(lookupsOf(kBerserk) == 1);
 }
 
 TEST_CASE_FIXTURE(updaterFixture, "updater says why there is no cover") {
-	CHECK(updates.coverFor(mediaType::kAnime, 0, 70, 100).state == updater::coverState::kNone);
+	CHECK(updates.coverFor({mediaType::kAnime, 0, 0}, 70, 100).state == updater::coverState::kNone);
 
-	// MyAnimeList answers but has no picture.
-	web.respond("/anime/8", R"({"data": {"images": {"jpg": {"image_url": null}}}})");
-	CHECK(updates.coverFor(mediaType::kAnime, 8, 70, 100).state == updater::coverState::kLoading);
+	// AniList answers but has no picture.
+	web.respond(asks(anime(8)), R"({"data":{"Media":{"id":8,"coverImage":{"large":null}}}})");
+	CHECK(updates.coverFor(anime(8), 70, 100).state == updater::coverState::kLoading);
 	updates.waitUntilIdle();
-	CHECK(updates.coverFor(mediaType::kAnime, 8, 70, 100).state == updater::coverState::kNone);
+	CHECK(updates.coverFor(anime(8), 70, 100).state == updater::coverState::kNone);
 
 	// Offline: unreachable, and not asked for again until the wait is over.
-	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state == updater::coverState::kLoading);
+	CHECK(updates.coverFor(anime(7), 70, 100).state == updater::coverState::kLoading);
 	updates.waitUntilIdle();
-	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state ==
-	      updater::coverState::kUnreachable);
-	CHECK(updates.coverFor(mediaType::kAnime, 7, 140, 200).state ==
-	      updater::coverState::kUnreachable);
-	CHECK(requestsFor("/anime/7") == 1);
+	CHECK(updates.coverFor(anime(7), 70, 100).state == updater::coverState::kUnreachable);
+	CHECK(updates.coverFor(anime(7), 140, 200).state == updater::coverState::kUnreachable);
+	CHECK(lookupsOf(anime(7)) == 1);
 }
 
 TEST_CASE("updater tries an unreachable cover again after a while") {
@@ -157,45 +173,44 @@ TEST_CASE("updater tries an unreachable cover again after a while") {
 	    web.fetcher(), web.poster(), catalist::test::testToday,
 	    [](const std::string& image, int, int) { return std::optional<std::string>(image); },
 	    std::chrono::milliseconds(0), {}, std::chrono::milliseconds(50));
-	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state == updater::coverState::kLoading);
+	CHECK(updates.coverFor(anime(7), 70, 100).state == updater::coverState::kLoading);
 	updates.waitUntilIdle();
-	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state ==
-	      updater::coverState::kUnreachable);
+	CHECK(updates.coverFor(anime(7), 70, 100).state == updater::coverState::kUnreachable);
 
-	// Back online (Jikan was busy, say): the next ask after the wait works.
-	web.respond("/anime/7", R"({"data": {"images": {"jpg": {"image_url": "https://img/7.jpg"}}}})");
+	// Back online (AniList was busy, say): the next ask after the wait works.
+	web.respond(asks(anime(7)), R"({"data":{"Media":{"id":7,
+      "coverImage":{"large":"https://img/7.jpg"}}}})");
 	web.respond("img/7.jpg", "JPEG");
 	std::this_thread::sleep_for(std::chrono::milliseconds(80));
-	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state == updater::coverState::kLoading);
+	CHECK(updates.coverFor(anime(7), 70, 100).state == updater::coverState::kLoading);
 	updates.waitUntilIdle();
-	auto ready = updates.coverFor(mediaType::kAnime, 7, 70, 100);
+	auto ready = updates.coverFor(anime(7), 70, 100);
 	CHECK(ready.state == updater::coverState::kReady);
 	CHECK(ready.sixel == "JPEG");
 }
 
 TEST_CASE("updater says when the picture cannot be converted") {
 	fakeWeb web;
-	web.respond("/manga/2", kFinishedManga);
+	web.respond(asks(kBerserk), kFinishedManga);
 	web.respond("img/berserk.jpg", "not really a JPEG");
 	updater updates(
 	    web.fetcher(), web.poster(), catalist::test::testToday,
 	    [](const std::string&, int, int) { return std::optional<std::string>(); },
 	    std::chrono::milliseconds(0));
-	CHECK(updates.coverFor(mediaType::kManga, 2, 70, 100).state == updater::coverState::kLoading);
+	CHECK(updates.coverFor(kBerserk, 70, 100).state == updater::coverState::kLoading);
 	updates.waitUntilIdle();
-	CHECK(updates.coverFor(mediaType::kManga, 2, 70, 100).state ==
-	      updater::coverState::kUnreadable);
+	CHECK(updates.coverFor(kBerserk, 70, 100).state == updater::coverState::kUnreadable);
 }
 
-TEST_CASE_FIXTURE(updaterFixture, "updater looks a title up again when Jikan was unreachable") {
-	updates.lookUp(mediaType::kManga, 2);
+TEST_CASE_FIXTURE(updaterFixture, "updater looks a title up again when AniList was unreachable") {
+	updates.lookUp(kBerserk);
 	updates.waitUntilIdle();
 	CHECK(updates.takeFindings().empty());
-	web.respond("/manga/2", kFinishedManga);
-	updates.lookUp(mediaType::kManga, 2);
+	web.respond(asks(kBerserk), kFinishedManga);
+	updates.lookUp(kBerserk);
 	updates.waitUntilIdle();
 	CHECK(updates.takeFindings().size() == 1);
-	CHECK(requestsFor("/manga/2") == 2);
+	CHECK(lookupsOf(kBerserk) == 2);
 }
 
 TEST_CASE("updater pauses between requests") {
@@ -205,12 +220,12 @@ TEST_CASE("updater pauses between requests") {
 	    [](const std::string&, int, int) { return std::optional<std::string>(); },
 	    std::chrono::milliseconds(60));
 	auto start = std::chrono::steady_clock::now();
-	updates.lookUp(mediaType::kAnime, 1);
-	updates.lookUp(mediaType::kAnime, 2);
-	updates.lookUp(mediaType::kAnime, 3);
+	updates.lookUp(anime(1));
+	updates.lookUp(anime(2));
+	updates.lookUp(anime(3));
 	updates.waitUntilIdle();
 	auto elapsed = std::chrono::steady_clock::now() - start;
-	CHECK(web.requested.size() == 3);
+	CHECK(web.posted.size() == 3);
 	// The first request goes at once; each later one waits its turn.
 	CHECK(elapsed >= std::chrono::milliseconds(120));
 }
@@ -219,7 +234,7 @@ TEST_CASE_FIXTURE(catalist::test::tempDirFixture,
                   "checkFollowed asks only for followed titles not checked today") {
 	catalist::catalogue lists(tempDir());
 	lists.addEntry(makeEntry().malId(1).status(watchStatus::kWatching));
-	lists.addEntry(makeEntry().malId(2).status(watchStatus::kOnHold));
+	lists.addEntry(makeEntry().anilistId(2).status(watchStatus::kOnHold));
 	lists.addEntry(makeEntry().malId(3).status(watchStatus::kCompleted));
 	lists.addEntry(makeEntry().malId(4).status(watchStatus::kPlanToWatch));
 	lists.addEntry(makeEntry().status(watchStatus::kWatching));
@@ -234,11 +249,13 @@ TEST_CASE_FIXTURE(catalist::test::tempDirFixture,
 	    std::chrono::milliseconds(0));
 	catalist::checkFollowed(lists, updates, catalist::test::testToday());
 	updates.waitUntilIdle();
-	std::vector<std::string> asked = web.requested;
-	std::sort(asked.begin(), asked.end());
-	CHECK(asked == std::vector<std::string>{
-	                   "https://api.jikan.moe/v4/anime/1", "https://api.jikan.moe/v4/anime/2",
-	                   "https://api.jikan.moe/v4/anime/7", "https://api.jikan.moe/v4/manga/8"});
+	std::vector<std::string> sent = web.posted;
+	std::vector<std::string> expected = {asks({mediaType::kAnime, 0, 1}), asks(anime(2)),
+	                                     asks({mediaType::kAnime, 0, 7}),
+	                                     asks({mediaType::kManga, 0, 8})};
+	std::sort(sent.begin(), sent.end());
+	std::sort(expected.begin(), expected.end());
+	CHECK(sent == expected);
 }
 
 TEST_CASE("updater fetches a cover before the lookups still waiting") {
@@ -247,17 +264,18 @@ TEST_CASE("updater fetches a cover before the lookups still waiting") {
 	    web.fetcher(), web.poster(), catalist::test::testToday,
 	    [](const std::string&, int, int) { return std::optional<std::string>("SIXEL"); },
 	    std::chrono::milliseconds(30));
-	web.respond("/anime/7", R"({"data": {"images": {"jpg": {"image_url":
-      "https://img/7.jpg"}}}})");
+	web.respond(asks(anime(7)), R"({"data":{"Media":{"id":7,
+      "coverImage":{"large":"https://img/7.jpg"}}}})");
 	web.respond("img/7.jpg", "JPEG");
-	updates.lookUp(mediaType::kAnime, 1);
-	updates.lookUp(mediaType::kAnime, 2);
-	updates.lookUp(mediaType::kAnime, 3);
-	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state == updater::coverState::kLoading);
+	updates.lookUp(anime(1));
+	updates.lookUp(anime(2));
+	updates.lookUp(anime(3));
+	CHECK(updates.coverFor(anime(7), 70, 100).state == updater::coverState::kLoading);
 	updates.waitUntilIdle();
-	REQUIRE(web.requested.size() == 5);
+	REQUIRE(web.posted.size() == 4);
 	// The lookups already under way finish; the cover goes before the rest.
-	CHECK(web.requested.back() == "https://api.jikan.moe/v4/anime/3");
+	CHECK(web.posted.back() == asks(anime(3)));
+	CHECK(web.requested == std::vector<std::string>{"https://img/7.jpg"});
 }
 
 TEST_CASE("updater does not hold up quitting while a request is slow") {
@@ -266,18 +284,16 @@ TEST_CASE("updater does not hold up quitting while a request is slow") {
 	auto woke = std::make_shared<std::atomic<bool>>(false);
 	auto start = std::chrono::steady_clock::now();
 	{
-		updater updates(
-		    [finished](const std::string&) {
-			    std::this_thread::sleep_for(std::chrono::milliseconds(600));
-			    *finished = true;
-			    return std::optional<std::string>();
-		    },
-		    // AniList answers nothing at once; the slow request is Jikan's.
-		    [](const std::string&, const std::string&) { return std::optional<std::string>(); },
-		    catalist::test::testToday,
-		    [](const std::string&, int, int) { return std::optional<std::string>(); },
-		    std::chrono::milliseconds(0), [woke] { *woke = true; });
-		updates.lookUp(mediaType::kAnime, 1);
+		updater updates([](const std::string&) { return std::optional<std::string>(); },
+		                [finished](const std::string&, const std::string&) {
+			                std::this_thread::sleep_for(std::chrono::milliseconds(600));
+			                *finished = true;
+			                return std::optional<std::string>();
+		                },
+		                catalist::test::testToday,
+		                [](const std::string&, int, int) { return std::optional<std::string>(); },
+		                std::chrono::milliseconds(0), [woke] { *woke = true; });
+		updates.lookUp(anime(1));
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
 	CHECK(std::chrono::steady_clock::now() - start < std::chrono::milliseconds(500));

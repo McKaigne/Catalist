@@ -48,7 +48,6 @@ add_library(catalistLib STATIC
   src/cli.cpp
   src/date.cpp
   src/entry.cpp
-  src/jikan.cpp
   src/json.cpp
   src/malXml.cpp
   src/system.cpp
@@ -98,7 +97,6 @@ add_executable(catalistTests
   tests/cliTest.cpp
   tests/dateTest.cpp
   tests/entryTest.cpp
-  tests/jikanTest.cpp
   tests/jsonTest.cpp
   tests/malXmlTest.cpp
   tests/resultTest.cpp

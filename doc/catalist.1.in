@@ -16,7 +16,7 @@ catalist \- local-first anime and manga tracker for the terminal
 .B catalist
 tracks the anime you watch and the manga you read in two CSV files on your
 computer. Run without arguments, it opens the terminal interface. It asks
-Jikan, the public MyAnimeList API, to look up a title to add, to refresh a
+AniList's public API to look up a title to add, to refresh a
 title's episode or chapter count after it changes (and once a day for the
 titles being watched or read) and to fetch covers, which it draws with
 sixel graphics through img2sixel.

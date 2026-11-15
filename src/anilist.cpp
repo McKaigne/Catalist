@@ -33,10 +33,12 @@ int countOrZero(const json::value& field) {
 
 // AniList's statuses: FINISHED, RELEASING, NOT_YET_RELEASED, CANCELLED and
 // HIATUS.
-jikan::details detailsOf(const json::value& media, mediaType type) {
+details detailsOf(const json::value& media, mediaType type) {
 	std::string status = media["status"].asString().value_or("");
-	jikan::details found;
+	details found;
 	found.name = media["title"]["romaji"].asString().value_or("");
+	found.facts.anilistId = countOrZero(media["id"]);
+	found.facts.malId = countOrZero(media["idMal"]);
 	found.facts.totalUnits =
 	    countOrZero(media[type == mediaType::kAnime ? "episodes" : "chapters"]);
 	found.facts.totalVolumes = countOrZero(media["volumes"]);
@@ -55,43 +57,49 @@ jikan::details detailsOf(const json::value& media, mediaType type) {
 
 }  // namespace
 
-std::string lookupRequest(mediaType type, int malId) {
-	return fmt::format(
-	    R"({{"query":"query($id:Int,$type:MediaType){{Media(idMal:$id,type:$type){{)"
-	    R"(title{{romaji}} episodes chapters volumes status nextAiringEpisode{{episode}} )"
-	    R"(coverImage{{large extraLarge}}}}}}","variables":{{"id":{},"type":"{}"}}}})",
-	    malId, typeName(type));
+titleRef refOf(const entry& e) {
+	return {e.type, e.anilistId, e.malId};
 }
 
-result<jikan::details> parseLookup(const std::string& body, mediaType type) {
+std::string lookupRequest(const titleRef& wanted) {
+	// AniList's own id when known; a MyAnimeList id goes in idMal.
+	bool own = wanted.anilistId > 0;
+	return fmt::format(R"({{"query":"query($id:Int,$type:MediaType){{Media({}:$id,type:$type){{)"
+	                   R"(id idMal title{{romaji}} episodes chapters volumes status )"
+	                   R"(nextAiringEpisode{{episode}} coverImage{{large extraLarge}}}}}}",)"
+	                   R"("variables":{{"id":{},"type":"{}"}}}})",
+	                   own ? "id" : "idMal", own ? wanted.anilistId : wanted.malId,
+	                   typeName(wanted.type));
+}
+
+result<details> parseLookup(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
 	if (not reply.ok() or reply.value()["data"]["Media"].isNull())
-		return result<jikan::details>::failure("AniList does not know the title");
-	return result<jikan::details>::success(detailsOf(reply.value()["data"]["Media"], type));
+		return result<details>::failure("AniList does not know the title");
+	return result<details>::success(detailsOf(reply.value()["data"]["Media"], type));
 }
 
 std::string searchRequest(mediaType type, const std::string& query) {
 	return fmt::format(
 	    R"({{"query":"query($search:String,$type:MediaType){{Page(perPage:10){{)"
-	    R"(media(search:$search,type:$type,sort:SEARCH_MATCH){{idMal title{{romaji}} )"
+	    R"(media(search:$search,type:$type,sort:SEARCH_MATCH){{id idMal title{{romaji}} )"
 	    R"(episodes chapters volumes averageScore startDate{{year}}}}}}}}",)"
 	    R"("variables":{{"search":{},"type":"{}"}}}})",
 	    jsonString(query), typeName(type));
 }
 
-result<std::vector<jikan::title>> parseSearch(const std::string& body, mediaType type) {
+result<std::vector<title>> parseSearch(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
 	const json::value& media = reply.ok() ? reply.value()["data"]["Page"]["media"] : json::value();
 	if (not media.isArray())
-		return result<std::vector<jikan::title>>::failure("unexpected reply from AniList");
-	std::vector<jikan::title> found;
+		return result<std::vector<title>>::failure("unexpected reply from AniList");
+	std::vector<title> found;
 	for (const auto& item : media.items()) {
-		jikan::title match;
+		title match;
+		match.anilistId = countOrZero(item["id"]);
 		match.malId = countOrZero(item["idMal"]);
 		match.name = item["title"]["romaji"].asString().value_or("");
-		// The catalogue is keyed on MyAnimeList ids; titles without one are
-		// left out.
-		if (match.malId == 0 or match.name.empty())
+		if (match.anilistId == 0 or match.name.empty())
 			continue;
 		match.totalUnits = countOrZero(item[type == mediaType::kAnime ? "episodes" : "chapters"]);
 		match.totalVolumes = countOrZero(item["volumes"]);
@@ -100,21 +108,22 @@ result<std::vector<jikan::title>> parseSearch(const std::string& body, mediaType
 		match.score = item["averageScore"].asNumber().value_or(0.0) / 10.0;
 		found.push_back(std::move(match));
 	}
-	return result<std::vector<jikan::title>>::success(std::move(found));
+	return result<std::vector<title>>::success(std::move(found));
 }
 
-result<jikan::details> lookUp(const poster& post, mediaType type, int malId) {
-	auto body = post(kApiUrl, lookupRequest(type, malId));
+result<details> lookUp(const poster& post, const titleRef& wanted) {
+	if (wanted.anilistId <= 0 and wanted.malId <= 0)
+		return result<details>::failure("the title has no id to look up");
+	auto body = post(kApiUrl, lookupRequest(wanted));
 	if (not body)
-		return result<jikan::details>::failure("could not reach AniList");
-	return parseLookup(*body, type);
+		return result<details>::failure("could not reach AniList");
+	return parseLookup(*body, wanted.type);
 }
 
-result<std::vector<jikan::title>> search(const poster& post, mediaType type,
-                                         const std::string& query) {
+result<std::vector<title>> search(const poster& post, mediaType type, const std::string& query) {
 	auto body = post(kApiUrl, searchRequest(type, query));
 	if (not body)
-		return result<std::vector<jikan::title>>::failure("could not reach AniList");
+		return result<std::vector<title>>::failure("could not reach AniList");
 	return parseSearch(*body, type);
 }
 

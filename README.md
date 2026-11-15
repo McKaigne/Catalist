@@ -6,11 +6,19 @@ A small, local-first anime and manga tracker for the terminal, written in
 Your lists live on your computer in two plain CSV files. Catalist goes
 online only to look up a title to add, to refresh what is known about a
 title (how many episodes or chapters it has and how many are out) and to
-show its cover, through two public APIs that need no account:
-[Jikan](https://jikan.moe) (MyAnimeList) and [AniList](https://anilist.co),
-each standing in when the other cannot be reached. Everything works offline
-too. Lists move in and out as MyAnimeList XML,
-which both MyAnimeList and AniList read.
+show its cover, all through [AniList](https://anilist.co)'s public API,
+which needs no account. AniList also knows every title's MyAnimeList id, so
+each entry carries both, and Catalist works the same for AniList and
+MyAnimeList users. Everything works offline too. Lists move in and out as
+MyAnimeList XML, which both sites read.
+
+## Provider
+
+Your **provider** is the site you use: AniList (the default) or
+MyAnimeList. Its ids are the ones Catalist shows and accepts, and its name
+sits in the pill at the bottom left. Only one is chosen at a time. It is
+kept in a `settings` file next to the lists, and is where syncing with
+your account will plug in later (not done yet: lists are local only).
 
 ---
 
@@ -47,9 +55,10 @@ ctest --test-dir build --output-on-failure
 | `1` | Anime | Left: the filters with their counts (status, rating 10 to 0) and a stats card (days spent, mean score, episodes, rewatches, a status bar). Middle: the sortable list. Right: the cover, then the details and tracking cards |
 | `2` | Manga | The same for manga, with chapters, rereads and volumes |
 
-Covers are found by the title's MyAnimeList id: Catalist asks AniList (or,
-failing that, Jikan) for the cover's address, downloads the picture with
-curl and turns it into sixel graphics with `img2sixel`. They need a terminal that
+Covers come from AniList: Catalist asks for the cover's address by the
+title's AniList id (or its MyAnimeList id, which AniList also knows),
+downloads the picture with curl and turns it into sixel graphics with
+`img2sixel`. They need a terminal that
 shows sixel (foot, WezTerm, Konsole, xterm with `-ti vt340`, Windows
 Terminal, and others), are fetched once the selection rests, and are kept
 in memory only. When there is no picture, the cover card says why; a cover
@@ -58,17 +67,17 @@ that could not be fetched is tried again after a few seconds.
 ## Staying current
 
 Whenever you change a title's status, rating or progress, Catalist asks
-MyAnimeList about it (once a run): a series that has ended gets its final
+AniList about it (once a run), filling in whichever id it lacked: a series that has ended gets its final
 episode or chapter count instead of `?`. Once a day, titles you are watching
 or reading (or have on hold) are checked in the background, one request
 every two seconds. The **New** column shows episodes or chapters that are
 out but not yet watched, and the list starts with the titles that have the
 most.
-MyAnimeList only counts the chapters of a manga once it has ended, so new
+AniList only counts the chapters of a manga once it has ended, so new
 chapters of a running manga cannot be known.
 
-The bottom bar shows the current mode (`NOR`, `SCH` search, `EDT` typing a
-number, `ADD`, `DEL`), the last message and the keys that work right now.
+The bottom bar shows your provider, the last message and the keys that work
+right now.
 
 ## Keys
 
@@ -105,8 +114,8 @@ catalist export manga > manga.xml
   [AniPy](https://github.com/Jacekun/AniPy), then import that file.
 
 Importing never overwrites what you track: a title already in the catalogue
-(the same MyAnimeList id) keeps your score, progress and dates, and only its
-totals are refreshed. Importing the same file twice adds nothing. Titles
+(the same AniList or MyAnimeList id) keeps your score, progress and dates,
+and only its totals are refreshed. Importing the same file twice adds nothing. Titles
 without a MyAnimeList id are left out of an export, with a note on stderr.
 
 ---
@@ -114,19 +123,23 @@ without a MyAnimeList id are left out of an export, with a note on stderr.
 ## Data
 
 - `~/.config/catalist/anime.csv` and `manga.csv` (or `$XDG_CONFIG_HOME/catalist`,
-  or the directory in `CATALIST_DATA_DIR`). RFC 4180 CSV with 16 columns:
+  or the directory in `CATALIST_DATA_DIR`). RFC 4180 CSV with 17 columns:
   `id, mal_id, type, title, status, score, progress, total_units, volumes,
   total_volumes, rewatched, start_date, finish_date, updated_at, released,
-  checked_at` (the last two from the web checks).
+  checked_at, anilist_id` (the last three from the web checks; `id` is
+  local and never shown).
   They open in any spreadsheet.
 - Every save writes a temporary file and renames it over the old one, so a
   crash never leaves half a file. A save that fails is reported (the bottom
   bar in the TUI, exit code 1 in the CLI).
-- Files written by Catalist 0.2.1 to 0.3.0 load as they are; their AniList
-  ids, notes and other extra columns are dropped on the next save.
+- Files written by Catalist 0.2.1 to 0.3.0 load as they are, AniList ids
+  included; their notes and other extra columns are dropped on the next
+  save.
+- `settings` holds one line, `provider = anilist` or
+  `provider = myanimelist`, and is only written when you change it.
 
-There are no settings: the defaults are the settings. The theme is
-Catppuccin Mocha and the list starts with new releases.
+The provider is the only setting. The theme is Catppuccin Mocha and the
+list starts with new releases.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.

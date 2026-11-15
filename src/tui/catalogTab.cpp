@@ -276,18 +276,13 @@ bool catalogTab::onEvent(const Event& event, appContext& ctx) {
 void catalogTab::onTick(appContext& ctx) {
 	if (step_ != step::kAddSearching)
 		return;
-	// Jikan is MyAnimeList's own; AniList stands in when Jikan cannot be
-	// reached.
-	auto found = jikan::search(ctx.fetch, media_, addTitle_.value);
-	if (not found.ok())
-		found = anilist::search(ctx.post, media_, addTitle_.value);
-	addResults_ = found.ok() ? found.value() : std::vector<jikan::title>{};
+	auto found = anilist::search(ctx.post, media_, addTitle_.value);
+	addResults_ = found.ok() ? found.value() : std::vector<anilist::title>{};
 	addSelected_ = 0;
 	step_ = step::kAddPicking;
 	std::string quoted = fmt::format("'{}'", utf8::clip(addTitle_.value, 24));
 	if (not found.ok())
-		ctx.status =
-		    fmt::format("Could not reach MyAnimeList; the last row adds {} by hand.", quoted);
+		ctx.status = fmt::format("Could not reach AniList; the last row adds {} by hand.", quoted);
 	else if (addResults_.empty())
 		ctx.status = fmt::format("No matches for {}; the last row adds it by hand.", quoted);
 	else
@@ -402,7 +397,7 @@ bool catalogTab::onAddTitleKey(const Event& event, appContext& ctx) {
 		return true;
 	}
 	step_ = step::kAddSearching;
-	ctx.status = fmt::format("Searching MyAnimeList for '{}'...", utf8::clip(addTitle_.value, 24));
+	ctx.status = fmt::format("Searching AniList for '{}'...", utf8::clip(addTitle_.value, 24));
 	return true;
 }
 
@@ -545,9 +540,9 @@ void catalogTab::commit(appContext& ctx, const entry& changed, const std::string
 	refresh(ctx);
 	selectId(changed.id);
 	ctx.save(done);
-	// Touching a title is the moment to see whether MyAnimeList knows more
+	// Touching a title is the moment to see whether AniList knows more
 	// about it now (a final episode count, new chapters).
-	ctx.web.lookUp(media_, changed.malId);
+	ctx.web.lookUp(anilist::refOf(changed));
 }
 
 void catalogTab::adjustDetailsField(appContext& ctx, int direction) {
@@ -650,10 +645,11 @@ void catalogTab::addPicked(appContext& ctx) {
 	if (addSelected_ < static_cast<int>(addResults_.size())) {
 		const auto& pick = addResults_[addSelected_];
 		added.title = pick.name;
+		added.anilistId = pick.anilistId;
 		added.malId = pick.malId;
 		added.totalUnits = pick.totalUnits;
 		added.totalVolumes = pick.totalVolumes;
-		existing = ctx.db.findByMalId(media_, pick.malId);
+		existing = ctx.db.findByIds(media_, pick.anilistId, pick.malId);
 	}
 
 	browse();
@@ -671,7 +667,7 @@ void catalogTab::addPicked(appContext& ctx) {
 	refresh(ctx);
 	selectId(id);
 	ctx.save(fmt::format("Added {}.", name));
-	ctx.web.lookUp(media_, added.malId);
+	ctx.web.lookUp(anilist::refOf(added));
 }
 
 }  // namespace catalist

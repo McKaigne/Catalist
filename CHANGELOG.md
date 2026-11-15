@@ -11,9 +11,14 @@ Catalist is now a small, local-first tracker: two CSV files, two tabs, and
 the network only to add titles, keep them current and show their covers.
 
 ### Added
-- AniList as a second web source beside Jikan, keyed on MyAnimeList ids:
-  lookups and covers ask AniList first, the add search asks it when Jikan
-  cannot be reached.
+- AniList is the one web source (search, totals, aired episodes, covers),
+  replacing Jikan, which some networks cannot reach at all.
+- A provider, AniList (default) or MyAnimeList: its ids are the ones shown
+  and accepted, its name replaces the mode pill at the bottom left, and it is
+  where an account sync will plug in (`iListSync`, declared, not yet
+  implemented). Kept in a `settings` file.
+- Entries carry both ids: an `anilist_id` CSV column, read back from 0.3's
+  files too, and filled in from AniList on any lookup.
 - A cover card at the top right of the Anime and Manga tabs, shaped like a
   cover and drawn with sixel graphics through img2sixel (libsixel), fetched
   once the selection rests and kept in memory. The card says why when there
@@ -35,7 +40,7 @@ the network only to add titles, keep them current and show their covers.
   instead of added twice.
 - `catalist export anime|manga` prints MyAnimeList XML, which the import
   pages of MyAnimeList and AniList read.
-- The bottom-left pill shows the keyboard mode: `NOR`, `SCH` (search), `EDT`
+- (Replaced by the provider pill.) The bottom-left pill showed the keyboard mode: `NOR`, `SCH` (search), `EDT`
   (typing a number), `ADD` or `DEL` (confirm delete).
 - The details card can set the episode or chapter total (for titles added
   by hand), read volumes (manga) and the rewatch or reread count, by one

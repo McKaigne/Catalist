@@ -192,6 +192,20 @@ entry cycleStatus(entry target, int direction, const isoDate& today) {
 	return target;
 }
 
+entry setStatus(entry target, watchStatus status, const isoDate& today) {
+	if (status == target.status)
+		return target;
+	watchStatus previous = target.status;
+	target.status = status;
+	target = applyStatusDates(target, previous, today);
+	target.updatedAt = today;
+	return target;
+}
+
+entry setScore(entry target, int score, const isoDate& today) {
+	return adjustRating(target, score - target.score, today);
+}
+
 entry adjustRating(entry target, int delta, const isoDate& today) {
 	int score = std::clamp(target.score + delta, 0, 10);
 	if (score == target.score)

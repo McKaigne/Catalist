@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "text.hpp"
 #include "tui/catalogTab.hpp"
 
 namespace catalist {
@@ -77,8 +78,8 @@ Element styledText(const std::string& content, Color tint, bool emphasised) {
 
 // The title with every case-insensitive match of the search marked.
 Element highlightMatches(const std::string& title, const std::string& query, bool emphasised) {
-	std::string loweredTitle = lowercase(title);
-	std::string loweredQuery = lowercase(query);
+	std::string loweredTitle = utf8::lowercase(title);
+	std::string loweredQuery = utf8::lowercase(query);
 	size_t match = query.empty() ? std::string::npos : loweredTitle.find(loweredQuery);
 	if (match == std::string::npos)
 		return styledText(title, theme::kText, emphasised);
@@ -216,10 +217,10 @@ Element catalogTab::renderStatsCard() const {
 
 Element catalogTab::renderSearchCard() const {
 	if (isAdding())
-		return hbox(
-		           {text(" + ") | bold | color(theme::kBlue),
-		            addTitle_.render("Title to add...", step_ == step::kAddTyping) | flex,
-		            text(fmt::format("Add to {} ", lowercase(title()))) | color(theme::kSubtext)}) |
+		return hbox({text(" + ") | bold | color(theme::kBlue),
+		             addTitle_.render("Title to add...", step_ == step::kAddTyping) | flex,
+		             text(fmt::format("Add to {} ", utf8::lowercase(title()))) |
+		                 color(theme::kSubtext)}) |
 		       border | color(theme::kBlue) | size(HEIGHT, EQUAL, 3);
 	bool searching = step_ == step::kSearch;
 	// The summary only shows when the bar has room for it beside the field.
@@ -251,7 +252,7 @@ Element catalogTab::renderCatalogRow(int row, const tableLayout& layout) {
 	    step_ != step::kSearch and row == catalogSelected_ and focus_ != focusedCard::kSidebar;
 	std::string shownTitle = rowActive ? marquee::scroll(e.title, layout.titleGlyphs,
 	                                                     rowTimer_.elapsedFor(catalogSelected_))
-	                                   : marquee::clip(e.title, layout.titleGlyphs);
+	                                   : utf8::clip(e.title, layout.titleGlyphs);
 
 	Elements cells = {text(rowActive ? "▌ " : "  ") | bold | color(theme::kMauve)};
 	if (layout.date)
@@ -348,7 +349,7 @@ Element catalogTab::renderPickCard() {
 			line = hbox({text(active ? "▌ " : "  ") | bold | color(theme::kMauve),
 			             text("    +     ") | color(theme::kBlue), text(" "),
 			             text(fmt::format(" Add '{}' by hand",
-			                              marquee::clip(addTitle_.value, pickTitleGlyphs))) |
+			                              utf8::clip(addTitle_.value, pickTitleGlyphs))) |
 			                 color(theme::kSubtext) | flex});
 		} else {
 			const auto& match = addResults_[row];
@@ -358,7 +359,7 @@ Element catalogTab::renderPickCard() {
 			                         : fmt::format("?{}", unitName(media_));
 			std::string name = active ? marquee::scroll(match.name, pickTitleGlyphs,
 			                                            rowTimer_.elapsedFor(addSelected_))
-			                          : marquee::clip(match.name, pickTitleGlyphs);
+			                          : utf8::clip(match.name, pickTitleGlyphs);
 			line = hbox({text(active ? "▌ " : "  ") | bold | color(theme::kMauve),
 			             text(match.year.empty() ? "    -" : fmt::format("   {}", match.year)) |
 			                 size(WIDTH, EQUAL, 10) | color(theme::kSubtext),

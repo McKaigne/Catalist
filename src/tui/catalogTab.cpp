@@ -7,6 +7,7 @@
 
 #include "anilist.hpp"
 #include "entry.hpp"
+#include "text.hpp"
 
 namespace catalist {
 
@@ -215,7 +216,8 @@ bool catalogTab::passesFilters(const entry& candidate) const {
 	}
 	if (search_.value.empty())
 		return true;
-	return lowercase(candidate.title).find(lowercase(search_.value)) != std::string::npos;
+	return utf8::lowercase(candidate.title).find(utf8::lowercase(search_.value)) !=
+	       std::string::npos;
 }
 
 void catalogTab::refresh(appContext& ctx) {
@@ -282,7 +284,7 @@ void catalogTab::onTick(appContext& ctx) {
 	addResults_ = found.ok() ? found.value() : std::vector<jikan::title>{};
 	addSelected_ = 0;
 	step_ = step::kAddPicking;
-	std::string quoted = fmt::format("'{}'", marquee::clip(addTitle_.value, 24));
+	std::string quoted = fmt::format("'{}'", utf8::clip(addTitle_.value, 24));
 	if (not found.ok())
 		ctx.status =
 		    fmt::format("Could not reach MyAnimeList; the last row adds {} by hand.", quoted);
@@ -318,7 +320,7 @@ bool catalogTab::onBrowseKey(const Event& event, appContext& ctx) {
 	if (keys::isCharacter(event, 'd') and selectedEntry()) {
 		step_ = step::kConfirmDelete;
 		ctx.status =
-		    fmt::format("Delete '{}'? Confirm [y/N]", marquee::clip(selectedEntry()->title, 24));
+		    fmt::format("Delete '{}'? Confirm [y/N]", utf8::clip(selectedEntry()->title, 24));
 		return true;
 	}
 	return false;
@@ -331,7 +333,7 @@ bool catalogTab::onConfirmDeleteKey(const Event& event, appContext& ctx) {
 		browse();
 		ctx.db.removeEntry(media_, doomed.id);
 		refresh(ctx);
-		ctx.save(fmt::format("Deleted '{}'.", marquee::clip(doomed.title, 36)));
+		ctx.save(fmt::format("Deleted '{}'.", utf8::clip(doomed.title, 36)));
 		return true;
 	}
 	bool cancels =
@@ -400,8 +402,7 @@ bool catalogTab::onAddTitleKey(const Event& event, appContext& ctx) {
 		return true;
 	}
 	step_ = step::kAddSearching;
-	ctx.status =
-	    fmt::format("Searching MyAnimeList for '{}'...", marquee::clip(addTitle_.value, 24));
+	ctx.status = fmt::format("Searching MyAnimeList for '{}'...", utf8::clip(addTitle_.value, 24));
 	return true;
 }
 
@@ -659,7 +660,7 @@ void catalogTab::addPicked(appContext& ctx) {
 	// Show the whole list so the title is there to be seen.
 	search_.value.clear();
 	sidebarSelected_ = 1;
-	std::string name = fmt::format("'{}'", marquee::clip(added.title, 36));
+	std::string name = fmt::format("'{}'", utf8::clip(added.title, 36));
 	if (existing) {
 		refresh(ctx);
 		selectId(existing->id);

@@ -12,7 +12,8 @@ namespace {
 
 // Real replies, shortened: Frieren (finished), One Piece (airing) and
 // Berserk (a manga still running).
-const char* kFrieren = R"({"data":{"Media":{"episodes":28,"chapters":null,"volumes":null,
+const char* kFrieren =
+    R"({"data":{"Media":{"title":{"romaji":"Sousou no Frieren"},"episodes":28,"chapters":null,"volumes":null,
   "status":"FINISHED","coverImage":{"large":"https:\/\/s4.anilist.co\/m\/bx154587.jpg",
   "extraLarge":"https:\/\/s4.anilist.co\/l\/bx154587.jpg"},"nextAiringEpisode":null}}})";
 const char* kOnePiece = R"({"data":{"Media":{"episodes":null,"chapters":null,"volumes":null,
@@ -26,6 +27,7 @@ const char* kBerserk = R"({"data":{"Media":{"episodes":null,"chapters":null,"vol
 TEST_CASE("anilist reads a finished title, its totals and its larger cover") {
 	auto found = anilist::parseLookup(kFrieren, mediaType::kAnime);
 	REQUIRE(found.ok());
+	CHECK(found.value().name == "Sousou no Frieren");
 	CHECK(found.value().facts.totalUnits == 28);
 	CHECK(found.value().facts.released == 28);
 	CHECK_FALSE(found.value().ongoing);

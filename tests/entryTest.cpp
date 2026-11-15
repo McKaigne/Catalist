@@ -290,3 +290,16 @@ TEST_CASE("applyWebFacts keeps known values the check did not have") {
 	CHECK(finished.totalVolumes == 4);
 	CHECK(finished.released == 26);
 }
+
+TEST_CASE("setStatus fills the dates like the cycle and ignores no change") {
+	entry planned = makeEntry().status(watchStatus::kPlanToWatch).totalUnits(12).progress(3);
+	auto done = catalist::setStatus(planned, watchStatus::kCompleted, kToday);
+	CHECK(done.status == watchStatus::kCompleted);
+	CHECK(done.progress == 12);
+	CHECK(formatDate(done.startDate) == "2026-10-20");
+	CHECK(formatDate(done.finishDate) == "2026-10-20");
+	auto same = catalist::setStatus(planned, watchStatus::kPlanToWatch, kToday);
+	CHECK_FALSE(same.updatedAt.has_value());
+	CHECK(catalist::setScore(planned, 14, kToday).score == 10);
+	CHECK(catalist::setScore(planned, 7, kToday).score == 7);
+}

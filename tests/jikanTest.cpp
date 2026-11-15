@@ -91,10 +91,11 @@ TEST_CASE("jikan search tells an unreachable server from no matches") {
 
 TEST_CASE("jikan details count everything as out once a title has ended") {
 	auto anime = jikan::parseDetails(
-	    R"({"data": {"episodes": 28, "status": "Finished Airing",
+	    R"({"data": {"title": "Sousou no Frieren", "episodes": 28, "status": "Finished Airing",
           "images": {"jpg": {"image_url": "https://img/a.jpg"}}}})",
 	    mediaType::kAnime);
 	REQUIRE(anime.ok());
+	CHECK(anime.value().name == "Sousou no Frieren");
 	CHECK(anime.value().facts.totalUnits == 28);
 	CHECK(anime.value().facts.released == 28);
 	CHECK_FALSE(anime.value().ongoing);

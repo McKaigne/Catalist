@@ -72,6 +72,13 @@ namespace catalist {
 // Changes the score by delta, kept within 0..10.
 [[nodiscard]] entry adjustRating(entry target, int delta, const isoDate& today);
 
+// Sets the status, filling in the start and finish dates the way the cycle
+// does. Setting the status it already has changes nothing.
+[[nodiscard]] entry setStatus(entry target, watchStatus status, const isoDate& today);
+
+// Sets the score, kept within 0..10.
+[[nodiscard]] entry setScore(entry target, int score, const isoDate& today);
+
 // The numbers of an entry the user can set directly.
 enum class countField { kProgress, kTotalUnits, kVolumes, kRewatched };
 

@@ -42,6 +42,7 @@ using fetcher = std::function<std::optional<std::string>(const std::string&)>;
 
 // What MyAnimeList says about one title.
 struct details {
+	std::string name;
 	// released: everything, once it has finished; for an anime still airing,
 	// the episodes aired so far (see lookUp); otherwise 0, unknown.
 	webFacts facts;

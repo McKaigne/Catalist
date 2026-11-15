@@ -73,11 +73,6 @@ namespace catalist {
 
 namespace catalist::marquee {
 
-// Splits UTF-8 text into code points so clipping never cuts a glyph in half.
-[[nodiscard]] std::vector<std::string> splitGlyphs(const std::string& text);
-
-[[nodiscard]] std::string clip(const std::string& text, size_t maxGlyphs);
-
 // Shows the first maxGlyphs for pauseMs, then scrolls one glyph per stepMs
 // and loops. Text that fits is returned unchanged.
 [[nodiscard]] std::string scroll(const std::string& text, size_t maxGlyphs, uint64_t elapsedMs,
@@ -114,9 +109,6 @@ namespace keys {
 [[nodiscard]] bool isCharacter(const ftxui::Event& event, char expected);
 
 }  // namespace keys
-
-// ASCII lower case, byte by byte, for matching titles without regard to case.
-[[nodiscard]] std::string lowercase(std::string text);
 
 // A one-line text entry, drawn by hand: what was typed, then a block cursor.
 struct textField {

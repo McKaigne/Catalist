@@ -36,6 +36,7 @@ int countOrZero(const json::value& field) {
 jikan::details detailsOf(const json::value& media, mediaType type) {
 	std::string status = media["status"].asString().value_or("");
 	jikan::details found;
+	found.name = media["title"]["romaji"].asString().value_or("");
 	found.facts.totalUnits =
 	    countOrZero(media[type == mediaType::kAnime ? "episodes" : "chapters"]);
 	found.facts.totalVolumes = countOrZero(media["volumes"]);
@@ -57,7 +58,7 @@ jikan::details detailsOf(const json::value& media, mediaType type) {
 std::string lookupRequest(mediaType type, int malId) {
 	return fmt::format(
 	    R"({{"query":"query($id:Int,$type:MediaType){{Media(idMal:$id,type:$type){{)"
-	    R"(episodes chapters volumes status nextAiringEpisode{{episode}} )"
+	    R"(title{{romaji}} episodes chapters volumes status nextAiringEpisode{{episode}} )"
 	    R"(coverImage{{large extraLarge}}}}}}","variables":{{"id":{},"type":"{}"}}}})",
 	    malId, typeName(type));
 }

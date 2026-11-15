@@ -3,13 +3,14 @@
 #include <string>
 #include <vector>
 
+#include "text.hpp"
 #include "tui/style.hpp"
 #include "tui/tuiHarness.hpp"
 
 TEST_CASE("tui marquee clips by glyph, not byte") {
-	CHECK(catalist::marquee::clip("葬送のフリーレン", 3) == "葬送の");
-	CHECK(catalist::marquee::clip("short", 10) == "short");
-	CHECK(catalist::marquee::splitGlyphs("aé葬").size() == 3);
+	CHECK(catalist::utf8::clip("葬送のフリーレン", 3) == "葬送の");
+	CHECK(catalist::utf8::clip("short", 10) == "short");
+	CHECK(catalist::utf8::splitGlyphs("aé葬").size() == 3);
 }
 
 TEST_CASE("tui marquee scrolls after the pause and loops") {

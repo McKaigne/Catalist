@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "system.hpp"
+#include "text.hpp"
 #include "tui/catalogTab.hpp"
 #include "tui/style.hpp"
 #include "version.hpp"
@@ -41,9 +42,9 @@ Element tabLabel(int number, bool active, const std::string& label, const std::s
 
 // Counted in glyphs, not bytes, so "▼" is one.
 std::string truncated(const std::string& message, int maxLength) {
-	if (static_cast<int>(marquee::splitGlyphs(message).size()) <= maxLength)
+	if (static_cast<int>(utf8::splitGlyphs(message).size()) <= maxLength)
 		return message;
-	return fmt::format("{}...", marquee::clip(message, std::max(0, maxLength - 3)));
+	return fmt::format("{}...", utf8::clip(message, std::max(0, maxLength - 3)));
 }
 
 Element modePill(appMode mode) {
@@ -107,8 +108,8 @@ void appShell::applyFindings() {
 			changedTitles.push_back(after.title);
 	}
 	if (changedTitles.size() == 1)
-		ctx_.save(fmt::format("Updated from MyAnimeList: '{}'.",
-		                      marquee::clip(changedTitles.front(), 36)));
+		ctx_.save(
+		    fmt::format("Updated from MyAnimeList: '{}'.", utf8::clip(changedTitles.front(), 36)));
 	else if (changedTitles.size() > 1)
 		ctx_.save(fmt::format("Updated from MyAnimeList: {} titles.", changedTitles.size()));
 	else
@@ -198,7 +199,7 @@ Element appShell::renderBottomBar() {
 	// The status line comes first (it answers what was just done); hints go
 	// in order while they fit beside it, and the last ones are dropped on a
 	// narrow terminal.
-	int statusGlyphs = static_cast<int>(marquee::splitGlyphs(ctx_.status).size());
+	int statusGlyphs = static_cast<int>(utf8::splitGlyphs(ctx_.status).size());
 	int statusShare = std::max(kMinStatusWidth, std::min(statusGlyphs, room));
 	Elements hintItems;
 	int hintsWidth = 0;

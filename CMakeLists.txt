@@ -52,6 +52,7 @@ add_library(catalistLib STATIC
   src/json.cpp
   src/malXml.cpp
   src/system.cpp
+  src/text.cpp
   src/tui/app.cpp
   src/tui/catalogTab.cpp
   src/tui/catalogView.cpp

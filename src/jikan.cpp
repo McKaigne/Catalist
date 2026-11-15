@@ -118,6 +118,7 @@ result<details> parseDetails(const std::string& body, mediaType type) {
 	std::string status = item["status"].asString().value_or("");
 
 	details found;
+	found.name = item["title"].asString().value_or("");
 	found.facts.totalUnits = countOrZero(item[type == mediaType::kAnime ? "episodes" : "chapters"]);
 	found.facts.totalVolumes = countOrZero(item["volumes"]);
 	found.ongoing = isOngoing(status);

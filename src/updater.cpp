@@ -24,10 +24,13 @@ titleKey keyOf(const anilist::titleRef& title) {
 }
 
 struct job {
-	bool isCover = false;
+	enum class kind { kLookup, kCover, kLink } what = kind::kLookup;
 	anilist::titleRef title;
 	int widthPx = 0;
 	int heightPx = 0;
+	// For a link: the ids to ask by, and the site they are from.
+	provider known = provider::kAniList;
+	std::vector<int> ids;
 };
 
 }  // namespace
@@ -47,6 +50,7 @@ struct updater::shared {
 	void work();
 	void runLookup(const anilist::titleRef& title);
 	void runCover(const job& next);
+	void runLink(const job& next);
 	// Waits until the pause since the last request is over; false when the
 	// updater is stopping instead.
 	bool waitTurn();
@@ -78,6 +82,7 @@ struct updater::shared {
 	std::map<titleKey, titleKey> aliases;  // MyAnimeList key to AniList key
 	std::set<titleKey> lookedUp;
 	std::vector<finding> findings;
+	std::vector<link> links;
 	std::map<titleKey, std::string> imageUrls;
 	std::map<titleKey, std::string> images;
 	// Why a title has no cover, and when an unreachable one may be retried.
@@ -116,7 +121,9 @@ void updater::lookUp(const anilist::titleRef& title) {
 		bool hasId = title.anilistId > 0 or title.malId > 0;
 		if (not hasId or not shared_->lookedUp.insert(shared_->canonical(title)).second)
 			return;
-		shared_->jobs.push_back({false, title});
+		job lookup;
+		lookup.title = title;
+		shared_->jobs.push_back(lookup);
 	}
 	shared_->changed.notify_all();
 }
@@ -151,10 +158,35 @@ updater::cover updater::coverFor(const anilist::titleRef& title, int widthPx, in
 		if (not shared_->asked.insert(key).second)
 			return {coverState::kLoading, ""};
 		// The person is looking at this one, so it goes before any lookups.
-		shared_->jobs.push_front({true, title, widthPx, heightPx});
+		job cover;
+		cover.what = job::kind::kCover;
+		cover.title = title;
+		cover.widthPx = widthPx;
+		cover.heightPx = heightPx;
+		shared_->jobs.push_front(cover);
 	}
 	shared_->changed.notify_all();
 	return {coverState::kLoading, ""};
+}
+
+void updater::linkIds(mediaType type, provider known, std::vector<int> ids) {
+	if (ids.empty())
+		return;
+	{
+		std::lock_guard<std::mutex> lock(shared_->mutex);
+		job link;
+		link.what = job::kind::kLink;
+		link.title.type = type;
+		link.known = known;
+		link.ids = std::move(ids);
+		shared_->jobs.push_back(std::move(link));
+	}
+	shared_->changed.notify_all();
+}
+
+std::vector<updater::link> updater::takeLinks() {
+	std::lock_guard<std::mutex> lock(shared_->mutex);
+	return std::exchange(shared_->links, {});
 }
 
 void updater::waitUntilIdle() {
@@ -186,10 +218,17 @@ void updater::shared::work() {
 		}
 
 		// The requests run without the lock, so the interface never waits.
-		if (next.isCover)
-			runCover(next);
-		else
-			runLookup(next.title);
+		switch (next.what) {
+			case job::kind::kLookup:
+				runLookup(next.title);
+				break;
+			case job::kind::kCover:
+				runCover(next);
+				break;
+			case job::kind::kLink:
+				runLink(next);
+				break;
+		}
 
 		// Report back; the interface is only woken while it still exists.
 		std::lock_guard<std::mutex> lock(mutex);
@@ -300,6 +339,42 @@ void updater::shared::runCover(const job& next) {
 	failed[title] = outcome;
 	if (outcome == coverState::kUnreachable)
 		retryAt[title] = std::chrono::steady_clock::now() + retryAfter;
+}
+
+void updater::shared::runLink(const job& next) {
+	auto pacedPost = [this](const std::string& url, const std::string& json) {
+		return waitTurn() ? post(url, json) : std::nullopt;
+	};
+	auto found = anilist::linkIds(pacedPost, next.title.type, next.known, next.ids);
+	if (not found.ok())
+		return;
+	std::lock_guard<std::mutex> lock(mutex);
+	links.push_back({next.title.type, found.value()});
+}
+
+std::vector<missingIds> findMissingIds(const catalogue& lists) {
+	std::vector<missingIds> missing;
+	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
+		missingIds byMal{type, provider::kMyAnimeList, {}};
+		missingIds byAniList{type, provider::kAniList, {}};
+		for (const auto& e : lists.getEntries(type)) {
+			if (e.anilistId == 0 and e.malId > 0)
+				byMal.ids.push_back(e.malId);
+			if (e.malId == 0 and e.anilistId > 0)
+				byAniList.ids.push_back(e.anilistId);
+		}
+		for (auto* each : {&byMal, &byAniList})
+			if (not each->ids.empty())
+				missing.push_back(std::move(*each));
+	}
+	return missing;
+}
+
+int fillIds(catalogue& lists, mediaType type, const std::vector<anilist::idPair>& found) {
+	std::vector<std::pair<int, int>> pairs;
+	for (const auto& each : found)
+		pairs.emplace_back(each.anilistId, each.malId);
+	return lists.fillIds(type, pairs);
 }
 
 void checkFollowed(const catalogue& lists, updater& web, const isoDate& today) {

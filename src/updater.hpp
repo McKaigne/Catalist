@@ -53,6 +53,15 @@ public:
 	// The lookups that finished since the last call.
 	[[nodiscard]] std::vector<finding> takeFindings();
 
+	// Asks for both ids of titles of one type known by their ids on `known`.
+	void linkIds(mediaType type, provider known, std::vector<int> ids);
+	// What the id lookups found, per type, since the last call.
+	struct link {
+		mediaType type;
+		std::vector<anilist::idPair> ids;
+	};
+	[[nodiscard]] std::vector<link> takeLinks();
+
 	enum class coverState {
 		kLoading,
 		kReady,
@@ -83,6 +92,19 @@ private:
 // Asks for a lookup of every followed title (watching or on hold) with an
 // id that has not been checked today.
 void checkFollowed(const catalogue& lists, updater& web, const isoDate& today);
+
+// Titles of one type that lack one id but have the other, as the ids to ask
+// by: MyAnimeList ids of titles without an AniList id, and AniList ids of
+// titles without a MyAnimeList one (some never have one).
+struct missingIds {
+	mediaType type;
+	provider known;
+	std::vector<int> ids;
+};
+[[nodiscard]] std::vector<missingIds> findMissingIds(const catalogue& lists);
+
+// Fills in what an id lookup found; returns how many titles gained an id.
+int fillIds(catalogue& lists, mediaType type, const std::vector<anilist::idPair>& found);
 
 }  // namespace catalist
 

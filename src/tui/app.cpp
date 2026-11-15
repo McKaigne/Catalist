@@ -87,6 +87,16 @@ void drawImage(const iTab::overlayImage& picture) {
 // Folds finished web lookups into the catalogue. A change the person can see
 // (a new total, new episodes or chapters) is named in the status line.
 void appShell::applyFindings() {
+	// Ids first: they change nothing on screen but the provider's ids.
+	int linked = 0;
+	for (const auto& found : ctx_.web.takeLinks())
+		linked += fillIds(ctx_.db, found.type, found.ids);
+	if (linked > 0) {
+		ctx_.save(fmt::format("Found the {} ids of {} titles.", providerName(ctx_.db.getProvider()),
+		                      linked));
+		activeTab().onActivate(ctx_);
+	}
+
 	auto findings = ctx_.web.takeFindings();
 	if (findings.empty())
 		return;
@@ -218,6 +228,18 @@ Element appShell::renderBottomBar() {
 	       border | color(theme::kSurface0) | size(HEIGHT, EQUAL, 3) | reflect(bottomBox_);
 }
 
+// Once a day, asks for the ids titles lack (all of them, after an import
+// from MyAnimeList XML), so the provider's ids can be shown.
+void startLinking(catalogue& db, updater& web, const isoDate& today) {
+	if (db.getLinkedOn() == today)
+		return;
+	auto missing = findMissingIds(db);
+	for (auto& each : missing)
+		web.linkIds(each.type, each.known, std::move(each.ids));
+	db.setLinkedOn(today);
+	(void)db.saveSettings();
+}
+
 void runTui(catalogue& db) {
 	auto screen = ScreenInteractive::Fullscreen();
 	screen.TrackMouse(false);
@@ -239,6 +261,7 @@ void runTui(catalogue& db) {
 		ctx.cellHeight = cell->height;
 	}
 	checkFollowed(db, web, today());
+	startLinking(db, web, today());
 
 	// The two tabs and the shell around them.
 	catalogTab anime(mediaType::kAnime);

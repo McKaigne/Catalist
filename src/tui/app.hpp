@@ -40,6 +40,9 @@ struct appContext {
 
 namespace catalist {
 
+// Once a day, queues lookups of the ids titles lack.
+void startLinking(catalogue& db, updater& web, const isoDate& today);
+
 struct hint {
 	std::string key;
 	std::string description;

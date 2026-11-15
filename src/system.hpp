@@ -48,6 +48,12 @@ struct cellSize {
 };
 [[nodiscard]] std::optional<cellSize> terminalCellSize();
 
+// Whether standard input and output are both a terminal (someone can be
+// asked a question), and the width of standard output's terminal in columns
+// (0 when it is not one).
+[[nodiscard]] bool isInteractive();
+[[nodiscard]] int terminalColumns();
+
 }  // namespace catalist
 
 #endif  // CATALIST_SYSTEM_HPP_

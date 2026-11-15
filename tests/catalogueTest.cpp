@@ -257,16 +257,6 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue getById and findByIds look in one m
 	CHECK_FALSE(db.getById(mediaType::kAnime, 99).has_value());
 }
 
-TEST_CASE_FIXTURE(tempDirFixture, "catalogue finds a title by the provider's id") {
-	catalogue db(tempDir() / "data");
-	db.addEntry(makeEntry().title("Frieren").malId(52991).anilistId(154587));
-	db.addEntry(makeEntry().title("Berserk").malId(2).anilistId(30002).type(mediaType::kManga));
-	CHECK(db.findOn(catalist::provider::kAniList, 30002)->title == "Berserk");
-	CHECK(db.findOn(catalist::provider::kMyAnimeList, 52991)->title == "Frieren");
-	CHECK_FALSE(db.findOn(catalist::provider::kAniList, 52991).has_value());
-	CHECK_FALSE(db.findOn(catalist::provider::kAniList, 0).has_value());
-}
-
 TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps the provider in its settings file") {
 	catalogue db(tempDir() / "data");
 	REQUIRE(db.loadAll().ok());

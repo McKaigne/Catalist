@@ -17,6 +17,15 @@ the network only to add titles, keep them current and show their covers.
   and accepted, its name replaces the mode pill at the bottom left, and it is
   where an account sync will plug in (`iListSync`, declared, not yet
   implemented). Kept in a `settings` file.
+- A command line that works as a list manager: `ls`, `show`, `add`, `set`
+  (`edit`), `next`, `rm`, `search` and `provider`, beside `import` and
+  `export`. Titles are named by the provider's id or by words from the
+  title; several matches are offered to choose from at a terminal and listed
+  (never guessed) in a script. Short and long options, `--help` on every
+  command, suggestions for typos, tables in colour at a terminal (`NO_COLOR`
+  respected), tab-separated lines when piped, prompts on stderr.
+- Missing ids are looked up once a day in batches of fifty, so titles
+  imported from MyAnimeList XML get their AniList ids.
 - Entries carry both ids: an `anilist_id` CSV column, read back from 0.3's
   files too, and filled in from AniList on any lookup.
 - A cover card at the top right of the Anime and Manga tabs, shaped like a

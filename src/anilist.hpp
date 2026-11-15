@@ -63,6 +63,22 @@ struct details {
 [[nodiscard]] std::string searchRequest(mediaType type, const std::string& query);
 [[nodiscard]] result<std::vector<title>> parseSearch(const std::string& body, mediaType type);
 
+// Both ids of a title.
+struct idPair {
+	int anilistId = 0;
+	int malId = 0;
+};
+
+// Asks for both ids of up to fifty titles known by their ids on `known`.
+[[nodiscard]] std::string linkRequest(mediaType type, provider known, const std::vector<int>& ids);
+[[nodiscard]] result<std::vector<idPair>> parseLink(const std::string& body);
+
+// Both ids of every title given by its id on `known`, fifty to a request;
+// titles AniList does not know are left out. Fails when AniList cannot be
+// reached.
+[[nodiscard]] result<std::vector<idPair>> linkIds(const poster& post, mediaType type,
+                                                  provider known, const std::vector<int>& ids);
+
 // Fails when AniList cannot be reached or does not know the title.
 [[nodiscard]] result<details> lookUp(const poster& post, const titleRef& wanted);
 

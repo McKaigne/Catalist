@@ -4,23 +4,57 @@ catalist \- local-first anime and manga tracker for the terminal
 .SH SYNOPSIS
 .B catalist
 .br
-.B catalist import
-\fIFILE.xml\fR...
-.br
-.B catalist export
-\fIanime\fR|\fImanga\fR
-.br
 .B catalist
-\fB--help\fR | \fB--version\fR
+\fICOMMAND\fR [\fIARGS\fR...] [\fIOPTIONS\fR]
 .SH DESCRIPTION
 .B catalist
 tracks the anime you watch and the manga you read in two CSV files on your
-computer. Run without arguments, it opens the terminal interface. It asks
-AniList's public API to look up a title to add, to refresh a
-title's episode or chapter count after it changes (and once a day for the
-titles being watched or read) and to fetch covers, which it draws with
-sixel graphics through img2sixel.
+computer. Run without arguments, it opens the terminal interface; with a
+command, it works on the lists from the shell. It asks AniList's public API
+to look up a title to add, to refresh a title's episode or chapter count
+after it changes (and once a day for the titles being watched or read), to
+find the ids titles lack, and to fetch covers, which it draws with sixel
+graphics through img2sixel.
+.PP
+A \fITITLE\fR is named by its id on the provider or by words from its name,
+in any case; \fBanime\fR or \fBmanga\fR in front looks in one list only.
+When several titles match, a terminal is asked which one; otherwise they are
+listed and the command fails. At a terminal, lists are tables; piped, they
+are tab-separated lines. Every command takes \fB-h\fR, \fB--help\fR.
 .SH COMMANDS
+.TP
+.BR ls " [" \fIanime\fR | \fImanga\fR "] [" \fIWORDS\fR ...]
+List titles, new releases first. \fB-s\fR, \fB--status\fR \fISTATUS\fR;
+\fB--sort\fR \fBnew\fR|\fBupdated\fR|\fBrating\fR|\fBstatus\fR|\fBtitle\fR|\fBprogress\fR|\fBdate\fR;
+\fB--reverse\fR; \fB-n\fR, \fB--limit\fR \fIN\fR. Piped, each line is: type,
+id, title, status, rating, progress, total, new.
+.TP
+.BR show " " \fITITLE\fR
+Show one title in full.
+.TP
+.BR add " " \fIanime\fR | \fImanga\fR " " \fITITLE\fR | \fIID\fR
+Search AniList and add the match picked (\fB-y\fR, \fB--yes\fR takes the
+first), or add by the provider's id. Takes the options of \fBset\fR.
+.TP
+.BR set " " \fITITLE\fR " " \fIOPTIONS\fR
+Change a title: \fB-s\fR, \fB--status\fR \fISTATUS\fR (watching, completed,
+on-hold, dropped, planned); \fB-r\fR, \fB--rating\fR \fIN\fR (0 to 10);
+\fB-p\fR, \fB--progress\fR \fIN\fR, \fI+N\fR or \fI-N\fR; \fB-t\fR,
+\fB--total\fR \fIN\fR; \fB--volumes\fR \fIN\fR; \fB--rewatched\fR \fIN\fR.
+Prints what changed. Also \fBedit\fR.
+.TP
+.BR next " " \fITITLE\fR
+One more episode or chapter (\fB-n\fR, \fB--by\fR \fIN\fR for more).
+.TP
+.BR rm " " \fITITLE\fR
+Remove a title, after asking (\fB-y\fR, \fB--yes\fR skips the question,
+and is needed when nobody can be asked). Also \fBremove\fR, \fBdelete\fR.
+.TP
+.BR search " " \fIanime\fR | \fImanga\fR " " \fIWORDS\fR ...
+Search AniList and show the matches, marking those already tracked.
+.TP
+.BR provider " [" \fIanilist\fR | \fImal\fR ]
+Show or choose the provider, the site whose ids are shown and accepted.
 .TP
 .BR import " " \fIFILE.xml\fR...
 Add the titles of MyAnimeList XML exports. A title already in the catalogue
@@ -32,10 +66,10 @@ Print that list as MyAnimeList XML, which the import pages of MyAnimeList
 and AniList read. Titles without a MyAnimeList id are left out and counted
 on standard error.
 .TP
-.BR -h ", " --help
-Print usage and the data directory.
+.BR help " [" \fICOMMAND\fR "], " -h ", " --help
+Print the commands, or one command's options.
 .TP
-.BR -v ", " --version
+.BR -V ", " --version
 Print the version.
 .SH TABS
 .TP
@@ -74,6 +108,9 @@ Quit. Changes are saved as they are made.
 .TP
 .I ~/.config/catalist/anime.csv, manga.csv
 The catalogue.
+.TP
+.I ~/.config/catalist/settings
+The provider, and the day missing ids were last looked up.
 .SH ENVIRONMENT
 .TP
 .B CATALIST_DATA_DIR
@@ -81,8 +118,12 @@ Use this directory instead of ~/.config/catalist.
 .TP
 .B XDG_CONFIG_HOME
 When set, the catalogue is kept in $XDG_CONFIG_HOME/catalist.
+.TP
+.B NO_COLOR
+When set, output has no colours.
 .SH EXIT STATUS
-0 on success, 1 when the work failed (a file could not be read or saved),
-2 when the command line is wrong.
+0 on success, 1 when the work failed (a file could not be read or saved, no
+title matched, AniList could not be reached), 2 when the command line is
+wrong.
 .SH AUTHORS
 McKaigne <https://github.com/McKaigne/Catalist>

@@ -65,16 +65,20 @@ public:
 	[[nodiscard]] std::optional<entry> getById(mediaType type, int id) const;
 	// The entry with either id (0 matches nothing).
 	[[nodiscard]] std::optional<entry> findByIds(mediaType type, int anilistId, int malId) const;
-	// The entry, anime or manga, with this id on the site. AniList ids are
-	// unique across both; a MyAnimeList id is looked for among anime first.
-	[[nodiscard]] std::optional<entry> findOn(provider site, int id) const;
 
 	// The site whose ids are shown, kept in the `settings` file beside the
 	// lists (AniList when there is none). loadAll reads it; saveSettings
 	// writes it.
 	[[nodiscard]] provider getProvider() const;
 	void setProvider(provider site);
+	// The day missing ids were last looked up, so it happens once a day.
+	[[nodiscard]] std::optional<isoDate> getLinkedOn() const;
+	void setLinkedOn(std::optional<isoDate> day);
 	[[nodiscard]] bool saveSettings() const;
+
+	// Fills in the ids found for titles of one type, matching on either id;
+	// returns how many entries gained one.
+	int fillIds(mediaType type, const std::vector<std::pair<int, int>>& anilistAndMal);
 	bool updateEntry(const entry& changed);
 	bool removeEntry(mediaType type, int id);
 
@@ -114,6 +118,7 @@ private:
 	std::vector<entry> animeEntries_;
 	std::vector<entry> mangaEntries_;
 	provider provider_ = provider::kAniList;
+	std::optional<isoDate> linkedOn_;
 };
 
 }  // namespace catalist

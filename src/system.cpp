@@ -204,4 +204,15 @@ std::optional<cellSize> terminalCellSize() {
 	return cellSize{window.ws_xpixel / window.ws_col, window.ws_ypixel / window.ws_row};
 }
 
+bool isInteractive() {
+	return isatty(STDIN_FILENO) and isatty(STDOUT_FILENO);
+}
+
+int terminalColumns() {
+	winsize window{};
+	if (not isatty(STDOUT_FILENO) or ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) != 0)
+		return 0;
+	return window.ws_col;
+}
+
 }  // namespace catalist

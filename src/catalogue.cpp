@@ -351,18 +351,6 @@ std::optional<entry> catalogue::findByIds(mediaType type, int anilistId, int mal
 	return found == list.end() ? std::nullopt : std::optional<entry>(*found);
 }
 
-std::optional<entry> catalogue::findOn(provider site, int id) const {
-	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
-		const auto& list = getList(type);
-		auto found = std::find_if(list.begin(), list.end(), [site, id](const entry& e) {
-			return id > 0 and idOn(e, site) == id;
-		});
-		if (found != list.end())
-			return *found;
-	}
-	return std::nullopt;
-}
-
 bool catalogue::updateEntry(const entry& changed) {
 	auto& list = getList(changed.type);
 	auto found = std::find_if(list.begin(), list.end(),
@@ -451,9 +439,40 @@ void catalogue::setProvider(provider site) {
 	provider_ = site;
 }
 
+std::optional<isoDate> catalogue::getLinkedOn() const {
+	return linkedOn_;
+}
+
+void catalogue::setLinkedOn(std::optional<isoDate> day) {
+	linkedOn_ = day;
+}
+
 bool catalogue::saveSettings() const {
 	std::string name = provider_ == provider::kAniList ? "anilist" : "myanimelist";
-	return writeFileAtomic(dataDir_ / kSettingsFile, fmt::format("provider = {}\n", name));
+	std::string settings = fmt::format("provider = {}\n", name);
+	if (linkedOn_)
+		settings += fmt::format("linked = {}\n", linkedOn_->toString());
+	return writeFileAtomic(dataDir_ / kSettingsFile, settings);
+}
+
+int catalogue::fillIds(mediaType type, const std::vector<std::pair<int, int>>& anilistAndMal) {
+	int filled = 0;
+	for (auto& e : getList(type)) {
+		for (const auto& [anilistId, malId] : anilistAndMal) {
+			bool same =
+			    (anilistId > 0 and e.anilistId == anilistId) or (malId > 0 and e.malId == malId);
+			if (not same)
+				continue;
+			bool gains = (e.anilistId == 0 and anilistId > 0) or (e.malId == 0 and malId > 0);
+			if (e.anilistId == 0)
+				e.anilistId = anilistId;
+			if (e.malId == 0)
+				e.malId = malId;
+			filled += gains ? 1 : 0;
+			break;
+		}
+	}
+	return filled;
 }
 
 result<bool> catalogue::loadAll() {
@@ -471,9 +490,13 @@ result<bool> catalogue::loadAll() {
 				text.erase(text.find_last_not_of(" \t\r") + 1);
 				return text;
 			};
-			auto site = parseProvider(trim(line.substr(equals + 1)));
-			if (trim(line.substr(0, equals)) == "provider" and site)
+			std::string key = trim(line.substr(0, equals));
+			std::string value = trim(line.substr(equals + 1));
+			auto site = parseProvider(value);
+			if (key == "provider" and site)
 				provider_ = *site;
+			if (key == "linked")
+				linkedOn_ = isoDate::parse(value);
 		}
 	}
 	auto anime = loadCsv(mediaType::kAnime, getCsvPath(mediaType::kAnime));

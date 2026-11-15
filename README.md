@@ -36,7 +36,7 @@ nix run
 
 You need a C++17 compiler, CMake 3.20 or later, Ninja or Make; FTXUI,
 doctest and fmt are used from the system or downloaded by CMake. At run time,
-`curl` reaches MyAnimeList and `img2sixel` (from libsixel) draws covers;
+`curl` reaches AniList and `img2sixel` (from libsixel) draws covers;
 without them Catalist works offline and without covers.
 
 ```bash
@@ -96,6 +96,41 @@ right now.
 | `q` | Quit |
 
 Every change is saved the moment you make it.
+
+## Command line
+
+Everything the tracker does to a list also works from the shell:
+
+```bash
+catalist ls                                 # everything, new releases first
+catalist ls manga --status reading          # one list, one status
+catalist ls anime frieren                   # titles with these words
+catalist add anime dandadan                 # search AniList, pick, add
+catalist add anime 171018 -s watching -p 3  # by id, with a status and progress
+catalist next frieren                       # one more episode or chapter
+catalist next frieren -n 3                  # three more
+catalist set 154587 -s completed -r 9       # change status, rating, progress...
+catalist set berserk -p +12                 # progress forward (or -3 back)
+catalist show taxi                          # one title in full
+catalist rm "odd taxi"                      # asks first (or --yes)
+catalist search manga berserk               # look without adding
+catalist provider mal                       # show MyAnimeList ids instead
+```
+
+- **Naming a title:** by its id on your provider, or by words from its
+  title (any case, in any order). Put `anime` or `manga` first to look in
+  one list only. When several titles match, you are asked which one; in a
+  script, the matches are listed and the command fails, so it never guesses.
+- **Options** come in short and long forms (`-p 3`, `--progress 3`,
+  `--progress=3`). Every command has `--help`, `catalist help` lists them,
+  and a mistyped command or option gets a suggestion.
+- **Output:** a table at a terminal (in colour, unless `NO_COLOR` is set);
+  tab-separated lines when piped, for `cut`, `awk` or `sort`. Messages and
+  questions go to stderr. Exit codes: 0 done, 1 failed, 2 wrong command line.
+- **Staying current:** before a change, a title not checked today is looked
+  up, so `catalist next` on a finished series gets its final count. Once a
+  day the ids titles lack are looked up in batches of fifty (all of them,
+  the first time after an import from MyAnimeList).
 
 ## Importing and exporting
 

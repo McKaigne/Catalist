@@ -2,6 +2,8 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
+
 #include "json.hpp"
 
 namespace catalist::anilist {
@@ -109,6 +111,46 @@ result<std::vector<title>> parseSearch(const std::string& body, mediaType type) 
 		found.push_back(std::move(match));
 	}
 	return result<std::vector<title>>::success(std::move(found));
+}
+
+std::string linkRequest(mediaType type, provider known, const std::vector<int>& ids) {
+	std::string list;
+	for (int id : ids)
+		list += list.empty() ? std::to_string(id) : fmt::format(",{}", id);
+	return fmt::format(
+	    R"({{"query":"query($ids:[Int],$type:MediaType){{Page(perPage:50){{)"
+	    R"(media({}:$ids,type:$type){{id idMal}}}}}}","variables":{{"ids":[{}],"type":"{}"}}}})",
+	    known == provider::kAniList ? "id_in" : "idMal_in", list, typeName(type));
+}
+
+result<std::vector<idPair>> parseLink(const std::string& body) {
+	auto reply = json::parse(body);
+	const json::value& media = reply.ok() ? reply.value()["data"]["Page"]["media"] : json::value();
+	if (not media.isArray())
+		return result<std::vector<idPair>>::failure("unexpected reply from AniList");
+	std::vector<idPair> found;
+	for (const auto& item : media.items())
+		found.push_back({countOrZero(item["id"]), countOrZero(item["idMal"])});
+	return result<std::vector<idPair>>::success(std::move(found));
+}
+
+result<std::vector<idPair>> linkIds(const poster& post, mediaType type, provider known,
+                                    const std::vector<int>& ids) {
+	constexpr size_t kPerRequest = 50;
+	std::vector<idPair> found;
+	for (size_t start = 0; start < ids.size(); start += kPerRequest) {
+		std::vector<int> batch(
+		    ids.begin() + static_cast<long>(start),
+		    ids.begin() + static_cast<long>(std::min(ids.size(), start + kPerRequest)));
+		auto body = post(kApiUrl, linkRequest(type, known, batch));
+		if (not body)
+			return result<std::vector<idPair>>::failure("could not reach AniList");
+		auto page = parseLink(*body);
+		if (not page.ok())
+			return page;
+		found.insert(found.end(), page.value().begin(), page.value().end());
+	}
+	return result<std::vector<idPair>>::success(std::move(found));
 }
 
 result<details> lookUp(const poster& post, const titleRef& wanted) {

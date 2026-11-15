@@ -13,7 +13,7 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
 | `sync` | `iListSync`, where a future account sync with the provider plugs in (no implementation yet) |
 | `updater` | a worker thread for lookups and covers, one request every 2 s, results collected on the interface's tick |
 | `system` | everything that touches the OS: files, `runProgram` (curl, img2sixel), `today()`, the terminal's cell size |
-| `cli` | `catalist import` and `catalist export` |
+| `cli` | the command line: `ls`, `show`, `add`, `set`, `next`, `rm`, `search`, `provider`, `import`, `export` |
 | `tui/app` | `iTab`, `appContext` and the shell (tab bar, bottom bar, global keys) |
 | `tui/catalogTab`, `tui/catalogView.cpp` | the Anime and Manga tabs (filters, stats card, list, cover, details): keys and state, and drawing |
 | `tui/style` | colours, icons, pill, marquee, key names, `textField` |
@@ -182,3 +182,23 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
   chosen provider only, matching titles with `idOn(entry, site)`, its token
   kept outside the catalogue, its requests queued on the updater's worker
   thread, its state shown in the provider pill. Nothing implements it yet.
+
+## ADR-015: A Command Line for Managing the Lists
+- **Context:** the CLI could only import and export; adding or changing a
+  title meant opening the TUI.
+- **Decision:** subcommands in the style of git and cargo, defined as a
+  table in `cli.cpp` (name, aliases, usage, options, handler) that also
+  drives `help`, per-command `--help` and typo suggestions. A small parser
+  takes `--long value`, `--long=value`, `-s value` and `--`; anything like
+  `-3` is a word, so `--progress -3` works.
+- **Naming titles:** by the provider's id, or by words from the title
+  (exact title first). Ambiguity is never resolved by guessing: a terminal
+  is asked, a script gets the list and exit code 1.
+- **Same rules as the TUI:** edits go through the entry rules
+  (`setStatus`, `setScore`, `stepProgress`, `setCount`), and a title not
+  checked today is looked up first. The CLI runs requests synchronously; it
+  never starts the updater thread.
+- **Testing:** `cliContext` carries the streams, the date, the AniList
+  poster and whether a terminal is attached, so tests drive every command
+  with string streams and a fake web.
+

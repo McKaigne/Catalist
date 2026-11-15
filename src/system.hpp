@@ -34,6 +34,10 @@ namespace catalist {
 // failed for any reason: no connection, a timeout or an HTTP error status.
 [[nodiscard]] std::optional<std::string> httpGet(const std::string& url);
 
+// The same for a POST of `json` as application/json (AniList's API takes
+// only POST).
+[[nodiscard]] std::optional<std::string> httpPost(const std::string& url, const std::string& json);
+
 // The date on this computer's calendar.
 [[nodiscard]] isoDate today();
 

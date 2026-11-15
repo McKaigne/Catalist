@@ -43,6 +43,15 @@ struct libraryTotals {
 	size_t titles = 0;
 };
 
+// The table's columns that fit its width, and the room left for titles.
+struct tableLayout {
+	bool date = true;
+	bool fresh = true;  // the New column
+	bool rating = true;
+	bool statusName = true;  // false: the status shows only its icon
+	size_t titleGlyphs = 16;
+};
+
 // One sidebar row: a section header, "all", a status filter or a score filter.
 struct sidebarRow {
 	std::string label;
@@ -108,10 +117,11 @@ private:
 
 	// Drawing (catalogView.cpp).
 	ftxui::Element renderSidebarRow(int row) const;
-	ftxui::Element renderCatalogRow(int row);
+	ftxui::Element renderCatalogRow(int row, const tableLayout& layout);
 	ftxui::Element renderHeaderCell(const std::string& name, sortKey key, int width,
 	                                bool stretches) const;
-	ftxui::Element renderDetails();
+	ftxui::Element renderDetails(bool withDetails);
+	ftxui::Element renderSideColumn(appContext& ctx);
 	ftxui::Element renderSidebarCard() const;
 	ftxui::Element renderStatsCard() const;
 	ftxui::Element renderSearchCard() const;
@@ -152,6 +162,8 @@ private:
 	marquee::selectionTimer detailsTimer_;
 	// Where the cover card's inside was drawn last, and the picture for it.
 	ftxui::Box coverBox_;
+	ftxui::Box sideBox_;
+	ftxui::Box tableBox_;
 	std::optional<overlayImage> cover_;
 };
 

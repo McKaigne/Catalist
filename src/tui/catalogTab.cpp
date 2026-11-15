@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 
+#include "anilist.hpp"
 #include "entry.hpp"
 
 namespace catalist {
@@ -273,7 +274,11 @@ bool catalogTab::onEvent(const Event& event, appContext& ctx) {
 void catalogTab::onTick(appContext& ctx) {
 	if (step_ != step::kAddSearching)
 		return;
+	// Jikan is MyAnimeList's own; AniList stands in when Jikan cannot be
+	// reached.
 	auto found = jikan::search(ctx.fetch, media_, addTitle_.value);
+	if (not found.ok())
+		found = anilist::search(ctx.post, media_, addTitle_.value);
 	addResults_ = found.ok() ? found.value() : std::vector<jikan::title>{};
 	addSelected_ = 0;
 	step_ = step::kAddPicking;

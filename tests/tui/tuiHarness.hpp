@@ -29,8 +29,9 @@ struct tuiHarness : tempDirFixture {
 	appContext ctx;
 };
 
-// Draws an element on a 200x50 screen and returns the text.
-[[nodiscard]] std::string draw(const ftxui::Element& element);
+// Draws an element on a screen of that size (200x50 by default) and returns
+// the text.
+[[nodiscard]] std::string draw(const ftxui::Element& element, int width = 200, int height = 50);
 
 // Screen text without the colour codes, as a person would read it.
 [[nodiscard]] std::string plain(const std::string& screenText);

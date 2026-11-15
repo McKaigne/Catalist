@@ -1,5 +1,6 @@
 #include "support/testSupport.hpp"
 
+#include <fmt/format.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -83,6 +84,24 @@ std::optional<std::string> fakeWeb::get(const std::string& url) {
 		}
 	}
 	return answer ? std::optional<std::string>(*answer) : std::nullopt;
+}
+
+std::optional<std::string> fakeWeb::post(const std::string& url, const std::string& json) {
+	posted.push_back(json);
+	const std::string* answer = nullptr;
+	size_t matched = 0;
+	std::string request = fmt::format("{} {}", url, json);
+	for (const auto& [fragment, body] : bodies) {
+		if (request.find(fragment) != std::string::npos and fragment.size() >= matched) {
+			answer = &body;
+			matched = fragment.size();
+		}
+	}
+	return answer ? std::optional<std::string>(*answer) : std::nullopt;
+}
+
+anilist::poster fakeWeb::poster() {
+	return [this](const std::string& url, const std::string& json) { return post(url, json); };
 }
 
 jikan::fetcher fakeWeb::fetcher() {

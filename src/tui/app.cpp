@@ -8,8 +8,8 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/loop.hpp>
 #include <ftxui/component/screen_interactive.hpp>
-#include <ftxui/screen/terminal.hpp>
 #include <iostream>
+#include <limits>
 #include <thread>
 
 #include "system.hpp"
@@ -39,10 +39,11 @@ Element tabLabel(int number, bool active, const std::string& label, const std::s
 	return text(shown) | (active ? bold | color(theme::kMauve) : color(theme::kSubtext));
 }
 
-std::string truncated(std::string message, int maxLength) {
-	if (static_cast<int>(message.size()) <= maxLength)
+// Counted in glyphs, not bytes, so "▼" is one.
+std::string truncated(const std::string& message, int maxLength) {
+	if (static_cast<int>(marquee::splitGlyphs(message).size()) <= maxLength)
 		return message;
-	return fmt::format("{}...", message.substr(0, std::max(0, maxLength - 3)));
+	return fmt::format("{}...", marquee::clip(message, std::max(0, maxLength - 3)));
 }
 
 Element modePill(appMode mode) {
@@ -61,9 +62,13 @@ Element modePill(appMode mode) {
 	return text("");
 }
 
-// Jikan allows three requests a second but only sixty a minute; one every
-// second and a half stays clear of both, even while the daily check runs.
-constexpr auto kRequestPause = std::chrono::milliseconds(1500);
+// The status line keeps at least this much of the bottom bar.
+constexpr int kMinStatusWidth = 30;
+
+// Jikan allows sixty requests a minute and AniList thirty when it is busy;
+// one every two seconds stays clear of both, even while the daily check
+// runs.
+constexpr auto kRequestPause = std::chrono::milliseconds(2000);
 
 std::string coverProblem(const App& screen, bool canConvert) {
 	if (not canConvert)
@@ -184,10 +189,24 @@ Element appShell::renderTopBar() {
 }
 
 Element appShell::renderBottomBar() {
+	// The pill, the separators and the borders take about 14 columns; the
+	// width is the bar's own, measured on the last frame. Before the first,
+	// nothing is left out.
+	int width = bottomBox_.x_max - bottomBox_.x_min + 1;
+	int room = width > 1 ? width - 14 : std::numeric_limits<int>::max() / 2;
+
+	// The status line comes first (it answers what was just done); hints go
+	// in order while they fit beside it, and the last ones are dropped on a
+	// narrow terminal.
+	int statusGlyphs = static_cast<int>(marquee::splitGlyphs(ctx_.status).size());
+	int statusShare = std::max(kMinStatusWidth, std::min(statusGlyphs, room));
 	Elements hintItems;
 	int hintsWidth = 0;
 	for (const auto& item : activeTab().hints()) {
-		hintsWidth += static_cast<int>(item.key.size() + item.description.size()) + 3;
+		int itemWidth = static_cast<int>(item.key.size() + item.description.size()) + 3;
+		if (hintsWidth + itemWidth > room - statusShare - 2)
+			break;
+		hintsWidth += itemWidth;
 		if (not hintItems.empty())
 			hintItems.push_back(text("  "));
 		hintItems.push_back(
@@ -195,12 +214,11 @@ Element appShell::renderBottomBar() {
 		          text(fmt::format(" {}", item.description)) | color(theme::kSubtext)}));
 	}
 
-	// The pill, the separators and the borders take about 14 columns.
-	int maxStatusLength = std::max(16, Terminal::Size().dimx - hintsWidth - 14);
+	int maxStatusLength = std::max(kMinStatusWidth, room - hintsWidth - 2);
 	return hbox({text(" "), modePill(activeTab().mode()), text(" │ ") | color(theme::kSurface1),
 	             text(truncated(ctx_.status, maxStatusLength)) | color(theme::kYellow), filler(),
-	             hbox(std::move(hintItems)), text(" ")}) |
-	       border | color(theme::kSurface0) | size(HEIGHT, EQUAL, 3);
+	             text("  "), hbox(std::move(hintItems)), text(" ")}) |
+	       border | color(theme::kSurface0) | size(HEIGHT, EQUAL, 3) | reflect(bottomBox_);
 }
 
 void runTui(catalogue& db) {
@@ -211,14 +229,14 @@ void runTui(catalogue& db) {
 	// when something arrives. Declared after the screen, so it stops first.
 	bool canConvert = hasProgram("img2sixel");
 	updater web(
-	    httpGet, today,
+	    httpGet, httpPost, today,
 	    [](const std::string& image, int widthPx, int heightPx) {
 		    return runProgram(
 		        {"img2sixel", "-w", std::to_string(widthPx), "-h", std::to_string(heightPx)},
 		        image);
 	    },
 	    kRequestPause, [&screen] { screen.PostEvent(Event::Custom); });
-	appContext ctx{db, today, httpGet, web};
+	appContext ctx{db, today, httpGet, httpPost, web};
 	if (auto cell = terminalCellSize()) {
 		ctx.cellWidth = cell->width;
 		ctx.cellHeight = cell->height;

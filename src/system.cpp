@@ -167,10 +167,26 @@ bool hasProgram(const std::string& name) {
 	return false;
 }
 
+namespace {
+
+// -f turns an HTTP error into a failed exit; a server that does not answer
+// is given up on after four seconds, and the whole request after eight.
+const std::vector<std::string> kCurl = {"curl", "-sfL", "--connect-timeout", "4", "-m",
+                                        "8",    "-A",   "catalist"};
+
+}  // namespace
+
 std::optional<std::string> httpGet(const std::string& url) {
-	// -f turns an HTTP error into a failed exit, -m bounds the whole request so
-	// nothing waits longer than that.
-	return runProgram({"curl", "-sfL", "-m", "8", "-A", "catalist", url});
+	std::vector<std::string> arguments = kCurl;
+	arguments.push_back(url);
+	return runProgram(arguments);
+}
+
+std::optional<std::string> httpPost(const std::string& url, const std::string& json) {
+	std::vector<std::string> arguments = kCurl;
+	arguments.insert(arguments.end(), {"-H", "Content-Type: application/json", "-H",
+	                                   "Accept: application/json", "--data-binary", "@-", url});
+	return runProgram(arguments, json);
 }
 
 isoDate today() {

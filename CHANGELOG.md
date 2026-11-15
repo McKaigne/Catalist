@@ -11,11 +11,17 @@ Catalist is now a small, local-first tracker: two CSV files, two tabs, and
 the network only to add titles, keep them current and show their covers.
 
 ### Added
+- AniList as a second web source beside Jikan, keyed on MyAnimeList ids:
+  lookups and covers ask AniList first, the add search asks it when Jikan
+  cannot be reached.
 - A cover card at the top right of the Anime and Manga tabs, shaped like a
   cover and drawn with sixel graphics through img2sixel (libsixel), fetched
   once the selection rests and kept in memory. The card says why when there
   is no picture, and retries one that could not be fetched. Both side panels
-  have the same width.
+  have the same width, the left headers are in capitals, tracking sits above
+  details, and on a narrow or short terminal the table drops its least
+  needed columns, the bottom bar its last hints and the right column its
+  details card.
 - Titles stay current from MyAnimeList: after any change to a title's
   status, rating or progress, and once a day for titles being watched or on
   hold, Catalist looks it up in the background and takes its episode or

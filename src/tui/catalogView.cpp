@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <ftxui/screen/terminal.hpp>
 
 #include "tui/catalogTab.hpp"
 
@@ -17,8 +16,41 @@ using namespace ftxui;
 namespace {
 
 // Titles get whatever the fixed columns leave; off a terminal that is 16.
-size_t titleWidth() {
-	return static_cast<size_t>(std::max(16, Terminal::Size().dimx - 141));
+// For a table `width` cells wide inside its border; before the first frame
+// has measured it (width 0), everything is shown. On a narrow terminal the
+// date goes first, then the new count, then the rating.
+tableLayout fitTable(int width) {
+	constexpr int kAlways = 2 + 4 + 13;  // marker, type icon, progress
+	constexpr int kDate = 11, kFresh = 7, kRating = 13, kStatusName = 15, kMinTitle = 16;
+	tableLayout layout;
+	if (width <= 0)
+		return layout;
+	int used = kAlways + 2 + kDate + kFresh + kRating + kStatusName;
+	if (used + kMinTitle > width) {
+		layout.date = false;
+		used -= kDate;
+	}
+	if (used + kMinTitle > width) {
+		layout.fresh = false;
+		used -= kFresh;
+	}
+	if (used + kMinTitle > width) {
+		layout.rating = false;
+		used -= kRating;
+	}
+	// Last of all, the status keeps only its icon.
+	if (used + kMinTitle > width) {
+		layout.statusName = false;
+		used -= kStatusName;
+	}
+	layout.titleGlyphs = static_cast<size_t>(std::max(8, width - used));
+	return layout;
+}
+
+// Inside width of a card drawn last frame at `box`, or 0 before that.
+int insideWidth(const Box& box) {
+	int width = box.x_max - box.x_min + 1 - 2;
+	return width > 0 ? width : 0;
 }
 
 // Wait this long after the selection last moved before asking for a cover,
@@ -27,6 +59,10 @@ constexpr uint64_t kCoverDelayMs = 400;
 
 // Both side panels are this wide, the cover's card included.
 constexpr int kSidePanelWidth = 32;
+// Rows the cover keeps before the details card gives way, and that card's
+// height.
+constexpr int kMinCoverRows = 10;
+constexpr int kDetailsRows = 9;
 // Covers are about 7 wide to 10 tall.
 constexpr double kCoverAspect = 0.7;
 
@@ -128,9 +164,7 @@ Element catalogTab::render(appContext& ctx) {
 	Element middle = picking ? renderPickCard() : renderCatalogCard();
 	return hbox({vbox({renderSidebarCard() | flex, renderStatsCard()}) |
 	                 size(WIDTH, EQUAL, kSidePanelWidth),
-	             vbox({renderSearchCard(), middle | flex}) | flex,
-	             vbox({renderCoverCard(ctx), renderDetails(), filler()}) |
-	                 size(WIDTH, EQUAL, kSidePanelWidth)});
+	             vbox({renderSearchCard(), middle | flex}) | flex, renderSideColumn(ctx)});
 }
 
 Element catalogTab::renderSidebarRow(int row) const {
@@ -156,7 +190,7 @@ Element catalogTab::renderSidebarCard() const {
 	Elements rows;
 	for (size_t row = 0; row < sidebarRows_.size(); ++row)
 		rows.push_back(renderSidebarRow(static_cast<int>(row)));
-	return vbox({text("  Categories") | bold | color(theme::kLavender), text(""),
+	return vbox({text("  CATEGORIES") | bold | color(theme::kLavender), text(""),
 	             vbox(std::move(rows)) | vscroll_indicator | frame | flex}) |
 	       border | color(focused ? theme::kMauve : theme::kSurface0);
 }
@@ -168,7 +202,7 @@ Element catalogTab::renderStatsCard() const {
 		return hbox({text(fmt::format("  {}", label)) | color(theme::kSubtext), filler(),
 		             text(value) | bold | color(theme::kText), text("  ")});
 	};
-	Elements lines = {text("  Stats") | bold | color(theme::kLavender),
+	Elements lines = {text("  STATS") | bold | color(theme::kLavender),
 	                  text(""),
 	                  row("Days spent", oneDecimal(totals_.daysSpent)),
 	                  row("Mean score", twoDecimals(totals_.meanScore)),
@@ -188,8 +222,11 @@ Element catalogTab::renderSearchCard() const {
 		            text(fmt::format("Add to {} ", lowercase(title()))) | color(theme::kSubtext)}) |
 		       border | color(theme::kBlue) | size(HEIGHT, EQUAL, 3);
 	bool searching = step_ == step::kSearch;
-	std::string summary =
-	    search_.value.empty() ? "All entries " : fmt::format("Filter: '{}' ", search_.value);
+	// The summary only shows when the bar has room for it beside the field.
+	std::string summary;
+	if (insideWidth(tableBox_) == 0 or insideWidth(tableBox_) >= 50)
+		summary =
+		    search_.value.empty() ? "All entries " : fmt::format("Filter: '{}' ", search_.value);
 	return hbox({text(fmt::format(" {} ", icon::kSearch)) | color(theme::kPeach),
 	             search_.render("Press '/' to search...", searching) | flex,
 	             text(summary) | color(theme::kSubtext), text(" ")}) |
@@ -208,63 +245,82 @@ Element catalogTab::renderHeaderCell(const std::string& name, sortKey key, int w
 	              : cell | bold | color(theme::kSubtext);
 }
 
-Element catalogTab::renderCatalogRow(int row) {
+Element catalogTab::renderCatalogRow(int row, const tableLayout& layout) {
 	const auto& e = displayed_[row];
 	bool rowActive =
 	    step_ != step::kSearch and row == catalogSelected_ and focus_ != focusedCard::kSidebar;
-	std::string shownTitle =
-	    rowActive ? marquee::scroll(e.title, titleWidth(), rowTimer_.elapsedFor(catalogSelected_))
-	              : marquee::clip(e.title, titleWidth());
+	std::string shownTitle = rowActive ? marquee::scroll(e.title, layout.titleGlyphs,
+	                                                     rowTimer_.elapsedFor(catalogSelected_))
+	                                   : marquee::clip(e.title, layout.titleGlyphs);
 
-	auto statusCell =
-	    hbox({text(fmt::format("{} ", statusToIcon(e.status))) | color(statusToColor(e.status)),
-	          text(statusToString(e.status, e.type)) | color(statusToColor(e.status))});
-	auto line =
-	    hbox({text(rowActive ? "▌ " : "  ") | bold | color(theme::kMauve),
-	          text(formatDateCell(sortBy_ == sortKey::kUpdated ? e.updatedAt : listDate(e))) |
-	              size(WIDTH, EQUAL, 10) | color(theme::kSubtext),
-	          text(" "),
-	          hbox({text(fmt::format(" {} ", typeToIcon(e.type))),
-	                highlightMatches(shownTitle, search_.value, rowActive)}) |
-	              flex,
-	          text(" "), statusCell | size(WIDTH, EQUAL, 14), text(" "),
-	          text(fmt::format(" {}", renderStarMeter(e.score))) | size(WIDTH, EQUAL, 12) |
-	              color(theme::kYellow),
-	          text(" "),
-	          text(fmt::format(" {} {}", icon::kGauge, progressLabel(e))) | size(WIDTH, EQUAL, 12) |
-	              color(theme::kLavender),
-	          text(" "),
-	          text(newReleases(e) > 0 ? fmt::format(" +{}", newReleases(e)) : "") | bold |
-	              size(WIDTH, EQUAL, 6) | color(theme::kGreen),
-	          text(" ")});
+	Elements cells = {text(rowActive ? "▌ " : "  ") | bold | color(theme::kMauve)};
+	if (layout.date)
+		cells.push_back(
+		    hbox({text(formatDateCell(sortBy_ == sortKey::kUpdated ? e.updatedAt : listDate(e))) |
+		              size(WIDTH, EQUAL, 10) | color(theme::kSubtext),
+		          text(" ")}));
+	cells.push_back(hbox({text(fmt::format(" {} ", typeToIcon(e.type))),
+	                      highlightMatches(shownTitle, search_.value, rowActive)}) |
+	                flex);
+	cells.push_back(text(" "));
+	if (layout.statusName)
+		cells.push_back(
+		    hbox({text(fmt::format("{} ", statusToIcon(e.status))) | color(statusToColor(e.status)),
+		          text(statusToString(e.status, e.type)) | color(statusToColor(e.status))}) |
+		    size(WIDTH, EQUAL, 16));
+	else
+		cells.push_back(text(statusToIcon(e.status)) | color(statusToColor(e.status)) |
+		                size(WIDTH, EQUAL, 2));
+	if (layout.rating)
+		cells.push_back(hbox({text(" "), text(fmt::format(" {}", renderStarMeter(e.score))) |
+		                                     size(WIDTH, EQUAL, 12) | color(theme::kYellow)}));
+	cells.push_back(hbox({text(" "), text(fmt::format(" {} {}", icon::kGauge, progressLabel(e))) |
+	                                     size(WIDTH, EQUAL, 12) | color(theme::kLavender)}));
+	if (layout.fresh)
+		cells.push_back(
+		    hbox({text(" "), text(newReleases(e) > 0 ? fmt::format(" +{}", newReleases(e)) : "") |
+		                         bold | size(WIDTH, EQUAL, 6) | color(theme::kGreen)}));
+	cells.push_back(text(" "));
+	auto line = hbox(std::move(cells));
 	return rowActive ? line | bgcolor(theme::kSurface0) | focus : line;
 }
 
 Element catalogTab::renderCatalogCard() {
-	auto header = hbox({text("   ") | size(WIDTH, EQUAL, 3),
-	                    sortBy_ == sortKey::kUpdated
-	                        ? renderHeaderCell("Updated", sortKey::kUpdated, 10, false)
-	                        : renderHeaderCell("Date", sortKey::kDate, 10, false),
-	                    text(" "), renderHeaderCell("Title", sortKey::kTitle, 28, true), text(" "),
-	                    renderHeaderCell("Status", sortKey::kStatus, 14, false), text(" "),
-	                    renderHeaderCell("Rating", sortKey::kScore, 12, false), text(" "),
-	                    renderHeaderCell("Progress", sortKey::kProgress, 12, false), text(" "),
-	                    renderHeaderCell("New", sortKey::kNew, 6, false), text(" ")});
+	tableLayout layout = fitTable(insideWidth(tableBox_));
+	Elements heads = {text("  ")};
+	if (layout.date)
+		heads.push_back(hbox({sortBy_ == sortKey::kUpdated
+		                          ? renderHeaderCell("Updated", sortKey::kUpdated, 10, false)
+		                          : renderHeaderCell("Date", sortKey::kDate, 10, false),
+		                      text(" ")}));
+	heads.push_back(hbox({text("   "), renderHeaderCell("Title", sortKey::kTitle, 28, true)}) |
+	                flex);
+	heads.push_back(text(" "));
+	heads.push_back(layout.statusName ? renderHeaderCell("Status", sortKey::kStatus, 16, false)
+	                                  : text("  "));
+	if (layout.rating)
+		heads.push_back(hbox({text(" "), renderHeaderCell("Rating", sortKey::kScore, 12, false)}));
+	heads.push_back(hbox({text(" "), renderHeaderCell("Progress", sortKey::kProgress, 12, false)}));
+	if (layout.fresh)
+		heads.push_back(hbox({text(" "), renderHeaderCell("New", sortKey::kNew, 6, false)}));
+	heads.push_back(text(" "));
+
 	Element rows;
 	if (displayed_.empty()) {
-		rows = text(libraryEmpty_ ? " Nothing here yet. Press a to add a title, or run: "
-		                            "catalist import <file.xml>"
-		                          : " No matching entries found.") |
-		       color(theme::kSubtext) | center | flex;
+		rows = paragraphAlignCenter(libraryEmpty_
+		                                ? "Nothing here yet. Press a to add a title, or run: "
+		                                  "catalist import <file.xml>"
+		                                : "No matching entries found.") |
+		       color(theme::kSubtext) | vcenter | flex;
 	} else {
 		Elements lines;
 		for (size_t row = 0; row < displayed_.size(); ++row)
-			lines.push_back(renderCatalogRow(static_cast<int>(row)));
+			lines.push_back(renderCatalogRow(static_cast<int>(row), layout));
 		rows = vbox(std::move(lines)) | vscroll_indicator | frame | flex;
 	}
 	bool focused = step_ != step::kSearch and focus_ == focusedCard::kCatalog;
-	return vbox({header, text(""), rows}) | border |
-	       color(focused ? theme::kMauve : theme::kSurface0) | flex;
+	return vbox({hbox(std::move(heads)), text(""), rows}) | border |
+	       color(focused ? theme::kMauve : theme::kSurface0) | flex | reflect(tableBox_);
 }
 
 Element catalogTab::renderPickCard() {
@@ -278,7 +334,11 @@ Element catalogTab::renderPickCard() {
 	if (step_ == step::kAddSearching)
 		return vbox({header, text(""),
 		             text(" Searching MyAnimeList...") | color(theme::kSubtext) | center | flex}) |
-		       border | color(theme::kBlue) | flex;
+		       border | color(theme::kBlue) | flex | reflect(tableBox_);
+
+	// Titles get what the year, length and score columns leave.
+	int width = insideWidth(tableBox_);
+	size_t pickTitleGlyphs = width > 0 ? static_cast<size_t>(std::max(8, width - 45)) : 16;
 
 	Elements lines;
 	for (size_t row = 0; row <= addResults_.size(); ++row) {
@@ -288,7 +348,7 @@ Element catalogTab::renderPickCard() {
 			line = hbox({text(active ? "▌ " : "  ") | bold | color(theme::kMauve),
 			             text("    +     ") | color(theme::kBlue), text(" "),
 			             text(fmt::format(" Add '{}' by hand",
-			                              marquee::clip(addTitle_.value, titleWidth()))) |
+			                              marquee::clip(addTitle_.value, pickTitleGlyphs))) |
 			                 color(theme::kSubtext) | flex});
 		} else {
 			const auto& match = addResults_[row];
@@ -296,9 +356,9 @@ Element catalogTab::renderPickCard() {
 			std::string length = match.totalUnits > 0
 			                         ? fmt::format("{}{}", match.totalUnits, unitName(media_))
 			                         : fmt::format("?{}", unitName(media_));
-			std::string name = active ? marquee::scroll(match.name, titleWidth(),
+			std::string name = active ? marquee::scroll(match.name, pickTitleGlyphs,
 			                                            rowTimer_.elapsedFor(addSelected_))
-			                          : marquee::clip(match.name, titleWidth());
+			                          : marquee::clip(match.name, pickTitleGlyphs);
 			line = hbox({text(active ? "▌ " : "  ") | bold | color(theme::kMauve),
 			             text(match.year.empty() ? "    -" : fmt::format("   {}", match.year)) |
 			                 size(WIDTH, EQUAL, 10) | color(theme::kSubtext),
@@ -316,13 +376,15 @@ Element catalogTab::renderPickCard() {
 		lines.push_back(active ? line | bgcolor(theme::kSurface0) | focus : line);
 	}
 	return vbox({header, text(""), vbox(std::move(lines)) | vscroll_indicator | frame | flex}) |
-	       border | color(theme::kBlue) | flex;
+	       border | color(theme::kBlue) | flex | reflect(tableBox_);
 }
 
-Element catalogTab::renderDetails() {
+Element catalogTab::renderDetails(bool withDetails) {
 	const entry* current = selectedEntry();
 	if (not current)
-		return text("No record selected.") | color(theme::kSubtext);
+		return vbox({text("  DETAILS") | bold | color(theme::kLavender),
+		             text("  No title selected.") | color(theme::kSubtext)}) |
+		       border | color(theme::kSurface0);
 	const auto& e = *current;
 
 	// Shared pieces: how far along the title is, and the row layouts.
@@ -401,20 +463,17 @@ Element catalogTab::renderDetails() {
 	Color trackingBorder = typing           ? theme::kPeach
 	                       : trackingActive ? theme::kMauve
 	                                        : theme::kSurface0;
-	return vbox({seriesCard, vbox(std::move(tracking)) | border | color(trackingBorder)});
+	// Tracking first, under the cover; the details card is left out when the
+	// terminal is too short for it.
+	Element trackingCard = vbox(std::move(tracking)) | border | color(trackingBorder);
+	return withDetails ? vbox({trackingCard, seriesCard}) : trackingCard;
 }
 
-// The cover sits above the details. FTXUI cannot draw pictures, so this card
+// The cover sits above the tracking and details cards. FTXUI cannot draw pictures, so this card
 // is drawn with only a note in it, and the shell paints the sixel over its
 // inside after every frame (see image()).
 Element catalogTab::renderCoverCard(appContext& ctx) {
 	cover_.reset();
-	// The card is as tall as a cover of its width, and gives way first when
-	// the terminal is short.
-	int insideColumns = kSidePanelWidth - 2;
-	int portraitRows =
-	    static_cast<int>(std::ceil(insideColumns * ctx.cellWidth / kCoverAspect / ctx.cellHeight));
-
 	const entry* current = selectedEntry();
 	std::string note;
 	int columns = coverBox_.x_max - coverBox_.x_min + 1;
@@ -441,17 +500,30 @@ Element catalogTab::renderCoverCard(appContext& ctx) {
 		heightPx -= heightPx % 6;
 		auto picture = ctx.web.coverFor(media_, current->malId, widthPx, heightPx);
 		if (picture.state == updater::coverState::kReady) {
+			// Centred both ways in the card.
 			int pictureColumns = (widthPx + ctx.cellWidth - 1) / ctx.cellWidth;
-			cover_ = overlayImage{coverBox_.x_min + (columns - pictureColumns) / 2, coverBox_.y_min,
-			                      picture.sixel};
+			int pictureRows = (heightPx + ctx.cellHeight - 1) / ctx.cellHeight;
+			cover_ = overlayImage{coverBox_.x_min + (columns - pictureColumns) / 2,
+			                      coverBox_.y_min + (rows - pictureRows) / 2, picture.sixel};
 		} else {
 			note = coverNote(picture.state);
 		}
 	}
 	Element inside =
 	    paragraphAlignCenter(note) | color(theme::kOverlay0) | vcenter | flex | reflect(coverBox_);
-	return vbox({inside}) | border | color(theme::kSurface0) |
-	       size(HEIGHT, EQUAL, portraitRows + 2) | yflex_shrink;
+	return vbox({inside}) | border | color(theme::kSurface0);
+}
+
+// The right-hand column: the cover takes whatever height the tracking and
+// details cards leave. On a short terminal the details card goes first, so
+// the cover keeps at least kMinCoverRows.
+Element catalogTab::renderSideColumn(appContext& ctx) {
+	int height = sideBox_.y_max - sideBox_.y_min + 1;
+	int trackingRows = media_ == mediaType::kManga ? 10 : 9;
+	bool measured = height > 1;
+	bool withDetails = not measured or height >= kMinCoverRows + trackingRows + kDetailsRows;
+	return vbox({renderCoverCard(ctx) | flex, renderDetails(withDetails)}) |
+	       size(WIDTH, EQUAL, kSidePanelWidth) | reflect(sideBox_);
 }
 
 }  // namespace catalist

@@ -9,12 +9,14 @@
 #include <thread>
 #include <vector>
 
+#include "anilist.hpp"
 #include "catalogue.hpp"
 #include "jikan.hpp"
 
 namespace catalist {
 
-// Keeps titles current from MyAnimeList without making the interface wait:
+// Keeps titles current without making the interface wait, from AniList or,
+// failing that, Jikan (both keyed on MyAnimeList ids):
 // a worker thread runs the web requests one at a time, pausing between them
 // (Jikan allows three a second), and the interface collects the answers on
 // its next tick. Covers are kept in memory only.
@@ -28,8 +30,8 @@ public:
 	// (offline, Jikan busy) may be tried again after `retryAfter`. `wake` is
 	// called on the worker thread whenever something finished, so the
 	// interface can redraw; never once the updater is being destroyed.
-	updater(jikan::fetcher fetch, std::function<isoDate()> today, sixelMaker toSixel,
-	        std::chrono::milliseconds pause, std::function<void()> wake = {},
+	updater(jikan::fetcher fetch, anilist::poster post, std::function<isoDate()> today,
+	        sixelMaker toSixel, std::chrono::milliseconds pause, std::function<void()> wake = {},
 	        std::chrono::milliseconds retryAfter = std::chrono::seconds(15));
 	// Waits a moment for a request under way; a slower one is left to finish
 	// on its own, so quitting never hangs on the network.

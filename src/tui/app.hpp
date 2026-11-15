@@ -3,6 +3,7 @@
 
 #include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
+#include <ftxui/screen/box.hpp>
 #include <functional>
 #include <optional>
 #include <string>
@@ -21,6 +22,7 @@ struct appContext {
 	catalogue& db;
 	std::function<isoDate()> today;
 	jikan::fetcher fetch;
+	anilist::poster post;
 	// Web lookups and covers, fetched in the background.
 	updater& web;
 	// The message in the bottom bar.
@@ -116,6 +118,8 @@ private:
 	std::vector<iTab*> tabs_;
 	std::function<void()> quit_;
 	int activeIndex_ = 0;
+	// Where the bottom bar was drawn last, for fitting its hints.
+	ftxui::Box bottomBox_;
 };
 
 // Runs the full-screen interface until the user quits.

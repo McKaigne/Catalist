@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "anilist.hpp"
 #include "catalogue.hpp"
 #include "entry.hpp"
 #include "jikan.hpp"
@@ -40,9 +41,13 @@ void makeUnwritable(const std::filesystem::path& file);
 struct fakeWeb {
 	void respond(const std::string& urlFragment, const std::string& body);
 	[[nodiscard]] std::optional<std::string> get(const std::string& url);
+	// A POST is answered the same way, matching against the URL and the body.
+	[[nodiscard]] std::optional<std::string> post(const std::string& url, const std::string& json);
 	[[nodiscard]] jikan::fetcher fetcher();
+	[[nodiscard]] anilist::poster poster();
 
-	std::vector<std::string> requested;
+	std::vector<std::string> requested;  // GETs
+	std::vector<std::string> posted;     // POST bodies
 	std::map<std::string, std::string> bodies;
 };
 

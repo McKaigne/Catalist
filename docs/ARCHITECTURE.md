@@ -9,8 +9,8 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
 | `entry` | one anime or manga title, its statuses and the rules that change it (progress, status cycle, rating, counts, import merge) |
 | `catalogue` | the two lists in memory and their CSV files |
 | `malXml` | the MyAnimeList XML format lists are imported and exported in |
-| `json`, `jikan` | Jikan: the title search, and a title's details (totals, how much is out, the cover) |
-| `updater` | a worker thread for lookups and covers, one Jikan request every 1.5 s, results collected on the interface's tick |
+| `json`, `jikan`, `anilist` | the two web sources, both keyed on MyAnimeList ids: title search, and a title's details (totals, how much is out, the cover) |
+| `updater` | a worker thread for lookups and covers, one request every 2 s, results collected on the interface's tick |
 | `system` | everything that touches the OS: files, `runProgram` (curl, img2sixel), `today()`, the terminal's cell size |
 | `cli` | `catalist import` and `catalist export` |
 | `tui/app` | `iTab`, `appContext` and the shell (tab bar, bottom bar, global keys) |
@@ -147,8 +147,9 @@ Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
   the next tick, after the "Searching" status is drawn; without a
   connection the title is added by hand. Lookups (after every change to a
   title, once a run per title, and once a day for followed titles) and
-  covers run on the `updater`'s worker thread, one Jikan request every 1.5 s
-  (Jikan allows 60 a minute); a fetch that failed is tried again after 15 s
+  covers run on the `updater`'s worker thread, one request every 2 s; they
+  ask AniList first (it counts an airing anime's episodes directly) and
+  Jikan when AniList cannot help, while the add search asks Jikan first; a fetch that failed is tried again after 15 s
   rather than given up; the
   shell folds finished lookups into the catalogue on its tick. Nothing
   about the network is needed to use the lists.

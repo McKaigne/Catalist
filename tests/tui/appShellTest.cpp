@@ -170,3 +170,17 @@ TEST_CASE_FIXTURE(shellFixture,
 	          catalist::test::findTitle(db, catalist::mediaType::kAnime, "Odd Taxi").checkedAt) ==
 	      "2026-10-20");
 }
+
+TEST_CASE_FIXTURE(shellFixture, "tui shell drops hints rather than crowd the status line") {
+	using catalist::test::draw;
+	using catalist::test::plain;
+	ctx.status = "Sort: New releases (Decreasing ▼)";
+	CHECK_FALSE(draw(shell.render(), 100, 40).empty());
+	auto narrow = plain(draw(shell.render(), 100, 40));
+	CHECK(narrow.find("Sort: New releases (Decreasing ▼)") != std::string::npos);
+	CHECK(narrow.find("Tab tabs") != std::string::npos);
+	CHECK(narrow.find("q quit") == std::string::npos);
+
+	CHECK_FALSE(draw(shell.render(), 200, 40).empty());
+	CHECK(plain(draw(shell.render(), 200, 40)).find("q quit") != std::string::npos);
+}

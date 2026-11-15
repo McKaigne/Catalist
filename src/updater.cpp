@@ -25,10 +25,11 @@ struct job {
 }  // namespace
 
 struct updater::shared {
-	shared(jikan::fetcher fetch, std::function<isoDate()> today, sixelMaker toSixel,
-	       std::chrono::milliseconds pause, std::function<void()> wake,
+	shared(jikan::fetcher fetch, anilist::poster post, std::function<isoDate()> today,
+	       sixelMaker toSixel, std::chrono::milliseconds pause, std::function<void()> wake,
 	       std::chrono::milliseconds retryAfter)
 	    : fetch(std::move(fetch)),
+	      post(std::move(post)),
 	      today(std::move(today)),
 	      toSixel(std::move(toSixel)),
 	      pause(pause),
@@ -38,13 +39,18 @@ struct updater::shared {
 	void work();
 	void runLookup(const titleKey& title);
 	void runCover(const coverKey& key);
-	std::optional<std::string> pacedFetch(const std::string& url);
-	// The cover's address: known, fetched from Jikan, absent because
-	// MyAnimeList has none (an empty string), or nothing when Jikan could
-	// not be reached.
+	// Waits until the pause since the last request is over; false when the
+	// updater is stopping instead.
+	bool waitTurn();
+	// What AniList knows about the title, or else Jikan; fails when neither
+	// could be reached or knows it.
+	result<jikan::details> lookUpAnywhere(const titleKey& title);
+	// The cover's address: known, looked up, absent because there is none
+	// (an empty string), or nothing when no source could be reached.
 	std::optional<std::string> imageUrlOf(const titleKey& title);
 
 	const jikan::fetcher fetch;
+	const anilist::poster post;
 	const std::function<isoDate()> today;
 	const sixelMaker toSixel;
 	const std::chrono::milliseconds pause;
@@ -70,11 +76,11 @@ struct updater::shared {
 	std::map<coverKey, std::string> sixels;
 };
 
-updater::updater(jikan::fetcher fetch, std::function<isoDate()> today, sixelMaker toSixel,
-                 std::chrono::milliseconds pause, std::function<void()> wake,
+updater::updater(jikan::fetcher fetch, anilist::poster post, std::function<isoDate()> today,
+                 sixelMaker toSixel, std::chrono::milliseconds pause, std::function<void()> wake,
                  std::chrono::milliseconds retryAfter)
-    : shared_(std::make_shared<shared>(std::move(fetch), std::move(today), std::move(toSixel),
-                                       pause, std::move(wake), retryAfter)) {
+    : shared_(std::make_shared<shared>(std::move(fetch), std::move(post), std::move(today),
+                                       std::move(toSixel), pause, std::move(wake), retryAfter)) {
 	worker_ = std::thread([state = shared_] { state->work(); });
 }
 
@@ -176,20 +182,33 @@ void updater::shared::work() {
 	}
 }
 
-std::optional<std::string> updater::shared::pacedFetch(const std::string& url) {
-	{
-		std::unique_lock<std::mutex> lock(mutex);
-		changed.wait_until(lock, lastRequest + pause, [this] { return stopping; });
-		if (stopping)
-			return std::nullopt;
-		lastRequest = std::chrono::steady_clock::now();
-	}
-	return fetch(url);
+bool updater::shared::waitTurn() {
+	std::unique_lock<std::mutex> lock(mutex);
+	changed.wait_until(lock, lastRequest + pause, [this] { return stopping; });
+	if (stopping)
+		return false;
+	lastRequest = std::chrono::steady_clock::now();
+	return true;
+}
+
+result<jikan::details> updater::shared::lookUpAnywhere(const titleKey& title) {
+	auto [type, malId] = title;
+	// AniList first: it is the more reliable of the two and counts the
+	// episodes of an airing anime directly.
+	auto pacedPost = [this](const std::string& url, const std::string& json) {
+		return waitTurn() ? post(url, json) : std::nullopt;
+	};
+	auto found = anilist::lookUp(pacedPost, type, malId);
+	if (found.ok())
+		return found;
+	auto pacedFetch = [this](const std::string& url) {
+		return waitTurn() ? fetch(url) : std::nullopt;
+	};
+	return jikan::lookUp(pacedFetch, type, malId, today());
 }
 
 void updater::shared::runLookup(const titleKey& title) {
-	auto paced = [this](const std::string& url) { return pacedFetch(url); };
-	auto found = jikan::lookUp(paced, title.first, title.second, today());
+	auto found = lookUpAnywhere(title);
 	std::lock_guard<std::mutex> lock(mutex);
 	if (not found.ok()) {
 		// Not reached: a later change or check may try again.
@@ -207,9 +226,7 @@ std::optional<std::string> updater::shared::imageUrlOf(const titleKey& title) {
 		if (known != imageUrls.end())
 			return known->second;
 	}
-	auto body = pacedFetch(jikan::detailsUrl(title.first, title.second));
-	auto found = body ? jikan::parseDetails(*body, title.first)
-	                  : result<jikan::details>::failure("unreachable");
+	auto found = lookUpAnywhere(title);
 	if (not found.ok())
 		return std::nullopt;
 	std::lock_guard<std::mutex> lock(mutex);

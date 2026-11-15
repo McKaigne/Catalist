@@ -43,6 +43,7 @@ configure_file(doc/catalist.1.in "${CMAKE_CURRENT_BINARY_DIR}/doc/catalist.1" @O
 
 # Everything but main(), so the tests link the same code the program runs.
 add_library(catalistLib STATIC
+  src/anilist.cpp
   src/catalogue.cpp
   src/cli.cpp
   src/date.cpp
@@ -91,6 +92,7 @@ else()
 endif()
 
 add_executable(catalistTests
+  tests/anilistTest.cpp
   tests/catalogueTest.cpp
   tests/cliTest.cpp
   tests/dateTest.cpp

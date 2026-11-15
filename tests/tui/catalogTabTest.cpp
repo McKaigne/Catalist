@@ -413,7 +413,8 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog sidebar filters by any rating") {
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog sidebar totals the anime and follow changes") {
 	using catalist::test::valueAfter;
 	auto shown = screen(tab);
-	CHECK(shown.find("Stats") != std::string::npos);
+	CHECK(shown.find("STATS") != std::string::npos);
+	CHECK(shown.find("CATEGORIES") != std::string::npos);
 	// The labels without a colon are the sidebar's; the details card's have one.
 	// 36 episodes at 24 minutes is 0.6 days; the mean of the rated 10, 8, 6.
 	CHECK(valueAfter(shown, "Days spent") == "0.6");
@@ -545,4 +546,38 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog add can be canceled at any stage"
 	CHECK(web.requested.empty());
 	CHECK(db.getEntries(mediaType::kAnime).size() == 4);
 	CHECK(tab.mode() == appMode::kNor);
+}
+
+TEST_CASE_FIXTURE(catalogFixture, "tui catalog drops table columns on a narrow terminal") {
+	using catalist::test::draw;
+	using catalist::test::plain;
+	// The first frame measures the table; the next one fits it.
+	CHECK_FALSE(draw(tab.render(ctx), 120, 40).empty());
+	auto narrow = plain(draw(tab.render(ctx), 120, 40));
+	CHECK(narrow.find(" Title") != std::string::npos);
+	CHECK(narrow.find(" Status") != std::string::npos);
+	CHECK(narrow.find(" Progress") != std::string::npos);
+	CHECK(narrow.find(" Date") == std::string::npos);
+	CHECK(narrow.find(" New") == std::string::npos);
+	CHECK(narrow.find("Sousou no Frieren") != std::string::npos);
+
+	CHECK_FALSE(draw(tab.render(ctx), 200, 40).empty());
+	auto wide = plain(draw(tab.render(ctx), 200, 40));
+	CHECK(wide.find(" Date") != std::string::npos);
+	CHECK(wide.find(" New") != std::string::npos);
+	CHECK(wide.find(" Rating") != std::string::npos);
+}
+
+TEST_CASE_FIXTURE(catalogFixture,
+                  "tui catalog keeps cover and tracking when the terminal is short") {
+	using catalist::test::draw;
+	CHECK(draw(tab.render(ctx), 200, 40).find("DETAILS") != std::string::npos);
+	CHECK_FALSE(draw(tab.render(ctx), 200, 24).empty());
+	auto shortScreen = draw(tab.render(ctx), 200, 24);
+	CHECK(shortScreen.find("TRACKING") != std::string::npos);
+	CHECK(shortScreen.find("DETAILS") == std::string::npos);
+	CHECK(shortScreen.find("Loading cover...") != std::string::npos);
+	// Back to a tall terminal, the details card returns.
+	CHECK_FALSE(draw(tab.render(ctx), 200, 50).empty());
+	CHECK(draw(tab.render(ctx), 200, 50).find("DETAILS") != std::string::npos);
 }

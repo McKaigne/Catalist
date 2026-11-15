@@ -39,7 +39,7 @@ struct updaterFixture {
 	updaterFixture()
 	    : web(),
 	      updates(
-	          web.fetcher(), catalist::test::testToday,
+	          web.fetcher(), web.poster(), catalist::test::testToday,
 	          [this](const std::string& image, int w, int h) { return sixel(image, w, h); },
 	          std::chrono::milliseconds(0)) {}
 
@@ -154,7 +154,7 @@ TEST_CASE_FIXTURE(updaterFixture, "updater says why there is no cover") {
 TEST_CASE("updater tries an unreachable cover again after a while") {
 	fakeWeb web;
 	updater updates(
-	    web.fetcher(), catalist::test::testToday,
+	    web.fetcher(), web.poster(), catalist::test::testToday,
 	    [](const std::string& image, int, int) { return std::optional<std::string>(image); },
 	    std::chrono::milliseconds(0), {}, std::chrono::milliseconds(50));
 	CHECK(updates.coverFor(mediaType::kAnime, 7, 70, 100).state == updater::coverState::kLoading);
@@ -178,7 +178,7 @@ TEST_CASE("updater says when the picture cannot be converted") {
 	web.respond("/manga/2", kFinishedManga);
 	web.respond("img/berserk.jpg", "not really a JPEG");
 	updater updates(
-	    web.fetcher(), catalist::test::testToday,
+	    web.fetcher(), web.poster(), catalist::test::testToday,
 	    [](const std::string&, int, int) { return std::optional<std::string>(); },
 	    std::chrono::milliseconds(0));
 	CHECK(updates.coverFor(mediaType::kManga, 2, 70, 100).state == updater::coverState::kLoading);
@@ -201,7 +201,7 @@ TEST_CASE_FIXTURE(updaterFixture, "updater looks a title up again when Jikan was
 TEST_CASE("updater pauses between requests") {
 	fakeWeb web;
 	updater updates(
-	    web.fetcher(), catalist::test::testToday,
+	    web.fetcher(), web.poster(), catalist::test::testToday,
 	    [](const std::string&, int, int) { return std::optional<std::string>(); },
 	    std::chrono::milliseconds(60));
 	auto start = std::chrono::steady_clock::now();
@@ -229,7 +229,7 @@ TEST_CASE_FIXTURE(catalist::test::tempDirFixture,
 
 	fakeWeb web;
 	updater updates(
-	    web.fetcher(), catalist::test::testToday,
+	    web.fetcher(), web.poster(), catalist::test::testToday,
 	    [](const std::string&, int, int) { return std::optional<std::string>(); },
 	    std::chrono::milliseconds(0));
 	catalist::checkFollowed(lists, updates, catalist::test::testToday());
@@ -244,7 +244,7 @@ TEST_CASE_FIXTURE(catalist::test::tempDirFixture,
 TEST_CASE("updater fetches a cover before the lookups still waiting") {
 	fakeWeb web;
 	updater updates(
-	    web.fetcher(), catalist::test::testToday,
+	    web.fetcher(), web.poster(), catalist::test::testToday,
 	    [](const std::string&, int, int) { return std::optional<std::string>("SIXEL"); },
 	    std::chrono::milliseconds(30));
 	web.respond("/anime/7", R"({"data": {"images": {"jpg": {"image_url":
@@ -272,6 +272,8 @@ TEST_CASE("updater does not hold up quitting while a request is slow") {
 			    *finished = true;
 			    return std::optional<std::string>();
 		    },
+		    // AniList answers nothing at once; the slow request is Jikan's.
+		    [](const std::string&, const std::string&) { return std::optional<std::string>(); },
 		    catalist::test::testToday,
 		    [](const std::string&, int, int) { return std::optional<std::string>(); },
 		    std::chrono::milliseconds(0), [woke] { *woke = true; });

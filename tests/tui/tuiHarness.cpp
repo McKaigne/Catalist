@@ -8,13 +8,13 @@ namespace catalist::test {
 tuiHarness::tuiHarness()
     : db(tempDir() / "data"),
       updates(
-          web.fetcher(), testToday,
+          web.fetcher(), web.poster(), testToday,
           [](const std::string& image, int widthPx, int heightPx) {
 	          return std::optional<std::string>("SIXEL[" + image + " " + std::to_string(widthPx) +
 	                                            "x" + std::to_string(heightPx) + "]");
           },
           std::chrono::milliseconds(0)),
-      ctx{db, testToday, web.fetcher(), updates} {}
+      ctx{db, testToday, web.fetcher(), web.poster(), updates} {}
 
 std::filesystem::path tuiHarness::dataDir() const {
 	return tempDir() / "data";
@@ -35,8 +35,9 @@ std::string tuiHarness::screen(iTab& tab) {
 	return draw(tab.render(ctx));
 }
 
-std::string draw(const ftxui::Element& element) {
-	auto canvas = ftxui::Screen::Create(ftxui::Dimension::Fixed(200), ftxui::Dimension::Fixed(50));
+std::string draw(const ftxui::Element& element, int width, int height) {
+	auto canvas =
+	    ftxui::Screen::Create(ftxui::Dimension::Fixed(width), ftxui::Dimension::Fixed(height));
 	ftxui::Render(canvas, element);
 	return canvas.ToString();
 }

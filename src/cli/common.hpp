@@ -56,6 +56,14 @@ extern const std::vector<watchStatus> kStatuses;
 
 // ---- Naming titles ----
 
+// The operands of a command that takes one text (ls, search and add) as
+// that text: the words with a space between them, so a title of several
+// words needs no quotes. Empty without operands. Nothing, after the usage
+// error (exit code 2), on a later word that looks like an option: options
+// come before the text.
+[[nodiscard]] std::optional<std::string> readText(const command& cmd, const args::parsed& line,
+                                                  cliContext& ctx);
+
 // -a and -m: the one list a command is kept to, or both.
 [[nodiscard]] std::optional<mediaType> onlyType(const args::parsed& line);
 

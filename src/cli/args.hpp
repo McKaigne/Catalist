@@ -52,6 +52,9 @@ struct parsed {
 [[nodiscard]] std::vector<std::string> withLinesFor(const std::vector<std::string>& operands,
                                                     std::istream& in);
 
+// How many single-character edits turn one word into the other.
+[[nodiscard]] size_t editDistance(const std::string& from, const std::string& to);
+
 // The known word a typo was probably meant to be: at most two edits away.
 [[nodiscard]] std::optional<std::string> closestTo(const std::string& typed,
                                                    const std::vector<std::string>& known);

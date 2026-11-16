@@ -37,8 +37,11 @@ txNote undoNote(const cliContext& ctx) {
 
 void sayNoMatch(cliContext& ctx, const std::string& ref, const naming& how) {
 	std::string where = how.only ? fmt::format("your {} list", typeKey(*how.only)) : "your lists";
+	auto meant = refs::closest(ctx.db, ref, how.only);
+	std::string hint =
+	    meant ? fmt::format(" (did you mean '{}', {}?)", meant->title, refs::of(*meant)) : "";
 	fail(ctx, refs::parse(ref) ? fmt::format("no title in {} has the ref {}", where, ref)
-	                           : fmt::format("nothing in {} matches '{}'", where, ref));
+	                           : fmt::format("nothing in {} matches '{}'{}", where, ref, hint));
 	if (ref.size() > 1 and ref[0] == '-')
 		ctx.err << "Options go before the first operand.\n";
 	ctx.err << fmt::format("See what is there with: {} ls\n", ctx.program);
@@ -187,6 +190,20 @@ std::vector<std::string> statusWords() {
 	for (watchStatus status : kStatuses)
 		words.push_back(statusKey(status));
 	return words;
+}
+
+std::optional<std::string> readText(const command& cmd, const args::parsed& line, cliContext& ctx) {
+	std::string text;
+	for (size_t i = 0; i < line.operands.size(); ++i) {
+		const std::string& word = line.operands[i];
+		if (i > 0 and word.size() > 1 and word[0] == '-') {
+			usageError(ctx, cmd,
+			           fmt::format("'{}' comes after the text; options go before it", word));
+			return std::nullopt;
+		}
+		text += (i > 0 ? " " : "") + word;
+	}
+	return text;
 }
 
 // -a and -m: the one list a command is kept to, or both.

@@ -63,9 +63,9 @@ std::vector<std::string> sortWords() {
 }
 
 int runList(const command& self, const args::parsed& line, cliContext& ctx) {
-	if (line.operands.size() > 1)
-		return usageError(ctx, self,
-		                  "give one QUERY, after the options; quote a title of several words");
+	auto query = readText(self, line, ctx);
+	if (not query)
+		return 2;
 	std::optional<watchStatus> status;
 	if (line.has("s")) {
 		status = parseStatus(line.get("s"));
@@ -82,14 +82,13 @@ int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (not load(ctx))
 		return 1;
 
-	std::string query = line.operands.empty() ? "" : line.operands[0];
 	auto only = onlyType(line);
 	std::vector<entry> shown;
 	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
 		if (only and *only != type)
 			continue;
 		for (const auto& e : ctx.db.getEntries(type))
-			if ((not status or e.status == *status) and refs::titleHolds(e, query))
+			if ((not status or e.status == *status) and refs::titleHolds(e, *query))
 				shown.push_back(e);
 	}
 	catalogue::sortEntries(shown, key, line.has("r"));
@@ -255,8 +254,8 @@ std::vector<command> listingCommands() {
 	    {"ls",
 	     {},
 	     "List your titles",
-	     std::string("Lists both lists in title order. QUERY keeps the titles that hold it,\n"
-	                 "in capitals or not.\n\n") +
+	     std::string("Lists both lists in title order. QUERY keeps the titles that hold its\n"
+	                 "words, in capitals or not; they need no quotes.\n\n") +
 	         kRowFormat,
 	     {{'a', "", "", "list anime only"},
 	      {'m', "", "", "list manga only"},
@@ -267,7 +266,7 @@ std::vector<command> listingCommands() {
 	      {'q', "", "", "print the refs and nothing else"},
 	      {0, "json", "", "print one JSON object a line"},
 	      {0, "header", "", "name the columns on the first line of a pipe"}},
-	     "[QUERY]",
+	     "[QUERY...]",
 	     runList,
 	     operandKind::kTitle},
 	    {"show",

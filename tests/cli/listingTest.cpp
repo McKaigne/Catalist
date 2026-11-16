@@ -60,11 +60,14 @@ TEST_CASE_FIXTURE(cliFixture, "cli ls keeps to a list, a status or a part of the
 
 	CHECK(run({"ls", "-s", "bored"}) == 2);
 	CHECK(err.find("error: unknown status 'bored'\n") == 0);
-	CHECK(run({"ls", "odd", "taxi"}) == 2);
-	CHECK(err.find("error: give one QUERY, after the options; quote a title of several words\n") ==
-	      0);
+	// The words of a query need no quotes.
+	CHECK(run({"ls", "-q", "odd", "taxi"}) == 0);
+	CHECK(out == "a:2\n");
+	CHECK(run({"ls", "-q", "sousou", "frieren"}) == 0);
+	CHECK(out.empty());
 	// Options come first.
 	CHECK(run({"ls", "taxi", "-q"}) == 2);
+	CHECK(err.find("error: '-q' comes after the text; options go before it\n") == 0);
 	CHECK(out.empty());
 }
 

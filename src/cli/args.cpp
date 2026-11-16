@@ -93,7 +93,12 @@ struct reader {
 	}
 };
 
-// How many single-character edits turn one word into the other.
+}  // namespace
+
+std::string spelled(const option& taken) {
+	return taken.name.empty() ? fmt::format("-{}", taken.letter) : fmt::format("--{}", taken.name);
+}
+
 size_t editDistance(const std::string& from, const std::string& to) {
 	std::vector<size_t> row(to.size() + 1);
 	std::iota(row.begin(), row.end(), 0);
@@ -108,12 +113,6 @@ size_t editDistance(const std::string& from, const std::string& to) {
 		}
 	}
 	return row[to.size()];
-}
-
-}  // namespace
-
-std::string spelled(const option& taken) {
-	return taken.name.empty() ? fmt::format("-{}", taken.letter) : fmt::format("--{}", taken.name);
 }
 
 std::string parsed::get(const std::string& name) const {

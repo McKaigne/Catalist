@@ -36,7 +36,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(run({"help", "ls"}) == 0);
 	CHECK(out.find("List your titles.\n\n"
 	               "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] "
-	               "[QUERY]\n") == 0);
+	               "[QUERY...]\n") == 0);
 	CHECK(has(out, "ref type title status score progress total volumes rewatched\n"));
 	CHECK(has(out, "\nOptions:\n  -a                list anime only\n"));
 	CHECK(has(out, "  -s STATUS         only watching, completed, on-hold, dropped or planned\n"));
@@ -68,8 +68,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(run({"help", "tx"}) == 0);
 	CHECK(has(out, "export CATALIST_TX=$(catalist tx)\n"));
 	CHECK(run({"help", "add"}) == 0);
-	CHECK(
-	    has(out, "Usage: catalist add [-amq] [--pick=N] [--status=STATUS] [--no-lookup] TITLE\n"));
+	CHECK(has(out,
+	          "Usage: catalist add [-amq] [--pick=N] [--status=STATUS] [--no-lookup] TITLE...\n"));
 	// The helps line up past the longest option.
 	CHECK(has(out, "      --status=STATUS  watching, completed, on-hold, dropped or planned\n"));
 	CHECK(has(out, "      --no-lookup      add TITLE as written, without asking AniList\n"));
@@ -77,7 +77,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(run({"help", "rm"}) == 0);
 	CHECK(has(out, "Usage: catalist rm [-amfq] [--all] REF...\n"));
 	CHECK(run({"help", "search"}) == 0);
-	CHECK(has(out, "Usage: catalist search [-am] [--json] [--header] QUERY\n"));
+	CHECK(has(out, "Usage: catalist search [-am] [--json] [--header] QUERY...\n"));
 	CHECK(has(out, "  pick type title year total score anilist_id mal_id ref\n"));
 	CHECK(run({"help", "stats"}) == 0);
 	CHECK(has(out, "Usage: catalist stats [-am] [--json] [--header]\n"));
@@ -116,7 +116,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli names itself as it was run") {
 	CHECK(run({"ls", "-x"}) == 2);
 	CHECK(err ==
 	      "error: unknown option '-x'\n"
-	      "Usage: cl ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] [QUERY]\n"
+	      "Usage: cl ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] [QUERY...]\n"
 	      "Run 'cl help ls' for more.\n");
 	CHECK(run({"show", "naruto"}) == 1);
 	CHECK(has(err, "See what is there with: cl ls\n"));
@@ -161,7 +161,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 	CHECK(run({"ls", "--jsno"}) == 2);
 	CHECK(err ==
 	      "error: unknown option '--jsno' (did you mean '--json'?)\n"
-	      "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] [QUERY]\n"
+	      "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] [QUERY...]\n"
 	      "Run 'catalist help ls' for more.\n");
 	CHECK(run({"ls", "-ax"}) == 2);
 	CHECK(err.find("error: unknown option '-x'\n") == 0);
@@ -219,6 +219,18 @@ TEST_CASE_FIXTURE(cliFixture, "cli says which title it could not find, and shows
 	// One REF that fails stops them all.
 	CHECK(run({"show", "taxi", "naruto"}) == 1);
 	CHECK(out.empty());
+	// A typo names the title it was probably meant to be.
+	CHECK(run({"show", "freiren"}) == 1);
+	CHECK(err ==
+	      "error: nothing in your lists matches 'freiren' (did you mean 'Sousou no Frieren', "
+	      "a:1?)\n"
+	      "See what is there with: catalist ls\n");
+	CHECK(run({"show", "-m", "odd taxo"}) == 1);
+	CHECK(err.find("error: nothing in your manga list matches 'odd taxo'\n") == 0);
+	CHECK(run({"show", "odd taxo"}) == 1);
+	CHECK(has(err, "(did you mean 'Odd Taxi', a:2?)"));
+	CHECK(run({"show", "bersek"}) == 1);
+	CHECK(has(err, "(did you mean 'Berserk', m:1?)"));
 	// An option after the first title is read as a title.
 	CHECK(run({"show", "taxi", "--json"}) == 1);
 	CHECK(err ==
@@ -305,6 +317,17 @@ TEST_CASE_FIXTURE(cliFixture, "cli refuses to work on a catalogue it cannot read
 	CHECK(run({"add", "--no-lookup", "Home Video"}) == 1);
 	CHECK(out.empty());
 	CHECK(catalist::test::readText("data/anime.csv") == "this,is,not,a,catalogue\n");
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli alone at a terminal lists what is being watched") {
+	seed();
+	CHECK(run({}, "", 100) == 0);
+	CHECK(has(out, "Odd Taxi"));
+	CHECK(has(out, "Berserk"));
+	CHECK_FALSE(has(out, "Frieren"));
+	// Odd Taxi has new episodes out, so it comes first.
+	CHECK(out.find("Odd Taxi") < out.find("Berserk"));
+	CHECK(err.empty());
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli without a command says how to give one, with exit code 2") {

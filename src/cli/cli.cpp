@@ -84,7 +84,8 @@ void printHelp(cliContext& ctx) {
 	    "  {0} set a:12 score=9\n"
 	    "  {0} undo\n"
 	    "\nOptions come before the titles. Run '{0} help COMMAND' for the options of\n"
-	    "a command. Your lists are kept in\n{1}.\n",
+	    "a command. '{0}' alone lists what you are watching or reading, new\n"
+	    "episodes and chapters first. Your lists are kept in\n{1}.\n",
 	    program, ctx.db.getDataDir().string());
 }
 
@@ -110,6 +111,14 @@ int commandError(cliContext& ctx, const std::string& what) {
 	    "error: {}\nUsage: {} COMMAND [ARG...]\nRun '{} help' to see the commands.\n", what,
 	    ctx.program, ctx.program);
 	return 2;
+}
+
+// The program alone at a terminal: what is being watched or read, the
+// titles with new episodes or chapters first.
+int runDefault(cliContext& ctx) {
+	const command* list = findCommand("ls");
+	auto line = args::parse({"-s", "watching", "--sort=new"}, list->options);
+	return list->run(*list, line.value(), ctx);
 }
 
 int unknownCommand(cliContext& ctx, const std::string& first) {
@@ -167,7 +176,7 @@ std::string usageLine(const command& shown) {
 
 int runCli(const std::vector<std::string>& args, cliContext& ctx) {
 	if (args.empty())
-		return commandError(ctx, "no command given");
+		return ctx.columns > 0 ? runDefault(ctx) : commandError(ctx, "no command given");
 	const std::string& first = args.at(0);
 	ctx.typed.clear();
 	for (const auto& word : args)

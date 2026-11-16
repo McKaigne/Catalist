@@ -105,8 +105,11 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 	auto type = oneType(line);
 	if (not type)
 		return usageError(ctx, self, "give -a or -m, not both");
-	if (line.operands.size() != 1 or line.operands[0].empty())
-		return usageError(ctx, self, "name one title; quote a title of several words");
+	auto name = readText(self, line, ctx);
+	if (not name)
+		return 2;
+	if (name->empty())
+		return usageError(ctx, self, "name the title to add");
 	auto status = parseStatus(line.has("status") ? line.get("status") : "planned");
 	if (not status)
 		return usageError(ctx, self, fmt::format("unknown status '{}'", line.get("status")));
@@ -126,7 +129,7 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 	isoDate today = ctx.today();
 	entry added;
 	added.type = *type;
-	added.title = line.operands[0];
+	added.title = *name;
 	added.status = watchStatus::kPlanToWatch;
 	added.updatedAt = today;
 	// AniList is asked before the catalogue is taken for writing: no other
@@ -196,11 +199,14 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 	auto type = oneType(line);
 	if (not type)
 		return usageError(ctx, self, "give -a or -m, not both");
-	if (line.operands.size() != 1 or line.operands[0].empty())
-		return usageError(ctx, self, "give one QUERY; quote a title of several words");
+	auto query = readText(self, line, ctx);
+	if (not query)
+		return 2;
+	if (query->empty())
+		return usageError(ctx, self, "give the QUERY to search for");
 	if (not load(ctx))
 		return 1;
-	auto found = anilist::search(ctx.post, *type, line.operands[0]);
+	auto found = anilist::search(ctx.post, *type, *query);
 	if (not found.ok())
 		return fail(ctx, webError(found.errorMessage()));
 	const auto& matches = found.value();
@@ -212,8 +218,7 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 
 	if (not line.has("json") and ctx.columns > 0) {
 		if (matches.empty()) {
-			ctx.err << fmt::format("AniList has no {} matching '{}'.\n", typeKey(*type),
-			                       line.operands[0]);
+			ctx.err << fmt::format("AniList has no {} matching '{}'.\n", typeKey(*type), *query);
 			return 0;
 		}
 		ctx.out << matchTable(ctx, *type, matches, mine);
@@ -259,7 +264,7 @@ std::vector<command> onlineCommands() {
 	       statusWords()},
 	      {0, "no-lookup", "", "add TITLE as written, without asking AniList"},
 	      kQuiet},
-	     "TITLE",
+	     "TITLE...",
 	     runAdd,
 	     operandKind::kText},
 	    {"search",
@@ -275,7 +280,7 @@ std::vector<command> onlineCommands() {
 	      {'m', "", "", "search manga"},
 	      {0, "json", "", "print one JSON object a line"},
 	      {0, "header", "", "name the columns on the first line of a pipe"}},
-	     "QUERY",
+	     "QUERY...",
 	     runSearch,
 	     operandKind::kText},
 	};

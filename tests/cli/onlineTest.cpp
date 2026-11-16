@@ -110,10 +110,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli add with several matches asks, or wants --pic
 TEST_CASE_FIXTURE(cliFixture, "cli add says what went wrong") {
 	seed();
 	CHECK(run({"add"}) == 2);
-	CHECK(err.find("error: name one title; quote a title of several words\n"
+	CHECK(err.find("error: name the title to add\n"
 	               "Usage: catalist add ") == 0);
-	CHECK(run({"add", "odd", "taxi"}) == 2);
 	CHECK(run({"add", ""}) == 2);
+	CHECK(run({"add", "odd", "--pick=1"}) == 2);
+	CHECK(err.find("error: '--pick=1' comes after the text; options go before it\n") == 0);
 	CHECK(run({"add", "-am", "x"}) == 2);
 	CHECK(err.find("error: give -a or -m, not both\n") == 0);
 	CHECK(run({"add", "--status", "nope", "x"}) == 2);
@@ -216,9 +217,9 @@ TEST_CASE_FIXTURE(cliFixture, "cli search -m searches manga") {
 
 TEST_CASE_FIXTURE(cliFixture, "cli search says what went wrong") {
 	CHECK(run({"search"}) == 2);
-	CHECK(err.find("error: give one QUERY; quote a title of several words\n"
+	CHECK(err.find("error: give the QUERY to search for\n"
 	               "Usage: catalist search ") == 0);
-	CHECK(run({"search", "odd", "taxi"}) == 2);
+	CHECK(run({"search", "odd", "-m"}) == 2);
 	CHECK(run({"search", "-am", "taxi"}) == 2);
 	CHECK(web.posted.empty());
 
@@ -235,6 +236,17 @@ TEST_CASE_FIXTURE(cliFixture, "cli search says what went wrong") {
 	CHECK(run({"search", "zzz"}, "", 100) == 0);
 	CHECK(out.empty());
 	CHECK(err == "AniList has no anime matching 'zzz'.\n");
+	// The words of a query need no quotes.
+	web.respond(R"("search":"odd taxi")", R"({"data":{"Page":{"media":[]}}})");
+	CHECK(run({"search", "odd", "taxi"}, "", 100) == 0);
+	CHECK(err == "AniList has no anime matching 'odd taxi'.\n");
 	// Searching writes nothing, not even the data directory.
 	CHECK_FALSE(std::filesystem::exists("data"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli add takes a title of several words without quotes") {
+	seed();
+	CHECK(run({"add", "--no-lookup", "Home", "Video"}) == 0);
+	CHECK(out == "a:3\tHome Video\tadded\t-\tplanned\n");
+	CHECK(steps()[0].label == "add --no-lookup Home Video");
 }

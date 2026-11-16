@@ -53,6 +53,7 @@ struct cell {
 
 inline const char* const kBold = "1";
 inline const char* const kDim = "2";
+inline const char* const kRed = "31";
 inline const char* const kGreen = "32";
 inline const char* const kCyan = "36";
 

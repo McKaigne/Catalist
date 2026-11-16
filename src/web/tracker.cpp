@@ -1,5 +1,7 @@
 #include "web/tracker.hpp"
 
+#include "web/json.hpp"
+
 namespace catalist::web {
 
 bool unreachable(const std::string& message) {
@@ -19,6 +21,25 @@ std::vector<result<details>> iTracker::lookUpMany(const std::vector<entry>& know
 		found.push_back(lookUp(each));
 	}
 	return found;
+}
+
+std::optional<tokenReply> parseTokenReply(const std::string& body) {
+	auto reply = json::parse(body);
+	if (not reply.ok())
+		return std::nullopt;
+	tokenReply found;
+	found.token = reply.value()["access_token"].asString().value_or("");
+	found.renewal = reply.value()["refresh_token"].asString().value_or("");
+	found.lifetime = reply.value()["expires_in"].asInteger().value_or(0);
+	return found.token.empty() ? std::nullopt : std::optional<tokenReply>(found);
+}
+
+std::string bearer(const std::string& token) {
+	return "Authorization: Bearer " + token;
+}
+
+bool runningOut(const account& login, long long now) {
+	return login.expires > 0 and now + 60 >= login.expires;
 }
 
 }  // namespace catalist::web

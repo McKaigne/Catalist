@@ -127,9 +127,48 @@ result<std::vector<web::match>> parseSearch(const std::string& body, mediaType t
 	return result<std::vector<web::match>>::success(std::move(found));
 }
 
-std::optional<std::string> tracker::ask(const std::string& query) const {
-	return net_.fetch(
-	    {"POST", kApiUrl, {"Content-Type: application/json", "Accept: application/json"}, query});
+std::optional<std::string> tracker::ask(const std::string& query, const std::string& token) const {
+	std::vector<std::string> headers = {"Content-Type: application/json",
+	                                    "Accept: application/json"};
+	if (not token.empty())
+		headers.push_back(web::bearer(token));
+	return net_.fetch({"POST", kApiUrl, headers, query});
+}
+
+result<web::loginStart> tracker::startLogin() {
+	if (net_.ids.anilist.empty())
+		return result<web::loginStart>::failure(
+		    "this Catalist has no AniList client id: register it at "
+		    "https://anilist.co/settings/developer (redirect URL "
+		    "https://anilist.co/api/v2/oauth/pin) and set CATALIST_ANILIST_CLIENT_ID");
+	return result<web::loginStart>::success(
+	    {fmt::format("https://anilist.co/api/v2/oauth/authorize?client_id={}&response_type=token",
+	                 net_.ids.anilist),
+	     "Open this page, let Catalist in, and copy the token AniList shows.",
+	     {{"Token", true}}});
+}
+
+result<account> tracker::finishLogin(const std::vector<std::string>& answers) {
+	std::string token = answers.empty() ? "" : answers[0];
+	if (token.empty())
+		return result<account>::failure("no token given");
+	auto body = ask(R"({"query":"query{Viewer{id name}}"})", token);
+	auto reply = body ? json::parse(*body) : result<json::value>::failure("");
+	const json::value& viewer = reply.ok() ? reply.value()["data"]["Viewer"] : json::value();
+	auto name = viewer["name"].asString();
+	if (not name)
+		return result<account>::failure("AniList did not take the token, or could not be reached");
+	constexpr long long kYear = 365LL * 24 * 60 * 60;
+	return result<account>::success({provider::kAniList, *name,
+	                                 std::to_string(countOrZero(viewer["id"])), token, "",
+	                                 net_.now() + kYear});
+}
+
+result<account> tracker::current(const account& login) {
+	if (web::runningOut(login, net_.now()))
+		return result<account>::failure(
+		    "your AniList login has run out: log in again with 'catalist login anilist'");
+	return result<account>::success(login);
 }
 
 result<web::details> tracker::lookUp(const entry& known) {

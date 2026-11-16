@@ -153,4 +153,57 @@ result<web::details> tracker::lookUp(const entry& known) {
 	return parseTitle(*body, known.type);
 }
 
+result<web::loginStart> tracker::startLogin() {
+	return result<web::loginStart>::success(
+	    {"",
+	     "Kitsu takes your email and password once, for a token; the password is\n"
+	     "not kept.",
+	     {{"Email", false}, {"Password", true}}});
+}
+
+result<account> tracker::accountFor(std::vector<std::pair<std::string, std::string>> fields) {
+	if (not net_.ids.kitsu.empty()) {
+		fields.emplace_back("client_id", net_.ids.kitsu);
+		fields.emplace_back("client_secret", net_.ids.kitsuSecret);
+	}
+	auto reply = net_.fetch({"POST",
+	                         kTokenUrl,
+	                         {"Content-Type: application/x-www-form-urlencoded"},
+	                         web::formEncoded(fields)});
+	auto token = reply ? web::parseTokenReply(*reply) : std::nullopt;
+	if (not token)
+		return result<account>::failure(
+		    "Kitsu did not take the login (is the email right?), or could not be reached");
+	auto body = net_.fetch({"GET",
+	                        kApiUrl + "/users?filter[self]=true",
+	                        {"Accept: application/vnd.api+json", web::bearer(token->token)},
+	                        ""});
+	auto me = body ? json::parse(*body) : result<json::value>::failure("");
+	const json::value* user = nullptr;
+	if (me.ok() and not me.value()["data"].items().empty())
+		user = &me.value()["data"].items().front();
+	auto name = user ? (*user)["attributes"]["name"].asString() : std::nullopt;
+	if (not name)
+		return result<account>::failure("Kitsu did not say whose login it is");
+	return result<account>::success({provider::kKitsu, *name, (*user)["id"].asString().value_or(""),
+	                                 token->token, token->renewal, net_.now() + token->lifetime});
+}
+
+result<account> tracker::finishLogin(const std::vector<std::string>& answers) {
+	if (answers.size() < 2 or answers[0].empty() or answers[1].empty())
+		return result<account>::failure("give the email and the password");
+	return accountFor(
+	    {{"grant_type", "password"}, {"username", answers[0]}, {"password", answers[1]}});
+}
+
+result<account> tracker::current(const account& login) {
+	if (not web::runningOut(login, net_.now()))
+		return result<account>::success(login);
+	auto renewed = accountFor({{"grant_type", "refresh_token"}, {"refresh_token", login.renewal}});
+	if (not renewed.ok())
+		return result<account>::failure(
+		    "your Kitsu login has run out: log in again with 'catalist login kitsu'");
+	return renewed;
+}
+
 }  // namespace catalist::kitsu

@@ -63,6 +63,9 @@ struct cliFixture : catalist::test::tempDirFixture {
 		ctx.nowStamp = [] { return std::string(kStamp); };
 		ctx.newTxLabel = [] { return std::string("1792531800-4242"); };
 		ctx.txLabel = group;
+		ctx.accountsFile = "state/accounts";
+		ctx.net.ids = ids;
+		ctx.net.now = [this] { return clock; };
 		int exitCode = catalist::runCli(args, ctx);
 		out = outStream.str();
 		err = errStream.str();
@@ -158,6 +161,9 @@ struct cliFixture : catalist::test::tempDirFixture {
 	bool color = false;
 	bool outClosed = false;
 	std::string group;
+	// The ids the sites gave this Catalist, and the time, in seconds.
+	catalist::web::appIds ids;
+	long long clock = 1792531800;
 	std::string out;
 	std::string err;
 };

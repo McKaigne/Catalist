@@ -150,6 +150,11 @@ extern const args::option kFrom;
 // What to say when a request to a site failed.
 [[nodiscard]] std::string webError(const std::string& message);
 
+// The logins, from the accounts file (none when there is no file).
+[[nodiscard]] std::vector<account> readAccounts(const cliContext& ctx);
+// Writes them, readable by their owner only; false when that failed.
+[[nodiscard]] bool saveAccounts(const cliContext& ctx, const std::vector<account>& logins);
+
 // What the helps share.
 extern const args::option kQuiet;
 extern const char* const kRefsHelp;
@@ -163,8 +168,10 @@ extern const char* const kChangeFormat;
 [[nodiscard]] std::vector<command> trackingCommands();
 // The fields `set` takes, for the completion scripts.
 [[nodiscard]] std::vector<std::string> settableNames();
-// online.cpp: add and search, the only commands that ask AniList.
+// online.cpp: add, search and refresh, which ask a site about titles.
 [[nodiscard]] std::vector<command> onlineCommands();
+// accounts.cpp: login, logout and accounts.
+[[nodiscard]] std::vector<command> accountCommands();
 // transfer.cpp: import and export.
 [[nodiscard]] std::vector<command> transferCommands();
 // history.cpp: undo, redo, log and tx.

@@ -8,10 +8,14 @@ namespace catalist {
 
 inline constexpr const char* kVersionString = "@PROJECT_VERSION@";
 
-// The id MyAnimeList gave this build of Catalist (cmake
-// -DCATALIST_MAL_CLIENT_ID=...); empty when it was built without one. Its
-// API answers nothing without one, even about public data.
+// The ids the sites gave this build of Catalist (cmake
+// -DCATALIST_MAL_CLIENT_ID=... and the like); empty when it was built
+// without them. MyAnimeList's API answers nothing without its id, even about
+// public data; AniList and Kitsu want theirs only to log in.
+inline constexpr const char* kAniListClientId = "@CATALIST_ANILIST_CLIENT_ID@";
 inline constexpr const char* kMalClientId = "@CATALIST_MAL_CLIENT_ID@";
+inline constexpr const char* kKitsuClientId = "@CATALIST_KITSU_CLIENT_ID@";
+inline constexpr const char* kKitsuClientSecret = "@CATALIST_KITSU_CLIENT_SECRET@";
 
 }  // namespace catalist
 

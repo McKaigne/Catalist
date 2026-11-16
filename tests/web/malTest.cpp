@@ -48,7 +48,7 @@ TEST_CASE("mal sends the client id, and asks nothing without one") {
 	CHECK(refused.errorMessage().find("CATALIST_MAL_CLIENT_ID") != std::string::npos);
 	CHECK(web.sent.empty());
 
-	net.malClientId = "abc";
+	net.ids.mal = "abc";
 	std::vector<std::string> headers;
 	net.fetch = [&headers](const catalist::web::request& sent) {
 		headers = sent.headers;

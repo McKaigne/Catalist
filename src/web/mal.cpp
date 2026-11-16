@@ -80,14 +80,14 @@ result<web::details> parseTitle(const std::string& body, mediaType type) {
 }
 
 std::string tracker::cannotAsk() const {
-	if (not net_.malClientId.empty())
+	if (not net_.ids.mal.empty())
 		return "";
 	return "MyAnimeList answers only programs with a client id: register one at "
 	       "https://myanimelist.net/apiconfig and set CATALIST_MAL_CLIENT_ID";
 }
 
 std::optional<std::string> tracker::get(const std::string& url) const {
-	return net_.fetch({"GET", url, {"X-MAL-CLIENT-ID: " + net_.malClientId}, ""});
+	return net_.fetch({"GET", url, {"X-MAL-CLIENT-ID: " + net_.ids.mal}, ""});
 }
 
 result<std::vector<web::match>> tracker::search(mediaType type, const std::string& query) {
@@ -108,6 +108,65 @@ result<web::details> tracker::lookUp(const entry& known) {
 	if (not body)
 		return result<web::details>::failure("could not reach MyAnimeList");
 	return parseTitle(*body, known.type);
+}
+
+result<web::loginStart> tracker::startLogin() {
+	if (auto why = cannotAsk(); not why.empty())
+		return result<web::loginStart>::failure(why);
+	// PKCE's plain method: the challenge is the verifier itself.
+	verifier_ = net_.random(64);
+	return result<web::loginStart>::success(
+	    {fmt::format("https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={}"
+	                 "&code_challenge={}&code_challenge_method=plain&state=catalist",
+	                 net_.ids.mal, verifier_),
+	     "Open this page and let Catalist in. Your browser is then sent to an\n"
+	     "address that may not load: copy that address.",
+	     {{"Address", false}}});
+}
+
+result<account> tracker::accountFor(const std::optional<std::string>& reply) {
+	auto token = reply ? web::parseTokenReply(*reply) : std::nullopt;
+	if (not token)
+		return result<account>::failure(
+		    "MyAnimeList did not take the login, or could not be reached");
+	auto body = net_.fetch({"GET", kApiUrl + "/users/@me", {web::bearer(token->token)}, ""});
+	auto me = body ? json::parse(*body) : result<json::value>::failure("");
+	auto name = me.ok() ? me.value()["name"].asString() : std::nullopt;
+	if (not name)
+		return result<account>::failure("MyAnimeList did not say whose login it is");
+	return result<account>::success({provider::kMyAnimeList, *name,
+	                                 std::to_string(countOrZero(me.value()["id"])), token->token,
+	                                 token->renewal, net_.now() + token->lifetime});
+}
+
+result<account> tracker::finishLogin(const std::vector<std::string>& answers) {
+	std::string pasted = answers.empty() ? "" : answers[0];
+	// The whole address, or only its code.
+	std::string code = web::queryValue(pasted, "code").value_or(pasted);
+	if (code.empty() or verifier_.empty())
+		return result<account>::failure("no code given");
+	return accountFor(net_.fetch({"POST",
+	                              kTokenUrl,
+	                              {"Content-Type: application/x-www-form-urlencoded"},
+	                              web::formEncoded({{"client_id", net_.ids.mal},
+	                                                {"grant_type", "authorization_code"},
+	                                                {"code", code},
+	                                                {"code_verifier", verifier_}})}));
+}
+
+result<account> tracker::current(const account& login) {
+	if (not web::runningOut(login, net_.now()))
+		return result<account>::success(login);
+	auto renewed = accountFor(net_.fetch({"POST",
+	                                      kTokenUrl,
+	                                      {"Content-Type: application/x-www-form-urlencoded"},
+	                                      web::formEncoded({{"client_id", net_.ids.mal},
+	                                                        {"grant_type", "refresh_token"},
+	                                                        {"refresh_token", login.renewal}})}));
+	if (not renewed.ok())
+		return result<account>::failure(
+		    "your MyAnimeList login has run out: log in again with 'catalist login mal'");
+	return renewed;
 }
 
 }  // namespace catalist::mal

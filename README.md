@@ -25,10 +25,20 @@ links to a title's page there. Telling the sites what changes in your
 lists, as Mihon tells its trackers, will come later: for now the lists are
 local only.
 
+`catalist login anilist|mal|kitsu` logs in to a site; `catalist accounts`
+lists the logins and `catalist logout SITE` forgets one. Each site has its
+own way (AniList shows a token to paste back, MyAnimeList sends the browser
+to an address to paste back, Kitsu takes your email and password once, for
+a token). The tokens are kept apart from your lists, readable by you only,
+in `~/.local/state/catalist/accounts`; passwords never are.
+
 MyAnimeList's API answers only programs it has registered, even about
 public titles. Register Catalist once at
 <https://myanimelist.net/apiconfig> and build with
-`-DCATALIST_MAL_CLIENT_ID=...`, or set `CATALIST_MAL_CLIENT_ID`.
+`-DCATALIST_MAL_CLIENT_ID=...`, or set `CATALIST_MAL_CLIENT_ID`. Logging
+in to AniList or Kitsu likewise wants their ids
+(`CATALIST_ANILIST_CLIENT_ID`; `CATALIST_KITSU_CLIENT_ID` and
+`CATALIST_KITSU_CLIENT_SECRET`).
 
 ---
 

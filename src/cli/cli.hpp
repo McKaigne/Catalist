@@ -1,8 +1,10 @@
 #ifndef CATALIST_CLI_CLI_HPP_
 #define CATALIST_CLI_CLI_HPP_
 
+#include <filesystem>
 #include <functional>
-#include <iosfwd>
+#include <istream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -22,6 +24,14 @@ struct cliContext {
 	std::function<isoDate()> today;
 	// The sites, and how they are reached.
 	web::link net;
+	// Where the logins are kept (see storage/accounts.hpp).
+	std::filesystem::path accountsFile{"accounts"};
+	// Reads a password: a line of `in`, not shown at a terminal.
+	std::function<std::optional<std::string>(std::istream&)> readSecret =
+	    [](std::istream& in) -> std::optional<std::string> {
+		std::string line;
+		return std::getline(in, line) ? std::optional<std::string>(line) : std::nullopt;
+	};
 	// Someone is at a terminal: add and rm may ask a question.
 	bool interactive = false;
 	// Write colours (a terminal, and NO_COLOR unset).

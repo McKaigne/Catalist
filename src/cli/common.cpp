@@ -8,6 +8,8 @@
 
 #include "cli/refs.hpp"
 #include "core/text.hpp"
+#include "storage/accounts.hpp"
+#include "system.hpp"
 #include "web/sites.hpp"
 
 namespace catalist::cli {
@@ -391,6 +393,14 @@ provider siteOf(const args::parsed& line, const cliContext& ctx) {
 
 std::unique_ptr<web::iTracker> trackerFor(const cliContext& ctx, provider site) {
 	return web::makeTracker(site, ctx.net);
+}
+
+std::vector<account> readAccounts(const cliContext& ctx) {
+	return accounts::parse(readFile(ctx.accountsFile).value_or(""));
+}
+
+bool saveAccounts(const cliContext& ctx, const std::vector<account>& logins) {
+	return writePrivateFile(ctx.accountsFile, accounts::format(logins));
 }
 
 std::string webError(const std::string& message) {

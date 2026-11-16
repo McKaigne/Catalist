@@ -17,6 +17,7 @@
 namespace catalist::kitsu {
 
 inline const std::string kApiUrl = "https://kitsu.app/api/edge";
+inline const std::string kTokenUrl = "https://kitsu.app/api/oauth/token";
 
 // The request URLs, and readers for their replies.
 [[nodiscard]] std::string searchUrl(mediaType type, const std::string& query);
@@ -36,6 +37,11 @@ public:
 	[[nodiscard]] result<std::vector<web::match>> search(mediaType type,
 	                                                     const std::string& query) override;
 	[[nodiscard]] result<web::details> lookUp(const entry& known) override;
+	// OAuth 2's password grant, as Kitsu has it: the email and password are
+	// sent once, for a token, and not kept.
+	[[nodiscard]] result<web::loginStart> startLogin() override;
+	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
+	[[nodiscard]] result<account> current(const account& login) override;
 
 protected:
 	void pause() const override { net_.pause(); }
@@ -43,6 +49,11 @@ protected:
 private:
 	// The reply to a GET; nothing when Kitsu cannot be reached.
 	[[nodiscard]] std::optional<std::string> get(const std::string& url) const;
+
+	// The token request with these fields, and the program's id when it has
+	// one; the account it is for.
+	[[nodiscard]] result<account> accountFor(
+	    std::vector<std::pair<std::string, std::string>> fields);
 
 	web::link net_;
 };

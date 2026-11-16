@@ -56,10 +56,15 @@ endif()
 
 set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 
-# MyAnimeList's API wants an app's id even for public data: register one at
-# https://myanimelist.net/apiconfig. CATALIST_MAL_CLIENT_ID in the
-# environment overrides it at run time.
+# The ids the sites give a registered program, for their APIs and logins:
+# MyAnimeList's (https://myanimelist.net/apiconfig, type "other") even for
+# public data; AniList's (https://anilist.co/settings/developer, redirect URL
+# https://anilist.co/api/v2/oauth/pin) and Kitsu's to log in. The same names
+# in the environment override them at run time.
+set(CATALIST_ANILIST_CLIENT_ID "" CACHE STRING "The client id AniList gave Catalist")
 set(CATALIST_MAL_CLIENT_ID "" CACHE STRING "The client id MyAnimeList gave Catalist")
+set(CATALIST_KITSU_CLIENT_ID "" CACHE STRING "The client id Kitsu gave Catalist")
+set(CATALIST_KITSU_CLIENT_SECRET "" CACHE STRING "The client secret Kitsu gave Catalist")
 set(CATALIST_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 configure_file(src/core/version.hpp.in "${CATALIST_GENERATED_DIR}/core/version.hpp" @ONLY)
 
@@ -70,6 +75,7 @@ add_library(catalistLib STATIC
   src/core/entry.cpp
   src/core/text.cpp
   # The lists in SQLite, the undo history, and the MyAnimeList XML format.
+  src/storage/accounts.cpp
   src/storage/catalogue.cpp
   src/storage/csvCodec.cpp
   src/storage/journal.cpp
@@ -84,6 +90,7 @@ add_library(catalistLib STATIC
   src/web/sites.cpp
   src/web/tracker.cpp
   # The command line.
+  src/cli/accounts.cpp
   src/cli/args.cpp
   src/cli/cli.cpp
   src/cli/common.cpp
@@ -192,6 +199,7 @@ add_executable(catalistTests
   tests/core/resultTest.cpp
   tests/core/textTest.cpp
   tests/core/versionTest.cpp
+  tests/storage/accountsTest.cpp
   tests/storage/catalogueTest.cpp
   tests/storage/csvCodecTest.cpp
   tests/storage/journalTest.cpp
@@ -199,7 +207,9 @@ add_executable(catalistTests
   tests/web/anilistTest.cpp
   tests/web/jsonTest.cpp
   tests/web/kitsuTest.cpp
+  tests/web/loginTest.cpp
   tests/web/malTest.cpp
+  tests/cli/accountsTest.cpp
   tests/cli/argsTest.cpp
   tests/cli/cliTest.cpp
   tests/cli/completionTest.cpp

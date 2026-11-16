@@ -47,3 +47,17 @@ TEST_CASE("nowStamp is the date and the time of day") {
 	CHECK(stamp[13] == ':');
 	CHECK(stamp[16] == ':');
 }
+
+TEST_CASE_FIXTURE(catalist::test::tempDirFixture,
+                  "writePrivateFile leaves a file only its owner reads") {
+	auto file = tempDir() / "deep" / "accounts";
+	REQUIRE(catalist::writePrivateFile(file, "secret\n"));
+	CHECK(catalist::test::readText(file) == "secret\n");
+	auto mode = std::filesystem::status(file).permissions();
+	CHECK((mode & std::filesystem::perms::all) ==
+	      (std::filesystem::perms::owner_read | std::filesystem::perms::owner_write));
+	REQUIRE(catalist::writePrivateFile(file, "again\n"));
+	CHECK(catalist::test::readText(file) == "again\n");
+	CHECK(catalist::randomText(43).size() == 43);
+	CHECK(catalist::randomText(16) != catalist::randomText(16));
+}

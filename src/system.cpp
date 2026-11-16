@@ -3,15 +3,19 @@
 #include <fcntl.h>
 #include <fmt/format.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
+#include <termios.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <istream>
 #include <iterator>
 #include <thread>
 #include <utility>
@@ -182,6 +186,64 @@ int terminalColumns() {
 	if (not isatty(STDOUT_FILENO) or ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) != 0)
 		return 0;
 	return window.ws_col;
+}
+
+bool writePrivateFile(const std::filesystem::path& file, const std::string& text) {
+	std::error_code ec;
+	if (file.has_parent_path())
+		std::filesystem::create_directories(file.parent_path(), ec);
+	// Written beside it and moved in place, so a crash leaves the old file.
+	std::filesystem::path next = file;
+	next += ".new";
+	fileDescriptor out(open(next.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600));
+	if (out.get() < 0 or fchmod(out.get(), 0600) != 0)
+		return false;
+	for (size_t done = 0; done < text.size();) {
+		ssize_t count = write(out.get(), text.data() + done, text.size() - done);
+		if (count <= 0)
+			return false;
+		done += static_cast<size_t>(count);
+	}
+	if (fsync(out.get()) != 0)
+		return false;
+	out.reset();
+	std::filesystem::rename(next, file, ec);
+	return not ec;
+}
+
+std::optional<std::string> readSecretLine(std::istream& in) {
+	termios before{};
+	bool hidden = isatty(STDIN_FILENO) and tcgetattr(STDIN_FILENO, &before) == 0;
+	if (hidden) {
+		termios quiet = before;
+		quiet.c_lflag &= static_cast<tcflag_t>(~ECHO);
+		tcsetattr(STDIN_FILENO, TCSAFLUSH, &quiet);
+	}
+	std::string line;
+	bool read = static_cast<bool>(std::getline(in, line));
+	if (hidden) {
+		tcsetattr(STDIN_FILENO, TCSAFLUSH, &before);
+		// The Enter that was not shown.
+		std::fputs("\n", stderr);
+	}
+	return read ? std::optional<std::string>(line) : std::nullopt;
+}
+
+std::string randomText(size_t length) {
+	static const char kLetters[] =
+	    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+	std::string bytes(length, '\0');
+	std::ifstream source("/dev/urandom", std::ios::binary);
+	source.read(bytes.data(), static_cast<std::streamsize>(length));
+	std::string text;
+	for (unsigned char c : bytes)
+		text += kLetters[c % (sizeof(kLetters) - 1)];
+	return text;
+}
+
+long long unixNow() {
+	return static_cast<long long>(
+	    std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
 }
 
 }  // namespace catalist

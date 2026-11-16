@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 // What the sites are asked through: one HTTP request, and the function that
@@ -27,6 +28,15 @@ using fetcher = std::function<std::optional<std::string>(const request&)>;
 // Text as it may stand in a URL's query: letters, digits and -._~ as they
 // are, every other byte as %XX.
 [[nodiscard]] std::string urlEncoded(const std::string& text);
+
+// The body of an application/x-www-form-urlencoded request.
+[[nodiscard]] std::string formEncoded(
+    const std::vector<std::pair<std::string, std::string>>& fields);
+
+// The value of `name` in a URL's query ("…?code=abc&state=x" gives "abc"
+// for code), decoded; nothing when it has none.
+[[nodiscard]] std::optional<std::string> queryValue(const std::string& url,
+                                                    const std::string& name);
 
 }  // namespace catalist::web
 

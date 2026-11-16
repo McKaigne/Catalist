@@ -70,7 +70,7 @@ expect() {
 expect "the commands" "catalist se" $'set\nsearch'
 expect "the program's options" "catalist --co" "--color="
 expect "a value of the program's" "catalist --color=al" "always"
-expect "the command after the program's options" "catalist -t --color never l" $'ls\nlog'
+expect "the command after the program's options" "catalist -t --color never l" $'ls\nlogin\nlogout\nlog'
 expect "a command's options" "catalist ls --so" "--sort="
 expect "a value apart" "catalist ls -s on" "on-hold"
 expect "a value joined" "catalist ls --sort=sc" "score"

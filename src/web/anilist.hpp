@@ -49,13 +49,20 @@ public:
 	// kBatchSize titles a request.
 	[[nodiscard]] std::vector<result<web::details>> lookUpMany(
 	    const std::vector<entry>& known) override;
+	// AniList's implicit grant: its page shows a token to paste, good for a
+	// year, which cannot be renewed.
+	[[nodiscard]] result<web::loginStart> startLogin() override;
+	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
+	[[nodiscard]] result<account> current(const account& login) override;
 
 protected:
 	void pause() const override { net_.pause(); }
 
 private:
-	// The reply to a query; nothing when AniList cannot be reached.
-	[[nodiscard]] std::optional<std::string> ask(const std::string& query) const;
+	// The reply to a query, asked as the account of `token` when there is
+	// one; nothing when AniList cannot be reached or said no.
+	[[nodiscard]] std::optional<std::string> ask(const std::string& query,
+	                                             const std::string& token = "") const;
 
 	web::link net_;
 };

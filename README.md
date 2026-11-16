@@ -88,6 +88,23 @@ fish, and `cmake --install` puts them where `man` and the shells look.
 `ctest` also runs the command line from `sh`, and checks that the zsh and
 fish scripts parse when those shells are installed.
 
+### Development
+
+`nix develop` (or `direnv allow`, which reads `.envrc`) opens the
+`catalist-dev` shell: the compiler, CMake, Ninja, SQLite and its `sqlite3`
+tool, doctest, gdb, clangd and the two shells the completion checks run.
+
+```bash
+nix develop
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build --output-on-failure
+./build/catalist ls
+```
+
+In that shell `CATALIST_DATA_DIR` is `build/dev-data`, so what you try out
+never touches your own lists in `~/.local/share/catalist`.
+
 ---
 
 ## Usage

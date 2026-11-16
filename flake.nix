@@ -61,24 +61,33 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-        in
-        {
-          default = pkgs.mkShell {
+          # The package's own build inputs (CMake, Ninja, SQLite), and what
+          # working on it wants besides.
+          catalistDev = pkgs.mkShell {
+            name = "catalist-dev";
+            inputsFrom = [ self.packages.${system}.default ];
             packages = with pkgs; [
-              cmake
-              gcc
-              gdb
-              ninja
-              git
               doctest
+              gdb
+              clang-tools
+              # sqlite3, to look inside catalist.db.
               sqlite
               curl
-              clang-tools
+              git
               # ctest checks that the completion scripts parse.
               zsh
               fish
             ];
+            # Runs of ./build/catalist from this shell keep their lists in
+            # build/, never in ~/.local/share/catalist.
+            shellHook = ''
+              export CATALIST_DATA_DIR="''${CATALIST_DATA_DIR:-$PWD/build/dev-data}"
+            '';
           };
+        in
+        {
+          default = catalistDev;
+          catalist-dev = catalistDev;
         }
       );
     };

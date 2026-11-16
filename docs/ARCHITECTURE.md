@@ -1,4 +1,10 @@
-# Catalist Architectural Decision Records (ADRs)
+# Catalist: Architecture and Decisions
+
+Catalist is a local-first anime and manga tracker for the command line, in
+C++23. This page says how the program is put together and why: the module
+map, then the decisions that hold today (D1 to D14), then a short history
+of the ones that were replaced. A decision gives its reason and, where it
+has one, its cost: what it makes harder, and when to revisit it.
 
 ## Module map
 Each module is a `.hpp`/`.cpp` pair in a folder of `src/` by layer. A
@@ -18,347 +24,320 @@ layer uses only the layers above it in this table, and `system`.
 | | `journal` | pure functions over the undo history: what changed between two lists, taking a step back or forward |
 | | `malXml` | the MyAnimeList XML format lists are imported and exported in |
 | `web/` | `http`, `json` | one request type, form and URL encoding; the JSON the sites answer in |
-| | `tracker` | `iTracker`, the one interface every site implements (ADR-018): search, look titles up, log in, read a user's list, push a title, remove one; `answer<T>` and `failure`, what a site answers |
+| | `tracker` | `iTracker`, the one interface every site implements (D12); `answer<T>` and `failure`, what a site answers |
 | | `anilist`, `mal`, `kitsu`, `sites` | the adapters of AniList, MyAnimeList and Kitsu, and `makeTracker`, which picks one |
 | `cli/` | `args`, `refs`, `output` | the POSIX option parser; refs (`a:12`) and title matching; tables, tab-separated lines and JSON Lines |
 | | `cli` | `cliContext`, the `command` row, the table put together, dispatch and help |
-| | `common` | what the commands share (naming titles, loading, saving and reporting a change), and one function per group of commands |
-| | `listing`, `tracking`, `online`, `accounts`, `sync`, `transfer`, `history`, `setup` | the commands, by group: their handlers and their rows of the table (ADR-017) |
+| | `common` | what the commands share (naming titles, statuses, loading, saving and reporting a change), and one function per group of commands |
+| | `listing`, `tracking`, `online`, `accounts`, `sync`, `transfer`, `history`, `setup` | the commands, by group: their handlers and their rows of the table |
 | | `completion` | the zsh and fish completions and the manual page's COMMANDS, written from the command table |
-| `src/` | `system` | everything that touches the outside world: reading and writing files, `runProgram` and `httpFetch` (curl), the clock (`localTime`), the terminal, random text |
+| `src/` | `system` | everything that touches the outside world: files, `runProgram` and `httpFetch` (curl), the clock, the terminal, random text |
 
 `main.cpp` reads the environment, builds the catalogue on the data
 directory and the `cliContext`, and runs the command line. Tests mirror the
-folders (`tests/core/`, `tests/storage/`, ...); `tests/smoke/` runs the
-built program from `sh`, and `tests/support/` holds the fixtures.
+folders; `tests/smoke/` runs the built program from `sh`, and
+`tests/support/` holds the fixtures.
 
-## ADR-001: Comments Say Why, and Label Long Sections
-- **Context:** Inline comments explaining step-by-step logic drifted over time.
-- **Decision:** Names and small functions say *what* code does. Comments say
-  *why*, state invariants and thread-safety contracts, and label the parts
-  of longer functions ("The details card: ...") so they read in sections.
+## Review, November 2026
+The decisions below were reviewed against what the program is for: a small
+tracker for one person, built as a C++ course project, that a script can
+drive. Most hold up. Three carry a real cost and say so:
 
-## ADR-002: Strong Types and Optionality over Magic Sentinels
-- **Context:** Magic values (`-1`, `"0000-00-00"`) caused error-prone checks.
-- **Decision:** Use `std::optional<T>` and `result<T>` (`std::expected`)
-  instead of magic sentinels. A site's failure says what kind it is
-  (`web::failure`: unreachable, not linked, refused) rather than leaving
-  callers to read its message.
+- **D2 No settings** holds, with two exceptions it names: the provider and
+  the sites' app ids.
+- **D9 One file with Catalist-TUI** is what makes the storage look
+  roundabout (a side table for Kitsu ids, undo rows as CSV text). That is
+  the price of sharing the file, and it is paid on purpose.
+- **D12 Sites as trackers** is a third of the code and has not been run
+  against the live sites. It stays, documented as untested; it is the
+  first thing to cut if the program must shrink.
 
-## ADR-003: Decoupled Multi-Provider Subsystem (superseded)
-- **Superseded** by ADR-013 and ADR-014: the only web source is AniList,
-  in `web/anilist`.
+## Principles
 
-## ADR-004: Explicit Unix Filter and Standard Stream Discipline
-- **Context:** Terminal tools must integrate smoothly into shell pipelines.
-- **Decision:** a command writes only its data to `stdout`; messages,
-  warnings, questions and errors go to `stderr`, and the exit code says
-  what happened (0 done, 1 failed, 2 wrong command line). ADR-015 has the
-  rest of the command line's contract.
-
-## ADR-005: Side Effects in One Place, Passed as Functions Where Tests Swap Them
-- **Context:** Code that reads files, the clock or the network cannot be
-  tested without a home directory, a fixed date or a connection. Interfaces
-  with a real class and a fake for each (`iFileSystem`, `iHttpClient`,
-  `iClock`) did the job, but each wrapped only one or two calls.
-- **Decision:** `system.cpp` is the only code that touches file streams,
-  other programs, the terminal or the system clock, as plain functions:
-  `readFile`, `runProgram`, `httpFetch`, `localTime`, `isInteractive`,
-  `terminalColumns`. The database file is the other side effect, and
-  `store.cpp` is the only code that includes `sqlite3.h`. Where a test must
-  swap one, the caller takes a function instead: a site takes a
-  `web::link` (the `fetch` function and the pause between requests), and
-  `cliContext` carries one `clock` (its `today()` and `stamp()` come from
-  it) and the link. The catalogue opens its directory directly; tests give
-  it a temporary one.
-- **Composition root:** `main.cpp` reads the environment into a
-  `dataDirEnv` (`dataDirFor` is pure), builds the catalogue on the data
-  directory, and fills the `cliContext`. There are no singletons.
-- **Processes:** the only program run is curl, with `execvp` and an
-  argument list, so nothing passes through a shell. `runProgram` writes
-  the input and reads the output in one `poll` loop, without a thread.
-
-## ADR-006: Shallow Control Flow
-- **Decision:** Function bodies nest at most three levels. Preconditions and
-  errors return early; loops skip with `continue`; each distinct subtask is a
-  small, named helper (`readRefs`, `chooseMatch`, `removalConfirmed`).
-
-## ADR-007: Tabs Behind `iTab`, Drawn and Routed by Hand (superseded)
-- **Superseded** by ADR-017: the terminal interface, and with it `iTab`,
-  moved to Catalist-TUI.
-
-## ADR-008: Naming and Formatting
-- **Names:** types, functions, variables and files are camelCase;
-  interfaces are `i` + PascalCase (`iTracker`); private members end in
-  `_`; constants and enumerators are `kPascalCase` (`mediaType::kAnime`,
-  `output::kBold`). Namespaces stay lower case and macros
-  SCREAMING_SNAKE_CASE. Names are descriptive (`widthPx`, `changedTitles`).
-- **Formatting:** `.clang-format` (Google-based): tabs for indentation,
-  four wide, a 100-column limit, opening braces on the line of their
-  statement. Logical operators are written `and`, `or`, `not`.
-- **Idioms:** C++23. Strings are built with `std::format`, not by
-  concatenation; a value or an error is a `std::expected`
-  (`result<T>`, `done`); rows of plain structs, such as the command table,
-  name their fields with designated initialisers;
-  resources are owned by objects that release them (RAII, e.g. the pipe
-  ends in `runProgram`); the standard algorithms replace hand-written loops
-  where they say it more plainly. A header is only added when nothing
-  already included does the job. Includes name the folder
-  (`#include "storage/catalogue.hpp"`), and header guards follow the path
-  (`CATALIST_STORAGE_CATALOGUE_HPP_`). Nothing is written to disk but
-  `catalist.db` (and SQLite's own journal beside it while it writes).
-
-## ADR-009: One Version, Bumped Only for User-Visible Change
-- **Decision:** `VERSION` holds `MAJOR.MINOR.PATCH` and is the only place
-  the number is written. CMake reads it into `project(VERSION)`, generates
-  `core/version.hpp` (`kVersionString`), and the program puts it in the
-  man page; `flake.nix` reads it too, and CI checks `catalist --version` against it.
-  PATCH is for fixes and small tweaks, MINOR for new commands or options (PATCH resets), MAJOR for big releases; the project stays on
-  0.x until the first full-feature release. Internal refactors do not bump.
-  Every bump adds a Keep a Changelog entry to `CHANGELOG.md`, is its own
-  `release: vX.Y.Z` commit and gets an annotated tag.
-
-## ADR-010: Hermetic Tests That Check Behaviour
-- **Decision:** Tests use doctest and are registered with ctest one case at a
-  time. The test `main` points `CATALIST_DATA_DIR`, `HOME`,
-  `XDG_DATA_HOME` and `XDG_CONFIG_HOME` at a throwaway sandbox and pins
-  `TZ=UTC` before any test code runs; each test that touches files gets its own temp directory, and
-  a failed write is simulated by a directory where the file should go.
-  Everything runs offline: tests pass a fixed date and a `fakeWeb`
-  (ADR-005).
-- **What a test checks:** the result the user would see: the lists as
-  another catalogue reads them back, the exit code and the output of a
-  command. No test is skipped, expected to fail or switched off by an
-  environment variable.
-- **Where:** the unit tests mirror `src/` (`tests/cli/listingTest.cpp`
-  tests `src/cli/listing.cpp`); the command tests share `cliFixture`
-  (`tests/support/cliFixture.hpp`), which runs `catalist ...` against a
-  temporary directory.
-- **From a shell:** `tests/smoke/smoke.sh` drives the built program as a
-  POSIX script does, run by `sh`, with a stub `curl` first in `PATH` so
-  nothing goes online. ctest also checks that the generated completions
-  parse, with `zsh -n` and `fish -n` when those shells are installed.
-- **Targets:** one library (`catalistLib`, everything but `main.cpp`), the
-  program and one test binary (`catalistTests`); `-DBUILD_TESTING=OFF`
-  builds without doctest. CI also runs the suite under AddressSanitizer and
-  UBSan.
-
-## ADR-011: No Settings
-- **Context:** A settings tab, `settings.json`, themes and `catalist config`
-  existed so users could change defaults that hardly anyone changed.
-- **Decision:** The defaults are fixed in code (Helix-style). There is no
-  configuration file; an old `settings.json` or `catalist.kdl`
-  is ignored. The provider (ADR-014) is the one choice kept, with the
-  lists.
-
-## ADR-012: Two-Way List Sync Against a Base (superseded)
-- **Superseded** by ADR-013. Sync needed accounts, tokens, a base per title
-  and service, request pacing, backups and a job thread: most of the code,
-  for a feature a local tracker does not need.
-
-## ADR-013: Local First, One-Way Import (partly superseded)
-- **Superseded** where it says the network is only for `add` and `search`,
-  and that lists only come in by file: see ADR-018.
-- **Decision:** The catalogue is `catalist.db` and nothing else (ADR-016).
-  Lists
-  come in with `catalist import` (MyAnimeList XML; AniList lists after
-  converting them to that format) and go out with `catalist export`; neither
-  touches an account. Re-importing merges by AniList or MyAnimeList id and never
-  overwrites the user's score, progress or dates.
-- **Network:** only `add` and `search` ask AniList, one request at a time,
-  while the command runs (ADR-015). Nothing about the network is needed to
-  use the lists: `add --no-lookup` adds a title offline.
+### D1: Local First; the Lists Are the Truth (was ADR-013, ADR-017)
+- **Decision:** the lists are `catalist.db` on the person's computer and
+  nothing else. The network is used only when a command asks a site
+  (`add`, `search`, `refresh`, `import --user`, `login`, `sync`) or, logged
+  in, to tell a site of a change (D12). Nothing about the network is
+  needed to use the lists: `add --no-lookup` adds a title offline.
 - **Ids:** an entry's id only numbers it within its list (a new title gets
   the highest id + 1); the command line shows it as the title's ref
-  (`a:12`), which can be given again after the title with the highest id
-  is removed. Two titles are the same only when they share an AniList or a
-  MyAnimeList id.
+  (`a:12`), which can come back after the title with the highest id is
+  removed. Two titles are the same only when they share an AniList,
+  MyAnimeList or Kitsu id.
+- **Lists in and out:** `import` takes MyAnimeList XML, Catalist's own JSON
+  Lines, 0.3.0's CSV files or a user's public lists on a site; `export`
+  writes XML (which all three sites import), CSV or JSON. Importing merges
+  by id: a title there already keeps what the person gave it and gets only
+  what it lacks (`mergeImported`).
+- **Why:** a tracker is used daily, offline as often as not, and must not
+  depend on a site staying up or keeping its API.
 
-## ADR-014: AniList Only; a Provider, Ready for Sync (superseded)
-- **Superseded** by ADR-018: AniList, MyAnimeList and Kitsu are equal
-  sites behind `iTracker`; `iListSync` and `sync.hpp` are gone.
-- **Context:** Jikan (MyAnimeList's unofficial API) could not be reached
-  from some networks, and many users have moved to AniList. AniList's
-  public API needs no account and also returns every title's MyAnimeList
-  id.
-- **Decision:** AniList is the only web source. Entries store both ids. The
-  user picks one provider (AniList by default, or MyAnimeList); its ids are
-  the ones a title's page link (`show`) uses. The provider lives in the catalogue (`getProvider`, `setProvider`,
-  `saveSettings`, the `setting` table of `catalist.db`).
-- **Room for sync:** `sync.hpp` declares `iListSync` (`pull`, `push`,
-  `remove`) for one site. A sync would be one class per site, made for the
-  chosen provider only, matching titles with `idOn(entry, site)`, its token
-  kept outside the catalogue. Nothing implements it yet.
+### D2: No Settings (was ADR-011)
+- **Decision:** the defaults are fixed in code. There is no configuration
+  file; an old `settings.json` or `catalist.kdl` is ignored.
+- **Exceptions:** the **provider** (AniList, MyAnimeList or Kitsu), kept
+  in the `setting` table, is the default site of `search`, `add`,
+  `refresh`, `import --user` and of `show`'s page link; `--from SITE`
+  overrides it for one command. The sites' **app ids** are built in
+  (`-DCATALIST_*_CLIENT_ID`) and the same names in the environment
+  override them; they belong to the build, not the person.
+- **Why:** every setting is a branch to test and a question to answer.
+  Hardly anyone changed the ones that existed.
 
-## ADR-015: The Command Line Is for Daily Tracking, Scripts and Pipes
-- **Context:** the first list-manager CLI named titles by the provider's
-  id, took options anywhere, looked titles up before every change, and
-  could not be undone, so it was neither quick to type nor safe to script.
-- **One table:** each command is a row of the table (name, aliases,
-  summary, details, options with their values and choices, operands and
-  their kind, handler, hidden). The row drives `help`, each `--help`, typo
-  suggestions, the usage lines, the manual page (`__man` prints its
-  COMMANDS, which the build puts into `docs/catalist.1.in`), and the zsh
-  and fish completions (`completion`). The build runs the program to write
-  the page and the scripts, so they cannot fall behind it.
-- **POSIX options:** `args` parses grouped short options, `-n3`,
-  `--name=value` (and `--name value`), `--`, and a lone `-`; options come
-  before operands. A wrong command line exits with 2 and the usage line.
-- **Refs:** a title is named by `a:12` / `m:3` (its local id) or by part of
-  its title; an exact title wins, several matches fail unless `--all`, and
-  nothing is guessed. A `-` operand reads refs from standard input.
-- **Output:** a table at a terminal; into a pipe, one tab-separated line a
-  title (a tab or newline inside a field becomes a space), `--json` for
-  JSON Lines, `--header` for the column names, `-q` for only the refs or
-  nothing. A failed write to `stdout`, as when `head` has gone, ends the
-  command quietly with 0.
-- **Network:** synchronous, through the site's `iTracker` (ADR-018): `add`,
-  `search`, `refresh`, `import --user`, `login`, `sync`, and, logged in,
-  the push after a saved change. A site is asked before the write lock is
-  taken. `add` fails offline unless `--no-lookup`; a push that fails waits
-  in the outbox, never failing the command that saved the change.
-- **Mutating commands:** take the write lock (`beginWrite`), load, resolve
-  every operand before changing anything, apply the entry rules
-  (`setStatus`, `setScore`, `stepProgress`, `setCount`),
-  save with an undo note, then print one line per changed field.
-- **No command:** `catalist` alone at a terminal lists what is being
-  watched (`printList`, as `ls -s watching --sort=new` would); into a pipe
-  it prints its usage on stderr and exits with 2.
-- **Completion:** the scripts know the commands and options by heart and
-  ask the hidden `catalist __complete refs|titles|statuses|fields` for the
-  rest. It opens the database read-only (`catalogue::peek`): no lock is
-  waited for beyond 100 ms, nothing is created, and any failure prints
-  nothing and exits with 0.
-- **Testing:** `cliContext` carries the streams, the clock, the
-  `web::link` and whether a terminal is attached, so tests drive every
-  command with string streams and a fake web (ADR-010).
+## Code
 
-## ADR-016: One SQLite File, with an Undo History
-- **Context:** two CSV files and a `settings` file could not hold an undo
-  history safely: undo and redo by rewriting files, with a separate lock
-  file, would be fragile, and two programs saving at once could lose a
-  change.
-- **Decision:** the lists, the settings and the history are one SQLite
-  file, `catalist.db`, in `$CATALIST_DATA_DIR`, `$XDG_DATA_HOME/catalist`
-  or `~/.local/share/catalist`. Tables: `entry` (one row a title, keyed by
-  type and id), `setting`, `tx` (one row a step: stamp, label, undone) and
-  `change` (an entry before and after, in the 17-column CSV encoding). The
-  default rollback journal is used, with a 5 s busy timeout.
+### D3: Code Reads Plainly (was ADR-001, ADR-006)
+- **Comments say why:** names and small functions say *what* code does.
+  Comments say *why*, state invariants, and label the parts of longer
+  functions so they read in sections.
+- **Shallow control flow:** function bodies nest at most three levels.
+  Preconditions and errors return early; loops skip with `continue`; each
+  distinct subtask is a small, named helper (`readRefs`, `chooseMatch`,
+  `heldAgain`).
+
+### D4: Naming and Formatting (was ADR-008)
+- **Names:** types, functions, variables and files are camelCase;
+  interfaces are `i` + PascalCase (`iTracker`); private members end in
+  `_`; constants and enumerators are `kPascalCase`. Namespaces are lower
+  case and macros SCREAMING_SNAKE_CASE.
+- **Formatting:** `.clang-format` (Google-based): tabs four wide, a
+  100-column limit, braces on the line of their statement. Logical
+  operators are written `and`, `or`, `not`.
+- **Idioms:** C++23. Strings are built with `std::format`; dates with
+  `std::chrono` where it has the calendar. Rows of plain structs (the
+  command table) name their fields with designated initialisers.
+  Resources are owned by objects that release them (RAII). Standard
+  algorithms replace hand-written loops where they say it more plainly.
+  Includes name the folder (`#include "storage/catalogue.hpp"`), and
+  header guards follow the path. Nothing is written to disk but
+  `catalist.db` and the logins file (D9).
+
+### D5: Types over Sentinels (was ADR-002)
+- **Decision:** `std::optional<T>` for what may be absent, and `result<T>`
+  / `done` (`std::expected` with a message) for what may fail; no `-1` or
+  `"0000-00-00"`. A site's failure says what kind it is (`web::failure`:
+  unreachable, not linked, refused) rather than leaving callers to read
+  its message.
+
+### D6: Side Effects in One Place (was ADR-005)
+- **Decision:** `system.cpp` is the only code that touches file streams,
+  other programs, the terminal or the system clock, as plain functions
+  (`readFile`, `runProgram`, `httpFetch`, `localTime`, `isInteractive`,
+  `terminalColumns`). `store.cpp` is the only code that includes
+  `sqlite3.h`. Where a test must swap a side effect, the caller takes a
+  function: a site takes a `web::link` (the fetch, the pause between
+  requests, the clock and the app ids), and `cliContext` carries the clock
+  and the link.
+- **Composition root:** `main.cpp` reads the environment, builds the
+  catalogue and the `cliContext`. There are no singletons.
+- **Processes:** the only program run is curl, with `execvp` and an
+  argument list, so nothing passes through a shell. A request body goes in
+  on standard input, never on the command line.
+- **Why:** interfaces with a real class and a fake each wrapped one or two
+  calls; a function does the same job with less code.
+
+## Data
+
+### D7: One SQLite File, with an Undo History (was ADR-016)
+- **Decision:** the lists, the provider and the history are one file,
+  `catalist.db`, in `$CATALIST_DATA_DIR`, `$XDG_DATA_HOME/catalist` or
+  `~/.local/share/catalist`. Tables: `entry` (one row a title), `setting`,
+  `tx` (one row a step: stamp, label, undone) and `change` (an entry
+  before and after). The default rollback journal, a 5 s busy timeout.
 - **Saving:** the catalogue keeps a snapshot of what it loaded and writes
   only the rows that differ, in one transaction. A save with an undo note
-  also records the step; a new step deletes the undone ones (no redo after
-  new work), and only the last 100 are kept. `beginWrite` starts the
-  transaction before the load (`BEGIN IMMEDIATE`), so nothing another
-  program does comes between what a command reads and what it saves.
+  records the step; a new step deletes the undone ones, and the last 100
+  are kept.
+- **Locking:** a command that changes the lists takes the write lock
+  (`beginWrite`, `BEGIN IMMEDIATE`) before it loads, so nothing another
+  program does comes between what it reads and what it saves. A site is
+  asked *before* the lock is taken (D11), so no program waits on the
+  network.
 - **Undo and redo:** `journal` computes the changes (`diff`) and takes a
-  step back or forward per entry (`transition`): only the fields the step
-  changed are checked and set, so web data found since is kept. A title
-  changed since stops the step unless forced; a removed title comes back
-  under its old id, never over another title.
-- **Old files:** the CSV files of 0.3.0 and earlier are read by
-  `catalist import`, as any other list is (ADR-020); they are never
-  changed.
+  step per entry (`transition`): only the fields the step changed are
+  checked and set, so what a site filled in since is kept. A title changed
+  since stops the step unless forced; a removed title comes back under its
+  old id, never over another title. Ids and released counts are no step.
+- **Why:** two CSV files and a lock file could not hold a history safely,
+  and two programs saving at once could lose a change.
 
-## ADR-017: Command Line Only, in Folders by Layer
-- **Context:** the program had two ways in, a full-screen interface (FTXUI,
-  covers through img2sixel, a worker thread keeping totals current) and the
-  command line. The owner wants two programs, each simple: this one for the
-  command line, Catalist-TUI for the interface.
-- **Decision:** this program is the command line only. FTXUI, libsixel, the
-  updater thread, covers, the daily id look-ups and the interface's entry
-  rules (status cycle, one star more) are gone; `text` measures glyph
-  widths with its own table instead of FTXUI's. `catalist` alone at a
-  terminal lists what is being watched; into a pipe it is a usage error.
-- **One database, two programs:** `catalist.db` keeps the schema of
-  ADR-016, so Catalist-TUI can work on the same file. This program writes
-  only the `provider` setting and leaves other keys (Catalist-TUI's
-  `linked`) as they are. Totals and released counts change when a title
-  is added, imported, refreshed (`refresh`) or set by hand here, or when
-  Catalist-TUI checks it. What this program adds to the file goes in
-  tables of its own (ADR-019).
-- **Layout:** `src/` has a folder per layer (`core`, `storage`, `web`,
-  `cli`) and `system` beside `main.cpp`; see the module map. The commands
-  are grouped in files (`listing`, `tracking`, `online`, `transfer`,
-  `history`, `setup`), each with its handlers and its rows of the table,
-  sharing `cli/common`; `cli.cpp` collects the groups into the table in
-  help order and runs it. A new command goes in the file of its group, or
-  a new group file listed in `common.hpp` and `commands()`.
+### D8: Files of Earlier Versions Are Read by Import (was ADR-016, ADR-020)
+- **Decision:** the CSV files of 0.3.0 and earlier are read only by
+  `catalist import`, like any other list, and never changed. Nothing is
+  imported automatically on a first run.
+- **Why:** a first-run import threaded through the catalogue, the command
+  line and the tests for something done once.
 
-## ADR-018: Sites as Equal Trackers, Told One Way
-- **Context:** AniList, MyAnimeList and Kitsu were each reached a different
-  way: AniList for search and look-ups, MyAnimeList by file only, Kitsu
-  not at all. The owner wanted all three to work the same, and pointed at
-  Mihon, which supports eight trackers with little code.
-- **Why Mihon's way is small:** tracking is one way (the app tells the
-  tracker, never merges back), each title is linked to each tracker by
-  its id there, every tracker does the same few jobs behind one
-  interface, and the app ships the ids the trackers gave it.
-- **Decision:** `web::iTracker` is that interface, and `anilist`, `mal` and
-  `kitsu` each implement all of it: `search`, `lookUp`/`lookUpMany`
-  (AniList answers fifty titles a request; the others go one a second
-  through the base class), `startLogin`/`finishLogin`/`current` (each
-  site's own OAuth flow behind two calls), `pull` (a user's public list,
-  for a one-time move-in with `import --user`) and `push`/`remove`.
-  `makeTracker` picks one; no command names a site in its code.
-- **One way:** the lists are the truth. Logged in to a site, each saved
-  change to a field the sites keep (status, score, progress, volumes,
-  rewatches, dates) is pushed to every site where the title is linked
-  (`saveAndReport`, undo and redo call `tellSites`). The site's entry is
-  overwritten; nothing is read back or merged, so there is nothing to
-  reconcile. `rm` leaves the sites alone unless `--remote` is given.
-- **Linking:** a title is linked to a site when it has that site's id.
-  `add`, `refresh` and `import` keep every id a site gives (AniList gives
-  MyAnimeList's; Kitsu's mappings give both others'), so linking is mostly
-  automatic; `link`/`unlink` set one by hand. Ids are no step for undo.
-- **The provider** is only the default site of `search`, `add`, `refresh`
-  and `import --user`, and of `show`'s page link; `--from SITE` overrides it.
-- **Known differences** stay behind the interface: only AniList says how
-  much of a running show has aired; MyAnimeList answers nothing without
-  the program's client id; the score scales differ (AniList's `scoreRaw`
-  out of 100, MyAnimeList's 0–10, Kitsu's `ratingTwenty`) and each adapter
-  converts from Catalist's 0–10.
-- **App ids** are built in (`cmake -DCATALIST_MAL_CLIENT_ID=...` and the
-  like, into `version.hpp`) and the same names in the environment override
-  them. They are not settings: the provider stays the only one (ADR-011).
-
-## ADR-019: New Data in Tables of Its Own, Logins Outside the Database
-- **Context:** Catalist-TUI shares `catalist.db`. It opens only
-  `user_version` 1 and writes `entry` with a positional 17-value INSERT,
-  so a new `entry` column, or a new version, would break it.
-- **Decision:** what this program adds goes in tables the TUI does not
-  know, made with `CREATE TABLE IF NOT EXISTS` on write:
+### D9: One File with Catalist-TUI; New Data in Tables of Its Own (was ADR-017, ADR-019)
+- **Context:** Catalist-TUI, the full-screen program, shares
+  `catalist.db`. It opens only `user_version` 1 and writes `entry` with a
+  positional 17-value INSERT, so a new `entry` column or a new version
+  would break it.
+- **Decision:** the schema of D7 stays as it is. What this program adds
+  goes in tables the TUI does not know, made with `CREATE TABLE IF NOT
+  EXISTS` on write:
   - `entry_id` holds the Kitsu ids, with the MyAnimeList and AniList ids
     the title had when written: the TUI gives a removed title's ref to the
     next one, and a row whose ids no longer match is not read as that
-    other title's. It is rewritten with the lists, in their transaction.
-  - `outbox` holds the titles the sites are still to be told of (offline,
-    a site down, `--offline`, more than ten at once); `sync` sends them.
-  The rows of the undo history may have an 18th CSV field, `kitsu_id`,
-  which the TUI's reader ignores. `user_version` stays 1.
-- **Logins** are kept in `$XDG_STATE_HOME/catalist/accounts` (or
-  `~/.local/state/catalist`; with `CATALIST_DATA_DIR`, in that
-  directory), mode 600, written beside and renamed into place. Never in
-  `catalist.db`: the lists can be copied and shared, the logins not.
+    other title's.
+  - `outbox` holds the titles the sites are still to be told of.
+  The undo rows may carry an 18th CSV field, `kitsu_id`, which the TUI's
+  reader ignores. This program writes only the `provider` setting and
+  leaves other keys (the TUI's `linked`) alone.
+- **Logins** are kept outside the database, in
+  `$XDG_STATE_HOME/catalist/accounts` (or `~/.local/state/catalist`; with
+  `CATALIST_DATA_DIR`, in that directory), mode 600, written beside and
+  renamed into place. The lists can be copied and shared; the logins not.
   Passwords (Kitsu's) are exchanged for a token and never kept.
-- **Verified** against Catalist-TUI 2f589e3 on one file: it opens, edits and
-  saves it, keeps the Kitsu ids and the outbox, and each program undoes
-  the other's steps. Changes made in the TUI are not queued for the sites;
-  `sync --all` sends them.
+- **Verified** against Catalist-TUI 2f589e3 on one file: each opens, edits
+  and saves it, keeps the other's data, and undoes the other's steps.
+  Changes made in the TUI are not queued for the sites; `sync --all` sends
+  them.
+- **Cost:** the Kitsu id lives in a side table with a staleness check, the
+  undo history stores entries as CSV text inside SQLite, and the provider
+  is written as `myanimelist`, the spelling 0.3 and the TUI read. A schema of its own
+  (version 2, a `kitsu_id` column, real columns in `change`) would remove
+  all three. **Revisit** if Catalist-TUI is retired or moves to this
+  program's storage code.
 
-## ADR-020: Few Dependencies, Little Machinery
-- **Context:** the build fetched fmt, SQLite and doctest when the system
-  had none, asked pkg-config where fish keeps completions, and linked
-  Threads for one writer thread. The code carried a hand-made `result<T>`,
-  site errors told apart by their wording, command rows of ten positional
-  fields, and four features that each ran through many files: the `cl`
-  name, bash completions, the first-run import of 0.3.0's files and
-  `CATALIST_TX` groups.
+## Command line
+
+### D10: Command Line Only, in Folders by Layer (was ADR-017)
+- **Decision:** this program is the command line only; the full-screen
+  interface is Catalist-TUI. `src/` has a folder per layer (`core`,
+  `storage`, `web`, `cli`) and `system` beside `main.cpp`. The commands
+  are grouped in files (`listing`, `tracking`, `online`, `accounts`,
+  `sync`, `transfer`, `history`, `setup`), each with its handlers and its
+  rows of the table, sharing `cli/common`; `cli.cpp` collects the groups in
+  help order. A new command goes in the file of its group.
+- **Why:** two ways in made each one harder to change. Two programs, each
+  simple, share the file instead (D9).
+
+### D11: The Command Line Is for Daily Tracking, Scripts and Pipes (was ADR-004, ADR-015)
+- **One table:** each command is a row (name, aliases, summary, details,
+  options with their values and choices, operands and their kind, handler,
+  hidden). The row drives `help`, `--help`, typo suggestions, the usage
+  lines, the manual page (`__man`) and the zsh and fish completions. The
+  build runs the program to write the page and the scripts, so they cannot
+  fall behind it.
+- **POSIX options:** grouped short options, `-n3`, `--name=value` and
+  `--name value`, `--`, and a lone `-`; options come before operands.
+- **Refs:** a title is named by `a:12` / `m:3` or by part of its title; an
+  exact title wins, several matches fail unless `--all`, and nothing is
+  guessed. Statuses are likewise exact words (`watching`, `completed`,
+  `on-hold`, `dropped`, `planned`, and `reading`); only `import` reads the
+  sites' own spellings. A `-` operand reads refs from standard input.
+- **Streams:** a command writes only its data to stdout; messages,
+  questions and errors go to stderr. Exit codes: 0 done, 1 failed, 2 wrong
+  command line. A failed write to stdout, as when `head` has gone, ends the
+  command quietly with 0.
+- **Output:** a table at a terminal; into a pipe, one tab-separated line a
+  title, `--json` for JSON Lines, `--header` for the column names, `-q`
+  for only the refs or nothing. A new column goes at the end.
+- **Changing titles:** take the write lock, load, resolve every operand
+  before changing anything, apply the entry rules, save with an undo note,
+  print one line per changed field. A site is asked before the lock is
+  taken (`add`, `refresh`, `link`).
+- **No command:** `catalist` alone at a terminal lists what is being
+  watched, new episodes first; into a pipe it is a usage error.
+- **Completion:** the scripts ask the hidden `catalist __complete` for
+  titles, statuses and fields. It opens the database read-only, waits at
+  most 100 ms, creates nothing, and prints nothing on any failure.
+- **Testing:** `cliContext` carries the streams, the clock, the
+  `web::link` and whether a terminal is attached, so tests drive every
+  command with string streams and a fake web.
+
+## Sites
+
+### D12: Sites as Equal Trackers, Told One Way (was ADR-018)
+- **Context:** the owner wanted AniList, MyAnimeList and Kitsu to work the
+  same, after Mihon, which supports many trackers with little code: it
+  tells the tracker, never merges back; each title is linked to each
+  tracker by its id there; every tracker does the same few jobs behind
+  one interface.
+- **Decision:** `web::iTracker` is that interface, and `anilist`, `mal`
+  and `kitsu` each implement all of it: `search`, `lookUp`/`lookUpMany`,
+  `startLogin`/`finishLogin`/`current`, `pull` (a user's public list, for
+  `import --user`) and `push`/`remove`. `makeTracker` picks one; no command
+  names a site in its code.
+- **One way:** logged in to a site, each saved change to a field the sites
+  keep (status, score, progress, volumes, rewatches, dates) is pushed to
+  every site where the title is linked. The site's entry is overwritten;
+  nothing is read back, so there is nothing to reconcile. What cannot be
+  sent (offline, a site down, `--offline`, more than ten at once) waits in
+  the outbox for `sync`. `rm` leaves the sites alone unless `--remote`.
+- **Linking:** a title is linked to a site when it has that site's id.
+  `add`, `refresh` and `import` keep every id a site gives (AniList gives
+  MyAnimeList's; Kitsu's mappings give both), so linking is mostly
+  automatic; `link`/`unlink` set one by hand.
+- **Known differences** stay behind the interface: only AniList says how
+  much of a running show has aired; MyAnimeList answers nothing without the
+  program's client id; the score scales differ and each adapter converts
+  from Catalist's 0–10.
+- **Cost and status:** this is about a third of the code (`web/`,
+  `cli/sync`, `cli/accounts`, the outbox). It is tested against recorded
+  answers only: **no request has been made to the live sites**, the app
+  ids are not registered yet, and Kitsu's endpoints, MyAnimeList's date
+  clearing and Kitsu's volumes are unchecked. One known weakness: curl
+  runs with `-f`, so an HTTP error (a 404 for an unknown title, a 401 for
+  a revoked login) reads as "could not reach" the site. A refresh on
+  MyAnimeList or Kitsu then stops at an unknown title, and a push the site
+  refuses waits in the outbox (blocking that site's later ones) until
+  `sync --forget`. Telling the two apart needs the HTTP status in
+  `web::link`'s fetch, and should be done once the live sites can be
+  tried. **Revisit:** if the program must shrink, tracking goes first,
+  keeping `search`, `add`, `refresh` and `import --user`.
+
+## Build, tests and releases
+
+### D13: Few Dependencies, Little Machinery (was ADR-020)
 - **Decision:** the build needs CMake, a C++23 compiler and SQLite, and
-  doctest for the tests; nothing is downloaded. `std::format` replaced fmt
-  and `std::expected` replaced `result<T>`'s own class. `cl` is a shell
-  alias away, zsh and fish keep their completions (bash has none), 0.3.0's
-  files go through `import`, and `undo -n N` takes several steps back. ctest runs the
-  smoke script once, from `sh`.
-- **Rule:** a dependency or a feature that threads through several layers
-  has to earn it; when the standard library or a shell does the job, it
-  does.
+  doctest for the tests; nothing is downloaded, and curl is needed only at
+  run time. `std::format` and `std::expected` replaced fmt and a hand-made
+  result class. zsh and fish have completions; bash has none, and a
+  shorter name is a shell alias away. The Nix flake builds the package and
+  gives the `catalist-dev` shell, which keeps by-hand runs' lists in
+  `build/dev-data`.
+- **Rule:** a dependency, or a feature that threads through several
+  layers, has to earn it; when the standard library or a shell does the
+  job, it does.
+
+### D14: Hermetic Tests That Check Behaviour (was ADR-010)
+- **Decision:** doctest, registered with ctest one case at a time. The
+  test `main` points `CATALIST_DATA_DIR`, `HOME`, `XDG_DATA_HOME` and
+  `XDG_CONFIG_HOME` at a throwaway sandbox and pins `TZ=UTC`; tests that
+  touch files get their own temporary directory, and a failed write is
+  simulated by a directory where the file should go. Everything runs
+  offline, with a fixed date and a fake web.
+- **What a test checks:** what the person would see: the lists as another
+  catalogue reads them back, the exit code and the output. No test is
+  skipped or switched off.
+- **Where:** unit tests mirror `src/`; command tests share `cliFixture`;
+  `tests/smoke/smoke.sh` drives the built program from `sh` with a stub
+  `curl`; ctest checks that the completions parse with `zsh -n` and
+  `fish -n`. CI also runs the suite under AddressSanitizer and UBSan.
+- **Versions** (was ADR-009): `VERSION` is the only place the number is
+  written; CMake, the manual page, the flake and CI read it. PATCH for
+  fixes, MINOR for new commands or options, MAJOR for big releases; 0.x
+  until the first full release. Every bump adds a Keep a Changelog entry,
+  is its own `release: vX.Y.Z` commit and gets an annotated tag. Internal
+  work, such as the `simplify/cleanup` branch, does not bump.
+
+## History
+Decisions that were replaced, for reading old commits and the changelog:
+
+- **ADR-003 Decoupled multi-provider subsystem:** web sources behind an
+  `IProvider` interface and a `ProviderRegistry`. Replaced by AniList alone
+  (ADR-014), then by D12.
+- **ADR-007 Tabs behind `iTab`:** the full-screen interface's tabs. Moved
+  with that interface to Catalist-TUI (D10).
+- **ADR-012 Two-way list sync against a base:** accounts, tokens, a base
+  per title and site, request pacing, backups and a job thread. Dropped as
+  most of the code for a feature a local tracker did not need; one-way
+  tracking (D12) later took its place.
+- **ADR-013 Local first, one-way import:** its network rule ("only `add`
+  and `search`") was widened by D12; the rest lives on in D1.
+- **ADR-014 AniList only, a provider ready for sync:** `iListSync` was
+  declared but never built. Replaced by D12; the provider lives on in D2.
+- **ADR-001 to ADR-020** otherwise map to D1 to D14 as each heading notes.

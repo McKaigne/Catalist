@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "core/date.hpp"
+#include "web/http.hpp"
 
 // Everything Catalist does to the world outside the program: reading files,
 // other programs, the network, the clock and the terminal. Nothing else in the
@@ -23,11 +24,10 @@ namespace catalist {
 [[nodiscard]] std::optional<std::string> runProgram(const std::vector<std::string>& arguments,
                                                     const std::string& input = "");
 
-// The body of the reply to a POST of `json` as application/json, through
-// the curl program (AniList's API takes only POST), or nothing when the
-// request failed for any reason: no connection, a timeout or an HTTP error
-// status.
-[[nodiscard]] std::optional<std::string> httpPost(const std::string& url, const std::string& json);
+// Sends the request through the curl program: the body of the reply, or
+// nothing when the request failed for any reason (no connection, a timeout,
+// an HTTP error status).
+[[nodiscard]] std::optional<std::string> httpFetch(const web::request& sent);
 
 // The date on this computer's calendar.
 [[nodiscard]] isoDate today();

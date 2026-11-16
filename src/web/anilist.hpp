@@ -1,25 +1,20 @@
 #ifndef CATALIST_WEB_ANILIST_HPP_
 #define CATALIST_WEB_ANILIST_HPP_
 
-#include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/entry.hpp"
 #include "core/result.hpp"
+#include "web/tracker.hpp"
 
-// AniList's public GraphQL API, the program's one web source: the title
-// search, and what is known about one title (both ids, totals, how much is
-// out). It needs no account and also knows every title's
-// MyAnimeList id, so MyAnimeList users are served from it too. The API takes
-// only POST requests.
+// AniList's public GraphQL API: the title search, and what is known about
+// one title (both ids, totals, how much is out). Searching and looking up
+// need no account, and AniList also knows every title's MyAnimeList id. The
+// API takes only POST requests.
 namespace catalist::anilist {
-
-// Posts JSON to a URL: the body of the reply, or nothing when the request
-// failed. The program passes httpPost; tests pass a fake.
-using poster =
-    std::function<std::optional<std::string>(const std::string& url, const std::string& json)>;
 
 inline const std::string kApiUrl = "https://graphql.anilist.co";
 
@@ -30,43 +25,27 @@ struct titleRef {
 	int malId = 0;
 };
 
-// One search match.
-struct title {
-	int anilistId = 0;
-	int malId = 0;  // 0 when MyAnimeList does not list it
-	std::string name;
-	// Episodes or chapters; 0 while the series is still running.
-	int totalUnits = 0;
-	int totalVolumes = 0;
-	// Four digits, or empty when there is no date.
-	std::string year;
-	// The site-wide score out of 10, 0 when there is none yet.
-	double score = 0.0;
-};
-
-// What AniList knows about one title.
-struct details {
-	std::string name;
-	// The ids, totals and, once the title has ended, everything as released;
-	// for an anime still airing, the episodes aired so far.
-	webFacts facts;
-	// Still airing or publishing.
-	bool ongoing = false;
-};
-
 // The request bodies, and readers for their replies.
 [[nodiscard]] std::string lookupRequest(const titleRef& wanted);
-[[nodiscard]] result<details> parseLookup(const std::string& body, mediaType type);
+[[nodiscard]] result<web::details> parseLookup(const std::string& body, mediaType type);
 [[nodiscard]] std::string searchRequest(mediaType type, const std::string& query);
-[[nodiscard]] result<std::vector<title>> parseSearch(const std::string& body, mediaType type);
+[[nodiscard]] result<std::vector<web::match>> parseSearch(const std::string& body, mediaType type);
 
-// Fails when AniList cannot be reached or does not know the title.
-[[nodiscard]] result<details> lookUp(const poster& post, const titleRef& wanted);
+class tracker : public web::iTracker {
+public:
+	explicit tracker(web::link net) : net_(std::move(net)) {}
 
-// Up to ten matches, best first. Fails when AniList cannot be reached, which
-// the caller must tell apart from a search that simply found nothing.
-[[nodiscard]] result<std::vector<title>> search(const poster& post, mediaType type,
-                                                const std::string& query);
+	[[nodiscard]] provider site() const override { return provider::kAniList; }
+	[[nodiscard]] result<std::vector<web::match>> search(mediaType type,
+	                                                     const std::string& query) override;
+	[[nodiscard]] result<web::details> lookUp(const entry& known) override;
+
+private:
+	// The reply to a query; nothing when AniList cannot be reached.
+	[[nodiscard]] std::optional<std::string> ask(const std::string& query) const;
+
+	web::link net_;
+};
 
 }  // namespace catalist::anilist
 

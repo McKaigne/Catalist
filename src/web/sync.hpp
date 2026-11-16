@@ -21,8 +21,8 @@ namespace catalist {
 // - Entries already carry both sites' ids, so a sync matches titles by
 //   idOn(entry, site()) and needs no new columns.
 // - A command that changes titles would push them after its save, and a
-//   `sync` command would pull; both through the anilist::poster style of
-//   function, so tests swap the network for a fake.
+//   `sync` command would pull; both through a web::link, so tests swap the
+//   network for a fake.
 class iListSync {
 public:
 	virtual ~iListSync() = default;

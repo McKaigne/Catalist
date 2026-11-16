@@ -14,7 +14,7 @@ layer uses only the layers above it in this table, and `system`.
 | | `csvCodec` | the CSV form of a title: the files of 0.3.0 and earlier, and the rows of the undo history |
 | | `journal` | pure functions over the undo history: what changed between two lists, merging steps, taking one back |
 | | `malXml` | the MyAnimeList XML format lists are imported and exported in |
-| `web/` | `json`, `anilist` | the web source: title search, and a title's details (both ids, totals, how much is out) |
+| `web/` | `http`, `tracker`, `json`, `anilist` | the sites: one request type, the `iTracker` interface every site implements (title search, a title's details: ids, totals, how much is out), and AniList's adapter |
 | | `sync.hpp` | `iListSync`, where a future account sync with the provider plugs in (no implementation yet) |
 | `cli/` | `args`, `refs`, `output` | the POSIX option parser; refs (`a:12`) and title matching; tables, tab-separated lines and JSON Lines |
 | | `cli` | `cliContext`, the `command` row, the table put together, dispatch and help |
@@ -56,12 +56,13 @@ built program from the shells, and `tests/support/` holds the fixtures.
   `iClock`) did the job, but each wrapped only one or two calls.
 - **Decision:** `system.cpp` is the only code that touches file streams,
   other programs, the terminal or the system clock, as plain functions:
-  `readFile`, `runProgram`, `httpPost`, `today`, `nowStamp`, `newTxLabel`,
+  `readFile`, `runProgram`, `httpFetch`, `today`, `nowStamp`, `newTxLabel`,
   `isInteractive`, `terminalColumns`. The database file is the other side
   effect, and `store.cpp` is the only code that includes `sqlite3.h`. Where
   a test must swap one, the caller takes a function instead:
-  `anilist::search` takes an `anilist::poster`, and `cliContext` carries
-  `today`, `nowStamp`, `newTxLabel` and the poster. The catalogue opens its
+  a site takes a `web::link` (the `fetch` function and the pause between
+  requests), and `cliContext` carries `today`, `nowStamp`, `newTxLabel` and
+  the link. The catalogue opens its
   directory directly; tests give it a temporary one.
 - **Composition root:** `main.cpp` reads the environment into a
   `dataDirEnv` (`getDefaultDataDir` is pure), builds the catalogue on the
@@ -211,7 +212,7 @@ built program from the shells, and `tests/support/` holds the fixtures.
   waited for beyond 100 ms, nothing is created or imported, and any
   failure prints nothing and exits with 0.
 - **Testing:** `cliContext` carries the streams, the date, the stamp, the
-  AniList poster, `CATALIST_TX` and whether a terminal is attached, so
+  `web::link`, `CATALIST_TX` and whether a terminal is attached, so
   tests drive every command with string streams and a fake web
   (ADR-010).
 

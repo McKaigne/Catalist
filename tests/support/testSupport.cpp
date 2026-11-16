@@ -76,11 +76,13 @@ void fakeWeb::respond(const std::string& fragment, const std::string& body) {
 	bodies[fragment] = body;
 }
 
-std::optional<std::string> fakeWeb::post(const std::string& url, const std::string& json) {
-	posted.push_back(json);
+std::optional<std::string> fakeWeb::fetch(const web::request& asked) {
+	std::string request = fmt::format("{} {} {}", asked.method, asked.url, asked.body);
+	sent.push_back(request);
+	if (not asked.body.empty())
+		posted.push_back(asked.body);
 	const std::string* answer = nullptr;
 	size_t matched = 0;
-	std::string request = fmt::format("{} {}", url, json);
 	for (const auto& [fragment, body] : bodies) {
 		if (request.find(fragment) != std::string::npos and fragment.size() >= matched) {
 			answer = &body;
@@ -90,8 +92,8 @@ std::optional<std::string> fakeWeb::post(const std::string& url, const std::stri
 	return answer ? std::optional<std::string>(*answer) : std::nullopt;
 }
 
-anilist::poster fakeWeb::poster() {
-	return [this](const std::string& url, const std::string& json) { return post(url, json); };
+web::link fakeWeb::link() {
+	return {[this](const web::request& asked) { return fetch(asked); }};
 }
 
 entry findTitle(const catalogue& db, mediaType type, const std::string& title) {

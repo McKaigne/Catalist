@@ -33,9 +33,9 @@ int countOrZero(const json::value& field) {
 
 // AniList's statuses: FINISHED, RELEASING, NOT_YET_RELEASED, CANCELLED and
 // HIATUS.
-details detailsOf(const json::value& media, mediaType type) {
+web::details detailsOf(const json::value& media, mediaType type) {
 	std::string status = media["status"].asString().value_or("");
-	details found;
+	web::details found;
 	found.name = media["title"]["romaji"].asString().value_or("");
 	found.facts.anilistId = countOrZero(media["id"]);
 	found.facts.malId = countOrZero(media["idMal"]);
@@ -65,11 +65,11 @@ std::string lookupRequest(const titleRef& wanted) {
 	                   typeName(wanted.type));
 }
 
-result<details> parseLookup(const std::string& body, mediaType type) {
+result<web::details> parseLookup(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
 	if (not reply.ok() or reply.value()["data"]["Media"].isNull())
-		return result<details>::failure("AniList does not know the title");
-	return result<details>::success(detailsOf(reply.value()["data"]["Media"], type));
+		return result<web::details>::failure("AniList does not know the title");
+	return result<web::details>::success(detailsOf(reply.value()["data"]["Media"], type));
 }
 
 std::string searchRequest(mediaType type, const std::string& query) {
@@ -81,14 +81,14 @@ std::string searchRequest(mediaType type, const std::string& query) {
 	    jsonString(query), typeName(type));
 }
 
-result<std::vector<title>> parseSearch(const std::string& body, mediaType type) {
+result<std::vector<web::match>> parseSearch(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
 	const json::value& media = reply.ok() ? reply.value()["data"]["Page"]["media"] : json::value();
 	if (not media.isArray())
-		return result<std::vector<title>>::failure("unexpected reply from AniList");
-	std::vector<title> found;
+		return result<std::vector<web::match>>::failure("unexpected reply from AniList");
+	std::vector<web::match> found;
 	for (const auto& item : media.items()) {
-		title match;
+		web::match match;
 		match.anilistId = countOrZero(item["id"]);
 		match.malId = countOrZero(item["idMal"]);
 		match.name = item["title"]["romaji"].asString().value_or("");
@@ -101,22 +101,27 @@ result<std::vector<title>> parseSearch(const std::string& body, mediaType type) 
 		match.score = item["averageScore"].asNumber().value_or(0.0) / 10.0;
 		found.push_back(std::move(match));
 	}
-	return result<std::vector<title>>::success(std::move(found));
+	return result<std::vector<web::match>>::success(std::move(found));
 }
 
-result<details> lookUp(const poster& post, const titleRef& wanted) {
-	if (wanted.anilistId <= 0 and wanted.malId <= 0)
-		return result<details>::failure("the title has no id to look up");
-	auto body = post(kApiUrl, lookupRequest(wanted));
-	if (not body)
-		return result<details>::failure("could not reach AniList");
-	return parseLookup(*body, wanted.type);
+std::optional<std::string> tracker::ask(const std::string& query) const {
+	return net_.fetch(
+	    {"POST", kApiUrl, {"Content-Type: application/json", "Accept: application/json"}, query});
 }
 
-result<std::vector<title>> search(const poster& post, mediaType type, const std::string& query) {
-	auto body = post(kApiUrl, searchRequest(type, query));
+result<web::details> tracker::lookUp(const entry& known) {
+	if (known.anilistId <= 0 and known.malId <= 0)
+		return result<web::details>::failure("the title has no id to look up");
+	auto body = ask(lookupRequest({known.type, known.anilistId, known.malId}));
 	if (not body)
-		return result<std::vector<title>>::failure("could not reach AniList");
+		return result<web::details>::failure("could not reach AniList");
+	return parseLookup(*body, known.type);
+}
+
+result<std::vector<web::match>> tracker::search(mediaType type, const std::string& query) {
+	auto body = ask(searchRequest(type, query));
+	if (not body)
+		return result<std::vector<web::match>>::failure("could not reach AniList");
 	return parseSearch(*body, type);
 }
 

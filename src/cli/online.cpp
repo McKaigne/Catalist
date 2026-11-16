@@ -5,6 +5,7 @@
 #include "cli/common.hpp"
 #include "cli/refs.hpp"
 #include "core/text.hpp"
+#include "web/anilist.hpp"
 
 namespace catalist::cli {
 
@@ -26,7 +27,7 @@ std::optional<mediaType> oneType(const args::parsed& line) {
 }
 
 // "28 episodes", or "? chapters" while the total is not known.
-std::string lengthOf(const anilist::title& match, mediaType type) {
+std::string lengthOf(const web::match& match, mediaType type) {
 	return fmt::format("{} {}", match.totalUnits > 0 ? std::to_string(match.totalUnits) : "?",
 	                   unitName(type, match.totalUnits));
 }
@@ -34,9 +35,9 @@ std::string lengthOf(const anilist::title& match, mediaType type) {
 // The match `add` is to take: the only one, the one --pick names, or the one
 // chosen at a terminal. Nothing, with the reason on standard error, when
 // there is no such match.
-std::optional<anilist::title> chooseMatch(cliContext& ctx, mediaType type, const std::string& query,
-                                          std::optional<int> pick) {
-	auto found = anilist::search(ctx.post, type, query);
+std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, mediaType type,
+                                      const std::string& query, std::optional<int> pick) {
+	auto found = site.search(type, query);
 	if (not found.ok()) {
 		fail(ctx, webError(found.errorMessage()));
 		ctx.err << fmt::format("To add a title without AniList: {} add --no-lookup TITLE\n",
@@ -80,8 +81,10 @@ std::optional<anilist::title> chooseMatch(cliContext& ctx, mediaType type, const
 
 // The title as AniList has it: its name, both ids, the totals and how much
 // is out. Fails with what to tell the person.
-result<entry> lookedUp(cliContext& ctx, entry blank, const anilist::title& match) {
-	auto details = anilist::lookUp(ctx.post, {blank.type, match.anilistId, match.malId});
+result<entry> lookedUp(cliContext& ctx, web::iTracker& site, entry blank, const web::match& match) {
+	blank.anilistId = match.anilistId;
+	blank.malId = match.malId;
+	auto details = site.lookUp(blank);
 	if (not details.ok())
 		return result<entry>::failure(webError(details.errorMessage()));
 	blank.title = details.value().name.empty() ? match.name : details.value().name;
@@ -149,10 +152,11 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 	// AniList is asked before the catalogue is taken for writing: no other
 	// program waits while the person chooses.
 	if (not byHand) {
-		auto match = chooseMatch(ctx, *type, added.title, pick);
+		anilist::tracker site(ctx.net);
+		auto match = chooseMatch(ctx, site, *type, added.title, pick);
 		if (not match)
 			return 1;
-		auto found = lookedUp(ctx, added, *match);
+		auto found = lookedUp(ctx, site, added, *match);
 		if (not found.ok())
 			return fail(ctx, found.errorMessage());
 		added = found.value();
@@ -194,7 +198,7 @@ output::cell scoreCell(double score) {
 
 // The matches as a table for a terminal.
 std::string matchTable(const cliContext& ctx, mediaType type,
-                       const std::vector<anilist::title>& matches,
+                       const std::vector<web::match>& matches,
                        const std::vector<std::string>& mine) {
 	std::vector<output::tableColumn> columns = {
 	    {"#", true},
@@ -227,7 +231,8 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 		return usageError(ctx, self, "give the QUERY to search for");
 	if (not load(ctx))
 		return 1;
-	auto found = anilist::search(ctx.post, *type, *query);
+	anilist::tracker site(ctx.net);
+	auto found = site.search(*type, *query);
 	if (not found.ok())
 		return fail(ctx, webError(found.errorMessage()));
 	const auto& matches = found.value();

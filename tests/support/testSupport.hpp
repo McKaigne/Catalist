@@ -9,7 +9,7 @@
 
 #include "core/entry.hpp"
 #include "storage/catalogue.hpp"
-#include "web/anilist.hpp"
+#include "web/tracker.hpp"
 
 namespace catalist::test {
 
@@ -34,14 +34,17 @@ void writeText(const std::filesystem::path& file, const std::string& text);
 // Puts a directory where the file should go, so writing it fails.
 void makeUnwritable(const std::filesystem::path& file);
 
-// Answers a POST whose URL and body together contain a registered fragment
-// with its reply (the longest such fragment), and fails every other
-// request, as if offline. Records every body posted.
+// Answers a request whose method, URL and body together ("POST url body")
+// contain a registered fragment with its reply (the longest such fragment),
+// and fails every other request, as if offline. Records every request.
 struct fakeWeb {
 	void respond(const std::string& fragment, const std::string& body);
-	[[nodiscard]] std::optional<std::string> post(const std::string& url, const std::string& json);
-	[[nodiscard]] anilist::poster poster();
+	[[nodiscard]] std::optional<std::string> fetch(const web::request& sent);
+	[[nodiscard]] web::link link();
 
+	// "POST url body" for each request, in the order sent.
+	std::vector<std::string> sent;
+	// The bodies of the requests that had one.
 	std::vector<std::string> posted;
 	std::map<std::string, std::string> bodies;
 };

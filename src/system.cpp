@@ -139,11 +139,17 @@ const std::vector<std::string> kCurl = {"curl", "-sfL", "--connect-timeout", "4"
 
 }  // namespace
 
-std::optional<std::string> httpPost(const std::string& url, const std::string& json) {
+std::optional<std::string> httpFetch(const web::request& sent) {
 	std::vector<std::string> arguments = kCurl;
-	arguments.insert(arguments.end(), {"-H", "Content-Type: application/json", "-H",
-	                                   "Accept: application/json", "--data-binary", "@-", url});
-	return runProgram(arguments, json);
+	if (sent.method != "GET")
+		arguments.insert(arguments.end(), {"-X", sent.method});
+	for (const auto& header : sent.headers)
+		arguments.insert(arguments.end(), {"-H", header});
+	// The body goes in on standard input, never on the command line.
+	if (not sent.body.empty())
+		arguments.insert(arguments.end(), {"--data-binary", "@-"});
+	arguments.push_back(sent.url);
+	return runProgram(arguments, sent.body);
 }
 
 isoDate today() {

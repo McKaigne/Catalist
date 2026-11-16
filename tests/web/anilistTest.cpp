@@ -57,8 +57,10 @@ TEST_CASE("anilist asks by its own id when known, else by the MyAnimeList id") {
 	CHECK(catalist::json::parse(own).ok());
 
 	catalist::test::fakeWeb web;
-	CHECK_FALSE(anilist::lookUp(web.poster(), {mediaType::kAnime, 0, 0}).ok());
-	CHECK(web.posted.empty());
+	// Without an id there is nothing to ask.
+	anilist::tracker site(web.link());
+	CHECK_FALSE(site.lookUp(catalist::entry{}).ok());
+	CHECK(web.sent.empty());
 }
 
 TEST_CASE("anilist reads both ids from a lookup") {

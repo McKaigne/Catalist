@@ -55,7 +55,7 @@ struct cliFixture : catalist::test::tempDirFixture {
 		std::ostringstream errStream;
 		if (outClosed)
 			outStream.setstate(std::ios::badbit);
-		catalist::cliContext ctx{db, inStream, outStream, errStream, testToday, web.poster()};
+		catalist::cliContext ctx{db, inStream, outStream, errStream, testToday, web.link()};
 		ctx.interactive = not input.empty();
 		ctx.columns = columns;
 		ctx.color = color;

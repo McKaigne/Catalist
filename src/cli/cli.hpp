@@ -8,7 +8,7 @@
 
 #include "cli/args.hpp"
 #include "storage/catalogue.hpp"
-#include "web/anilist.hpp"
+#include "web/tracker.hpp"
 
 namespace catalist {
 
@@ -20,7 +20,8 @@ struct cliContext {
 	std::ostream& out;
 	std::ostream& err;
 	std::function<isoDate()> today;
-	anilist::poster post;
+	// The sites, and how they are reached.
+	web::link net;
 	// Someone is at a terminal: add and rm may ask a question.
 	bool interactive = false;
 	// Write colours (a terminal, and NO_COLOR unset).

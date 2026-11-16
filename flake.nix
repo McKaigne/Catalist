@@ -31,15 +31,16 @@
             nativeBuildInputs = with pkgs; [
               cmake
               ninja
-              pkg-config
               makeWrapper
             ];
 
             buildInputs = with pkgs; [
-              doctest
               fmt
               sqlite
             ];
+
+            # The tests are run from the dev shell, not by the package.
+            cmakeFlags = [ "-DBUILD_TESTING=OFF" ];
 
             postInstall = ''
               wrapProgram $out/bin/catalist \
@@ -69,17 +70,13 @@
               gcc
               gdb
               ninja
-              pkg-config
               git
               doctest
               fmt
               sqlite
               curl
               clang-tools
-              # The shells the command-line tests run under; bash with
-              # readline, for the completion test.
-              bashInteractive
-              dash
+              # ctest checks that the completion scripts parse.
               zsh
               fish
             ];

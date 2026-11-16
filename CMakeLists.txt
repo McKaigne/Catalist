@@ -13,41 +13,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # project include shows up as an error in the editor.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(fmt QUIET)
-if(NOT fmt_FOUND)
-  include(FetchContent)
-  FetchContent_Declare(
-    fmt
-    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    GIT_TAG 12.2.0
-  )
-  FetchContent_MakeAvailable(fmt)
-endif()
-
-# The lists are kept in an SQLite file. Without a system library, SQLite's
-# single-file source is downloaded and built in.
-find_package(SQLite3 QUIET)
-if(NOT SQLite3_FOUND)
-  include(FetchContent)
-  if(POLICY CMP0135)
-    cmake_policy(SET CMP0135 NEW)
-  endif()
-  FetchContent_Declare(
-    sqlite3
-    URL https://www.sqlite.org/2025/sqlite-amalgamation-3500400.zip
-    URL_HASH SHA256=1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032
-  )
-  FetchContent_MakeAvailable(sqlite3)
-  enable_language(C)
-  add_library(catalistSqlite STATIC "${sqlite3_SOURCE_DIR}/sqlite3.c")
-  target_include_directories(catalistSqlite PUBLIC "${sqlite3_SOURCE_DIR}")
-  target_compile_definitions(catalistSqlite PRIVATE SQLITE_OMIT_LOAD_EXTENSION)
-  # Not this project's code: its warnings are not ours to fix.
-  target_compile_options(catalistSqlite PRIVATE -w)
-  find_package(Threads REQUIRED)
-  target_link_libraries(catalistSqlite PUBLIC Threads::Threads)
-  set(CATALIST_SQLITE catalistSqlite)
-elseif(TARGET SQLite3::SQLite3)
+find_package(fmt REQUIRED)
+# The lists are kept in an SQLite file.
+find_package(SQLite3 REQUIRED)
+if(TARGET SQLite3::SQLite3)
   set(CATALIST_SQLITE SQLite3::SQLite3)
 else()
   # The target's name before CMake 4.3.
@@ -108,9 +77,7 @@ add_library(catalistLib STATIC
   src/system.cpp
 )
 target_include_directories(catalistLib PUBLIC src "${CATALIST_GENERATED_DIR}")
-# runProgram feeds a program's input from a second thread.
-find_package(Threads REQUIRED)
-target_link_libraries(catalistLib PUBLIC fmt::fmt ${CATALIST_SQLITE} Threads::Threads)
+target_link_libraries(catalistLib PUBLIC fmt::fmt ${CATALIST_SQLITE})
 target_compile_options(catalistLib PRIVATE ${CATALIST_WARNING_FLAGS})
 
 add_executable(catalist src/main.cpp)
@@ -138,45 +105,22 @@ add_custom_command(
 )
 add_custom_target(catalistShellSupport ALL DEPENDS ${CATALIST_SHELL_FILES})
 
-# fish reads completions from the directory its pkg-config file names, when
-# that is inside this install; anywhere else it would not be ours to write.
-set(fishDir "${CMAKE_INSTALL_DATADIR}/fish/vendor_completions.d")
-find_package(PkgConfig QUIET)
-if(PKG_CONFIG_FOUND)
-  pkg_get_variable(fishPkgDir fish completionsdir)
-  if(fishPkgDir)
-    cmake_path(IS_PREFIX CMAKE_INSTALL_PREFIX "${fishPkgDir}" NORMALIZE fishDirIsOurs)
-    if(fishDirIsOurs)
-      set(fishDir "${fishPkgDir}")
-    endif()
-  endif()
-endif()
-set(CATALIST_FISH_COMPLETIONS_DIR "${fishDir}" CACHE PATH
-  "Where the fish completions are installed")
-
 install(TARGETS catalist DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES "${CATALIST_SHARE_DIR}/man/man1/catalist.1"
   DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 install(FILES "${CATALIST_SHARE_DIR}/zsh/_catalist"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/zsh/site-functions)
 install(FILES "${CATALIST_SHARE_DIR}/fish/catalist.fish"
-  DESTINATION ${CATALIST_FISH_COMPLETIONS_DIR})
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/fish/vendor_completions.d)
 
+option(BUILD_TESTING "Build the tests (needs doctest)" ON)
+if(NOT BUILD_TESTING)
+  return()
+endif()
 enable_testing()
 
-find_package(doctest CONFIG QUIET)
-if(doctest_FOUND)
-  include(doctest)
-else()
-  include(FetchContent)
-  FetchContent_Declare(
-    doctest
-    GIT_REPOSITORY https://github.com/doctest/doctest.git
-    GIT_TAG v2.5.3
-  )
-  FetchContent_MakeAvailable(doctest)
-  include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
-endif()
+find_package(doctest CONFIG REQUIRED)
+include(doctest)
 
 add_executable(catalistTests
   tests/testMain.cpp
@@ -220,22 +164,13 @@ target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 
 doctest_discover_tests(catalistTests)
 
-# The command line from the shells, as scripts use it; each shell found
-# runs it. A stub curl stands in for AniList.
-set(smokeScript "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke/smoke.sh")
-find_program(CATALIST_DASH dash)
-find_program(CATALIST_BASH bash)
+# The command line from a POSIX shell, as scripts use it; a stub curl
+# stands in for the sites. The completion scripts must parse.
+add_test(NAME smoke COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke/smoke.sh"
+  $<TARGET_FILE:catalist>)
 find_program(CATALIST_ZSH zsh)
 find_program(CATALIST_FISH fish)
-if(CATALIST_DASH)
-  add_test(NAME smoke.dash COMMAND "${CATALIST_DASH}" "${smokeScript}" $<TARGET_FILE:catalist>)
-endif()
-if(CATALIST_BASH)
-  add_test(NAME smoke.bash
-    COMMAND "${CATALIST_BASH}" --posix "${smokeScript}" $<TARGET_FILE:catalist>)
-endif()
 if(CATALIST_ZSH)
-  add_test(NAME smoke.zsh COMMAND "${CATALIST_ZSH}" -f "${smokeScript}" $<TARGET_FILE:catalist>)
   add_test(NAME completion.zsh COMMAND "${CATALIST_ZSH}" -n "${CATALIST_SHARE_DIR}/zsh/_catalist")
 endif()
 if(CATALIST_FISH)

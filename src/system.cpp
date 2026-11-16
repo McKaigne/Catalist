@@ -2,6 +2,7 @@
 
 #include <fcntl.h>
 #include <fmt/format.h>
+#include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -10,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -17,7 +19,6 @@
 #include <fstream>
 #include <istream>
 #include <iterator>
-#include <thread>
 #include <utility>
 
 namespace catalist {
@@ -108,25 +109,39 @@ std::optional<std::string> runProgram(const std::vector<std::string>& arguments,
 	if (child < 0)
 		return std::nullopt;
 
-	// Feed the input from another thread, so a program that answers before it
-	// has read everything cannot block on a full pipe.
-	std::thread feeder([&input, end = std::move(toChild->write)] {
-		size_t written = 0;
-		while (written < input.size()) {
-			ssize_t count = write(end.get(), input.data() + written, input.size() - written);
-			if (count <= 0)
-				break;
-			written += static_cast<size_t>(count);
-		}
-	});
-
-	// Collect everything the program writes until it closes its output.
+	// Feed the input and collect the output together, so a program that
+	// answers before it has read everything cannot block on a full pipe.
+	fileDescriptor feed = std::move(toChild->write);
+	fcntl(feed.get(), F_SETFL, O_NONBLOCK);
+	size_t written = 0;
+	if (input.empty())
+		feed.reset();
 	std::string output;
 	std::array<char, 4096> buffer;
-	ssize_t count = 0;
-	while ((count = read(fromChild->read.get(), buffer.data(), buffer.size())) > 0)
-		output.append(buffer.data(), static_cast<size_t>(count));
-	feeder.join();
+	while (true) {
+		// poll passes over the input's end once it is closed (-1).
+		std::array<pollfd, 2> ends = {pollfd{fromChild->read.get(), POLLIN, 0},
+		                              pollfd{feed.get(), POLLOUT, 0}};
+		if (poll(ends.data(), ends.size(), -1) < 0) {
+			if (errno == EINTR)
+				continue;
+			break;
+		}
+		if (ends[1].revents != 0) {
+			ssize_t count = write(feed.get(), input.data() + written, input.size() - written);
+			if (count > 0)
+				written += static_cast<size_t>(count);
+			if ((count < 0 and errno != EAGAIN) or written == input.size())
+				feed.reset();
+		}
+		if (ends[0].revents != 0) {
+			ssize_t count = read(fromChild->read.get(), buffer.data(), buffer.size());
+			if (count <= 0)
+				break;
+			output.append(buffer.data(), static_cast<size_t>(count));
+		}
+	}
+	feed.reset();
 
 	int status = 0;
 	waitpid(child, &status, 0);

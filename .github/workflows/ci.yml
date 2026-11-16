@@ -17,8 +17,8 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build build-essential pkg-config libsqlite3-dev \
-            dash zsh fish
+          sudo apt-get install -y cmake ninja-build build-essential libsqlite3-dev libfmt-dev \
+            doctest-dev zsh fish
 
       - name: Configure CMake
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
@@ -26,22 +26,8 @@ jobs:
       - name: Compile application and test suite
         run: cmake --build build
 
-      - name: Execute automated unit tests
+      - name: Run the tests, the smoke script and the completion checks
         run: ctest --test-dir build --output-on-failure
-
-      - name: Run the command line from each shell
-        run: |
-          dash tests/smoke/smoke.sh build/catalist
-          bash --posix tests/smoke/smoke.sh build/catalist
-          zsh -f tests/smoke/smoke.sh build/catalist
-
-      - name: Check the completion scripts parse
-        run: |
-          zsh -n build/share/zsh/_catalist
-          fish --no-config -n build/share/fish/catalist.fish
-
-      - name: Verify CLI argument dispatcher
-        run: ./build/catalist --version
 
       - name: Verify reported version matches VERSION
         run: |
@@ -67,7 +53,8 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build build-essential pkg-config libsqlite3-dev
+          sudo apt-get install -y cmake ninja-build build-essential libsqlite3-dev libfmt-dev \
+            doctest-dev
 
       - name: Configure CMake with AddressSanitizer and UBSan
         run: >

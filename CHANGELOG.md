@@ -86,14 +86,14 @@ Catalist-TUI, which keeps its lists in the same file.
   `settings` in `~/.config/catalist`. Move in with `catalist import
   ~/.config/catalist/anime.csv ~/.config/catalist/manga.csv`, which leaves
   them as they were (choose the provider again with `catalist provider`).
-  Each change is one transaction, and two programs at once wait for each other. SQLite
-  is a new build dependency (downloaded by CMake when the system has none).
+  Each change is one transaction, and two programs at once wait for each
+  other. SQLite is a new build dependency.
 - `catalist` with no command, into a pipe, prints its usage and exits
   with 2.
 - `catalist import` takes MyAnimeList XML files, Catalist's JSON or the
   CSV files of 0.3.0 (`-` for standard input), reads them all before adding
-  anything, reports per file how many
-  titles were added, and is one step for undo.
+  anything, reports per file how many titles were added, and is one step
+  for undo.
 - New titles are numbered from 1 in each list; an imported title merges
   with a tracked one only when they share an AniList, MyAnimeList or Kitsu
   id.

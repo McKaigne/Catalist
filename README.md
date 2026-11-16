@@ -68,11 +68,11 @@ nix run . -- help
 
 ### CMake
 
-You need a C++17 compiler, CMake 3.20 or later, Ninja or Make, and SQLite 3
-(`libsqlite3-dev` on Debian and Ubuntu, `sqlite` elsewhere; without it
-CMake downloads its source). doctest and fmt are used from the system or
-downloaded by CMake. At run time, `curl` reaches AniList; without it
-`add --no-lookup` still works.
+You need a C++17 compiler, CMake 3.20 or later, Ninja or Make, SQLite 3 and
+fmt (`libsqlite3-dev` and `libfmt-dev` on Debian and Ubuntu), and doctest
+for the tests (`doctest-dev`; `-DBUILD_TESTING=OFF` builds without them).
+At run time, `curl` reaches the sites; without it `add --no-lookup` still
+works.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -84,8 +84,8 @@ sudo cmake --install build
 
 The build also writes the manual page and the completions for zsh and
 fish, and `cmake --install` puts them where `man` and the shells look.
-When `dash`, `bash` or `zsh` is installed, `ctest` also runs the command
-line from that shell.
+`ctest` also runs the command line from `sh`, and checks that the zsh and
+fish scripts parse when those shells are installed.
 
 ---
 

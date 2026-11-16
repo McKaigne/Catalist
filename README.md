@@ -191,6 +191,7 @@ catalist completion fish > ~/.config/fish/completions/catalist.fish
 ## Importing and exporting
 
 ```bash
+catalist import --user Abel --from kitsu     # a user's public lists on a site
 catalist import animelist.xml mangalist.xml   # MyAnimeList XML exports
 catalist export anime > anime.xml             # MyAnimeList XML on stdout
 catalist export manga > manga.xml
@@ -198,16 +199,18 @@ catalist export --format=csv anime > anime.csv   # for a spreadsheet
 catalist export --format=json manga | jq .title  # one object a line
 ```
 
-- **MyAnimeList:** export your lists from MyAnimeList's export page, unpack
-  the `.xml.gz` files (`gunzip`), and import them. Upload what
-  `catalist export` writes on MyAnimeList's import page.
-- **AniList:** AniList's settings have an import that reads MyAnimeList XML,
-  so `catalist export` works there too. AniList does not export MyAnimeList
-  XML itself; convert an AniList list with a third-party tool such as
-  [AniPy](https://github.com/Jacekun/AniPy), then import that file.
+- **From a site:** `import --user NAME` reads NAME's public lists on your
+  provider, or the site `--from` names (AniList, MyAnimeList or Kitsu), the
+  same way for each. The titles keep their ids on that site, so they come
+  in linked to it (see Tracking).
+- **From a file:** MyAnimeList's export page gives `.xml.gz` files: unpack
+  them (`gunzip`) and import them.
+- **To a site:** log in and `catalist sync --all`; or upload what
+  `catalist export` writes on the import page of MyAnimeList, AniList or
+  Kitsu, which all read MyAnimeList XML.
 
 Importing never overwrites what you track: a title already in the catalogue
-(the same AniList or MyAnimeList id) keeps your score, progress and dates,
+(the same AniList, MyAnimeList or Kitsu id) keeps your score, progress and dates,
 and only its totals are refreshed. Importing the same file twice adds
 nothing, and an import is one step for undo. Titles without a MyAnimeList
 id are left out of an XML export, with a note on stderr; the CSV and JSON

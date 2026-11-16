@@ -209,6 +209,7 @@ add_executable(catalistTests
   tests/web/jsonTest.cpp
   tests/web/kitsuTest.cpp
   tests/web/loginTest.cpp
+  tests/web/pullTest.cpp
   tests/web/pushTest.cpp
   tests/web/malTest.cpp
   tests/cli/accountsTest.cpp

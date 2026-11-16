@@ -25,6 +25,12 @@ inline const std::string kTokenUrl = "https://myanimelist.net/v1/oauth2/token";
 [[nodiscard]] std::string titleUrl(mediaType type, int malId);
 [[nodiscard]] result<web::details> parseTitle(const std::string& body, mediaType type);
 
+// A user's public list of one type: the first page's URL, and the entries
+// of a page with the URL of the next ("" after the last).
+[[nodiscard]] std::string listUrl(mediaType type, const std::string& user);
+[[nodiscard]] result<std::vector<entry>> parseList(const std::string& body, mediaType type,
+                                                   std::string& next);
+
 // The form that sets a title on the account's list. A date the title has
 // not is left out: MyAnimeList keeps the one it had.
 [[nodiscard]] std::string listStatusForm(const entry& title);
@@ -42,6 +48,7 @@ public:
 	[[nodiscard]] result<web::loginStart> startLogin() override;
 	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
 	[[nodiscard]] result<account> current(const account& login) override;
+	[[nodiscard]] result<std::vector<entry>> pull(mediaType type, const std::string& user) override;
 	[[nodiscard]] result<bool> push(const entry& title, const account& login) override;
 	[[nodiscard]] result<bool> remove(mediaType type, int siteId, const account& login) override;
 

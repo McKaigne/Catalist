@@ -43,6 +43,11 @@ inline constexpr size_t kBatchSize = 50;
 [[nodiscard]] std::string saveRequest(const entry& title);
 [[nodiscard]] std::string listEntryRequest(int mediaId, const std::string& userId);
 
+// The query for a user's whole list of one type, and the entries of its
+// reply.
+[[nodiscard]] std::string listRequest(mediaType type, const std::string& user);
+[[nodiscard]] result<std::vector<entry>> parseList(const std::string& body, mediaType type);
+
 class tracker : public web::iTracker {
 public:
 	explicit tracker(web::link net) : net_(std::move(net)) {}
@@ -59,6 +64,7 @@ public:
 	[[nodiscard]] result<web::loginStart> startLogin() override;
 	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
 	[[nodiscard]] result<account> current(const account& login) override;
+	[[nodiscard]] result<std::vector<entry>> pull(mediaType type, const std::string& user) override;
 	[[nodiscard]] result<bool> push(const entry& title, const account& login) override;
 	[[nodiscard]] result<bool> remove(mediaType type, int siteId, const account& login) override;
 

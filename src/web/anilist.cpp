@@ -50,6 +50,20 @@ std::string fuzzyDate(const std::optional<isoDate>& day) {
 	                   day->day());
 }
 
+std::optional<watchStatus> statusOf(const std::string& listStatus) {
+	if (listStatus == "CURRENT" or listStatus == "REPEATING")
+		return watchStatus::kWatching;
+	if (listStatus == "COMPLETED")
+		return watchStatus::kCompleted;
+	if (listStatus == "PAUSED")
+		return watchStatus::kOnHold;
+	if (listStatus == "DROPPED")
+		return watchStatus::kDropped;
+	if (listStatus == "PLANNING")
+		return watchStatus::kPlanToWatch;
+	return std::nullopt;
+}
+
 int countOrZero(const json::value& field) {
 	auto count = field.asInteger();
 	return count and *count > 0 ? static_cast<int>(*count) : 0;
@@ -122,6 +136,55 @@ std::string listEntryRequest(int mediaId, const std::string& userId) {
 	    R"({{"query":"query($m:Int,$u:Int){{MediaList(mediaId:$m,userId:$u){{id}}}}",)"
 	    R"("variables":{{"m":{},"u":{}}}}})",
 	    mediaId, userId.empty() ? "0" : userId);
+}
+
+std::string listRequest(mediaType type, const std::string& user) {
+	return fmt::format(
+	    R"({{"query":"query($u:String,$t:MediaType){{MediaListCollection(userName:$u,type:$t))"
+	    R"({{lists{{entries{{status score(format:POINT_10) progress progressVolumes repeat )"
+	    R"(startedAt{{year month day}} completedAt{{year month day}} )"
+	    R"(media{{id idMal title{{romaji}} episodes chapters volumes status )"
+	    R"(nextAiringEpisode{{episode}}}}}}}}}}}}",)"
+	    R"("variables":{{"u":{},"t":"{}"}}}})",
+	    jsonString(user), typeName(type));
+}
+
+result<std::vector<entry>> parseList(const std::string& body, mediaType type) {
+	auto reply = json::parse(body);
+	const json::value& lists =
+	    reply.ok() ? reply.value()["data"]["MediaListCollection"]["lists"] : json::value();
+	if (not lists.isArray())
+		return result<std::vector<entry>>::failure("unexpected reply from AniList");
+	auto dayOf = [](const json::value& fuzzy) {
+		return isoDate::fromParts(countOrZero(fuzzy["year"]), countOrZero(fuzzy["month"]),
+		                          countOrZero(fuzzy["day"]));
+	};
+	std::vector<entry> found;
+	for (const auto& list : lists.items()) {
+		for (const auto& item : list["entries"].items()) {
+			auto status = statusOf(item["status"].asString().value_or(""));
+			auto media = detailsOf(item["media"], type);
+			if (not status or media.facts.anilistId == 0 or media.name.empty())
+				continue;
+			entry e;
+			e.type = type;
+			e.title = media.name;
+			e.status = *status;
+			e.score = static_cast<int>(item["score"].asNumber().value_or(0.0) + 0.5);
+			e.progress = countOrZero(item["progress"]);
+			e.volumes = countOrZero(item["progressVolumes"]);
+			e.rewatched = countOrZero(item["repeat"]);
+			e.startDate = dayOf(item["startedAt"]);
+			e.finishDate = dayOf(item["completedAt"]);
+			e.anilistId = media.facts.anilistId;
+			e.malId = media.facts.malId;
+			e.totalUnits = media.facts.totalUnits;
+			e.totalVolumes = media.facts.totalVolumes;
+			e.released = media.facts.released;
+			found.push_back(std::move(e));
+		}
+	}
+	return result<std::vector<entry>>::success(std::move(found));
 }
 
 std::string batchRequest(mediaType type, const std::vector<int>& ids, bool byMal) {
@@ -205,6 +268,15 @@ result<account> tracker::finishLogin(const std::vector<std::string>& answers) {
 	return result<account>::success({provider::kAniList, *name,
 	                                 std::to_string(countOrZero(viewer["id"])), token, "",
 	                                 net_.now() + kYear});
+}
+
+result<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
+	auto body = ask(listRequest(type, user));
+	// AniList answers 404 for a user it has not, and for a private list.
+	if (not body)
+		return result<std::vector<entry>>::failure(
+		    fmt::format("could not reach AniList, or it has no public list of {}", user));
+	return parseList(*body, type);
 }
 
 result<bool> tracker::push(const entry& title, const account& login) {

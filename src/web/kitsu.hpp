@@ -29,6 +29,12 @@ inline const std::string kTokenUrl = "https://kitsu.app/api/oauth/token";
 // The Kitsu id the mapping names; 0 when there is none.
 [[nodiscard]] int parseMapping(const std::string& body);
 
+// A user's library of one type: the first page's URL, and the entries of
+// a page with the URL of the next ("" after the last).
+[[nodiscard]] std::string libraryUrl(mediaType type, const std::string& userId);
+[[nodiscard]] result<std::vector<entry>> parseLibrary(const std::string& body, mediaType type,
+                                                      std::string& next);
+
 // The attributes of a library entry, as Catalist's lists have the title.
 [[nodiscard]] std::string libraryAttributes(const entry& title);
 
@@ -45,6 +51,7 @@ public:
 	[[nodiscard]] result<web::loginStart> startLogin() override;
 	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
 	[[nodiscard]] result<account> current(const account& login) override;
+	[[nodiscard]] result<std::vector<entry>> pull(mediaType type, const std::string& user) override;
 	[[nodiscard]] result<bool> push(const entry& title, const account& login) override;
 	[[nodiscard]] result<bool> remove(mediaType type, int siteId, const account& login) override;
 

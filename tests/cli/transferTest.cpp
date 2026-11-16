@@ -261,3 +261,28 @@ TEST_CASE_FIXTURE(cliFixture, "cli export of an empty catalogue is an empty list
 	CHECK(out.empty());
 	CHECK_FALSE(std::filesystem::exists("data"));
 }
+
+TEST_CASE_FIXTURE(cliFixture, "cli import --user moves in a user's lists from a site") {
+	seed();
+	web.respond(R"("u":"Abel","t":"ANIME")",
+	            R"({"data":{"MediaListCollection":{"lists":[{"entries":[
+	            {"status":"COMPLETED","score":9,"progress":13,"repeat":0,"startedAt":{},"completedAt":{},
+	             "media":{"id":128547,"idMal":44265,"title":{"romaji":"Odd Taxi"},"episodes":13,"status":"FINISHED"}},
+	            {"status":"CURRENT","score":0,"progress":3,"repeat":0,"startedAt":{},"completedAt":{},
+	             "media":{"id":171018,"idMal":57334,"title":{"romaji":"Dandadan"},"episodes":12,"status":"FINISHED"}}]}]}}})");
+	CHECK(run({"import", "-a", "--user", "Abel", "--from", "anilist"}) == 0);
+	CHECK(has(err, "Abel on AniList (anime): 2 titles, 1 added, 1 in your lists already\n"));
+	auto dandadan = savedTitle(mediaType::kAnime, "Dandadan");
+	CHECK(dandadan.progress == 3);
+	CHECK(dandadan.anilistId == 171018);
+	// A title there already keeps what the person gave it.
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 5);
+	CHECK(steps().size() == 1);
+
+	CHECK(run({"import", "--user", "Nobody"}) == 1);
+	CHECK(err == "error: could not reach AniList, or it has no public list of Nobody; check the "
+	             "connection and try again\n");
+	CHECK(run({"import", "--user", "Abel", "file.xml"}) == 2);
+	CHECK(run({"import", "-a", "file.xml"}) == 2);
+	CHECK(err.find("error: --from, -a and -m go with --user\n") == 0);
+}

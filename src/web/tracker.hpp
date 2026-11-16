@@ -115,6 +115,15 @@ public:
 	// again.
 	[[nodiscard]] virtual result<account> current(const account& login) = 0;
 
+	// ---- Moving in ----
+
+	// The user's public list of one type, as entries with the ids the site
+	// knows (so linked to it), the user's status, score out of 10, progress,
+	// volumes, rewatches and dates. Fails when the site cannot be reached,
+	// or has no public list of that user.
+	[[nodiscard]] virtual result<std::vector<entry>> pull(mediaType type,
+	                                                      const std::string& user) = 0;
+
 	// ---- Telling the site, one way ----
 
 	// Puts the title on the account's list as it is in Catalist's: status,
@@ -150,6 +159,10 @@ struct tokenReply {
 // The word for "this title has no id on the site": push fails with it, and
 // the caller tells it apart from a site that said no.
 [[nodiscard]] std::string notLinked(provider site);
+
+// The day of "2026-10-01", "2026-10-01T00:00:00.000Z" and the like; nothing
+// for anything shorter.
+[[nodiscard]] std::optional<isoDate> dayOf(const std::string& text);
 
 // Whether the login's token runs out within a minute (or has).
 [[nodiscard]] bool runningOut(const account& login, long long now);

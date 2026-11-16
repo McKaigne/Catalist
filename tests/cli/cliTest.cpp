@@ -90,7 +90,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(run({"help", "stats"}) == 0);
 	CHECK(has(out, "Usage: catalist stats [-am] [--json] [--header]\n"));
 	CHECK(run({"help", "import"}) == 0);
-	CHECK(has(out, "Usage: catalist import [-q] FILE...\n"));
+	CHECK(has(out, "Usage: catalist import [-amq] [--user=NAME] [--from=SITE] [FILE...]\n"));
 	CHECK(run({"help", "export"}) == 0);
 	CHECK(has(out, "Usage: catalist export [--format=FORMAT] [anime|manga]\n"));
 	CHECK(run({"help", "provider"}) == 0);

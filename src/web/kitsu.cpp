@@ -47,6 +47,20 @@ void readMappings(const json::value& item, const json::value& included, mediaTyp
 	}
 }
 
+std::optional<watchStatus> statusOf(const std::string& library) {
+	if (library == "current")
+		return watchStatus::kWatching;
+	if (library == "completed")
+		return watchStatus::kCompleted;
+	if (library == "on_hold")
+		return watchStatus::kOnHold;
+	if (library == "dropped")
+		return watchStatus::kDropped;
+	if (library == "planned")
+		return watchStatus::kPlanToWatch;
+	return std::nullopt;
+}
+
 std::string libraryStatus(watchStatus status) {
 	switch (status) {
 		case watchStatus::kWatching:
@@ -144,6 +158,58 @@ int parseMapping(const std::string& body) {
 	return 0;
 }
 
+std::string libraryUrl(mediaType type, const std::string& userId) {
+	std::string kind = kindOf(type);
+	return fmt::format(
+	    "{}/library-entries?filter[userId]={}&filter[kind]={}&include={},{}.mappings"
+	    "&page[limit]=500",
+	    kApiUrl, userId, kind, kind, kind);
+}
+
+result<std::vector<entry>> parseLibrary(const std::string& body, mediaType type,
+                                        std::string& next) {
+	auto reply = json::parse(body);
+	const json::value& data = reply.ok() ? reply.value()["data"] : json::value();
+	if (not data.isArray())
+		return result<std::vector<entry>>::failure("unexpected reply from Kitsu");
+	const json::value& included = reply.value()["included"];
+	std::string kind = kindOf(type);
+	std::vector<entry> found;
+	for (const auto& item : data.items()) {
+		const json::value& attributes = item["attributes"];
+		auto status = statusOf(attributes["status"].asString().value_or(""));
+		auto mediaId = item["relationships"][kind]["data"]["id"].asString();
+		const json::value* media = nullptr;
+		for (const auto& each : included.items())
+			if (each["type"].asString().value_or("") == kind and each["id"].asString() == mediaId)
+				media = &each;
+		if (not status or not media)
+			continue;
+		auto match = matchOf(*media, included, type);
+		entry e;
+		e.type = type;
+		e.title = match.name;
+		e.kitsuId = match.kitsuId;
+		e.malId = match.malId;
+		e.anilistId = match.anilistId;
+		e.totalUnits = match.totalUnits;
+		e.totalVolumes = match.totalVolumes;
+		if ((*media)["attributes"]["status"].asString().value_or("") == "finished")
+			e.released = match.totalUnits;
+		e.status = *status;
+		e.progress = countOrZero(attributes["progress"]);
+		e.rewatched = countOrZero(attributes["reconsumeCount"]);
+		// ratingTwenty runs from 2 to 20.
+		e.score = (countOrZero(attributes["ratingTwenty"]) + 1) / 2;
+		e.startDate = web::dayOf(attributes["startedAt"].asString().value_or(""));
+		e.finishDate = web::dayOf(attributes["finishedAt"].asString().value_or(""));
+		if (e.kitsuId > 0 and not e.title.empty())
+			found.push_back(std::move(e));
+	}
+	next = reply.value()["links"]["next"].asString().value_or("");
+	return result<std::vector<entry>>::success(std::move(found));
+}
+
 std::string libraryAttributes(const entry& title) {
 	// ratingTwenty runs from 2 to 20; null is no rating.
 	return fmt::format(R"({{"status":"{}","progress":{},"reconsumeCount":{},"ratingTwenty":{},)"
@@ -172,6 +238,31 @@ std::optional<int> tracker::libraryEntry(mediaType type, int kitsuId, const acco
 	for (const auto& found : reply.value()["data"].items())
 		return idOf(found["id"]);
 	return 0;
+}
+
+result<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
+	using outcome = result<std::vector<entry>>;
+	auto people = get(fmt::format("{}/users?filter[name]={}", kApiUrl, web::urlEncoded(user)));
+	if (not people)
+		return outcome::failure("could not reach Kitsu");
+	auto reply = json::parse(*people);
+	std::string userId;
+	if (reply.ok() and not reply.value()["data"].items().empty())
+		userId = reply.value()["data"].items().front()["id"].asString().value_or("");
+	if (userId.empty())
+		return outcome::failure(fmt::format("Kitsu has no user named {}", user));
+	std::vector<entry> all;
+	for (std::string page = libraryUrl(type, userId); not page.empty();) {
+		pause();
+		auto body = get(page);
+		if (not body)
+			return outcome::failure("could not reach Kitsu");
+		auto entries = parseLibrary(*body, type, page);
+		if (not entries.ok())
+			return entries;
+		all.insert(all.end(), entries.value().begin(), entries.value().end());
+	}
+	return outcome::success(std::move(all));
 }
 
 result<bool> tracker::push(const entry& title, const account& login) {

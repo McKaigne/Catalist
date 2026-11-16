@@ -42,6 +42,10 @@ std::string bearer(const std::string& token) {
 	return "Authorization: Bearer " + token;
 }
 
+std::optional<isoDate> dayOf(const std::string& text) {
+	return text.size() < 10 ? std::nullopt : isoDate::parse(text.substr(0, 10));
+}
+
 bool runningOut(const account& login, long long now) {
 	return login.expires > 0 and now + 60 >= login.expires;
 }

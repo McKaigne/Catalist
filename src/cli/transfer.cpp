@@ -35,34 +35,29 @@ result<std::vector<entry>> readExport(cliContext& ctx, const std::string& file) 
 	return outcome::success(std::move(found));
 }
 
-int runImport(const command& self, const args::parsed& line, cliContext& ctx) {
-	if (line.operands.empty())
-		return usageError(ctx, self, "give at least one file, or - for standard input");
-	// Everything is read before anything is added, so a bad file leaves the
-	// catalogue untouched.
-	std::vector<std::vector<entry>> lists;
-	for (const auto& file : line.operands) {
-		auto read = readExport(ctx, file);
-		if (not read.ok())
-			return fail(ctx, read.errorMessage());
-		lists.push_back(read.value());
-	}
+// A list read whole, before anything is added, and what to call it.
+struct source {
+	std::string name;
+	std::vector<entry> titles;
+};
+
+// Adds the titles of each source to the lists, as import does: a title
+// there already keeps what the person gave it. One step for undo.
+int addSources(cliContext& ctx, const args::parsed& line, const std::vector<source>& sources) {
 	if (not loadForWrite(ctx))
 		return 1;
-
 	std::vector<entry> animeBefore = ctx.db.getEntries(mediaType::kAnime);
 	std::vector<entry> mangaBefore = ctx.db.getEntries(mediaType::kManga);
-	for (size_t i = 0; i < lists.size(); ++i) {
+	for (const auto& each : sources) {
 		size_t added = 0;
-		for (const auto& title : lists[i]) {
+		for (const auto& title : each.titles) {
 			size_t before = ctx.db.getEntries(title.type).size();
 			ctx.db.addEntry(title);
 			added += ctx.db.getEntries(title.type).size() - before;
 		}
 		if (not line.has("q"))
-			ctx.err << fmt::format("{}: {}, {} added, {} in your lists already\n",
-			                       line.operands[i] == "-" ? "standard input" : line.operands[i],
-			                       titles(lists[i].size()), added, lists[i].size() - added);
+			ctx.err << fmt::format("{}: {}, {} added, {} in your lists already\n", each.name,
+			                       titles(each.titles.size()), added, each.titles.size() - added);
 	}
 	auto changes = journal::diff(animeBefore, ctx.db.getEntries(mediaType::kAnime));
 	auto manga = journal::diff(mangaBefore, ctx.db.getEntries(mediaType::kManga));
@@ -71,6 +66,53 @@ int runImport(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (changes.empty() and not ctx.db.saveAll())
 		return saveFailed(ctx);
 	return saveAndReport(ctx, line, changes);
+}
+
+// import --user NAME: the user's public lists on a site, both unless -a or
+// -m keeps to one.
+int importUser(const command& self, const args::parsed& line, cliContext& ctx) {
+	if (not line.operands.empty())
+		return usageError(ctx, self, "give FILEs or --user, not both");
+	if (not fromKnown(self, line, ctx))
+		return 2;
+	if (asksProvider(line) and not load(ctx))
+		return 1;
+	auto site = trackerFor(ctx, siteOf(line, ctx));
+	std::string user = line.get("user");
+	auto only = onlyType(line);
+	std::vector<source> sources;
+	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
+		if (only and *only != type)
+			continue;
+		if (not sources.empty())
+			ctx.net.pause();
+		auto list = site->pull(type, user);
+		if (not list.ok())
+			return fail(ctx, webError(list.errorMessage()));
+		sources.push_back(
+		    {fmt::format("{} on {} ({})", user, providerName(site->site()), typeKey(type)),
+		     list.value()});
+	}
+	return addSources(ctx, line, sources);
+}
+
+int runImport(const command& self, const args::parsed& line, cliContext& ctx) {
+	if (line.has("user"))
+		return importUser(self, line, ctx);
+	if (line.has("from") or line.has("a") or line.has("m"))
+		return usageError(ctx, self, "--from, -a and -m go with --user");
+	if (line.operands.empty())
+		return usageError(ctx, self, "give at least one file, or - for standard input");
+	// Everything is read before anything is added, so a bad file leaves the
+	// catalogue untouched.
+	std::vector<source> sources;
+	for (const auto& file : line.operands) {
+		auto read = readExport(ctx, file);
+		if (not read.ok())
+			return fail(ctx, read.errorMessage());
+		sources.push_back({file == "-" ? "standard input" : file, read.value()});
+	}
+	return addSources(ctx, line, sources);
 }
 
 int runExport(const command& self, const args::parsed& line, cliContext& ctx) {
@@ -127,15 +169,22 @@ std::vector<command> transferCommands() {
 	return {
 	    {"import",
 	     {},
-	     "Add the titles of MyAnimeList XML exports",
-	     std::string("A FILE of - is read from standard input. A title already in your lists\n"
-	                 "keeps your score, progress and dates; only its totals are refreshed.\n"
-	                 "Every file is read before anything is added: when one of them is bad,\n"
-	                 "nothing is changed. MyAnimeList gzips its exports: unpack them first\n"
-	                 "(gunzip).\n\n") +
+	     "Add titles from MyAnimeList XML files, or a user's lists on a site",
+	     std::string("A FILE of - is read from standard input. MyAnimeList gzips its exports:\n"
+	                 "unpack them first (gunzip). With --user, the user's public lists are\n"
+	                 "read from your provider, or the site --from names, both of them unless\n"
+	                 "-a or -m keeps to one: moving in from AniList, MyAnimeList or Kitsu.\n\n"
+	                 "A title already in your lists keeps your score, progress and dates;\n"
+	                 "only its totals and ids are refreshed. Everything is read before\n"
+	                 "anything is added: when one source is bad, nothing is changed. The\n"
+	                 "titles keep their ids, so they are linked to the sites that know them.\n\n") +
 	         kChangeFormat,
-	     {kQuiet},
-	     "FILE...",
+	     {{'a', "", "", "with --user: the anime list only"},
+	      {'m', "", "", "with --user: the manga list only"},
+	      {0, "user", "NAME", "read NAME's public lists on a site, not FILEs"},
+	      kFrom,
+	      kQuiet},
+	     "[FILE...]",
 	     runImport,
 	     operandKind::kFiles},
 	    {"export",

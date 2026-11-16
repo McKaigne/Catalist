@@ -39,6 +39,20 @@ std::string listStatus(watchStatus status, mediaType type) {
 	return anime ? "plan_to_watch" : "plan_to_read";
 }
 
+std::optional<watchStatus> statusOf(const std::string& listStatus) {
+	if (listStatus == "watching" or listStatus == "reading")
+		return watchStatus::kWatching;
+	if (listStatus == "completed")
+		return watchStatus::kCompleted;
+	if (listStatus == "on_hold")
+		return watchStatus::kOnHold;
+	if (listStatus == "dropped")
+		return watchStatus::kDropped;
+	if (listStatus == "plan_to_watch" or listStatus == "plan_to_read")
+		return watchStatus::kPlanToWatch;
+	return std::nullopt;
+}
+
 web::match matchOf(const json::value& node, mediaType type) {
 	web::match found;
 	found.malId = countOrZero(node["id"]);
@@ -96,6 +110,52 @@ result<web::details> parseTitle(const std::string& body, mediaType type) {
 	return result<web::details>::success(std::move(found));
 }
 
+std::string listUrl(mediaType type, const std::string& user) {
+	bool anime = type == mediaType::kAnime;
+	return fmt::format(
+	    "{}/users/{}/{}?fields=list_status{{{}}},{},status&limit=1000&nsfw=true", kApiUrl,
+	    web::urlEncoded(user), anime ? "animelist" : "mangalist",
+	    anime ? "status,score,num_episodes_watched,num_times_rewatched,start_date,finish_date"
+	          : "status,score,num_chapters_read,num_volumes_read,num_times_reread,start_date,"
+	            "finish_date",
+	    anime ? "num_episodes" : "num_chapters,num_volumes");
+}
+
+result<std::vector<entry>> parseList(const std::string& body, mediaType type, std::string& next) {
+	auto reply = json::parse(body);
+	const json::value& data = reply.ok() ? reply.value()["data"] : json::value();
+	if (not data.isArray())
+		return result<std::vector<entry>>::failure("unexpected reply from MyAnimeList");
+	bool anime = type == mediaType::kAnime;
+	std::vector<entry> found;
+	for (const auto& item : data.items()) {
+		const json::value& mine = item["list_status"];
+		auto status = statusOf(mine["status"].asString().value_or(""));
+		auto match = matchOf(item["node"], type);
+		if (not status or match.malId == 0 or match.name.empty())
+			continue;
+		entry e;
+		e.type = type;
+		e.title = match.name;
+		e.malId = match.malId;
+		e.totalUnits = match.totalUnits;
+		e.totalVolumes = match.totalVolumes;
+		std::string airing = item["node"]["status"].asString().value_or("");
+		if (airing == "finished_airing" or airing == "finished")
+			e.released = match.totalUnits;
+		e.status = *status;
+		e.score = countOrZero(mine["score"]);
+		e.progress = countOrZero(mine[anime ? "num_episodes_watched" : "num_chapters_read"]);
+		e.volumes = countOrZero(mine["num_volumes_read"]);
+		e.rewatched = countOrZero(mine[anime ? "num_times_rewatched" : "num_times_reread"]);
+		e.startDate = web::dayOf(mine["start_date"].asString().value_or(""));
+		e.finishDate = web::dayOf(mine["finish_date"].asString().value_or(""));
+		found.push_back(std::move(e));
+	}
+	next = reply.value()["paging"]["next"].asString().value_or("");
+	return result<std::vector<entry>>::success(std::move(found));
+}
+
 std::string listStatusForm(const entry& title) {
 	bool anime = title.type == mediaType::kAnime;
 	std::vector<std::pair<std::string, std::string>> fields = {
@@ -113,6 +173,27 @@ std::string listStatusForm(const entry& title) {
 	if (title.finishDate)
 		fields.emplace_back("finish_date", title.finishDate->toString());
 	return web::formEncoded(fields);
+}
+
+result<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
+	using outcome = result<std::vector<entry>>;
+	if (auto why = cannotAsk(); not why.empty())
+		return outcome::failure(why);
+	std::vector<entry> all;
+	for (std::string page = listUrl(type, user); not page.empty();) {
+		if (not all.empty())
+			pause();
+		auto body = get(page);
+		// MyAnimeList answers 403 or 404 for a private list or no such user.
+		if (not body)
+			return outcome::failure(
+			    fmt::format("could not reach MyAnimeList, or it has no public list of {}", user));
+		auto entries = parseList(*body, type, page);
+		if (not entries.ok())
+			return entries;
+		all.insert(all.end(), entries.value().begin(), entries.value().end());
+	}
+	return outcome::success(std::move(all));
 }
 
 result<bool> tracker::push(const entry& title, const account& login) {

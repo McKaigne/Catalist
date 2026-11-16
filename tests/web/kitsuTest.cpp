@@ -27,7 +27,7 @@ const char* kOnePiece = R"({"data":{"id":"12","type":"anime","attributes":{
 
 TEST_CASE("kitsu reads a title, its totals and the other sites' ids") {
 	auto found = kitsu::parseTitle(kFrieren, mediaType::kAnime);
-	REQUIRE(found.ok());
+	REQUIRE(found.has_value());
 	CHECK(found.value().name == "Sousou no Frieren");
 	CHECK(found.value().facts.kitsuId == 46474);
 	CHECK(found.value().facts.malId == 52991);
@@ -39,12 +39,12 @@ TEST_CASE("kitsu reads a title, its totals and the other sites' ids") {
 
 TEST_CASE("kitsu does not know how much of a running show is out") {
 	auto found = kitsu::parseTitle(kOnePiece, mediaType::kAnime);
-	REQUIRE(found.ok());
+	REQUIRE(found.has_value());
 	CHECK(found.value().ongoing);
 	CHECK(found.value().facts.totalUnits == 0);
 	CHECK(found.value().facts.released == 0);
-	CHECK_FALSE(kitsu::parseTitle(R"({"data":null})", mediaType::kAnime).ok());
-	CHECK_FALSE(kitsu::parseTitle("<html>", mediaType::kAnime).ok());
+	CHECK_FALSE(kitsu::parseTitle(R"({"data":null})", mediaType::kAnime).has_value());
+	CHECK_FALSE(kitsu::parseTitle("<html>", mediaType::kAnime).has_value());
 }
 
 TEST_CASE("kitsu searches by text, with the mappings of each match") {
@@ -58,14 +58,14 @@ TEST_CASE("kitsu searches by text, with the mappings of each match") {
 	  "included":[{"id":"7","type":"mappings",
 	  "attributes":{"externalSite":"myanimelist/anime","externalId":"52991"}}]})";
 	auto found = kitsu::parseSearch(reply, mediaType::kAnime);
-	REQUIRE(found.ok());
+	REQUIRE(found.has_value());
 	REQUIRE(found.value().size() == 1);
 	CHECK(found.value()[0].kitsuId == 46474);
 	CHECK(found.value()[0].malId == 52991);
 	CHECK(found.value()[0].anilistId == 0);
 	CHECK(found.value()[0].year == "2023");
 	CHECK(found.value()[0].score == doctest::Approx(8.96));
-	CHECK_FALSE(kitsu::parseSearch("{}", mediaType::kAnime).ok());
+	CHECK_FALSE(kitsu::parseSearch("{}", mediaType::kAnime).has_value());
 }
 
 TEST_CASE("kitsu finds a title by its MyAnimeList id through a mapping") {
@@ -79,18 +79,18 @@ TEST_CASE("kitsu finds a title by its MyAnimeList id through a mapping") {
 	catalist::entry known;
 	known.malId = 52991;
 	auto found = site.lookUp(known);
-	REQUIRE(found.ok());
+	REQUIRE(found.has_value());
 	CHECK(found.value().facts.kitsuId == 46474);
 	CHECK(web.sent.size() == 2);
 
 	// A title MyAnimeList has and Kitsu does not.
 	known.malId = 1;
 	web.respond("filter[externalId]=1&", R"({"data":[]})");
-	CHECK(site.lookUp(known).errorMessage() == "Kitsu does not know the title");
-	CHECK(site.lookUp(catalist::entry{}).errorMessage() == "the title has no id to look up");
+	CHECK(site.lookUp(known).error() == "Kitsu does not know the title");
+	CHECK(site.lookUp(catalist::entry{}).error() == "the title has no id to look up");
 	// Offline.
 	known.malId = 2;
-	CHECK(site.lookUp(known).errorMessage() == "could not reach Kitsu");
+	CHECK(site.lookUp(known).error() == "could not reach Kitsu");
 }
 
 TEST_CASE("kitsu looks titles up one at a time, and stops once it is not there") {
@@ -104,9 +104,9 @@ TEST_CASE("kitsu looks titles up one at a time, and stops once it is not there")
 	catalist::entry gone = catalist::test::makeEntry().kitsuId(1);
 	auto found = site.lookUpMany({frieren, gone, frieren});
 	REQUIRE(found.size() == 3);
-	CHECK(found[0].ok());
-	CHECK(found[1].errorMessage() == "could not reach Kitsu");
-	CHECK(found[2].errorMessage() == "could not reach Kitsu");
+	CHECK(found[0].has_value());
+	CHECK(found[1].error() == "could not reach Kitsu");
+	CHECK(found[2].error() == "could not reach Kitsu");
 	CHECK(web.sent.size() == 2);
 	CHECK(pauses == 1);
 }

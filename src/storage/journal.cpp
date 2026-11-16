@@ -1,8 +1,7 @@
 #include "storage/journal.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
+#include <format>
 
 namespace catalist::journal {
 
@@ -58,7 +57,7 @@ const entry* findById(const std::vector<entry>& list, int id) {
 
 // The entry's title and ref, as refs::of writes it: "Odd Taxi (a:2)".
 std::string nameOf(const entry& named) {
-	return fmt::format("{} ({}:{})", named.title, named.type == mediaType::kAnime ? 'a' : 'm',
+	return std::format("{} ({}:{})", named.title, named.type == mediaType::kAnime ? 'a' : 'm',
 	                   named.id);
 }
 
@@ -68,16 +67,16 @@ using outcome = result<std::optional<entry>>;
 outcome comeBack(const std::vector<entry>& list, const entry& back) {
 	for (const auto& other : list) {
 		if (other.id == back.id)
-			return outcome::failure(fmt::format("{} cannot come back: its ref is now that of {}",
-			                                    nameOf(back), other.title));
+			return std::unexpected(std::format("{} cannot come back: its ref is now that of {}",
+			                                   nameOf(back), other.title));
 		bool same = (back.anilistId > 0 and other.anilistId == back.anilistId) or
 		            (back.malId > 0 and other.malId == back.malId) or
 		            (back.kitsuId > 0 and other.kitsuId == back.kitsuId);
 		if (same)
-			return outcome::failure(
-			    fmt::format("{} is in your lists again, as {}", back.title, nameOf(other)));
+			return std::unexpected(
+			    std::format("{} is in your lists again, as {}", back.title, nameOf(other)));
 	}
-	return outcome::success(back);
+	return back;
 }
 
 // The first field the change set that no longer holds what it was set to,
@@ -86,7 +85,7 @@ std::string changedSince(const entry& now, const entry& from, const std::optiona
 	for (const auto& each : columns()) {
 		bool wasSet = not to or each.text(from) != each.text(*to);
 		if (wasSet and each.text(now) != each.text(from))
-			return fmt::format("{} is now {}, not {}", each.name, each.text(now), each.text(from));
+			return std::format("{} is now {}, not {}", each.name, each.text(now), each.text(from));
 	}
 	return "";
 }
@@ -129,27 +128,27 @@ result<std::optional<entry>> transition(const std::vector<entry>& list,
                                         const std::optional<entry>& from,
                                         const std::optional<entry>& to, bool force) {
 	if (not from)
-		return to ? comeBack(list, *to) : outcome::success(std::nullopt);
+		return to ? comeBack(list, *to) : std::nullopt;
 
 	const entry* now = findById(list, from->id);
 	if (not now) {
 		// Gone already: nothing to remove, and nothing to set fields on.
 		if (force and not to)
-			return outcome::success(std::nullopt);
-		return outcome::failure(fmt::format("{} is no longer in your lists", nameOf(*from)));
+			return std::nullopt;
+		return std::unexpected(std::format("{} is no longer in your lists", nameOf(*from)));
 	}
 	std::string moved = force ? "" : changedSince(*now, *from, to);
 	if (not moved.empty())
-		return outcome::failure(fmt::format("{} has changed since: {}", nameOf(*now), moved));
+		return std::unexpected(std::format("{} has changed since: {}", nameOf(*now), moved));
 	if (not to)
-		return outcome::success(std::nullopt);
+		return std::nullopt;
 
 	entry next = *now;
 	for (const auto& each : columns())
 		if (each.text(*from) != each.text(*to))
 			each.copy(next, *to);
 	next.updatedAt = to->updatedAt;
-	return outcome::success(next);
+	return next;
 }
 
 }  // namespace catalist::journal

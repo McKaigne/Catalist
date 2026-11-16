@@ -127,7 +127,7 @@ public:
 	// until the catalogue goes away): what loadAll reads next cannot change
 	// under a command before it saves. Fails when another program holds the
 	// catalogue for longer than a few seconds.
-	[[nodiscard]] result<bool> beginWrite();
+	[[nodiscard]] done beginWrite();
 
 	// Reads the lists and the provider. The value says whether there was
 	// anything stored; with nothing stored, nothing is created until the
@@ -175,8 +175,8 @@ private:
 	const std::vector<entry>& getList(mediaType type) const;
 	const std::vector<entry>& getSaved(mediaType type) const;
 
-	[[nodiscard]] result<bool> openStore();
-	[[nodiscard]] result<bool> setUpStore();
+	[[nodiscard]] done openStore();
+	[[nodiscard]] done setUpStore();
 	[[nodiscard]] bool readStore();
 	[[nodiscard]] bool writeRows();
 	[[nodiscard]] bool writeSiteIds();

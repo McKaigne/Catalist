@@ -1,8 +1,7 @@
 #include "storage/malXml.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
+#include <format>
 
 namespace catalist::malXml {
 
@@ -28,8 +27,8 @@ std::string decodeXmlEntities(std::string text) {
 
 // The trimmed text of the first <tag> in the block; empty when absent.
 std::string tagText(const std::string& block, const std::string& tag) {
-	std::string openTag = fmt::format("<{}>", tag);
-	std::string closeTag = fmt::format("</{}>", tag);
+	std::string openTag = std::format("<{}>", tag);
+	std::string closeTag = std::format("</{}>", tag);
 	size_t start = block.find(openTag);
 	if (start == std::string::npos)
 		return "";
@@ -92,8 +91,8 @@ const blockTags kMangaTags = {mediaType::kManga, "manga",          "manga_mangad
                               "my_times_read"};
 
 void parseBlocks(const std::string& xml, const blockTags& tags, std::vector<entry>& found) {
-	std::string openTag = fmt::format("<{}>", tags.block);
-	std::string closeTag = fmt::format("</{}>", tags.block);
+	std::string openTag = std::format("<{}>", tags.block);
+	std::string closeTag = std::format("</{}>", tags.block);
 	size_t at = 0;
 	while ((at = xml.find(openTag, at)) != std::string::npos) {
 		size_t end = xml.find(closeTag, at);
@@ -130,14 +129,14 @@ std::string cdata(const std::string& text) {
 	size_t start = 0;
 	for (size_t found = text.find("]]>"); found != std::string::npos;
 	     found = text.find("]]>", start)) {
-		escaped += fmt::format("{}]]]]><![CDATA[>", text.substr(start, found - start));
+		escaped += std::format("{}]]]]><![CDATA[>", text.substr(start, found - start));
 		start = found + 3;
 	}
-	return fmt::format("<![CDATA[{}{}]]>", escaped, text.substr(start));
+	return std::format("<![CDATA[{}{}]]>", escaped, text.substr(start));
 }
 
 std::string xmlTag(const std::string& name, const std::string& value) {
-	return fmt::format("\t\t<{0}>{1}</{0}>\n", name, value);
+	return std::format("\t\t<{0}>{1}</{0}>\n", name, value);
 }
 
 std::string xmlStatus(const entry& item) {
@@ -190,7 +189,7 @@ std::vector<entry> parse(const std::string& xml) {
 
 exported write(const std::vector<entry>& entries, mediaType type) {
 	exported result;
-	result.xml = fmt::format(
+	result.xml = std::format(
 	    "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<myanimelist>\n"
 	    "\t<myinfo>\n\t\t<user_export_type>{}</user_export_type>\n"
 	    "\t</myinfo>\n",

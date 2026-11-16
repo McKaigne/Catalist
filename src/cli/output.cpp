@@ -1,8 +1,7 @@
 #include "cli/output.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
+#include <format>
 
 #include "core/text.hpp"
 
@@ -151,7 +150,7 @@ std::string jsonString(const std::string& value) {
 			default:
 				// The other control characters have no short form.
 				quoted +=
-				    c < 0x20 ? fmt::format("\\u{:04x}", c) : std::string(1, static_cast<char>(c));
+				    c < 0x20 ? std::format("\\u{:04x}", c) : std::string(1, static_cast<char>(c));
 		}
 	}
 	return quoted + "\"";
@@ -164,13 +163,13 @@ std::string jsonLine(const std::vector<std::string>& names, const std::vector<ce
 		std::string value = each.json == jsonForm::kNull     ? "null"
 		                    : each.json == jsonForm::kNumber ? each.text
 		                                                     : jsonString(each.text);
-		line += fmt::format("{}{}:{}", i > 0 ? "," : "", jsonString(names[i]), value);
+		line += std::format("{}{}:{}", i > 0 ? "," : "", jsonString(names[i]), value);
 	}
 	return line + "}\n";
 }
 
 std::string paint(const std::string& value, const char* sgr, bool color) {
-	return color and sgr ? fmt::format("\x1b[{}m{}\x1b[0m", sgr, value) : value;
+	return color and sgr ? std::format("\x1b[{}m{}\x1b[0m", sgr, value) : value;
 }
 
 std::string table(const std::vector<tableColumn>& columns,

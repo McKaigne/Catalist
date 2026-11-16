@@ -1,6 +1,6 @@
 #include "web/mal.hpp"
 
-#include <fmt/format.h>
+#include <format>
 
 #include "web/json.hpp"
 
@@ -68,26 +68,26 @@ web::match matchOf(const json::value& node, mediaType type) {
 }  // namespace
 
 std::string searchUrl(mediaType type, const std::string& query) {
-	return fmt::format("{}/{}?q={}&limit=10&fields={}", kApiUrl, kindOf(type),
+	return std::format("{}/{}?q={}&limit=10&fields={}", kApiUrl, kindOf(type),
 	                   web::urlEncoded(query), fieldsOf(type));
 }
 
 result<std::vector<web::match>> parseSearch(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
-	const json::value& data = reply.ok() ? reply.value()["data"] : json::value();
+	const json::value& data = reply.has_value() ? reply.value()["data"] : json::value();
 	if (not data.isArray())
-		return result<std::vector<web::match>>::failure("unexpected reply from MyAnimeList");
+		return std::unexpected("unexpected reply from MyAnimeList");
 	std::vector<web::match> found;
 	for (const auto& item : data.items()) {
 		auto match = matchOf(item["node"], type);
 		if (match.malId > 0 and not match.name.empty())
 			found.push_back(std::move(match));
 	}
-	return result<std::vector<web::match>>::success(std::move(found));
+	return found;
 }
 
 std::string titleUrl(mediaType type, int malId) {
-	return fmt::format("{}/{}/{}?fields={}", kApiUrl, kindOf(type), malId, fieldsOf(type));
+	return std::format("{}/{}/{}?fields={}", kApiUrl, kindOf(type), malId, fieldsOf(type));
 }
 
 // The statuses: finished_airing, currently_airing and not_yet_aired for an
@@ -95,8 +95,8 @@ std::string titleUrl(mediaType type, int malId) {
 // not_yet_published for a manga.
 result<web::details> parseTitle(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
-	if (not reply.ok() or countOrZero(reply.value()["id"]) == 0)
-		return result<web::details>::failure("MyAnimeList does not know the title");
+	if (not reply.has_value() or countOrZero(reply.value()["id"]) == 0)
+		return std::unexpected("MyAnimeList does not know the title");
 	const json::value& node = reply.value();
 	auto match = matchOf(node, type);
 	std::string status = node["status"].asString().value_or("");
@@ -107,12 +107,12 @@ result<web::details> parseTitle(const std::string& body, mediaType type) {
 	    status == "currently_airing" or status == "currently_publishing" or status == "on_hiatus";
 	if (status == "finished_airing" or status == "finished" or status == "discontinued")
 		found.facts.released = match.totalUnits;
-	return result<web::details>::success(std::move(found));
+	return found;
 }
 
 std::string listUrl(mediaType type, const std::string& user) {
 	bool anime = type == mediaType::kAnime;
-	return fmt::format(
+	return std::format(
 	    "{}/users/{}/{}?fields=list_status{{{}}},{},status&limit=1000&nsfw=true", kApiUrl,
 	    web::urlEncoded(user), anime ? "animelist" : "mangalist",
 	    anime ? "status,score,num_episodes_watched,num_times_rewatched,start_date,finish_date"
@@ -123,9 +123,9 @@ std::string listUrl(mediaType type, const std::string& user) {
 
 result<std::vector<entry>> parseList(const std::string& body, mediaType type, std::string& next) {
 	auto reply = json::parse(body);
-	const json::value& data = reply.ok() ? reply.value()["data"] : json::value();
+	const json::value& data = reply.has_value() ? reply.value()["data"] : json::value();
 	if (not data.isArray())
-		return result<std::vector<entry>>::failure("unexpected reply from MyAnimeList");
+		return std::unexpected("unexpected reply from MyAnimeList");
 	bool anime = type == mediaType::kAnime;
 	std::vector<entry> found;
 	for (const auto& item : data.items()) {
@@ -153,7 +153,7 @@ result<std::vector<entry>> parseList(const std::string& body, mediaType type, st
 		found.push_back(std::move(e));
 	}
 	next = reply.value()["paging"]["next"].asString().value_or("");
-	return result<std::vector<entry>>::success(std::move(found));
+	return found;
 }
 
 std::string listStatusForm(const entry& title) {
@@ -176,9 +176,8 @@ std::string listStatusForm(const entry& title) {
 }
 
 result<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
-	using outcome = result<std::vector<entry>>;
 	if (auto why = cannotAsk(); not why.empty())
-		return outcome::failure(why);
+		return std::unexpected(why);
 	std::vector<entry> all;
 	for (std::string page = listUrl(type, user); not page.empty();) {
 		if (not all.empty())
@@ -186,37 +185,37 @@ result<std::vector<entry>> tracker::pull(mediaType type, const std::string& user
 		auto body = get(page);
 		// MyAnimeList answers 403 or 404 for a private list or no such user.
 		if (not body)
-			return outcome::failure(
-			    fmt::format("could not reach MyAnimeList, or it has no public list of {}", user));
+			return std::unexpected(
+			    std::format("could not reach MyAnimeList, or it has no public list of {}", user));
 		auto entries = parseList(*body, type, page);
-		if (not entries.ok())
+		if (not entries.has_value())
 			return entries;
 		all.insert(all.end(), entries.value().begin(), entries.value().end());
 	}
-	return outcome::success(std::move(all));
+	return all;
 }
 
-result<bool> tracker::push(const entry& title, const account& login) {
+done tracker::push(const entry& title, const account& login) {
 	if (title.malId <= 0)
-		return result<bool>::failure(web::notLinked(provider::kMyAnimeList));
+		return std::unexpected(web::notLinked(provider::kMyAnimeList));
 	auto body = net_.fetch(
 	    {"PATCH",
-	     fmt::format("{}/{}/{}/my_list_status", kApiUrl, kindOf(title.type), title.malId),
+	     std::format("{}/{}/{}/my_list_status", kApiUrl, kindOf(title.type), title.malId),
 	     {"Content-Type: application/x-www-form-urlencoded", web::bearer(login.token)},
 	     listStatusForm(title)});
 	if (not body)
-		return result<bool>::failure("could not reach MyAnimeList, or it did not take the change");
-	return result<bool>::success(true);
+		return std::unexpected("could not reach MyAnimeList, or it did not take the change");
+	return done{};
 }
 
-result<bool> tracker::remove(mediaType type, int siteId, const account& login) {
+done tracker::remove(mediaType type, int siteId, const account& login) {
 	auto body = net_.fetch({"DELETE",
-	                        fmt::format("{}/{}/{}/my_list_status", kApiUrl, kindOf(type), siteId),
+	                        std::format("{}/{}/{}/my_list_status", kApiUrl, kindOf(type), siteId),
 	                        {web::bearer(login.token)},
 	                        ""});
 	if (not body)
-		return result<bool>::failure("could not reach MyAnimeList, or it did not take the change");
-	return result<bool>::success(true);
+		return std::unexpected("could not reach MyAnimeList, or it did not take the change");
+	return done{};
 }
 
 std::string tracker::cannotAsk() const {
@@ -232,51 +231,50 @@ std::optional<std::string> tracker::get(const std::string& url) const {
 
 result<std::vector<web::match>> tracker::search(mediaType type, const std::string& query) {
 	if (auto why = cannotAsk(); not why.empty())
-		return result<std::vector<web::match>>::failure(why);
+		return std::unexpected(why);
 	auto body = get(searchUrl(type, query));
 	if (not body)
-		return result<std::vector<web::match>>::failure("could not reach MyAnimeList");
+		return std::unexpected("could not reach MyAnimeList");
 	return parseSearch(*body, type);
 }
 
 result<web::details> tracker::lookUp(const entry& known) {
 	if (auto why = cannotAsk(); not why.empty())
-		return result<web::details>::failure(why);
+		return std::unexpected(why);
 	if (known.malId <= 0)
-		return result<web::details>::failure("the title has no id to look up");
+		return std::unexpected("the title has no id to look up");
 	auto body = get(titleUrl(known.type, known.malId));
 	if (not body)
-		return result<web::details>::failure("could not reach MyAnimeList");
+		return std::unexpected("could not reach MyAnimeList");
 	return parseTitle(*body, known.type);
 }
 
 result<web::loginStart> tracker::startLogin() {
 	if (auto why = cannotAsk(); not why.empty())
-		return result<web::loginStart>::failure(why);
+		return std::unexpected(why);
 	// PKCE's plain method: the challenge is the verifier itself.
 	verifier_ = net_.random(64);
-	return result<web::loginStart>::success(
-	    {fmt::format("https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={}"
-	                 "&code_challenge={}&code_challenge_method=plain&state=catalist",
-	                 net_.ids.mal, verifier_),
-	     "Open this page and let Catalist in. Your browser is then sent to an\n"
-	     "address that may not load: copy that address.",
-	     {{"Address", false}}});
+	return web::loginStart{
+	    std::format("https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={}"
+	                "&code_challenge={}&code_challenge_method=plain&state=catalist",
+	                net_.ids.mal, verifier_),
+	    "Open this page and let Catalist in. Your browser is then sent to an\n"
+	    "address that may not load: copy that address.",
+	    {{"Address", false}}};
 }
 
 result<account> tracker::accountFor(const std::optional<std::string>& reply) {
 	auto token = reply ? web::parseTokenReply(*reply) : std::nullopt;
 	if (not token)
-		return result<account>::failure(
-		    "MyAnimeList did not take the login, or could not be reached");
+		return std::unexpected("MyAnimeList did not take the login, or could not be reached");
 	auto body = net_.fetch({"GET", kApiUrl + "/users/@me", {web::bearer(token->token)}, ""});
-	auto me = body ? json::parse(*body) : result<json::value>::failure("");
-	auto name = me.ok() ? me.value()["name"].asString() : std::nullopt;
+	auto me = body ? json::parse(*body) : std::unexpected("");
+	auto name = me.has_value() ? me.value()["name"].asString() : std::nullopt;
 	if (not name)
-		return result<account>::failure("MyAnimeList did not say whose login it is");
-	return result<account>::success({provider::kMyAnimeList, *name,
-	                                 std::to_string(countOrZero(me.value()["id"])), token->token,
-	                                 token->renewal, net_.now() + token->lifetime});
+		return std::unexpected("MyAnimeList did not say whose login it is");
+	return account{
+	    provider::kMyAnimeList, *name,          std::to_string(countOrZero(me.value()["id"])),
+	    token->token,           token->renewal, net_.now() + token->lifetime};
 }
 
 result<account> tracker::finishLogin(const std::vector<std::string>& answers) {
@@ -284,7 +282,7 @@ result<account> tracker::finishLogin(const std::vector<std::string>& answers) {
 	// The whole address, or only its code.
 	std::string code = web::queryValue(pasted, "code").value_or(pasted);
 	if (code.empty() or verifier_.empty())
-		return result<account>::failure("no code given");
+		return std::unexpected("no code given");
 	return accountFor(net_.fetch({"POST",
 	                              kTokenUrl,
 	                              {"Content-Type: application/x-www-form-urlencoded"},
@@ -296,15 +294,15 @@ result<account> tracker::finishLogin(const std::vector<std::string>& answers) {
 
 result<account> tracker::current(const account& login) {
 	if (not web::runningOut(login, net_.now()))
-		return result<account>::success(login);
+		return login;
 	auto renewed = accountFor(net_.fetch({"POST",
 	                                      kTokenUrl,
 	                                      {"Content-Type: application/x-www-form-urlencoded"},
 	                                      web::formEncoded({{"client_id", net_.ids.mal},
 	                                                        {"grant_type", "refresh_token"},
 	                                                        {"refresh_token", login.renewal}})}));
-	if (not renewed.ok())
-		return result<account>::failure(
+	if (not renewed.has_value())
+		return std::unexpected(
 		    "your MyAnimeList login has run out: log in again with 'catalist login mal'");
 	return renewed;
 }

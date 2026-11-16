@@ -1,6 +1,5 @@
-#include <fmt/format.h>
-
 #include <algorithm>
+#include <format>
 #include <ostream>
 
 #include "cli/common.hpp"
@@ -26,10 +25,10 @@ result<entry> lookedUp(cliContext& ctx, web::iTracker& site, entry blank, const 
 	blank.malId = match.malId;
 	blank.kitsuId = match.kitsuId;
 	auto details = site.lookUp(blank);
-	if (not details.ok())
-		return result<entry>::failure(webError(details.errorMessage()));
+	if (not details.has_value())
+		return std::unexpected(webError(details.error()));
 	blank.title = details.value().name.empty() ? match.name : details.value().name;
-	return result<entry>::success(applyWebFacts(blank, details.value().facts, ctx.today()));
+	return applyWebFacts(blank, details.value().facts, ctx.today());
 }
 
 // A title added by hand has no id to know it by: its name is all there is
@@ -39,7 +38,7 @@ void noteSameName(cliContext& ctx, const entry& added) {
 	for (const auto& e : ctx.db.getEntries(added.type)) {
 		if (utf8::lowercase(e.title) != name)
 			continue;
-		ctx.err << fmt::format("note: your {} list has a title of that name already, {}.\n",
+		ctx.err << std::format("note: your {} list has a title of that name already, {}.\n",
 		                       typeKey(added.type), refs::of(e));
 		return;
 	}
@@ -56,33 +55,33 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 		return usageError(ctx, self, "name the title to add");
 	auto status = parseStatus(line.has("status") ? line.get("status") : "planned");
 	if (not status)
-		return usageError(ctx, self, fmt::format("unknown status '{}'", line.get("status")));
+		return usageError(ctx, self, std::format("unknown status '{}'", line.get("status")));
 	std::optional<int> pick;
 	if (line.has("pick")) {
 		pick = args::parseCount(line.get("pick"));
 		if (not pick or *pick == 0)
 			return usageError(
 			    ctx, self,
-			    fmt::format("--pick '{}' is not the number of a match", line.get("pick")));
+			    std::format("--pick '{}' is not the number of a match", line.get("pick")));
 	}
 	std::optional<int> score;
 	if (line.has("score")) {
 		score = args::parseCount(line.get("score"));
 		if (not score or *score > 10)
 			return usageError(ctx, self,
-			                  fmt::format("--score '{}' is not 0 to 10", line.get("score")));
+			                  std::format("--score '{}' is not 0 to 10", line.get("score")));
 	}
 	std::optional<int> progress;
 	if (line.has("progress")) {
 		progress = args::parseCount(line.get("progress"));
 		if (not progress)
 			return usageError(ctx, self,
-			                  fmt::format("--progress '{}' is not a count", line.get("progress")));
+			                  std::format("--progress '{}' is not a count", line.get("progress")));
 	}
 	bool byHand = line.has("no-lookup");
 	if (byHand and (pick or line.has("from")))
 		return usageError(ctx, self,
-		                  fmt::format("{} chooses among a site's matches; --no-lookup asks none",
+		                  std::format("{} chooses among a site's matches; --no-lookup asks none",
 		                              pick ? "--pick" : "--from"));
 	if (not fromKnown(self, line, ctx))
 		return 2;
@@ -103,8 +102,8 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 		if (not match)
 			return 1;
 		auto found = lookedUp(ctx, *site, added, *match);
-		if (not found.ok())
-			return fail(ctx, found.errorMessage());
+		if (not found.has_value())
+			return fail(ctx, found.error());
 		added = found.value();
 	}
 	// In the order `set` takes them: the progress starts the title, or
@@ -119,7 +118,7 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (not loadForWrite(ctx))
 		return 1;
 	if (auto mine = ctx.db.findByIds(*type, added.anilistId, added.malId, added.kitsuId)) {
-		ctx.err << fmt::format("{} is in your {} list already, as {} ({}).\nNothing changed.\n",
+		ctx.err << std::format("{} is in your {} list already, as {} ({}).\nNothing changed.\n",
 		                       mine->title, typeKey(*type), refs::of(*mine),
 		                       statusKey(mine->status));
 		return 0;
@@ -139,7 +138,7 @@ const std::vector<std::string> kSearchColumns = {
 output::cell scoreCell(double score) {
 	if (score <= 0.0)
 		return {"0", output::jsonForm::kNull};
-	return {fmt::format("{:.1f}", score), output::jsonForm::kNumber};
+	return {std::format("{:.1f}", score), output::jsonForm::kNumber};
 }
 
 // The matches as a table for a terminal.
@@ -160,7 +159,7 @@ std::string matchTable(const cliContext& ctx, mediaType type,
 		                {match.year.empty() ? "-" : match.year},
 		                {match.name},
 		                {match.totalUnits > 0 ? std::to_string(match.totalUnits) : "?"},
-		                {match.score > 0.0 ? fmt::format("{:.1f}", match.score) : "-"},
+		                {match.score > 0.0 ? std::format("{:.1f}", match.score) : "-"},
 		                {mine[i], output::kGreen}});
 	}
 	return output::table(columns, rows, ctx.columns, ctx.color);
@@ -181,8 +180,8 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 		return 1;
 	auto site = trackerFor(ctx, siteOf(line, ctx));
 	auto found = site->search(*type, *query);
-	if (not found.ok())
-		return fail(ctx, webError(found.errorMessage()));
+	if (not found.has_value())
+		return fail(ctx, webError(found.error()));
 	const auto& matches = found.value();
 	std::vector<std::string> mine;
 	for (const auto& match : matches) {
@@ -192,12 +191,12 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 
 	if (not line.has("json") and ctx.columns > 0) {
 		if (matches.empty()) {
-			ctx.err << fmt::format("{} has no {} matching '{}'.\n", providerName(site->site()),
+			ctx.err << std::format("{} has no {} matching '{}'.\n", providerName(site->site()),
 			                       typeKey(*type), *query);
 			return 0;
 		}
 		ctx.out << matchTable(ctx, *type, matches, mine);
-		ctx.err << fmt::format("Add one with: catalist add{}{} --pick=N QUERY\n",
+		ctx.err << std::format("Add one with: catalist add{}{} --pick=N QUERY\n",
 		                       *type == mediaType::kManga ? " -m" : "",
 		                       line.has("from") ? " --from=" + line.get("from") : "");
 		return 0;
@@ -282,15 +281,15 @@ int runRefresh(const command& self, const args::parsed& line, cliContext& ctx) {
 	auto site = trackerFor(ctx, siteOf(line, ctx));
 	std::string name = providerName(site->site());
 	if (not quiet and wanted.titles.size() > 1 and site->site() != provider::kAniList)
-		ctx.err << fmt::format("Asking {} about {}, one a second.\n", name,
+		ctx.err << std::format("Asking {} about {}, one a second.\n", name,
 		                       titles(wanted.titles.size()));
 	auto answers = site->lookUpMany(wanted.titles);
 	std::vector<std::string> unknown;
 	for (size_t i = 0; i < answers.size(); ++i) {
-		if (answers[i].ok())
+		if (answers[i].has_value())
 			continue;
-		if (web::unreachable(answers[i].errorMessage()))
-			return fail(ctx, webError(answers[i].errorMessage()));
+		if (web::unreachable(answers[i].error()))
+			return fail(ctx, webError(answers[i].error()));
 		unknown.push_back(refs::of(wanted.titles[i]));
 	}
 
@@ -301,7 +300,7 @@ int runRefresh(const command& self, const args::parsed& line, cliContext& ctx) {
 	size_t fresh = 0;
 	for (size_t i = 0; i < answers.size(); ++i) {
 		const entry& asked = wanted.titles[i];
-		auto now = answers[i].ok() ? ctx.db.getById(asked.type, asked.id) : std::nullopt;
+		auto now = answers[i].has_value() ? ctx.db.getById(asked.type, asked.id) : std::nullopt;
 		// Removed meanwhile by another program: nothing to refresh.
 		if (not now)
 			continue;
@@ -325,12 +324,12 @@ int runRefresh(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (quiet)
 		return 0;
 	if (not unknown.empty())
-		ctx.err << fmt::format("note: {} could not find {}.\n", name, joinedWith(unknown, ", "));
-	ctx.err << fmt::format("Checked {} on {}{}.\n", titles(changes.size()), name,
+		ctx.err << std::format("note: {} could not find {}.\n", name, joinedWith(unknown, ", "));
+	ctx.err << std::format("Checked {} on {}{}.\n", titles(changes.size()), name,
 	                       fresh == 0
 	                           ? ""
-	                           : fmt::format("; {} new episodes or chapters out",
-	                                         fresh == 1 ? "1 has" : fmt::format("{} have", fresh)));
+	                           : std::format("; {} new episodes or chapters out",
+	                                         fresh == 1 ? "1 has" : std::format("{} have", fresh)));
 	return 0;
 }
 
@@ -340,7 +339,7 @@ namespace {
 
 // "28 episodes", or "? chapters" while the total is not known.
 std::string lengthOf(const web::match& match, mediaType type) {
-	return fmt::format("{} {}", match.totalUnits > 0 ? std::to_string(match.totalUnits) : "?",
+	return std::format("{} {}", match.totalUnits > 0 ? std::to_string(match.totalUnits) : "?",
 	                   unitName(type, match.totalUnits));
 }
 
@@ -353,20 +352,20 @@ std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, medi
                                       const std::string& query, std::optional<int> pick) {
 	std::string name = providerName(site.site());
 	auto found = site.search(type, query);
-	if (not found.ok()) {
-		fail(ctx, webError(found.errorMessage()));
-		ctx.err << fmt::format("To add a title without {}: catalist add --no-lookup TITLE\n", name);
+	if (not found.has_value()) {
+		fail(ctx, webError(found.error()));
+		ctx.err << std::format("To add a title without {}: catalist add --no-lookup TITLE\n", name);
 		return std::nullopt;
 	}
 	const auto& matches = found.value();
 	if (matches.empty()) {
-		fail(ctx, fmt::format("{} has no {} matching '{}'", name, typeKey(type), query));
+		fail(ctx, std::format("{} has no {} matching '{}'", name, typeKey(type), query));
 		return std::nullopt;
 	}
 	if (pick and static_cast<size_t>(*pick) > matches.size()) {
-		fail(ctx, fmt::format(
+		fail(ctx, std::format(
 		              "--pick={}, but {} has only {} for '{}'", *pick, name,
-		              matches.size() == 1 ? "one match" : fmt::format("{} matches", matches.size()),
+		              matches.size() == 1 ? "one match" : std::format("{} matches", matches.size()),
 		              query));
 		return std::nullopt;
 	}
@@ -375,10 +374,10 @@ std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, medi
 	if (matches.size() == 1)
 		return matches[0];
 
-	ctx.err << fmt::format("{}'{}' matches {} {} on {}:\n", ctx.interactive ? "" : "error: ", query,
+	ctx.err << std::format("{}'{}' matches {} {} on {}:\n", ctx.interactive ? "" : "error: ", query,
 	                       matches.size(), typeKey(type), name);
 	for (size_t i = 0; i < matches.size(); ++i)
-		ctx.err << fmt::format("  {:>2}  {:<4}  {}  ({})\n", i + 1,
+		ctx.err << std::format("  {:>2}  {:<4}  {}  ({})\n", i + 1,
 		                       matches[i].year.empty() ? "-" : matches[i].year, matches[i].name,
 		                       lengthOf(matches[i], type));
 	if (not ctx.interactive) {
@@ -395,67 +394,66 @@ std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, medi
 
 std::vector<command> onlineCommands() {
 	return {
-	    {"add",
-	     {},
-	     "Add a title found on AniList, MyAnimeList or Kitsu",
-	     std::string("Searches your provider (see 'provider'), or the site --from names, for\n"
-	                 "TITLE, an anime unless -m is given, and adds the match: the only one,\n"
-	                 "the one you choose when there are several, or the one --pick names by\n"
-	                 "its number in that list ('search' prints the same list). Where nobody\n"
-	                 "can be asked, several matches without --pick are an error. A new title\n"
-	                 "is planned, or watching once it has a --progress, unless --status says\n"
-	                 "otherwise. A title that is in your list already is left as it is.\n\n"
-	                 "With --no-lookup no site is asked: TITLE is added as it is written,\n"
-	                 "without ids or totals ('set' can give it a total).\n\n") +
+	    {.name = "add",
+	     .summary = "Add a title found on AniList, MyAnimeList or Kitsu",
+	     .details =
+	         std::string("Searches your provider (see 'provider'), or the site --from names, for\n"
+	                     "TITLE, an anime unless -m is given, and adds the match: the only one,\n"
+	                     "the one you choose when there are several, or the one --pick names by\n"
+	                     "its number in that list ('search' prints the same list). Where nobody\n"
+	                     "can be asked, several matches without --pick are an error. A new title\n"
+	                     "is planned, or watching once it has a --progress, unless --status says\n"
+	                     "otherwise. A title that is in your list already is left as it is.\n\n"
+	                     "With --no-lookup no site is asked: TITLE is added as it is written,\n"
+	                     "without ids or totals ('set' can give it a total).\n\n") +
 	         kChangeFormat,
-	     {{'a', "", "", "add an anime (the default)"},
-	      {'m', "", "", "add a manga"},
-	      kFrom,
-	      {0, "pick", "N", "take the Nth match without asking"},
-	      {0, "status", "STATUS", "watching, completed, on-hold, dropped or planned",
-	       statusWords()},
-	      {0, "score", "N", "give it a score as well, 0 to 10"},
-	      {0, "progress", "N", "the episodes or chapters done already"},
-	      {0, "no-lookup", "", "add TITLE as written, without asking a site"},
-	      kQuiet},
-	     "TITLE...",
-	     runAdd,
-	     operandKind::kText},
-	    {"search",
-	     {},
-	     "Search a site without adding anything",
-	     "Prints up to ten matches for QUERY on your provider, or the site --from\n"
-	     "names, anime unless -m is given, best first. At a terminal they are\n"
-	     "drawn as a table. Into a pipe each is one line of fields with a tab\n"
-	     "between them:\n"
-	     "  pick type title year total score anilist_id mal_id ref kitsu_id\n"
-	     "pick is the N of 'add --pick=N'; ref is the title in your lists, or '-'.\n"
-	     "A year that is not known is '-', a total, a score or an id that is not\n"
-	     "is 0. Each site knows its own ids; AniList also MyAnimeList's, and Kitsu\n"
-	     "both of the others'.\n",
-	     {{'a', "", "", "search anime (the default)"},
-	      {'m', "", "", "search manga"},
-	      kFrom,
-	      {0, "json", "", "print one JSON object a line"},
-	      {0, "header", "", "name the columns on the first line of a pipe"}},
-	     "QUERY...",
-	     runSearch,
-	     operandKind::kText},
-	    {"refresh",
-	     {},
-	     "Ask a site what is out of the titles you follow",
-	     std::string("Asks your provider, or the site --from names, for each title's totals\n"
-	                 "and how many of its episodes or chapters are out (what the new column\n"
-	                 "of ls counts from), and fills in the ids that site knows. Without a\n"
-	                 "REF it asks about the titles you are watching or reading, or have on\n"
-	                 "hold. AniList answers fifty titles a request; MyAnimeList and Kitsu\n"
-	                 "one a second, and only AniList says how much of a running show has\n"
-	                 "aired. A changed total is a step for undo.\n\n") +
+	     .options = {{'a', "", "", "add an anime (the default)"},
+	                 {'m', "", "", "add a manga"},
+	                 kFrom,
+	                 {0, "pick", "N", "take the Nth match without asking"},
+	                 {0, "status", "STATUS", "watching, completed, on-hold, dropped or planned",
+	                  statusWords()},
+	                 {0, "score", "N", "give it a score as well, 0 to 10"},
+	                 {0, "progress", "N", "the episodes or chapters done already"},
+	                 {0, "no-lookup", "", "add TITLE as written, without asking a site"},
+	                 kQuiet},
+	     .operands = "TITLE...",
+	     .run = runAdd,
+	     .completes = operandKind::kText},
+	    {.name = "search",
+	     .summary = "Search a site without adding anything",
+	     .details = "Prints up to ten matches for QUERY on your provider, or the site --from\n"
+	                "names, anime unless -m is given, best first. At a terminal they are\n"
+	                "drawn as a table. Into a pipe each is one line of fields with a tab\n"
+	                "between them:\n"
+	                "  pick type title year total score anilist_id mal_id ref kitsu_id\n"
+	                "pick is the N of 'add --pick=N'; ref is the title in your lists, or '-'.\n"
+	                "A year that is not known is '-', a total, a score or an id that is not\n"
+	                "is 0. Each site knows its own ids; AniList also MyAnimeList's, and Kitsu\n"
+	                "both of the others'.\n",
+	     .options = {{'a', "", "", "search anime (the default)"},
+	                 {'m', "", "", "search manga"},
+	                 kFrom,
+	                 {0, "json", "", "print one JSON object a line"},
+	                 {0, "header", "", "name the columns on the first line of a pipe"}},
+	     .operands = "QUERY...",
+	     .run = runSearch,
+	     .completes = operandKind::kText},
+	    {.name = "refresh",
+	     .summary = "Ask a site what is out of the titles you follow",
+	     .details =
+	         std::string("Asks your provider, or the site --from names, for each title's totals\n"
+	                     "and how many of its episodes or chapters are out (what the new column\n"
+	                     "of ls counts from), and fills in the ids that site knows. Without a\n"
+	                     "REF it asks about the titles you are watching or reading, or have on\n"
+	                     "hold. AniList answers fifty titles a request; MyAnimeList and Kitsu\n"
+	                     "one a second, and only AniList says how much of a running show has\n"
+	                     "aired. A changed total is a step for undo.\n\n") +
 	         kRefsHelp + "\n" + kChangeFormat,
-	     withRefOptions({kFrom, kQuiet}),
-	     "[REF...]",
-	     runRefresh,
-	     operandKind::kRefs},
+	     .options = withRefOptions({kFrom, kQuiet}),
+	     .operands = "[REF...]",
+	     .run = runRefresh,
+	     .completes = operandKind::kRefs},
 	};
 }
 

@@ -1,9 +1,8 @@
 #include "cli/completion.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
 #include <cctype>
+#include <format>
 
 #include "core/text.hpp"
 
@@ -40,7 +39,7 @@ std::vector<std::string> globalsApart() {
 		if (each.value.empty())
 			continue;
 		if (each.letter)
-			spellings.push_back(fmt::format("-{}", each.letter));
+			spellings.push_back(std::format("-{}", each.letter));
 		if (not each.name.empty())
 			spellings.push_back("--" + each.name);
 	}
@@ -73,7 +72,7 @@ std::string wordFor(const std::string& operands) {
 // ---- zsh ----
 
 std::string zshQuoted(const std::string& text) {
-	return fmt::format("'{}'", replaced(text, "'", "'\\''"));
+	return std::format("'{}'", replaced(text, "'", "'\\''"));
 }
 
 // The words in the brackets of an option: a bracket in them would end them.
@@ -86,12 +85,12 @@ std::string zshExplained(const std::string& help) {
 // What follows an option's name: its explanation and, when it takes a
 // value, what the value is and the values to choose from.
 std::string zshOptionTail(const args::option& taken) {
-	std::string tail = fmt::format("[{}]", zshExplained(taken.help));
+	std::string tail = std::format("[{}]", zshExplained(taken.help));
 	if (taken.value.empty())
 		return tail;
 	std::string choices =
-	    taken.choices.empty() ? " " : fmt::format("({})", joined(taken.choices, " "));
-	return tail + fmt::format(":{}:{}", utf8::lowercase(taken.value), choices);
+	    taken.choices.empty() ? " " : std::format("({})", joined(taken.choices, " "));
+	return tail + std::format(":{}:{}", utf8::lowercase(taken.value), choices);
 }
 
 // One spec of _arguments for each way the option is written. The two ways
@@ -100,14 +99,14 @@ std::vector<std::string> zshOptionSpecs(const args::option& taken) {
 	std::string tail = zshOptionTail(taken);
 	std::string once;
 	if (taken.letter and not taken.name.empty())
-		once = fmt::format("(-{} --{})", taken.letter, taken.name);
+		once = std::format("(-{} --{})", taken.letter, taken.name);
 	std::vector<std::string> specs;
 	if (taken.letter)
 		specs.push_back(
-		    fmt::format("{}-{}{}{}", once, taken.letter, taken.value.empty() ? "" : "+", tail));
+		    std::format("{}-{}{}{}", once, taken.letter, taken.value.empty() ? "" : "+", tail));
 	if (not taken.name.empty())
 		specs.push_back(
-		    fmt::format("{}--{}{}{}", once, taken.name, taken.value.empty() ? "" : "=", tail));
+		    std::format("{}--{}{}{}", once, taken.name, taken.value.empty() ? "" : "=", tail));
 	return specs;
 }
 
@@ -123,11 +122,11 @@ std::vector<std::string> zshOperandSpecs(const command& of) {
 		case operandKind::kTitle:
 			return {"1:title:_catalist_titles"};
 		case operandKind::kText:
-			return {fmt::format("1:{}: ", word)};
+			return {std::format("1:{}: ", word)};
 		case operandKind::kFiles:
 			return {"*:file:_files"};
 		case operandKind::kWords:
-			return {fmt::format("1:{}:({})", word, joined(of.words, " "))};
+			return {std::format("1:{}:({})", word, joined(of.words, " "))};
 		case operandKind::kCommands:
 			return {"1:command:_catalist_commands"};
 	}
@@ -152,9 +151,9 @@ std::string zshCommand(const command& of) {
 	for (const auto& spec : zshOperandSpecs(of))
 		specs.push_back(spec);
 
-	std::string text = fmt::format("\t{}\n\t\t_arguments -s -S -A '-*' :", zshCase(of));
+	std::string text = std::format("\t{}\n\t\t_arguments -s -S -A '-*' :", zshCase(of));
 	for (const auto& spec : specs)
-		text += fmt::format(" \\\n\t\t\t{}", zshQuoted(spec));
+		text += std::format(" \\\n\t\t\t{}", zshQuoted(spec));
 	return text + " && ret=0\n\t\t;;\n";
 }
 
@@ -215,7 +214,7 @@ _catalist_commands() {
 // ---- fish ----
 
 std::string fishQuoted(const std::string& text) {
-	return fmt::format("'{}'", replaced(replaced(text, "\\", "\\\\"), "'", "\\'"));
+	return std::format("'{}'", replaced(replaced(text, "\\", "\\\\"), "'", "\\'"));
 }
 
 const char* const kFishHelpers = R"fish(# Asks the program, by the name it was typed under.
@@ -276,14 +275,14 @@ end
 std::string fishOption(const args::option& taken) {
 	std::string text;
 	if (taken.letter)
-		text += fmt::format(" -s {}", taken.letter);
+		text += std::format(" -s {}", taken.letter);
 	if (not taken.name.empty())
-		text += fmt::format(" -l {}", taken.name);
+		text += std::format(" -l {}", taken.name);
 	if (not taken.value.empty())
 		text += " -x";
 	if (not taken.choices.empty())
-		text += fmt::format(" -a {}", fishQuoted(joined(taken.choices, " ")));
-	return text + fmt::format(" -d {}", fishQuoted(taken.help));
+		text += std::format(" -a {}", fishQuoted(joined(taken.choices, " ")));
+	return text + std::format(" -d {}", fishQuoted(taken.help));
 }
 
 // What `complete` is given for the command's operands, each with the
@@ -305,7 +304,7 @@ std::vector<std::pair<std::string, std::string>> fishOperands(const command& of)
 		case operandKind::kFiles:
 			return {{"", "-F"}};
 		case operandKind::kWords:
-			return {{first, fmt::format("-a {}", fishQuoted(joined(of.words, " ")))}};
+			return {{first, std::format("-a {}", fishQuoted(joined(of.words, " ")))}};
 	}
 	return {};
 }
@@ -314,21 +313,21 @@ std::vector<std::pair<std::string, std::string>> fishOperands(const command& of)
 std::string fishCommandNames(const std::vector<command>& table, const std::string& condition) {
 	std::string text;
 	for (const command* each : shownOf(table))
-		text += fmt::format("complete -c catalist -n {} -a {} -d {}\n", fishQuoted(condition),
+		text += std::format("complete -c catalist -n {} -a {} -d {}\n", fishQuoted(condition),
 		                    fishQuoted(each->name), fishQuoted(each->summary));
 	return text;
 }
 
 std::string fishCommand(const std::vector<command>& table, const command& of) {
-	std::string condition = fmt::format("__catalist_command {}", joined(namesOf(of), " "));
+	std::string condition = std::format("__catalist_command {}", joined(namesOf(of), " "));
 	std::string text;
 	std::vector<args::option> options = of.options;
 	options.push_back(helpOption());
 	for (const auto& option : options)
-		text += fmt::format("complete -c catalist -n {}{}\n", fishQuoted(condition),
+		text += std::format("complete -c catalist -n {}{}\n", fishQuoted(condition),
 		                    fishOption(option));
 	for (const auto& [when, what] : fishOperands(of))
-		text += fmt::format("complete -c catalist -n {} {}\n", fishQuoted(condition + when), what);
+		text += std::format("complete -c catalist -n {} {}\n", fishQuoted(condition + when), what);
 	if (of.completes == operandKind::kCommands)
 		text += fishCommandNames(table, condition + "; and test (__catalist_operands) -eq 0");
 	return text;
@@ -365,7 +364,7 @@ std::string roffSyntax(const std::string& line) {
 		bool standsFor = std::none_of(word.begin(), word.end(), [](unsigned char c) {
 			return std::islower(c) or c == '-' or c == '+';
 		});
-		styled += fmt::format("\\f{}{}\\fR", standsFor ? 'I' : 'B', roffText(word));
+		styled += std::format("\\f{}{}\\fR", standsFor ? 'I' : 'B', roffText(word));
 		at = end;
 	}
 	return styled;
@@ -373,11 +372,11 @@ std::string roffSyntax(const std::string& line) {
 
 // "-s STATUS", "--sort=KEY", "-h, --help".
 std::string optionSyntax(const args::option& taken) {
-	std::string label = taken.letter ? fmt::format("-{}", taken.letter) : "";
+	std::string label = taken.letter ? std::format("-{}", taken.letter) : "";
 	if (not taken.name.empty())
-		label += fmt::format("{}--{}", label.empty() ? "" : ", ", taken.name);
+		label += std::format("{}--{}", label.empty() ? "" : ", ", taken.name);
 	if (not taken.value.empty())
-		label += fmt::format("{}{}", taken.name.empty() ? " " : "=", taken.value);
+		label += std::format("{}{}", taken.name.empty() ? " " : "=", taken.value);
 	return label;
 }
 
@@ -412,12 +411,12 @@ std::string roffDetails(const std::string& details) {
 
 std::string roffCommand(const command& of) {
 	std::string text =
-	    fmt::format(".TP\n{}\n{}.\n", roffSyntax(usageLine(of)), roffText(of.summary));
+	    std::format(".TP\n{}\n{}.\n", roffSyntax(usageLine(of)), roffText(of.summary));
 	if (not of.aliases.empty()) {
 		std::vector<std::string> also;
 		for (const auto& alias : of.aliases)
-			also.push_back(fmt::format("\\fB{}\\fR", roffText(alias)));
-		text += fmt::format("Also {}.\n", joined(also, ", "));
+			also.push_back(std::format("\\fB{}\\fR", roffText(alias)));
+		text += std::format("Also {}.\n", joined(also, ", "));
 	}
 	text += roffDetails(of.details);
 	if (of.options.empty())
@@ -425,7 +424,7 @@ std::string roffCommand(const command& of) {
 	text += ".RS\n";
 	for (const auto& option : of.options)
 		text +=
-		    fmt::format(".TP\n{}\n{}\n", roffSyntax(optionSyntax(option)), roffText(option.help));
+		    std::format(".TP\n{}\n{}\n", roffSyntax(optionSyntax(option)), roffText(option.help));
 	return text + ".RE\n";
 }
 
@@ -445,7 +444,7 @@ std::string zsh(const std::vector<command>& table) {
 	    "\tlocal -a _catalist_names\n"
 	    "\t_catalist_names=(\n";
 	for (const command* each : shownOf(table))
-		text += fmt::format("\t\t{}\n", zshQuoted(fmt::format("{}:{}", each->name, each->summary)));
+		text += std::format("\t\t{}\n", zshQuoted(std::format("{}:{}", each->name, each->summary)));
 	text +=
 	    "\t)\n\n"
 	    "\t_arguments -C :";
@@ -453,10 +452,10 @@ std::string zsh(const std::vector<command>& table) {
 	for (const auto& option : globalOptions()) {
 		std::vector<std::string> specs = zshOptionSpecs(option);
 		if (option.name == "help" or option.name == "version")
-			specs = {fmt::format("(- *)-{}[{}]", option.letter, zshExplained(option.help)),
-			         fmt::format("(- *)--{}[{}]", option.name, zshExplained(option.help))};
+			specs = {std::format("(- *)-{}[{}]", option.letter, zshExplained(option.help)),
+			         std::format("(- *)--{}[{}]", option.name, zshExplained(option.help))};
 		for (const auto& spec : specs)
-			text += fmt::format(" \\\n\t\t{}", zshQuoted(spec));
+			text += std::format(" \\\n\t\t{}", zshQuoted(spec));
 	}
 	text +=
 	    " \\\n"
@@ -490,7 +489,7 @@ std::string fish(const std::vector<command>& table) {
 	    "complete -c catalist -f\n";
 	for (const auto& option : globalOptions())
 		text +=
-		    fmt::format("complete -c catalist -n __catalist_no_command{}\n", fishOption(option));
+		    std::format("complete -c catalist -n __catalist_no_command{}\n", fishOption(option));
 	text += fishCommandNames(table, "__catalist_no_command");
 	for (const command* each : shownOf(table))
 		text += "\n" + fishCommand(table, *each);

@@ -1,5 +1,4 @@
-#include <fmt/format.h>
-
+#include <format>
 #include <istream>
 #include <iterator>
 #include <map>
@@ -26,7 +25,7 @@ int runProvider(const command& self, const args::parsed& line, cliContext& ctx) 
 	auto chosen = parseProvider(line.operands[0]);
 	if (not chosen)
 		return usageError(ctx, self,
-		                  fmt::format("unknown provider '{}'{}; choose anilist, mal or kitsu",
+		                  std::format("unknown provider '{}'{}; choose anilist, mal or kitsu",
 		                              line.operands[0], didYouMean(line.operands[0], self.words)));
 	if (not loadForWrite(ctx))
 		return 1;
@@ -37,7 +36,7 @@ int runProvider(const command& self, const args::parsed& line, cliContext& ctx) 
 	ctx.db.setProvider(*chosen);
 	if (not ctx.db.saveSettings())
 		return saveFailed(ctx);
-	ctx.err << fmt::format("Your provider is now {}.\n", providerName(*chosen));
+	ctx.err << std::format("Your provider is now {}.\n", providerName(*chosen));
 	return 0;
 }
 
@@ -94,54 +93,39 @@ int runManual(const command&, const args::parsed&, cliContext& ctx) {
 
 std::vector<command> setupCommands() {
 	return {
-	    {"provider",
-	     {},
-	     "Show or choose your provider",
-	     "Your provider is the site your titles are looked at on: AniList (the\n"
-	     "default), MyAnimeList or Kitsu. 'search', 'add' and 'refresh' ask it\n"
-	     "unless --from names another site, and 'show' gives a title's page\n"
-	     "there. Without an operand the provider is printed, as anilist, mal or\n"
-	     "kitsu. Choosing a provider is not a step for undo.\n",
-	     {},
-	     "[anilist|mal|kitsu]",
-	     runProvider,
-	     operandKind::kWords,
-	     {"anilist", "mal", "kitsu"}},
-	    {"completion",
-	     {},
-	     "Print the completion script of a shell",
-	     "An installed Catalist has put the scripts where the shells look for\n"
-	     "them. To set one up by hand:\n"
-	     "  catalist completion zsh > ~/.zfunc/_catalist\n"
-	     "  catalist completion fish > ~/.config/fish/completions/catalist.fish\n"
-	     "For zsh the directory must be in $fpath before compinit runs. The\n"
-	     "scripts complete the commands and their options, and your titles by\n"
-	     "ref or by any part of their name.\n",
-	     {},
-	     "zsh|fish",
-	     runCompletion,
-	     operandKind::kWords,
-	     {"zsh", "fish"}},
-	    {"__complete",
-	     {},
-	     "Print the words the completion scripts ask for",
-	     "",
-	     {},
-	     "refs|titles|statuses|fields",
-	     runComplete,
-	     operandKind::kNone,
-	     {},
-	     true},
-	    {"__man",
-	     {},
-	     "Fill in the manual page read from standard input",
-	     "",
-	     {},
-	     "",
-	     runManual,
-	     operandKind::kNone,
-	     {},
-	     true},
+	    {.name = "provider",
+	     .summary = "Show or choose your provider",
+	     .details = "Your provider is the site your titles are looked at on: AniList (the\n"
+	                "default), MyAnimeList or Kitsu. 'search', 'add' and 'refresh' ask it\n"
+	                "unless --from names another site, and 'show' gives a title's page\n"
+	                "there. Without an operand the provider is printed, as anilist, mal or\n"
+	                "kitsu. Choosing a provider is not a step for undo.\n",
+	     .operands = "[anilist|mal|kitsu]",
+	     .run = runProvider,
+	     .completes = operandKind::kWords,
+	     .words = {"anilist", "mal", "kitsu"}},
+	    {.name = "completion",
+	     .summary = "Print the completion script of a shell",
+	     .details = "An installed Catalist has put the scripts where the shells look for\n"
+	                "them. To set one up by hand:\n"
+	                "  catalist completion zsh > ~/.zfunc/_catalist\n"
+	                "  catalist completion fish > ~/.config/fish/completions/catalist.fish\n"
+	                "For zsh the directory must be in $fpath before compinit runs. The\n"
+	                "scripts complete the commands and their options, and your titles by\n"
+	                "ref or by any part of their name.\n",
+	     .operands = "zsh|fish",
+	     .run = runCompletion,
+	     .completes = operandKind::kWords,
+	     .words = {"zsh", "fish"}},
+	    {.name = "__complete",
+	     .summary = "Print the words the completion scripts ask for",
+	     .operands = "refs|titles|statuses|fields",
+	     .run = runComplete,
+	     .hidden = true},
+	    {.name = "__man",
+	     .summary = "Fill in the manual page read from standard input",
+	     .run = runManual,
+	     .hidden = true},
 	};
 }
 

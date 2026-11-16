@@ -1,6 +1,6 @@
 #include "web/anilist.hpp"
 
-#include <fmt/format.h>
+#include <format>
 
 #include "web/json.hpp"
 
@@ -17,9 +17,9 @@ std::string jsonString(const std::string& text) {
 	std::string quoted = "\"";
 	for (unsigned char c : text) {
 		if (c == '"' or c == '\\')
-			quoted += fmt::format("\\{}", static_cast<char>(c));
+			quoted += std::format("\\{}", static_cast<char>(c));
 		else if (c < 0x20)
-			quoted += fmt::format("\\u{:04x}", c);
+			quoted += std::format("\\u{:04x}", c);
 		else
 			quoted += static_cast<char>(c);
 	}
@@ -46,7 +46,7 @@ std::string listStatus(watchStatus status) {
 std::string fuzzyDate(const std::optional<isoDate>& day) {
 	if (not day)
 		return R"({"year":null,"month":null,"day":null})";
-	return fmt::format(R"({{"year":{},"month":{},"day":{}}})", day->year(), day->month(),
+	return std::format(R"({{"year":{},"month":{},"day":{}}})", day->year(), day->month(),
 	                   day->day());
 }
 
@@ -95,7 +95,7 @@ web::details detailsOf(const json::value& media, mediaType type) {
 std::string lookupRequest(const titleRef& wanted) {
 	// AniList's own id when known; a MyAnimeList id goes in idMal.
 	bool own = wanted.anilistId > 0;
-	return fmt::format(R"({{"query":"query($id:Int,$type:MediaType){{Media({}:$id,type:$type){{)"
+	return std::format(R"({{"query":"query($id:Int,$type:MediaType){{Media({}:$id,type:$type){{)"
 	                   R"(id idMal title{{romaji}} episodes chapters volumes status )"
 	                   R"(nextAiringEpisode{{episode}}}}}}",)"
 	                   R"("variables":{{"id":{},"type":"{}"}}}})",
@@ -105,13 +105,13 @@ std::string lookupRequest(const titleRef& wanted) {
 
 result<web::details> parseLookup(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
-	if (not reply.ok() or reply.value()["data"]["Media"].isNull())
-		return result<web::details>::failure("AniList does not know the title");
-	return result<web::details>::success(detailsOf(reply.value()["data"]["Media"], type));
+	if (not reply.has_value() or reply.value()["data"]["Media"].isNull())
+		return std::unexpected("AniList does not know the title");
+	return detailsOf(reply.value()["data"]["Media"], type);
 }
 
 std::string searchRequest(mediaType type, const std::string& query) {
-	return fmt::format(
+	return std::format(
 	    R"({{"query":"query($search:String,$type:MediaType){{Page(perPage:10){{)"
 	    R"(media(search:$search,type:$type,sort:SEARCH_MATCH){{id idMal title{{romaji}} )"
 	    R"(episodes chapters volumes averageScore startDate{{year}}}}}}}}",)"
@@ -121,7 +121,7 @@ std::string searchRequest(mediaType type, const std::string& query) {
 
 std::string saveRequest(const entry& title) {
 	// scoreRaw is out of 100 whatever scale the person chose on AniList.
-	return fmt::format(
+	return std::format(
 	    R"({{"query":"mutation($m:Int,$s:MediaListStatus,$c:Int,$p:Int,$v:Int,$r:Int,)"
 	    R"($a:FuzzyDateInput,$f:FuzzyDateInput){{SaveMediaListEntry(mediaId:$m,status:$s,)"
 	    R"(scoreRaw:$c,progress:$p,progressVolumes:$v,repeat:$r,startedAt:$a,completedAt:$f))"
@@ -132,14 +132,14 @@ std::string saveRequest(const entry& title) {
 }
 
 std::string listEntryRequest(int mediaId, const std::string& userId) {
-	return fmt::format(
+	return std::format(
 	    R"({{"query":"query($m:Int,$u:Int){{MediaList(mediaId:$m,userId:$u){{id}}}}",)"
 	    R"("variables":{{"m":{},"u":{}}}}})",
 	    mediaId, userId.empty() ? "0" : userId);
 }
 
 std::string listRequest(mediaType type, const std::string& user) {
-	return fmt::format(
+	return std::format(
 	    R"({{"query":"query($u:String,$t:MediaType){{MediaListCollection(userName:$u,type:$t))"
 	    R"({{lists{{entries{{status score(format:POINT_10) progress progressVolumes repeat )"
 	    R"(startedAt{{year month day}} completedAt{{year month day}} )"
@@ -152,9 +152,9 @@ std::string listRequest(mediaType type, const std::string& user) {
 result<std::vector<entry>> parseList(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
 	const json::value& lists =
-	    reply.ok() ? reply.value()["data"]["MediaListCollection"]["lists"] : json::value();
+	    reply.has_value() ? reply.value()["data"]["MediaListCollection"]["lists"] : json::value();
 	if (not lists.isArray())
-		return result<std::vector<entry>>::failure("unexpected reply from AniList");
+		return std::unexpected("unexpected reply from AniList");
 	auto dayOf = [](const json::value& fuzzy) {
 		return isoDate::fromParts(countOrZero(fuzzy["year"]), countOrZero(fuzzy["month"]),
 		                          countOrZero(fuzzy["day"]));
@@ -184,14 +184,14 @@ result<std::vector<entry>> parseList(const std::string& body, mediaType type) {
 			found.push_back(std::move(e));
 		}
 	}
-	return result<std::vector<entry>>::success(std::move(found));
+	return found;
 }
 
 std::string batchRequest(mediaType type, const std::vector<int>& ids, bool byMal) {
 	std::string list;
 	for (int id : ids)
 		list += (list.empty() ? "" : ",") + std::to_string(id);
-	return fmt::format(
+	return std::format(
 	    R"({{"query":"query($ids:[Int],$type:MediaType){{Page(perPage:{}){{)"
 	    R"(media({}:$ids,type:$type){{id idMal title{{romaji}} episodes chapters volumes )"
 	    R"(status nextAiringEpisode{{episode}}}}}}}}",)"
@@ -201,20 +201,22 @@ std::string batchRequest(mediaType type, const std::vector<int>& ids, bool byMal
 
 result<std::vector<web::details>> parseBatch(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
-	const json::value& media = reply.ok() ? reply.value()["data"]["Page"]["media"] : json::value();
+	const json::value& media =
+	    reply.has_value() ? reply.value()["data"]["Page"]["media"] : json::value();
 	if (not media.isArray())
-		return result<std::vector<web::details>>::failure("unexpected reply from AniList");
+		return std::unexpected("unexpected reply from AniList");
 	std::vector<web::details> found;
 	for (const auto& item : media.items())
 		found.push_back(detailsOf(item, type));
-	return result<std::vector<web::details>>::success(std::move(found));
+	return found;
 }
 
 result<std::vector<web::match>> parseSearch(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
-	const json::value& media = reply.ok() ? reply.value()["data"]["Page"]["media"] : json::value();
+	const json::value& media =
+	    reply.has_value() ? reply.value()["data"]["Page"]["media"] : json::value();
 	if (not media.isArray())
-		return result<std::vector<web::match>>::failure("unexpected reply from AniList");
+		return std::unexpected("unexpected reply from AniList");
 	std::vector<web::match> found;
 	for (const auto& item : media.items()) {
 		web::match match;
@@ -230,7 +232,7 @@ result<std::vector<web::match>> parseSearch(const std::string& body, mediaType t
 		match.score = item["averageScore"].asNumber().value_or(0.0) / 10.0;
 		found.push_back(std::move(match));
 	}
-	return result<std::vector<web::match>>::success(std::move(found));
+	return found;
 }
 
 std::optional<std::string> tracker::ask(const std::string& query, const std::string& token) const {
@@ -243,91 +245,90 @@ std::optional<std::string> tracker::ask(const std::string& query, const std::str
 
 result<web::loginStart> tracker::startLogin() {
 	if (net_.ids.anilist.empty())
-		return result<web::loginStart>::failure(
+		return std::unexpected(
 		    "this Catalist has no AniList client id: register it at "
 		    "https://anilist.co/settings/developer (redirect URL "
 		    "https://anilist.co/api/v2/oauth/pin) and set CATALIST_ANILIST_CLIENT_ID");
-	return result<web::loginStart>::success(
-	    {fmt::format("https://anilist.co/api/v2/oauth/authorize?client_id={}&response_type=token",
-	                 net_.ids.anilist),
-	     "Open this page, let Catalist in, and copy the token AniList shows.",
-	     {{"Token", true}}});
+	return web::loginStart{
+	    std::format("https://anilist.co/api/v2/oauth/authorize?client_id={}&response_type=token",
+	                net_.ids.anilist),
+	    "Open this page, let Catalist in, and copy the token AniList shows.",
+	    {{"Token", true}}};
 }
 
 result<account> tracker::finishLogin(const std::vector<std::string>& answers) {
 	std::string token = answers.empty() ? "" : answers[0];
 	if (token.empty())
-		return result<account>::failure("no token given");
+		return std::unexpected("no token given");
 	auto body = ask(R"({"query":"query{Viewer{id name}}"})", token);
-	auto reply = body ? json::parse(*body) : result<json::value>::failure("");
-	const json::value& viewer = reply.ok() ? reply.value()["data"]["Viewer"] : json::value();
+	auto reply = body ? json::parse(*body) : std::unexpected("");
+	const json::value& viewer = reply.has_value() ? reply.value()["data"]["Viewer"] : json::value();
 	auto name = viewer["name"].asString();
 	if (not name)
-		return result<account>::failure("AniList did not take the token, or could not be reached");
+		return std::unexpected("AniList did not take the token, or could not be reached");
 	constexpr long long kYear = 365LL * 24 * 60 * 60;
-	return result<account>::success({provider::kAniList, *name,
-	                                 std::to_string(countOrZero(viewer["id"])), token, "",
-	                                 net_.now() + kYear});
+	return account{provider::kAniList, *name, std::to_string(countOrZero(viewer["id"])), token, "",
+	               net_.now() + kYear};
 }
 
 result<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
 	auto body = ask(listRequest(type, user));
 	// AniList answers 404 for a user it has not, and for a private list.
 	if (not body)
-		return result<std::vector<entry>>::failure(
-		    fmt::format("could not reach AniList, or it has no public list of {}", user));
+		return std::unexpected(
+		    std::format("could not reach AniList, or it has no public list of {}", user));
 	return parseList(*body, type);
 }
 
-result<bool> tracker::push(const entry& title, const account& login) {
+done tracker::push(const entry& title, const account& login) {
 	if (title.anilistId <= 0)
-		return result<bool>::failure(web::notLinked(provider::kAniList));
+		return std::unexpected(web::notLinked(provider::kAniList));
 	auto body = ask(saveRequest(title), login.token);
 	if (not body)
-		return result<bool>::failure("could not reach AniList, or it did not take the change");
+		return std::unexpected("could not reach AniList, or it did not take the change");
 	auto reply = json::parse(*body);
-	if (not reply.ok() or reply.value()["data"]["SaveMediaListEntry"]["id"].isNull())
-		return result<bool>::failure("AniList did not take the change");
-	return result<bool>::success(true);
+	if (not reply.has_value() or reply.value()["data"]["SaveMediaListEntry"]["id"].isNull())
+		return std::unexpected("AniList did not take the change");
+	return done{};
 }
 
-result<bool> tracker::remove(mediaType, int siteId, const account& login) {
+done tracker::remove(mediaType, int siteId, const account& login) {
 	// AniList answers an error, which curl -f makes nothing, for a title that
 	// is not on the list: it is gone already.
 	auto body = ask(listEntryRequest(siteId, login.userId), login.token);
-	auto reply = body ? json::parse(*body) : result<json::value>::failure("");
-	int listId = reply.ok() ? countOrZero(reply.value()["data"]["MediaList"]["id"]) : 0;
+	auto reply = body ? json::parse(*body) : std::unexpected("");
+	int listId = reply.has_value() ? countOrZero(reply.value()["data"]["MediaList"]["id"]) : 0;
 	if (listId == 0)
-		return result<bool>::success(true);
+		return done{};
 	pause();
-	auto gone = ask(fmt::format(R"({{"query":"mutation($i:Int){{DeleteMediaListEntry(id:$i))"
+	auto gone = ask(std::format(R"({{"query":"mutation($i:Int){{DeleteMediaListEntry(id:$i))"
 	                            R"({{deleted}}}}","variables":{{"i":{}}}}})",
 	                            listId),
 	                login.token);
 	if (not gone)
-		return result<bool>::failure("could not reach AniList, or it did not take the change");
-	return result<bool>::success(true);
+		return std::unexpected("could not reach AniList, or it did not take the change");
+	return done{};
 }
 
 result<account> tracker::current(const account& login) {
 	if (web::runningOut(login, net_.now()))
-		return result<account>::failure(
+		return std::unexpected(
 		    "your AniList login has run out: log in again with 'catalist login anilist'");
-	return result<account>::success(login);
+	return login;
 }
 
 result<web::details> tracker::lookUp(const entry& known) {
 	if (known.anilistId <= 0 and known.malId <= 0)
-		return result<web::details>::failure("the title has no id to look up");
+		return std::unexpected("the title has no id to look up");
 	auto body = ask(lookupRequest({known.type, known.anilistId, known.malId}));
 	if (not body)
-		return result<web::details>::failure("could not reach AniList");
+		return std::unexpected("could not reach AniList");
 	return parseLookup(*body, known.type);
 }
 
 std::vector<result<web::details>> tracker::lookUpMany(const std::vector<entry>& known) {
 	using outcome = result<web::details>;
-	std::vector<outcome> found(known.size(), outcome::failure("AniList does not know the title"));
+	std::vector<outcome> found(known.size(), std::unexpected("AniList does not know the title"));
 	bool asked = false;
 	bool reached = true;
 	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
@@ -341,7 +342,7 @@ std::vector<result<web::details>> tracker::lookUpMany(const std::vector<entry>& 
 				if (each.type == type and fits)
 					wanted.push_back(i);
 				if (each.anilistId <= 0 and each.malId <= 0)
-					found[i] = outcome::failure("the title has no id to look up");
+					found[i] = std::unexpected("the title has no id to look up");
 			}
 			for (size_t from = 0; from < wanted.size(); from += kBatchSize) {
 				std::vector<size_t> batch(wanted.begin() + static_cast<std::ptrdiff_t>(from),
@@ -355,18 +356,17 @@ std::vector<result<web::details>> tracker::lookUpMany(const std::vector<entry>& 
 				asked = true;
 				auto body = reached ? ask(batchRequest(type, ids, byMal)) : std::nullopt;
 				auto titles =
-				    body ? parseBatch(*body, type)
-				         : result<std::vector<web::details>>::failure("could not reach AniList");
+				    body ? parseBatch(*body, type) : std::unexpected("could not reach AniList");
 				reached = reached and body.has_value();
 				for (size_t i : batch) {
-					if (not titles.ok()) {
-						found[i] = outcome::failure(titles.errorMessage());
+					if (not titles.has_value()) {
+						found[i] = std::unexpected(titles.error());
 						continue;
 					}
 					for (const auto& title : titles.value()) {
 						int id = byMal ? title.facts.malId : title.facts.anilistId;
 						if (id == (byMal ? known[i].malId : known[i].anilistId))
-							found[i] = outcome::success(title);
+							found[i] = title;
 					}
 				}
 			}
@@ -378,7 +378,7 @@ std::vector<result<web::details>> tracker::lookUpMany(const std::vector<entry>& 
 result<std::vector<web::match>> tracker::search(mediaType type, const std::string& query) {
 	auto body = ask(searchRequest(type, query));
 	if (not body)
-		return result<std::vector<web::match>>::failure("could not reach AniList");
+		return std::unexpected("could not reach AniList");
 	return parseSearch(*body, type);
 }
 

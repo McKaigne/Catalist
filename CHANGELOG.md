@@ -99,7 +99,8 @@ Catalist-TUI, which keeps its lists in the same file.
   id.
 - Internal: the sources are in folders by layer (`core`, `storage`, `web`,
   `cli`), the commands in one file per group, the tests in matching
-  folders; fmt builds the strings (a new build dependency); see
+  folders; C++23, so the strings are built with `std::format` and errors
+  travel as `std::expected`, with nothing to download at build time; see
   docs/ARCHITECTURE.md.
 
 ### Fixed

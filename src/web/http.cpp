@@ -1,8 +1,7 @@
 #include "web/http.hpp"
 
-#include <fmt/format.h>
-
 #include <cctype>
+#include <format>
 
 namespace catalist::web {
 
@@ -12,7 +11,7 @@ std::string urlEncoded(const std::string& text) {
 		if (std::isalnum(c) or c == '-' or c == '.' or c == '_' or c == '~')
 			encoded += static_cast<char>(c);
 		else
-			encoded += fmt::format("%{:02X}", c);
+			encoded += std::format("%{:02X}", c);
 	}
 	return encoded;
 }
@@ -21,7 +20,7 @@ std::string formEncoded(const std::vector<std::pair<std::string, std::string>>& 
 	std::string body;
 	for (const auto& [name, value] : fields)
 		body +=
-		    fmt::format("{}{}={}", body.empty() ? "" : "&", urlEncoded(name), urlEncoded(value));
+		    std::format("{}{}={}", body.empty() ? "" : "&", urlEncoded(name), urlEncoded(value));
 	return body;
 }
 

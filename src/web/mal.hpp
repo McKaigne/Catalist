@@ -49,8 +49,8 @@ public:
 	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
 	[[nodiscard]] result<account> current(const account& login) override;
 	[[nodiscard]] result<std::vector<entry>> pull(mediaType type, const std::string& user) override;
-	[[nodiscard]] result<bool> push(const entry& title, const account& login) override;
-	[[nodiscard]] result<bool> remove(mediaType type, int siteId, const account& login) override;
+	[[nodiscard]] done push(const entry& title, const account& login) override;
+	[[nodiscard]] done remove(mediaType type, int siteId, const account& login) override;
 
 protected:
 	void pause() const override { net_.pause(); }

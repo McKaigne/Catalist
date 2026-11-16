@@ -11,8 +11,8 @@ bool unreachable(const std::string& message) {
 std::vector<result<details>> iTracker::lookUpMany(const std::vector<entry>& known) {
 	std::vector<result<details>> found;
 	for (const auto& each : known) {
-		if (not found.empty() and not found.back().ok() and
-		    unreachable(found.back().errorMessage())) {
+		if (not found.empty() and not found.back().has_value() and
+		    unreachable(found.back().error())) {
 			found.push_back(found.back());
 			continue;
 		}
@@ -25,7 +25,7 @@ std::vector<result<details>> iTracker::lookUpMany(const std::vector<entry>& know
 
 std::optional<tokenReply> parseTokenReply(const std::string& body) {
 	auto reply = json::parse(body);
-	if (not reply.ok())
+	if (not reply.has_value())
 		return std::nullopt;
 	tokenReply found;
 	found.token = reply.value()["access_token"].asString().value_or("");

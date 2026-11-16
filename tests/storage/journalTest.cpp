@@ -132,7 +132,7 @@ TEST_CASE("journal transition sets back only the fields the change set") {
 	now.score = 9;
 
 	auto undone = journal::transition({frieren(), now}, after, before, false);
-	REQUIRE(undone.ok());
+	REQUIRE(undone.has_value());
 	REQUIRE(undone.value());
 	CHECK(undone.value()->progress == 5);
 	CHECK(undone.value()->score == 9);
@@ -141,7 +141,7 @@ TEST_CASE("journal transition sets back only the fields the change set") {
 
 	// Redo is the same step the other way.
 	auto redone = journal::transition({*undone.value()}, before, after, false);
-	REQUIRE(redone.ok());
+	REQUIRE(redone.has_value());
 	CHECK(redone.value()->progress == 6);
 	CHECK(redone.value()->updatedAt == requireDate("2026-10-20"));
 }
@@ -152,22 +152,22 @@ TEST_CASE("journal transition refuses when the entry has changed since, unless f
 	entry now = withProgress(taxi(), 7);
 
 	auto refused = journal::transition({now}, after, before, false);
-	REQUIRE_FALSE(refused.ok());
-	CHECK(refused.errorMessage() == "Odd Taxi (a:2) has changed since: progress is now 7, not 6");
+	REQUIRE_FALSE(refused.has_value());
+	CHECK(refused.error() == "Odd Taxi (a:2) has changed since: progress is now 7, not 6");
 
 	auto forced = journal::transition({now}, after, before, true);
-	REQUIRE(forced.ok());
+	REQUIRE(forced.has_value());
 	CHECK(forced.value()->progress == 5);
 
 	// An added entry is taken away only as it was added.
 	refused = journal::transition({now}, after, std::nullopt, false);
-	REQUIRE_FALSE(refused.ok());
-	CHECK(refused.errorMessage() == "Odd Taxi (a:2) has changed since: progress is now 7, not 6");
+	REQUIRE_FALSE(refused.has_value());
+	CHECK(refused.error() == "Odd Taxi (a:2) has changed since: progress is now 7, not 6");
 	auto taken = journal::transition({after}, after, std::nullopt, false);
-	REQUIRE(taken.ok());
+	REQUIRE(taken.has_value());
 	CHECK_FALSE(taken.value());
 	forced = journal::transition({now}, after, std::nullopt, true);
-	REQUIRE(forced.ok());
+	REQUIRE(forced.has_value());
 	CHECK_FALSE(forced.value());
 }
 
@@ -176,19 +176,19 @@ TEST_CASE("journal transition says when the entry is gone") {
 	entry after = withProgress(taxi(), 6);
 	for (bool force : {false, true}) {
 		auto gone = journal::transition({frieren()}, after, before, force);
-		REQUIRE_FALSE(gone.ok());
-		CHECK(gone.errorMessage() == "Odd Taxi (a:2) is no longer in your lists");
+		REQUIRE_FALSE(gone.has_value());
+		CHECK(gone.error() == "Odd Taxi (a:2) is no longer in your lists");
 	}
 	// Taking away what is gone already: only when forced.
-	CHECK_FALSE(journal::transition({}, after, std::nullopt, false).ok());
+	CHECK_FALSE(journal::transition({}, after, std::nullopt, false).has_value());
 	auto forced = journal::transition({}, after, std::nullopt, true);
-	REQUIRE(forced.ok());
+	REQUIRE(forced.has_value());
 	CHECK_FALSE(forced.value());
 }
 
 TEST_CASE("journal transition brings a removed entry back under its id") {
 	auto back = journal::transition({frieren()}, std::nullopt, taxi(), false);
-	REQUIRE(back.ok());
+	REQUIRE(back.has_value());
 	REQUIRE(back.value());
 	CHECK(back.value()->id == 2);
 	CHECK(back.value()->title == "Odd Taxi");
@@ -198,23 +198,22 @@ TEST_CASE("journal transition brings a removed entry back under its id") {
 	entry other = makeEntry().id(2).title("Mushishi");
 	for (bool force : {false, true}) {
 		auto taken = journal::transition({frieren(), other}, std::nullopt, taxi(), force);
-		REQUIRE_FALSE(taken.ok());
-		CHECK(taken.errorMessage() ==
-		      "Odd Taxi (a:2) cannot come back: its ref is now that of Mushishi");
+		REQUIRE_FALSE(taken.has_value());
+		CHECK(taken.error() == "Odd Taxi (a:2) cannot come back: its ref is now that of Mushishi");
 	}
 	// The title was added again.
 	entry again = makeEntry().id(3).title("ODDTAXI").anilistId(128547);
 	auto twice = journal::transition({frieren(), again}, std::nullopt, taxi(), false);
-	REQUIRE_FALSE(twice.ok());
-	CHECK(twice.errorMessage() == "Odd Taxi is in your lists again, as ODDTAXI (a:3)");
+	REQUIRE_FALSE(twice.has_value());
+	CHECK(twice.error() == "Odd Taxi is in your lists again, as ODDTAXI (a:3)");
 	entry byMal = makeEntry().id(3).title("ODDTAXI").malId(44265);
-	CHECK_FALSE(journal::transition({byMal}, std::nullopt, taxi(), true).ok());
+	CHECK_FALSE(journal::transition({byMal}, std::nullopt, taxi(), true).has_value());
 	// Titles without site ids are never the same title.
 	entry byHand = makeEntry().id(7).title("By hand");
 	entry alsoByHand = makeEntry().id(8).title("By hand");
-	CHECK(journal::transition({alsoByHand}, std::nullopt, byHand, false).ok());
+	CHECK(journal::transition({alsoByHand}, std::nullopt, byHand, false).has_value());
 
 	auto nothing = journal::transition({}, std::nullopt, std::nullopt, false);
-	REQUIRE(nothing.ok());
+	REQUIRE(nothing.has_value());
 	CHECK_FALSE(nothing.value());
 }

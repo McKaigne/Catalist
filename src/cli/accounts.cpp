@@ -1,7 +1,6 @@
 #include "storage/accounts.hpp"
 
-#include <fmt/format.h>
-
+#include <format>
 #include <istream>
 #include <ostream>
 
@@ -25,7 +24,7 @@ std::optional<provider> siteOperand(const command& self, const args::parsed& lin
 	auto site = parseProvider(line.operands[0]);
 	if (not site)
 		usageError(ctx, self,
-		           fmt::format("unknown site '{}'{}; choose anilist, mal or kitsu",
+		           std::format("unknown site '{}'{}; choose anilist, mal or kitsu",
 		                       line.operands[0], didYouMean(line.operands[0], kSiteWords)));
 	return site;
 }
@@ -45,7 +44,7 @@ std::string dayOf(long long seconds) {
 	long long day = dayOfYear - (153 * monthIndex + 2) / 5 + 1;
 	long long month = monthIndex < 10 ? monthIndex + 3 : monthIndex - 9;
 	long long year = yearOfEra + era * 400 + (month <= 2 ? 1 : 0);
-	return fmt::format("{:04}-{:02}-{:02}", year, month, day);
+	return std::format("{:04}-{:02}-{:02}", year, month, day);
 }
 
 std::string trimmed(std::string text) {
@@ -60,8 +59,8 @@ int runLogin(const command& self, const args::parsed& line, cliContext& ctx) {
 		return 2;
 	auto tracker = trackerFor(ctx, *site);
 	auto start = tracker->startLogin();
-	if (not start.ok())
-		return fail(ctx, start.errorMessage());
+	if (not start.has_value())
+		return fail(ctx, start.error());
 
 	ctx.err << start.value().explanation << "\n";
 	if (not start.value().page.empty())
@@ -82,11 +81,11 @@ int runLogin(const command& self, const args::parsed& line, cliContext& ctx) {
 		answers.push_back(trimmed(*answer));
 	}
 	auto login = tracker->finishLogin(answers);
-	if (not login.ok())
-		return fail(ctx, login.errorMessage());
+	if (not login.has_value())
+		return fail(ctx, login.error());
 	if (not saveAccounts(ctx, accounts::with(readAccounts(ctx), login.value())))
-		return fail(ctx, fmt::format("could not save the login to {}", ctx.accountsFile.string()));
-	ctx.err << fmt::format(
+		return fail(ctx, std::format("could not save the login to {}", ctx.accountsFile.string()));
+	ctx.err << std::format(
 	    "Logged in to {} as {}. Each change to a linked title is now sent there;\n"
 	    "send your lists there now with: catalist sync --all\n",
 	    providerName(*site), login.value().user);
@@ -99,12 +98,12 @@ int runLogout(const command& self, const args::parsed& line, cliContext& ctx) {
 		return 2;
 	auto logins = readAccounts(ctx);
 	if (not accounts::on(logins, *site)) {
-		ctx.err << fmt::format("You are not logged in to {}.\n", providerName(*site));
+		ctx.err << std::format("You are not logged in to {}.\n", providerName(*site));
 		return 0;
 	}
 	if (not saveAccounts(ctx, accounts::without(logins, *site)))
-		return fail(ctx, fmt::format("could not save {}", ctx.accountsFile.string()));
-	ctx.err << fmt::format("Logged out of {}.\n", providerName(*site));
+		return fail(ctx, std::format("could not save {}", ctx.accountsFile.string()));
+	ctx.err << std::format("Logged out of {}.\n", providerName(*site));
 	return 0;
 }
 
@@ -145,41 +144,35 @@ int runAccounts(const command& self, const args::parsed& line, cliContext& ctx) 
 
 std::vector<command> accountCommands() {
 	return {
-	    {"login",
-	     {},
-	     "Log in to a site",
-	     "Logs in to AniList, MyAnimeList or Kitsu, so that Catalist can later\n"
-	     "tell it what changes in your lists. Each site has its own way, which\n"
-	     "the command walks you through: AniList shows a token to paste back,\n"
-	     "MyAnimeList sends your browser to an address to paste back, and Kitsu\n"
-	     "asks for your email and password (not kept: Kitsu gives a token for\n"
-	     "them). Logging in again replaces the login. Logins are kept, readable\n"
-	     "by you only, apart from your lists (see FILES in the manual).\n",
-	     {},
-	     "anilist|mal|kitsu",
-	     runLogin,
-	     operandKind::kWords,
-	     kSiteWords},
-	    {"logout",
-	     {},
-	     "Forget the login of a site",
-	     "Forgets the token Catalist keeps for the site. The site may still list\n"
-	     "Catalist among your apps: take it off there too, if you like.\n",
-	     {},
-	     "anilist|mal|kitsu",
-	     runLogout,
-	     operandKind::kWords,
-	     kSiteWords},
-	    {"accounts",
-	     {},
-	     "List the sites you are logged in to",
-	     "Into a pipe each login is one line of fields with a tab between them:\n"
-	     "site, user, state (in, or run out) and until (the day its token runs\n"
-	     "out, or '-' when it does not say). Tokens are never printed.\n",
-	     {{0, "json", "", "print one JSON object a line"},
-	      {0, "header", "", "name the columns on the first line of a pipe"}},
-	     "",
-	     runAccounts},
+	    {.name = "login",
+	     .summary = "Log in to a site",
+	     .details = "Logs in to AniList, MyAnimeList or Kitsu, so that Catalist can later\n"
+	                "tell it what changes in your lists. Each site has its own way, which\n"
+	                "the command walks you through: AniList shows a token to paste back,\n"
+	                "MyAnimeList sends your browser to an address to paste back, and Kitsu\n"
+	                "asks for your email and password (not kept: Kitsu gives a token for\n"
+	                "them). Logging in again replaces the login. Logins are kept, readable\n"
+	                "by you only, apart from your lists (see FILES in the manual).\n",
+	     .operands = "anilist|mal|kitsu",
+	     .run = runLogin,
+	     .completes = operandKind::kWords,
+	     .words = kSiteWords},
+	    {.name = "logout",
+	     .summary = "Forget the login of a site",
+	     .details = "Forgets the token Catalist keeps for the site. The site may still list\n"
+	                "Catalist among your apps: take it off there too, if you like.\n",
+	     .operands = "anilist|mal|kitsu",
+	     .run = runLogout,
+	     .completes = operandKind::kWords,
+	     .words = kSiteWords},
+	    {.name = "accounts",
+	     .summary = "List the sites you are logged in to",
+	     .details = "Into a pipe each login is one line of fields with a tab between them:\n"
+	                "site, user, state (in, or run out) and until (the day its token runs\n"
+	                "out, or '-' when it does not say). Tokens are never printed.\n",
+	     .options = {{0, "json", "", "print one JSON object a line"},
+	                 {0, "header", "", "name the columns on the first line of a pipe"}},
+	     .run = runAccounts},
 	};
 }
 

@@ -116,7 +116,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli importing again keeps what the user changed")
 
 	{
 		catalist::catalogue db("data");
-		REQUIRE(db.loadAll().ok());
+		REQUIRE(db.loadAll().has_value());
 		auto taxi = db.getEntries(mediaType::kAnime)[1];
 		REQUIRE(taxi.title == "Odd Taxi");
 		taxi.score = 9;

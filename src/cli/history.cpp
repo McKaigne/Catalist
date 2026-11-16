@@ -1,5 +1,4 @@
-#include <fmt/format.h>
-
+#include <format>
 #include <ostream>
 
 #include "cli/common.hpp"
@@ -12,31 +11,31 @@ namespace {
 int runReplay(const command& self, const args::parsed& line, cliContext& ctx) {
 	bool redoing = self.name == "redo";
 	if (not line.operands.empty())
-		return usageError(ctx, self, fmt::format("{} takes no operands", self.name));
+		return usageError(ctx, self, std::format("{} takes no operands", self.name));
 	auto count = countGiven(line, 1);
-	if (not count.ok())
-		return usageError(ctx, self, count.errorMessage());
+	if (not count.has_value())
+		return usageError(ctx, self, count.error());
 	if (not loadForWrite(ctx))
 		return 1;
 
 	bool force = line.has("f");
 	auto done = redoing ? ctx.db.redo(count.value(), force) : ctx.db.undo(count.value(), force);
-	if (not done.ok()) {
-		fail(ctx, done.errorMessage());
+	if (not done.has_value()) {
+		fail(ctx, done.error());
 		if (not force)
 			ctx.err << "Nothing was changed. With -f the step is taken all the same, where "
 			           "it still can be.\n";
 		return 1;
 	}
 	if (done.value().steps.empty()) {
-		ctx.err << fmt::format("Nothing to {}.\n", self.name);
+		ctx.err << std::format("Nothing to {}.\n", self.name);
 		return 0;
 	}
 	tellSites(ctx, done.value().changes);
 	if (line.has("q"))
 		return 0;
 	for (const auto& step : done.value().steps)
-		ctx.err << fmt::format("{} '{}' ({}).\n", redoing ? "Redid" : "Undid", step.label,
+		ctx.err << std::format("{} '{}' ({}).\n", redoing ? "Redid" : "Undid", step.label,
 		                       step.stamp);
 	printChanges(ctx, done.value().changes);
 	return 0;
@@ -46,13 +45,13 @@ int runLog(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (not line.operands.empty())
 		return usageError(ctx, self, "log takes no operands");
 	auto count = countGiven(line, 0);
-	if (not count.ok())
-		return usageError(ctx, self, count.errorMessage());
+	if (not count.has_value())
+		return usageError(ctx, self, count.error());
 	if (not load(ctx))
 		return 1;
 	auto steps = ctx.db.history(count.value());
-	if (not steps.ok())
-		return fail(ctx, steps.errorMessage());
+	if (not steps.has_value())
+		return fail(ctx, steps.error());
 
 	auto stateOf = [](const txRecord& step) { return step.undone ? "undone" : "done"; };
 	if (not line.has("json") and ctx.columns > 0) {
@@ -83,15 +82,13 @@ int runLog(const command& self, const args::parsed& line, cliContext& ctx) {
 
 command replayCommand(const std::string& name, const std::string& summary,
                       const std::string& details) {
-	return {name,
-	        {},
-	        summary,
-	        details,
-	        {{'n', "", "N", "N steps instead of one"},
-	         {'f', "", "", "also when a title has changed since"},
-	         kQuiet},
-	        "",
-	        runReplay};
+	return {.name = name,
+	        .summary = summary,
+	        .details = details,
+	        .options = {{'n', "", "N", "N steps instead of one"},
+	                    {'f', "", "", "also when a title has changed since"},
+	                    kQuiet},
+	        .run = runReplay};
 }
 
 }  // namespace
@@ -105,17 +102,15 @@ std::vector<command> historyCommands() {
 	                  "title is named; -f takes the step back all the same.\n"),
 	    replayCommand("redo", "Make again what undo took back",
 	                  "Steps can be made again until a command changes something new.\n"),
-	    {"log",
-	     {},
-	     "List what can be undone",
-	     "The last 100 steps, newest first. Into a pipe each is one line of fields\n"
-	     "with a tab between them: tx, stamp, state (done or undone), changes (how\n"
-	     "many titles) and label (the command).\n",
-	     {{'n', "", "N", "the newest N steps only"},
-	      {0, "json", "", "print one JSON object a line"},
-	      {0, "header", "", "name the columns on the first line of a pipe"}},
-	     "",
-	     runLog},
+	    {.name = "log",
+	     .summary = "List what can be undone",
+	     .details = "The last 100 steps, newest first. Into a pipe each is one line of fields\n"
+	                "with a tab between them: tx, stamp, state (done or undone), changes (how\n"
+	                "many titles) and label (the command).\n",
+	     .options = {{'n', "", "N", "the newest N steps only"},
+	                 {0, "json", "", "print one JSON object a line"},
+	                 {0, "header", "", "name the columns on the first line of a pipe"}},
+	     .run = runLog},
 	};
 }
 

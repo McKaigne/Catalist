@@ -33,7 +33,7 @@ catalist::entry oddTaxi() {
 
 TEST_CASE("anilist sets the whole list entry, the score out of 100") {
 	std::string request = catalist::anilist::saveRequest(oddTaxi());
-	CHECK(catalist::json::parse(request).ok());
+	CHECK(catalist::json::parse(request).has_value());
 	CHECK(request.find(R"("m":128547,"s":"CURRENT","c":80,"p":5,"v":0,"r":1,)") !=
 	      std::string::npos);
 	CHECK(request.find(R"("a":{"year":2026,"month":10,"day":1})") != std::string::npos);
@@ -43,11 +43,11 @@ TEST_CASE("anilist sets the whole list entry, the score out of 100") {
 	catalist::test::fakeWeb web;
 	web.respond("SaveMediaListEntry", R"({"data":{"SaveMediaListEntry":{"id":9}}})");
 	catalist::anilist::tracker site(web.link());
-	CHECK(site.push(oddTaxi(), kLogin).ok());
+	CHECK(site.push(oddTaxi(), kLogin).has_value());
 	CHECK(web.sent.size() == 1);
 	catalist::entry unlinked = oddTaxi();
 	unlinked.anilistId = 0;
-	CHECK(site.push(unlinked, kLogin).errorMessage() == "not linked to AniList");
+	CHECK(site.push(unlinked, kLogin).error() == "not linked to AniList");
 }
 
 TEST_CASE("anilist removes a title by its list entry, and is done when there is none") {
@@ -55,13 +55,13 @@ TEST_CASE("anilist removes a title by its list entry, and is done when there is 
 	web.respond("MediaList(mediaId:$m,userId:$u)", R"({"data":{"MediaList":{"id":31}}})");
 	web.respond("DeleteMediaListEntry", R"({"data":{"DeleteMediaListEntry":{"deleted":true}}})");
 	catalist::anilist::tracker site(web.link());
-	CHECK(site.remove(mediaType::kAnime, 128547, kLogin).ok());
+	CHECK(site.remove(mediaType::kAnime, 128547, kLogin).has_value());
 	REQUIRE(web.sent.size() == 2);
 	CHECK(web.sent[1].find(R"("i":31)") != std::string::npos);
 
 	catalist::test::fakeWeb none;
 	catalist::anilist::tracker empty(none.link());
-	CHECK(empty.remove(mediaType::kAnime, 1, kLogin).ok());
+	CHECK(empty.remove(mediaType::kAnime, 1, kLogin).has_value());
 }
 
 TEST_CASE("mal sets the list status with the fields of the list") {
@@ -84,8 +84,8 @@ TEST_CASE("mal sets the list status with the fields of the list") {
 	auto net = web.link();
 	net.ids.mal = "mal-id";
 	catalist::mal::tracker site(net);
-	CHECK(site.push(oddTaxi(), kLogin).ok());
-	CHECK_FALSE(site.remove(mediaType::kAnime, 44265, kLogin).ok());
+	CHECK(site.push(oddTaxi(), kLogin).has_value());
+	CHECK_FALSE(site.remove(mediaType::kAnime, 44265, kLogin).has_value());
 }
 
 TEST_CASE("kitsu changes the library entry it has, or makes one") {
@@ -100,7 +100,7 @@ TEST_CASE("kitsu changes the library entry it has, or makes one") {
 	    R"({"data":[{"id":"555"}]})");
 	web.respond("PATCH https://kitsu.app/api/edge/library-entries/555", "{}");
 	catalist::kitsu::tracker site(web.link());
-	CHECK(site.push(oddTaxi(), kLogin).ok());
+	CHECK(site.push(oddTaxi(), kLogin).has_value());
 	REQUIRE(web.sent.size() == 2);
 	CHECK(web.sent[1].find(R"({"data":{"id":"555","type":"libraryEntries","attributes":)") !=
 	      std::string::npos);
@@ -109,11 +109,11 @@ TEST_CASE("kitsu changes the library entry it has, or makes one") {
 	fresh.respond("filter[animeId]=43095", R"({"data":[]})");
 	fresh.respond("POST https://kitsu.app/api/edge/library-entries", "{}");
 	catalist::kitsu::tracker making(fresh.link());
-	CHECK(making.push(oddTaxi(), kLogin).ok());
+	CHECK(making.push(oddTaxi(), kLogin).has_value());
 	REQUIRE(fresh.sent.size() == 2);
 	CHECK(fresh.sent[1].find(R"("user":{"data":{"type":"users","id":"77"}},)"
 	                         R"("anime":{"data":{"type":"anime","id":"43095"}})") !=
 	      std::string::npos);
 	// Not on the list: removed already.
-	CHECK(making.remove(mediaType::kAnime, 43095, kLogin).ok());
+	CHECK(making.remove(mediaType::kAnime, 43095, kLogin).has_value());
 }

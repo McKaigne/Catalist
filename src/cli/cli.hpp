@@ -59,13 +59,13 @@ enum class operandKind { kNone, kRefs, kRefThenFields, kTitle, kText, kFiles, kW
 // One command of the command line. The table of them (see commands) is what
 // the parser, the help, the manual page and the completion scripts all read.
 struct command {
-	std::string name;
-	std::vector<std::string> aliases;
-	std::string summary;
-	std::string details;
-	std::vector<args::option> options;
+	std::string name{};
+	std::vector<std::string> aliases{};
+	std::string summary{};
+	std::string details{};
+	std::vector<args::option> options{};
 	// The operands as the usage line shows them: "REF...".
-	std::string operands;
+	std::string operands{};
 	int (*run)(const command& self, const args::parsed& line, cliContext& ctx) = nullptr;
 	operandKind completes = operandKind::kNone;
 	// The words to choose from, for kWords.

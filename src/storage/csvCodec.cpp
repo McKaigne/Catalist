@@ -1,7 +1,6 @@
 #include "storage/csvCodec.hpp"
 
-#include <fmt/format.h>
-
+#include <format>
 #include <sstream>
 
 namespace catalist::csvCodec {
@@ -180,20 +179,20 @@ result<std::vector<entry>> decodeEntries(std::string_view text) {
 	for (const auto& record : splitRecords(text)) {
 		auto decoded = decodeEntry(splitFields(record));
 		if (not decoded)
-			return result<std::vector<entry>>::failure(fmt::format(
+			return std::unexpected(std::format(
 			    "row {} has a column layout this version cannot read", entries.size() + 1));
 		entries.push_back(std::move(*decoded));
 	}
-	return result<std::vector<entry>>::success(std::move(entries));
+	return entries;
 }
 
 std::string encodeEntry(const entry& e) {
-	return fmt::format(
+	return std::format(
 	    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}{}", e.id, e.malId, typeKey(e.type),
 	    escapeField(e.title), escapeField(statusToString(e.status, e.type)), e.score, e.progress,
 	    e.totalUnits, e.volumes, e.totalVolumes, e.rewatched, formatDate(e.startDate),
 	    formatDate(e.finishDate), formatDate(e.updatedAt), e.released, formatDate(e.checkedAt),
-	    e.anilistId, e.kitsuId > 0 ? fmt::format(",{}", e.kitsuId) : "");
+	    e.anilistId, e.kitsuId > 0 ? std::format(",{}", e.kitsuId) : "");
 }
 
 }  // namespace catalist::csvCodec

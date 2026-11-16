@@ -11,7 +11,7 @@ using catalist::watchStatus;
 
 TEST_CASE("anilist reads a user's list, with the ids and the person's fields") {
 	auto request = catalist::anilist::listRequest(mediaType::kAnime, "Abel");
-	CHECK(catalist::json::parse(request).ok());
+	CHECK(catalist::json::parse(request).has_value());
 	CHECK(request.find(R"("u":"Abel","t":"ANIME")") != std::string::npos);
 	auto found = catalist::anilist::parseList(
 	    R"({"data":{"MediaListCollection":{"lists":[{"entries":[
@@ -22,7 +22,7 @@ TEST_CASE("anilist reads a user's list, with the ids and the person's fields") {
 	    {"entries":[{"status":"PLANNING","score":0,"progress":0,"repeat":0,"startedAt":{},"completedAt":{},
 	     "media":{"id":154587,"idMal":52991,"title":{"romaji":"Sousou no Frieren"},"episodes":28,"status":"FINISHED"}}]}]}}})",
 	    mediaType::kAnime);
-	REQUIRE(found.ok());
+	REQUIRE(found.has_value());
 	REQUIRE(found.value().size() == 2);
 	const auto& taxi = found.value()[0];
 	CHECK(taxi.title == "Odd Taxi");
@@ -36,7 +36,7 @@ TEST_CASE("anilist reads a user's list, with the ids and the person's fields") {
 	CHECK(catalist::formatDate(taxi.startDate) == "2026-10-01");
 	CHECK_FALSE(taxi.finishDate);
 	CHECK(found.value()[1].status == watchStatus::kPlanToWatch);
-	CHECK_FALSE(catalist::anilist::parseList("{}", mediaType::kAnime).ok());
+	CHECK_FALSE(catalist::anilist::parseList("{}", mediaType::kAnime).has_value());
 }
 
 TEST_CASE("kitsu reads a user's library page by page") {
@@ -61,7 +61,7 @@ TEST_CASE("kitsu reads a user's library page by page") {
 	            "links":{}})");
 	catalist::kitsu::tracker site(web.link());
 	auto found = site.pull(mediaType::kAnime, "abel");
-	REQUIRE(found.ok());
+	REQUIRE(found.has_value());
 	REQUIRE(found.value().size() == 2);
 	const auto& frieren = found.value()[0];
 	CHECK(frieren.kitsuId == 46474);
@@ -74,8 +74,7 @@ TEST_CASE("kitsu reads a user's library page by page") {
 	CHECK(found.value()[1].score == 0);
 
 	web.respond("filter[name]=nobody", R"({"data":[]})");
-	CHECK(site.pull(mediaType::kAnime, "nobody").errorMessage() ==
-	      "Kitsu has no user named nobody");
+	CHECK(site.pull(mediaType::kAnime, "nobody").error() == "Kitsu has no user named nobody");
 }
 
 TEST_CASE("mal reads a user's list page by page") {
@@ -91,13 +90,14 @@ TEST_CASE("mal reads a user's list page by page") {
 	    {"node":{"id":3,"title":"x"},"list_status":{"status":"unknown"}}],
 	    "paging":{"next":"https://api.myanimelist.net/v2/users/Abel/mangalist?offset=1000"}})",
 	    mediaType::kManga, next);
-	REQUIRE(found.ok());
+	REQUIRE(found.has_value());
 	REQUIRE(found.value().size() == 1);
 	CHECK(found.value()[0].progress == 364);
 	CHECK(found.value()[0].volumes == 41);
 	CHECK(found.value()[0].score == 10);
 	CHECK(found.value()[0].released == 0);
 	CHECK(next == "https://api.myanimelist.net/v2/users/Abel/mangalist?offset=1000");
-	CHECK(catalist::mal::parseList(R"({"data":[],"paging":{}})", mediaType::kManga, next).ok());
+	CHECK(catalist::mal::parseList(R"({"data":[],"paging":{}})", mediaType::kManga, next)
+	          .has_value());
 	CHECK(next.empty());
 }

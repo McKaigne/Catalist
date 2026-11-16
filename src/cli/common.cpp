@@ -1,8 +1,7 @@
 #include "cli/common.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
+#include <format>
 #include <istream>
 #include <ostream>
 
@@ -25,12 +24,12 @@ txNote undoNote(const cliContext& ctx) {
 }
 
 void sayNoMatch(cliContext& ctx, const std::string& ref, const naming& how) {
-	std::string where = how.only ? fmt::format("your {} list", typeKey(*how.only)) : "your lists";
+	std::string where = how.only ? std::format("your {} list", typeKey(*how.only)) : "your lists";
 	auto meant = refs::closest(ctx.db, ref, how.only);
 	std::string hint =
-	    meant ? fmt::format(" (did you mean '{}', {}?)", meant->title, refs::of(*meant)) : "";
-	fail(ctx, refs::parse(ref) ? fmt::format("no title in {} has the ref {}", where, ref)
-	                           : fmt::format("nothing in {} matches '{}'{}", where, ref, hint));
+	    meant ? std::format(" (did you mean '{}', {}?)", meant->title, refs::of(*meant)) : "";
+	fail(ctx, refs::parse(ref) ? std::format("no title in {} has the ref {}", where, ref)
+	                           : std::format("nothing in {} matches '{}'{}", where, ref, hint));
 	if (ref.size() > 1 and ref[0] == '-')
 		ctx.err << "Options go before the first operand.\n";
 	ctx.err << "See what is there with: catalist ls\n";
@@ -49,10 +48,10 @@ std::optional<std::vector<entry>> named(cliContext& ctx, const std::string& ref,
 	if (found.size() == 1 or how.all)
 		return found;
 
-	ctx.err << fmt::format("{}'{}' matches {} titles:\n", how.ask ? "" : "error: ", ref,
+	ctx.err << std::format("{}'{}' matches {} titles:\n", how.ask ? "" : "error: ", ref,
 	                       found.size());
 	for (size_t i = 0; i < found.size(); ++i)
-		ctx.err << (how.ask ? fmt::format("  {:>2}", i + 1) : "") << "  " << refs::of(found[i])
+		ctx.err << (how.ask ? std::format("  {:>2}", i + 1) : "") << "  " << refs::of(found[i])
 		        << "  " << found[i].title << "\n";
 	if (not how.ask) {
 		ctx.err << "Name one by its ref (-a and -m keep to one list), or pass --all for all of "
@@ -73,13 +72,13 @@ std::string changeText(const cliContext& ctx, const entry& shown,
                        const journal::fieldChange& field) {
 	std::string title = paint(shown.title, output::kBold, ctx.color);
 	if (field.field == "added")
-		return fmt::format("{}  added as {} ({})\n", title, field.after, refs::of(shown));
+		return std::format("{}  added as {} ({})\n", title, field.after, refs::of(shown));
 	if (field.field == "removed")
-		return fmt::format("{}  removed\n", title);
+		return std::format("{}  removed\n", title);
 	if (field.field == "progress")
-		return fmt::format("{}  {} → {}\n", title, field.before,
+		return std::format("{}  {} → {}\n", title, field.before,
 		                   outOf(shown.progress, shown.totalUnits));
-	return fmt::format("{}  {} {} → {}\n", title, paint(field.field, output::kDim, ctx.color),
+	return std::format("{}  {} {} → {}\n", title, paint(field.field, output::kDim, ctx.color),
 	                   field.before, field.after);
 }
 
@@ -91,19 +90,19 @@ int fail(cliContext& ctx, const std::string& message) {
 }
 
 int usageError(cliContext& ctx, const command& cmd, const std::string& message) {
-	ctx.err << fmt::format("error: {}\nUsage: catalist {}\nRun 'catalist help {}' for more.\n",
+	ctx.err << std::format("error: {}\nUsage: catalist {}\nRun 'catalist help {}' for more.\n",
 	                       message, usageLine(cmd), cmd.name);
 	return 2;
 }
 
 std::string didYouMean(const std::string& typed, const std::vector<std::string>& known) {
 	auto guess = args::closestTo(typed, known);
-	return guess ? fmt::format(" (did you mean '{}'?)", *guess) : "";
+	return guess ? std::format(" (did you mean '{}'?)", *guess) : "";
 }
 
 int saveFailed(cliContext& ctx) {
 	return fail(ctx,
-	            fmt::format("could not save the catalogue to {}", ctx.db.getDataDir().string()));
+	            std::format("could not save the catalogue to {}", ctx.db.getDataDir().string()));
 }
 
 // The columns of a title, in the order every tab-separated line and JSON
@@ -165,12 +164,12 @@ std::string unitName(mediaType type, int count) {
 
 // "1 title", "3 titles".
 std::string titles(size_t count) {
-	return fmt::format("{} {}", count, count == 1 ? "title" : "titles");
+	return std::format("{} {}", count, count == 1 ? "title" : "titles");
 }
 
 // "5/28", or "5/?" while the total is not known.
 std::string outOf(int done, int total) {
-	return fmt::format("{}/{}", done, total > 0 ? std::to_string(total) : std::string("?"));
+	return std::format("{}/{}", done, total > 0 ? std::to_string(total) : std::string("?"));
 }
 
 // Rows as JSON Lines, or as tab-separated lines (the column names first
@@ -205,7 +204,7 @@ std::optional<std::string> readText(const command& cmd, const args::parsed& line
 		const std::string& word = line.operands[i];
 		if (i > 0 and word.size() > 1 and word[0] == '-') {
 			usageError(ctx, cmd,
-			           fmt::format("'{}' comes after the text; options go before it", word));
+			           std::format("'{}' comes after the text; options go before it", word));
 			return std::nullopt;
 		}
 		text += (i > 0 ? " " : "") + word;
@@ -254,7 +253,7 @@ refRequest readRefs(const command& cmd, const args::parsed& line, cliContext& ct
 // Asks which of the numbered choices was meant; nothing when the answer is
 // empty or not one of them.
 std::optional<size_t> askWhich(cliContext& ctx, size_t count) {
-	ctx.err << fmt::format("Which one? [1-{}, Enter to cancel]: ", count) << std::flush;
+	ctx.err << std::format("Which one? [1-{}, Enter to cancel]: ", count) << std::flush;
 	std::string answer;
 	if (not std::getline(ctx.in, answer))
 		return std::nullopt;
@@ -286,17 +285,17 @@ std::optional<std::vector<entry>> resolve(cliContext& ctx, const std::vector<std
 
 bool load(cliContext& ctx) {
 	auto loaded = ctx.db.loadAll();
-	if (not loaded.ok())
-		fail(ctx, loaded.errorMessage());
-	return loaded.ok();
+	if (not loaded.has_value())
+		fail(ctx, loaded.error());
+	return loaded.has_value();
 }
 
 // Takes the catalogue for writing, then reads it: nothing another program
 // does can come between what the command reads and what it saves.
 bool loadForWrite(cliContext& ctx) {
 	auto held = ctx.db.beginWrite();
-	if (not held.ok()) {
-		fail(ctx, held.errorMessage());
+	if (not held.has_value()) {
+		fail(ctx, held.error());
 		return false;
 	}
 	return load(ctx);
@@ -365,12 +364,11 @@ int changeTitles(const command& self, const args::parsed& line, cliContext& ctx,
 // The N of -n, or `otherwise` when it is not given.
 result<int> countGiven(const args::parsed& line, int otherwise) {
 	if (not line.has("n"))
-		return result<int>::success(otherwise);
+		return otherwise;
 	auto count = args::parseCount(line.get("n"));
 	if (not count or *count == 0)
-		return result<int>::failure(
-		    fmt::format("-n '{}' is not a count of one or more", line.get("n")));
-	return result<int>::success(*count);
+		return std::unexpected(std::format("-n '{}' is not a count of one or more", line.get("n")));
+	return *count;
 }
 
 extern const args::option kFrom{
@@ -380,7 +378,7 @@ bool fromKnown(const command& cmd, const args::parsed& line, cliContext& ctx) {
 	if (not line.has("from") or parseProvider(line.get("from")))
 		return true;
 	usageError(ctx, cmd,
-	           fmt::format("--from '{}' is not anilist, mal or kitsu{}", line.get("from"),
+	           std::format("--from '{}' is not anilist, mal or kitsu{}", line.get("from"),
 	                       didYouMean(line.get("from"), kFrom.choices)));
 	return false;
 }

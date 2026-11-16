@@ -72,13 +72,13 @@ struct cliFixture : catalist::test::tempDirFixture {
 
 	std::vector<catalist::entry> saved(mediaType type) {
 		catalist::catalogue db("data");
-		REQUIRE(db.loadAll().ok());
+		REQUIRE(db.loadAll().has_value());
 		return db.getEntries(type);
 	}
 
 	catalist::entry savedTitle(mediaType type, const std::string& title) {
 		catalist::catalogue db("data");
-		REQUIRE(db.loadAll().ok());
+		REQUIRE(db.loadAll().has_value());
 		return catalist::test::findTitle(db, type, title);
 	}
 
@@ -140,14 +140,14 @@ struct cliFixture : catalist::test::tempDirFixture {
 	// What waits to be sent to the sites.
 	std::vector<catalist::pending> waiting() {
 		catalist::catalogue db("data");
-		REQUIRE(db.loadAll().ok());
+		REQUIRE(db.loadAll().has_value());
 		return db.outbox();
 	}
 
 	// The steps of the undo history, newest first.
 	std::vector<catalist::txRecord> steps() {
 		catalist::catalogue db("data");
-		REQUIRE(db.loadAll().ok());
+		REQUIRE(db.loadAll().has_value());
 		return db.history(0).value();
 	}
 
@@ -155,7 +155,7 @@ struct cliFixture : catalist::test::tempDirFixture {
 	// check) makes one.
 	void changeBehindTheHistory(mediaType type, const std::string& title, int progress) {
 		catalist::catalogue db("data");
-		REQUIRE(db.loadAll().ok());
+		REQUIRE(db.loadAll().has_value());
 		auto changed = catalist::test::findTitle(db, type, title);
 		changed.progress = progress;
 		REQUIRE(db.updateEntry(changed));

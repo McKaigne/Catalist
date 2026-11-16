@@ -1,7 +1,6 @@
 #include "system.hpp"
 
 #include <fcntl.h>
-#include <fmt/format.h>
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
@@ -16,6 +15,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <format>
 #include <fstream>
 #include <istream>
 #include <iterator>
@@ -183,7 +183,7 @@ std::string nowStamp() {
 	std::time_t seconds = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 	std::tm local{};
 	localtime_r(&seconds, &local);
-	return fmt::format("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", local.tm_year + 1900,
+	return std::format("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", local.tm_year + 1900,
 	                   local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min, local.tm_sec);
 }
 

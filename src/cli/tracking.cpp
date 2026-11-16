@@ -1,5 +1,4 @@
-#include <fmt/format.h>
-
+#include <format>
 #include <istream>
 #include <map>
 #include <ostream>
@@ -94,25 +93,24 @@ const settable* findSettable(const std::string& name) {
 // fails on the first that names no field or holds no value for it.
 result<std::map<std::string, std::string>> readAssignments(const std::vector<std::string>& operands,
                                                            const isoDate& today) {
-	using outcome = result<std::map<std::string, std::string>>;
 	std::map<std::string, std::string> values;
 	for (size_t i = 1; i < operands.size(); ++i) {
 		auto equals = operands[i].find('=');
 		if (equals == std::string::npos)
-			return outcome::failure(fmt::format(
+			return std::unexpected(std::format(
 			    "'{}' is not FIELD=VALUE; quote a title of several words", operands[i]));
 		std::string name = utf8::lowercase(operands[i].substr(0, equals));
 		std::string value = operands[i].substr(equals + 1);
 		const settable* field = findSettable(name);
 		if (not field)
-			return outcome::failure(
-			    fmt::format("unknown field '{}'{}", name, didYouMean(name, settableNames())));
+			return std::unexpected(
+			    std::format("unknown field '{}'{}", name, didYouMean(name, settableNames())));
 		if (not field->set(entry{}, value, today))
-			return outcome::failure(
-			    fmt::format("{} '{}' is not {}", field->name, value, field->wants));
+			return std::unexpected(
+			    std::format("{} '{}' is not {}", field->name, value, field->wants));
 		values[field->name] = value;
 	}
-	return outcome::success(std::move(values));
+	return values;
 }
 
 entry withValues(entry target, const std::map<std::string, std::string>& values,
@@ -127,8 +125,8 @@ entry withValues(entry target, const std::map<std::string, std::string>& values,
 
 int runStep(const command& self, const args::parsed& line, cliContext& ctx) {
 	auto by = countGiven(line, 1);
-	if (not by.ok())
-		return usageError(ctx, self, by.errorMessage());
+	if (not by.has_value())
+		return usageError(ctx, self, by.error());
 	int delta = self.name == "+" ? by.value() : -by.value();
 	isoDate today = ctx.today();
 	return changeTitles(self, line, ctx,
@@ -142,8 +140,8 @@ int runSet(const command& self, const args::parsed& line, cliContext& ctx) {
 		return usageError(ctx, self, "nothing to change: give a FIELD=VALUE such as score=8");
 	isoDate today = ctx.today();
 	auto values = readAssignments(line.operands, today);
-	if (not values.ok())
-		return usageError(ctx, self, values.errorMessage());
+	if (not values.has_value())
+		return usageError(ctx, self, values.error());
 	if (not loadForWrite(ctx))
 		return 1;
 	auto found =
@@ -168,7 +166,7 @@ int runStatus(const command& self, const args::parsed& line, cliContext& ctx) {
 		score = args::parseCount(line.get("score"));
 		if (not score or *score > 10)
 			return usageError(ctx, self,
-			                  fmt::format("--score '{}' is not 0 to 10", line.get("score")));
+			                  std::format("--score '{}' is not 0 to 10", line.get("score")));
 	}
 	isoDate today = ctx.today();
 	return changeTitles(self, line, ctx, [&](const entry& e) {
@@ -182,13 +180,13 @@ int runStatus(const command& self, const args::parsed& line, cliContext& ctx) {
 bool removalConfirmed(cliContext& ctx, const std::vector<entry>& gone, bool ask) {
 	for (size_t i = 0; gone.size() > 1 and i < gone.size(); ++i)
 		ctx.err << "  " << refs::of(gone[i]) << "  " << gone[i].title << "\n";
-	std::string what = gone.size() == 1 ? fmt::format("{} ({})", gone[0].title, refs::of(gone[0]))
-	                                    : fmt::format("these {} titles", gone.size());
+	std::string what = gone.size() == 1 ? std::format("{} ({})", gone[0].title, refs::of(gone[0]))
+	                                    : std::format("these {} titles", gone.size());
 	if (not ask) {
-		fail(ctx, fmt::format("nobody to ask here: pass -f to remove {}", what));
+		fail(ctx, std::format("nobody to ask here: pass -f to remove {}", what));
 		return false;
 	}
-	ctx.err << fmt::format("Remove {} from your lists? [y/N]: ", what) << std::flush;
+	ctx.err << std::format("Remove {} from your lists? [y/N]: ", what) << std::flush;
 	std::string answer;
 	std::getline(ctx.in, answer);
 	answer = utf8::lowercase(answer);
@@ -226,26 +224,25 @@ command statusCommand(const std::string& name, const std::string& summary,
 	std::vector<args::option> options = {kQuiet};
 	if (name == "done")
 		options.insert(options.begin(), {0, "score", "N", "give it a score as well, 0 to 10"});
-	return {name,
-	        {},
-	        summary,
-	        details + "\n" + kRefsHelp + "\n" + kChangeFormat,
-	        withRefOptions(options),
-	        "REF...",
-	        runStatus,
-	        operandKind::kRefs};
+	return {.name = name,
+	        .summary = summary,
+	        .details = details + "\n" + kRefsHelp + "\n" + kChangeFormat,
+	        .options = withRefOptions(options),
+	        .operands = "REF...",
+	        .run = runStatus,
+	        .completes = operandKind::kRefs};
 }
 
 command stepCommand(const std::string& name, const std::string& alias, const std::string& summary,
                     const std::string& details) {
-	return {name,
-	        {alias},
-	        summary,
-	        details + "\n" + kRefsHelp + "\n" + kChangeFormat,
-	        withRefOptions({{'n', "", "N", "count N instead of one"}, kQuiet}),
-	        "REF...",
-	        runStep,
-	        operandKind::kRefs};
+	return {.name = name,
+	        .aliases = {alias},
+	        .summary = summary,
+	        .details = details + "\n" + kRefsHelp + "\n" + kChangeFormat,
+	        .options = withRefOptions({{'n', "", "N", "count N instead of one"}, kQuiet}),
+	        .operands = "REF...",
+	        .run = runStep,
+	        .completes = operandKind::kRefs};
 }
 
 }  // namespace
@@ -263,20 +260,20 @@ std::vector<command> trackingCommands() {
 	                "The first one starts a title, and the last one completes it.\n"),
 	    stepCommand("-", "dec", "Count one less episode or chapter",
 	                "Going back below the total reopens a completed title.\n"),
-	    {"set",
-	     {},
-	     "Set fields of a title",
-	     std::string(
-	         "The fields: title, status, score (0 clears it), progress, total,\n"
-	         "volumes, rewatched, start and finish (dates such as 2026-10-20, or\n"
-	         "today; an empty value, as in finish=, clears one). Reaching the total completes a\n"
-	         "title, as + does. All values are checked before anything changes.\n\n"
-	         "The REF is a ref such as a:12, or part of a title.\n\n") +
+	    {.name = "set",
+	     .summary = "Set fields of a title",
+	     .details =
+	         std::string(
+	             "The fields: title, status, score (0 clears it), progress, total,\n"
+	             "volumes, rewatched, start and finish (dates such as 2026-10-20, or\n"
+	             "today; an empty value, as in finish=, clears one). Reaching the total completes a\n"
+	             "title, as + does. All values are checked before anything changes.\n\n"
+	             "The REF is a ref such as a:12, or part of a title.\n\n") +
 	         kChangeFormat,
-	     withRefOptions({kQuiet}),
-	     "REF FIELD=VALUE...",
-	     runSet,
-	     operandKind::kRefThenFields},
+	     .options = withRefOptions({kQuiet}),
+	     .operands = "REF FIELD=VALUE...",
+	     .run = runSet,
+	     .completes = operandKind::kRefThenFields},
 	    statusCommand("done", "Mark titles completed",
 	                  "Sets the finish date, and the progress to the total when it is known.\n"),
 	    statusCommand("hold", "Put titles on hold", ""),
@@ -284,20 +281,21 @@ std::vector<command> trackingCommands() {
 	    statusCommand("plan", "Mark titles planned", ""),
 	    statusCommand("resume", "Take titles up again",
 	                  "Sets the status to watching (reading, for a manga).\n"),
-	    {"rm",
-	     {},
-	     "Remove titles",
-	     std::string("At a terminal rm asks first. Where nobody can be asked, in a script or\n"
-	                 "with REFs from standard input, it removes nothing without -f. 'undo'\n"
-	                 "brings a removed title back under its ref. The sites you are logged in\n"
-	                 "to keep the title on your lists there, unless --remote is given.\n\n") +
+	    {.name = "rm",
+	     .summary = "Remove titles",
+	     .details =
+	         std::string("At a terminal rm asks first. Where nobody can be asked, in a script or\n"
+	                     "with REFs from standard input, it removes nothing without -f. 'undo'\n"
+	                     "brings a removed title back under its ref. The sites you are logged in\n"
+	                     "to keep the title on your lists there, unless --remote is given.\n\n") +
 	         kRefsHelp + "\n" + kChangeFormat,
-	     withRefOptions({{'f', "", "", "remove without asking"},
-	                     {0, "remote", "", "take them off your lists on the sites as well"},
-	                     kQuiet}),
-	     "REF...",
-	     runRemove,
-	     operandKind::kRefs},
+	     .options =
+	         withRefOptions({{'f', "", "", "remove without asking"},
+	                         {0, "remote", "", "take them off your lists on the sites as well"},
+	                         kQuiet}),
+	     .operands = "REF...",
+	     .run = runRemove,
+	     .completes = operandKind::kRefs},
 	};
 }
 

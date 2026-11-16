@@ -130,10 +130,10 @@ public:
 	// score, progress, volumes, rewatches and dates. Catalist's lists are the
 	// truth; the site's entry is overwritten. Fails when the title has no id
 	// on this site, when the site cannot be reached, or says no.
-	[[nodiscard]] virtual result<bool> push(const entry& title, const account& login) = 0;
+	[[nodiscard]] virtual done push(const entry& title, const account& login) = 0;
 	// Takes the title with this id on the site off the account's list; a
 	// title that is not on it is gone already.
-	[[nodiscard]] virtual result<bool> remove(mediaType type, int siteId, const account& login) = 0;
+	[[nodiscard]] virtual done remove(mediaType type, int siteId, const account& login) = 0;
 
 protected:
 	// The pause between two requests of lookUpMany.

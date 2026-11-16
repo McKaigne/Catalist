@@ -17,8 +17,8 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build build-essential libsqlite3-dev libfmt-dev \
-            doctest-dev zsh fish
+          sudo apt-get install -y cmake ninja-build build-essential libsqlite3-dev doctest-dev \
+            zsh fish
 
       - name: Configure CMake
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
@@ -53,8 +53,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build build-essential libsqlite3-dev libfmt-dev \
-            doctest-dev
+          sudo apt-get install -y cmake ninja-build build-essential libsqlite3-dev doctest-dev
 
       - name: Configure CMake with AddressSanitizer and UBSan
         run: >

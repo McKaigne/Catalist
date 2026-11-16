@@ -19,14 +19,14 @@ using words = std::vector<std::string>;
 
 TEST_CASE("args reads flags, one at a time or grouped") {
 	auto line = parse({"-a", "-m"}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().has("a"));
 	CHECK(line.value().has("m"));
 	CHECK_FALSE(line.value().has("force"));
 	CHECK(line.value().operands.empty());
 
 	line = parse({"-amf"}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().has("a"));
 	CHECK(line.value().has("m"));
 	// An option with both forms is known by its long name.
@@ -37,32 +37,32 @@ TEST_CASE("args reads flags, one at a time or grouped") {
 TEST_CASE("args reads a short option's value attached or as the next argument") {
 	for (const auto& given : {words{"-n", "3"}, words{"-n3"}, words{"-an3"}, words{"-an", "3"}}) {
 		auto line = parse(given, kOptions);
-		REQUIRE(line.ok());
+		REQUIRE(line.has_value());
 		CHECK(line.value().get("n") == "3");
 		CHECK(line.value().operands.empty());
 	}
 	// The value is whatever follows, even when it looks like an option.
 	auto line = parse({"-n", "-a"}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().get("n") == "-a");
 	CHECK_FALSE(line.value().has("a"));
 }
 
 TEST_CASE("args reads long options, with = or with the next argument") {
 	auto line = parse({"--json", "--sort=title", "--force"}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().has("json"));
 	CHECK(line.value().get("sort") == "title");
 	CHECK(line.value().has("force"));
 
 	line = parse({"--sort", "score", "frieren"}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().get("sort") == "score");
 	CHECK(line.value().operands == words{"frieren"});
 
 	// An empty value is a value; the last of a repeated option counts.
 	line = parse({"--sort=", "--sort=a=b"}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().has("sort"));
 	CHECK(line.value().get("sort") == "a=b");
 	// An option that was not given reads as empty.
@@ -71,7 +71,7 @@ TEST_CASE("args reads long options, with = or with the next argument") {
 
 TEST_CASE("args ends the options at the first operand") {
 	auto line = parse({"-a", "frieren", "-m", "--json"}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().has("a"));
 	CHECK_FALSE(line.value().has("m"));
 	CHECK_FALSE(line.value().has("json"));
@@ -80,43 +80,43 @@ TEST_CASE("args ends the options at the first operand") {
 
 TEST_CASE("args ends the options at --, and takes a lone - as an operand") {
 	auto line = parse({"-a", "--", "-m", "--json"}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().has("a"));
 	CHECK(line.value().operands == words{"-m", "--json"});
 
 	// Only the first -- is taken away.
 	line = parse({"--", "--", "x"}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().operands == words{"--", "x"});
 
 	line = parse({"-a", "-", "-m"}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().operands == words{"-", "-m"});
 
 	line = parse({}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().options.empty());
 	CHECK(line.value().operands.empty());
 	line = parse({""}, kOptions);
-	REQUIRE(line.ok());
+	REQUIRE(line.has_value());
 	CHECK(line.value().operands == words{""});
 }
 
 TEST_CASE("args says what is wrong with an option") {
-	CHECK(parse({"-x"}, kOptions).errorMessage() == "unknown option '-x'");
-	CHECK(parse({"-ax"}, kOptions).errorMessage() == "unknown option '-x'");
-	CHECK(parse({"--frobnicate"}, kOptions).errorMessage() == "unknown option '--frobnicate'");
-	CHECK(parse({"--jsno"}, kOptions).errorMessage() ==
+	CHECK(parse({"-x"}, kOptions).error() == "unknown option '-x'");
+	CHECK(parse({"-ax"}, kOptions).error() == "unknown option '-x'");
+	CHECK(parse({"--frobnicate"}, kOptions).error() == "unknown option '--frobnicate'");
+	CHECK(parse({"--jsno"}, kOptions).error() ==
 	      "unknown option '--jsno' (did you mean '--json'?)");
-	CHECK(parse({"--forse=1"}, kOptions).errorMessage() ==
+	CHECK(parse({"--forse=1"}, kOptions).error() ==
 	      "unknown option '--forse' (did you mean '--force'?)");
-	CHECK(parse({"-n"}, kOptions).errorMessage() == "option '-n' needs a value (N)");
-	CHECK(parse({"-an"}, kOptions).errorMessage() == "option '-n' needs a value (N)");
-	CHECK(parse({"--sort"}, kOptions).errorMessage() == "option '--sort' needs a value (KEY)");
-	CHECK(parse({"--json=yes"}, kOptions).errorMessage() == "option '--json' takes no value");
+	CHECK(parse({"-n"}, kOptions).error() == "option '-n' needs a value (N)");
+	CHECK(parse({"-an"}, kOptions).error() == "option '-n' needs a value (N)");
+	CHECK(parse({"--sort"}, kOptions).error() == "option '--sort' needs a value (KEY)");
+	CHECK(parse({"--json=yes"}, kOptions).error() == "option '--json' takes no value");
 	// A short option has no long form unless it is given one.
-	CHECK_FALSE(parse({"--a"}, kOptions).ok());
-	CHECK(parse({"--"}, kOptions).ok());
+	CHECK_FALSE(parse({"--a"}, kOptions).has_value());
+	CHECK(parse({"--"}, kOptions).has_value());
 }
 
 TEST_CASE("args spells an option by its long name, or its letter") {

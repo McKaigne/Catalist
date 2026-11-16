@@ -1,9 +1,9 @@
 #include "support/testSupport.hpp"
 
-#include <fmt/format.h>
 #include <unistd.h>
 
 #include <atomic>
+#include <format>
 #include <fstream>
 #include <random>
 #include <stdexcept>
@@ -77,7 +77,7 @@ void fakeWeb::respond(const std::string& fragment, const std::string& body) {
 }
 
 std::optional<std::string> fakeWeb::fetch(const web::request& asked) {
-	std::string request = fmt::format("{} {} {}", asked.method, asked.url, asked.body);
+	std::string request = std::format("{} {} {}", asked.method, asked.url, asked.body);
 	sent.push_back(request);
 	if (not asked.body.empty())
 		posted.push_back(asked.body);
@@ -107,8 +107,8 @@ entry findTitle(const catalogue& db, mediaType type, const std::string& title) {
 std::string storedRows(const std::filesystem::path& dataDir, mediaType type) {
 	catalogue db(dataDir);
 	auto loaded = db.loadAll();
-	if (not loaded.ok())
-		throw std::runtime_error(loaded.errorMessage());
+	if (not loaded.has_value())
+		throw std::runtime_error(loaded.error());
 	std::string rows;
 	for (const auto& row : db.getEntries(type))
 		rows += csvCodec::encodeEntry(row) + "\n";

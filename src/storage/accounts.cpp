@@ -1,8 +1,7 @@
 #include "storage/accounts.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
+#include <format>
 #include <sstream>
 
 namespace catalist::accounts {
@@ -67,7 +66,7 @@ std::string format(const std::vector<account>& logins) {
 	std::string text;
 	for (const auto& login : logins)
 		if (fits(login))
-			text += fmt::format("{}\t{}\t{}\t{}\t{}\t{}\n", providerKey(login.site), login.user,
+			text += std::format("{}\t{}\t{}\t{}\t{}\t{}\n", providerKey(login.site), login.user,
 			                    login.userId, login.token, login.renewal, login.expires);
 	return text;
 }

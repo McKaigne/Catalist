@@ -34,7 +34,7 @@ TEST_CASE("anilist logs in with the token its page shows") {
 	catalist::test::fakeWeb fake;
 	catalist::anilist::tracker site(linkWith(fake));
 	auto start = site.startLogin();
-	REQUIRE(start.ok());
+	REQUIRE(start.has_value());
 	CHECK(start.value().page ==
 	      "https://anilist.co/api/v2/oauth/authorize?client_id=al-id&response_type=token");
 	REQUIRE(start.value().questions.size() == 1);
@@ -42,22 +42,22 @@ TEST_CASE("anilist logs in with the token its page shows") {
 
 	fake.respond("Viewer", R"({"data":{"Viewer":{"id":5,"name":"Abel"}}})");
 	auto login = site.finishLogin({"tok"});
-	REQUIRE(login.ok());
+	REQUIRE(login.has_value());
 	CHECK(login.value().user == "Abel");
 	CHECK(login.value().userId == "5");
 	CHECK(login.value().token == "tok");
 	CHECK(login.value().expires == 1000 + 365LL * 24 * 60 * 60);
 	// A login good for a year is not renewed; one that has run out cannot be.
-	CHECK(site.current(login.value()).ok());
+	CHECK(site.current(login.value()).has_value());
 	auto old = login.value();
 	old.expires = 1030;
-	CHECK_FALSE(site.current(old).ok());
+	CHECK_FALSE(site.current(old).has_value());
 
 	catalist::test::fakeWeb offline;
 	catalist::anilist::tracker unreached(linkWith(offline));
-	CHECK_FALSE(unreached.finishLogin({"tok"}).ok());
+	CHECK_FALSE(unreached.finishLogin({"tok"}).has_value());
 	auto bare = offline.link();
-	CHECK(catalist::anilist::tracker(bare).startLogin().errorMessage().find(
+	CHECK(catalist::anilist::tracker(bare).startLogin().error().find(
 	          "CATALIST_ANILIST_CLIENT_ID") != std::string::npos);
 }
 
@@ -65,7 +65,7 @@ TEST_CASE("mal logs in with PKCE and the address the browser was sent to") {
 	catalist::test::fakeWeb fake;
 	catalist::mal::tracker site(linkWith(fake));
 	auto start = site.startLogin();
-	REQUIRE(start.ok());
+	REQUIRE(start.has_value());
 	std::string verifier(64, 'x');
 	CHECK(start.value().page.find("client_id=mal-id&code_challenge=" + verifier +
 	                              "&code_challenge_method=plain") != std::string::npos);
@@ -78,7 +78,7 @@ TEST_CASE("mal logs in with PKCE and the address the browser was sent to") {
 	             "refresh_token":"rt"})");
 	fake.respond("GET https://api.myanimelist.net/v2/users/@me", R"({"id":9,"name":"Abel"})");
 	auto login = site.finishLogin({"http://localhost/catalist?code=C0DE&state=catalist"});
-	REQUIRE(login.ok());
+	REQUIRE(login.has_value());
 	CHECK(login.value().site == provider::kMyAnimeList);
 	CHECK(login.value().user == "Abel");
 	CHECK(login.value().token == "at");
@@ -91,7 +91,7 @@ TEST_CASE("mal logs in with PKCE and the address the browser was sent to") {
 	auto old = login.value();
 	old.expires = 1010;
 	auto renewed = site.current(old);
-	REQUIRE(renewed.ok());
+	REQUIRE(renewed.has_value());
 	CHECK(renewed.value().token == "at2");
 	CHECK(renewed.value().renewal == "rt2");
 }
@@ -100,7 +100,7 @@ TEST_CASE("kitsu logs in with email and password, for a token it renews") {
 	catalist::test::fakeWeb fake;
 	catalist::kitsu::tracker site(linkWith(fake));
 	auto start = site.startLogin();
-	REQUIRE(start.ok());
+	REQUIRE(start.has_value());
 	CHECK(start.value().page.empty());
 	REQUIRE(start.value().questions.size() == 2);
 	CHECK_FALSE(start.value().questions[0].secret);
@@ -113,7 +113,7 @@ TEST_CASE("kitsu logs in with email and password, for a token it renews") {
 	fake.respond("GET https://kitsu.app/api/edge/users?filter[self]=true",
 	             R"({"data":[{"id":"77","attributes":{"name":"abel"}}]})");
 	auto login = site.finishLogin({"a@b.c", "p w"});
-	REQUIRE(login.ok());
+	REQUIRE(login.has_value());
 	CHECK(login.value().user == "abel");
 	CHECK(login.value().userId == "77");
 	CHECK(login.value().token == "kt");
@@ -122,6 +122,5 @@ TEST_CASE("kitsu logs in with email and password, for a token it renews") {
 	     {login.value().user, login.value().userId, login.value().token, login.value().renewal})
 		CHECK(field.find("p w") == std::string::npos);
 
-	CHECK(site.finishLogin({"a@b.c", "wrong"}).errorMessage().find("did not take") !=
-	      std::string::npos);
+	CHECK(site.finishLogin({"a@b.c", "wrong"}).error().find("did not take") != std::string::npos);
 }

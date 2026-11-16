@@ -1,10 +1,9 @@
 #include "web/json.hpp"
 
-#include <fmt/format.h>
-
 #include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <format>
 
 namespace catalist::json {
 
@@ -75,17 +74,17 @@ public:
 	result<value> parseDocument() {
 		auto parsed = parseValue(0);
 		if (not parsed)
-			return result<value>::failure(error_);
+			return std::unexpected(error_);
 		skipSpace();
 		if (pos_ != text_.size())
-			return result<value>::failure("unexpected text after the JSON value");
-		return result<value>::success(std::move(*parsed));
+			return std::unexpected("unexpected text after the JSON value");
+		return std::move(*parsed);
 	}
 
 private:
 	std::optional<value> fail(std::string message) {
 		if (error_.empty())
-			error_ = fmt::format("{} at offset {}", message, pos_);
+			error_ = std::format("{} at offset {}", message, pos_);
 		return std::nullopt;
 	}
 

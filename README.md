@@ -1,7 +1,7 @@
 # Catalist
 
 A small, local-first anime and manga tracker for the command line, written
-in **C++17**. It is made for daily tracking, scripts and pipes, and every
+in **C++23**. It is made for daily tracking, scripts and pipes, and every
 change can be undone and redone.
 
 Your lists live on your computer in one SQLite file. Catalist goes online
@@ -68,9 +68,10 @@ nix run . -- help
 
 ### CMake
 
-You need a C++17 compiler, CMake 3.20 or later, Ninja or Make, SQLite 3 and
-fmt (`libsqlite3-dev` and `libfmt-dev` on Debian and Ubuntu), and doctest
-for the tests (`doctest-dev`; `-DBUILD_TESTING=OFF` builds without them).
+You need a C++23 compiler (GCC 13 or Clang 17 and later), CMake 3.20 or
+later, Ninja or Make, and SQLite 3 (`libsqlite3-dev` on Debian and Ubuntu),
+and doctest for the tests (`doctest-dev`; `-DBUILD_TESTING=OFF` builds
+without them).
 At run time, `curl` reaches the sites; without it `add --no-lookup` still
 works.
 

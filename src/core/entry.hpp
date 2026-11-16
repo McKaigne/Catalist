@@ -41,6 +41,8 @@ struct entry {
 	// and when that check was.
 	int released = 0;
 	std::optional<isoDate> checkedAt;
+
+	bool operator==(const entry&) const = default;
 };
 
 std::string statusToString(watchStatus status, mediaType type = mediaType::kAnime);

@@ -1,9 +1,8 @@
 #include "storage/catalogue.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
 #include <cstdlib>
+#include <format>
 #include <utility>
 
 #include "core/entry.hpp"
@@ -186,7 +185,7 @@ bool writeChanges(const store::database& db, long long tx,
 std::optional<std::vector<txRecord>> readSteps(const store::database& db, const std::string& where,
                                                int limit) {
 	std::vector<txRecord> steps;
-	auto rows = db.prepare(fmt::format(
+	auto rows = db.prepare(std::format(
 	    "SELECT id, stamp, label, undone,"
 	    " (SELECT COUNT(*) FROM change WHERE change.tx = tx.id) FROM tx WHERE {} LIMIT ?",
 	    where));
@@ -209,7 +208,7 @@ bool writeJournal(store::database& db, const txNote& note,
 	    not writeChanges(db, db.lastInsertId(), changes))
 		return false;
 	return db.run(
-	    fmt::format("DELETE FROM tx WHERE id NOT IN (SELECT id FROM tx ORDER BY id DESC LIMIT {});"
+	    std::format("DELETE FROM tx WHERE id NOT IN (SELECT id FROM tx ORDER BY id DESC LIMIT {});"
 	                "DELETE FROM change WHERE tx NOT IN (SELECT id FROM tx);",
 	                catalogue::kHistoryLength));
 }
@@ -436,7 +435,7 @@ void catalogue::setProvider(provider site) {
 
 std::vector<pending> catalogue::outbox() {
 	std::vector<pending> waiting;
-	if (not openStore().ok() or not hasTable(db_, "outbox"))
+	if (not openStore().has_value() or not hasTable(db_, "outbox"))
 		return waiting;
 	auto rows = db_.prepare("SELECT site, type, id, removed, site_id FROM outbox ORDER BY seq");
 	while (rows.step()) {
@@ -477,56 +476,56 @@ bool catalogue::sent(const pending& done) {
 
 // Opening and setting up the store.
 
-result<bool> catalogue::openStore() {
+done catalogue::openStore() {
 	if (db_.isOpen())
-		return result<bool>::success(true);
+		return done{};
 	std::error_code ignored;
 	std::filesystem::create_directories(dataDir_, ignored);
 	if (not db_.open(getStorePath()))
-		return result<bool>::failure(
-		    fmt::format("cannot open {}: {}", getStorePath().string(), db_.lastError()));
+		return std::unexpected(
+		    std::format("cannot open {}: {}", getStorePath().string(), db_.lastError()));
 	auto ready = setUpStore();
-	if (not ready.ok())
+	if (not ready.has_value())
 		db_.close();
 	return ready;
 }
 
 // A new file gets its tables, in one transaction: two programs starting at
 // the same moment cannot both set it up.
-result<bool> catalogue::setUpStore() {
+done catalogue::setUpStore() {
 	if (storeVersion(db_) == kStoreVersion)
-		return result<bool>::success(true);
+		return done{};
 
 	store::transaction setup(db_);
 	if (not setup.active())
-		return result<bool>::failure(
-		    fmt::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
+		return std::unexpected(
+		    std::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
 	int version = storeVersion(db_);
 	if (version == kStoreVersion)
-		return result<bool>::success(true);
+		return done{};
 	if (version != 0)
-		return result<bool>::failure(
-		    fmt::format("{} was written by a newer Catalist", getStorePath().string()));
+		return std::unexpected(
+		    std::format("{} was written by a newer Catalist", getStorePath().string()));
 
 	if (not db_.run(kSchema))
-		return result<bool>::failure(
-		    fmt::format("cannot set up {}: {}", getStorePath().string(), db_.lastError()));
+		return std::unexpected(
+		    std::format("cannot set up {}: {}", getStorePath().string(), db_.lastError()));
 	if (not setup.commit())
-		return result<bool>::failure(
-		    fmt::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
-	return result<bool>::success(true);
+		return std::unexpected(
+		    std::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
+	return done{};
 }
 
-result<bool> catalogue::beginWrite() {
+done catalogue::beginWrite() {
 	auto opened = openStore();
-	if (not opened.ok())
+	if (not opened.has_value())
 		return opened;
 	write_.emplace(db_);
 	if (write_->active())
-		return result<bool>::success(true);
+		return done{};
 	write_.reset();
-	return result<bool>::failure(fmt::format("{} is in use by another program ({})",
-	                                         getStorePath().string(), db_.lastError()));
+	return std::unexpected(std::format("{} is in use by another program ({})",
+	                                   getStorePath().string(), db_.lastError()));
 }
 
 // Reading.
@@ -535,14 +534,14 @@ result<bool> catalogue::loadAll() {
 	std::error_code ignored;
 	bool stored = db_.isOpen() or std::filesystem::exists(getStorePath(), ignored);
 	if (not stored)
-		return result<bool>::success(false);
+		return false;
 	auto opened = openStore();
-	if (not opened.ok())
-		return opened;
+	if (not opened)
+		return std::unexpected(opened.error());
 	if (not readStore())
-		return result<bool>::failure(
-		    fmt::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
-	return result<bool>::success(true);
+		return std::unexpected(
+		    std::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
+	return true;
 }
 
 bool catalogue::peek() {
@@ -593,7 +592,7 @@ void catalogue::rememberSaved() {
 
 template <typename writer>
 bool catalogue::commit(writer work) {
-	if (not openStore().ok())
+	if (not openStore().has_value())
 		return false;
 	if (not write_)
 		write_.emplace(db_);
@@ -611,7 +610,7 @@ bool catalogue::writeRows() {
 		const auto& before = getSaved(type);
 		for (const auto& row : now) {
 			const entry* was = findById(before, row.id);
-			bool same = was and csvCodec::encodeEntry(*was) == csvCodec::encodeEntry(row);
+			bool same = was and *was == row;
 			if (not same and not bindEntry(insert, row).run())
 				return false;
 		}
@@ -693,7 +692,7 @@ result<replay> catalogue::redo(int count, bool force) {
 std::string catalogue::replayStep(const txRecord& step, bool redoing, bool force) {
 	auto changes = readChanges(db_, step.id);
 	if (not changes)
-		return fmt::format("cannot read {}: {}", getStorePath().string(), db_.lastError());
+		return std::format("cannot read {}: {}", getStorePath().string(), db_.lastError());
 	// What was done last is taken back first.
 	if (not redoing)
 		std::reverse(changes->begin(), changes->end());
@@ -701,9 +700,9 @@ std::string catalogue::replayStep(const txRecord& step, bool redoing, bool force
 		const auto& from = redoing ? made.before : made.after;
 		const auto& to = redoing ? made.after : made.before;
 		auto next = journal::transition(getList(made.type), from, to, force);
-		if (not next.ok())
-			return fmt::format("cannot {} '{}' ({}): {}", redoing ? "redo" : "undo", step.label,
-			                   step.stamp, next.errorMessage());
+		if (not next.has_value())
+			return std::format("cannot {} '{}' ({}): {}", redoing ? "redo" : "undo", step.label,
+			                   step.stamp, next.error());
 		if (not next.value())
 			removeEntry(made.type, made.id);
 		else if (not updateEntry(*next.value()))
@@ -713,17 +712,16 @@ std::string catalogue::replayStep(const txRecord& step, bool redoing, bool force
 }
 
 result<replay> catalogue::walkHistory(bool redoing, int count, bool force) {
-	using outcome = result<replay>;
 	auto opened = openStore();
-	if (not opened.ok())
-		return outcome::failure(opened.errorMessage());
+	if (not opened.has_value())
+		return std::unexpected(opened.error());
 	auto steps = readSteps(
 	    db_, redoing ? "undone = 1 ORDER BY id ASC" : "undone = 0 ORDER BY id DESC", count);
 	if (not steps)
-		return outcome::failure(
-		    fmt::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
+		return std::unexpected(
+		    std::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
 	if (steps->empty())
-		return outcome::success({});
+		return {};
 
 	// The lists as they are, to go back to when a step cannot be taken.
 	std::vector<entry> anime = animeEntries_;
@@ -739,29 +737,28 @@ result<replay> catalogue::walkHistory(bool redoing, int count, bool force) {
 		});
 	};
 	if (problem.empty() and not commit([&] { return writeChanged() and mark(); }))
-		problem = fmt::format("could not save the catalogue to {}", getDataDir().string());
+		problem = std::format("could not save the catalogue to {}", getDataDir().string());
 	if (not problem.empty()) {
 		animeEntries_ = std::move(anime);
 		mangaEntries_ = std::move(manga);
-		return outcome::failure(problem);
+		return std::unexpected(problem);
 	}
 
 	replay done{*steps, journal::diff(anime, animeEntries_)};
 	auto more = journal::diff(manga, mangaEntries_);
 	done.changes.insert(done.changes.end(), more.begin(), more.end());
 	rememberSaved();
-	return outcome::success(std::move(done));
+	return done;
 }
 
 result<std::vector<txRecord>> catalogue::history(int limit) {
-	using outcome = result<std::vector<txRecord>>;
 	if (not db_.isOpen())
-		return outcome::success({});
+		return {};
 	auto steps = readSteps(db_, "1 ORDER BY id DESC", limit);
 	if (not steps)
-		return outcome::failure(
-		    fmt::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
-	return outcome::success(std::move(*steps));
+		return std::unexpected(
+		    std::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
+	return std::move(*steps);
 }
 
 }  // namespace catalist

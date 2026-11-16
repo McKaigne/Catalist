@@ -1,8 +1,7 @@
 #include "web/kitsu.hpp"
 
-#include <fmt/format.h>
-
 #include <cstdlib>
+#include <format>
 
 #include "web/json.hpp"
 
@@ -79,7 +78,7 @@ std::string libraryStatus(watchStatus status) {
 
 // An ISO 8601 time at midnight, UTC, or null.
 std::string timeOf(const std::optional<isoDate>& day) {
-	return day ? fmt::format(R"("{}T00:00:00.000Z")", day->toString()) : "null";
+	return day ? std::format(R"("{}T00:00:00.000Z")", day->toString()) : "null";
 }
 
 int unitsOf(const json::value& attributes, mediaType type) {
@@ -103,33 +102,33 @@ web::match matchOf(const json::value& item, const json::value& included, mediaTy
 }  // namespace
 
 std::string searchUrl(mediaType type, const std::string& query) {
-	return fmt::format("{}/{}?filter[text]={}&page[limit]=10&include=mappings", kApiUrl,
+	return std::format("{}/{}?filter[text]={}&page[limit]=10&include=mappings", kApiUrl,
 	                   kindOf(type), web::urlEncoded(query));
 }
 
 result<std::vector<web::match>> parseSearch(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
-	const json::value& data = reply.ok() ? reply.value()["data"] : json::value();
+	const json::value& data = reply.has_value() ? reply.value()["data"] : json::value();
 	if (not data.isArray())
-		return result<std::vector<web::match>>::failure("unexpected reply from Kitsu");
+		return std::unexpected("unexpected reply from Kitsu");
 	std::vector<web::match> found;
 	for (const auto& item : data.items()) {
 		auto match = matchOf(item, reply.value()["included"], type);
 		if (match.kitsuId > 0 and not match.name.empty())
 			found.push_back(std::move(match));
 	}
-	return result<std::vector<web::match>>::success(std::move(found));
+	return found;
 }
 
 std::string titleUrl(mediaType type, int kitsuId) {
-	return fmt::format("{}/{}/{}?include=mappings", kApiUrl, kindOf(type), kitsuId);
+	return std::format("{}/{}/{}?include=mappings", kApiUrl, kindOf(type), kitsuId);
 }
 
 // Kitsu's statuses: current, finished, tba, unreleased and upcoming.
 result<web::details> parseTitle(const std::string& body, mediaType type) {
 	auto reply = json::parse(body);
-	if (not reply.ok() or reply.value()["data"]["id"].isNull())
-		return result<web::details>::failure("Kitsu does not know the title");
+	if (not reply.has_value() or reply.value()["data"]["id"].isNull())
+		return std::unexpected("Kitsu does not know the title");
 	const json::value& item = reply.value()["data"];
 	auto match = matchOf(item, reply.value()["included"], type);
 	std::string status = item["attributes"]["status"].asString().value_or("");
@@ -140,18 +139,18 @@ result<web::details> parseTitle(const std::string& body, mediaType type) {
 	found.ongoing = status == "current";
 	if (status == "finished")
 		found.facts.released = match.totalUnits;
-	return result<web::details>::success(std::move(found));
+	return found;
 }
 
 std::string mappingUrl(mediaType type, int malId) {
-	return fmt::format(
+	return std::format(
 	    "{}/mappings?filter[externalSite]=myanimelist/{}&filter[externalId]={}&include=item",
 	    kApiUrl, kindOf(type), malId);
 }
 
 int parseMapping(const std::string& body) {
 	auto reply = json::parse(body);
-	if (not reply.ok())
+	if (not reply.has_value())
 		return 0;
 	for (const auto& mapping : reply.value()["data"].items())
 		return idOf(mapping["relationships"]["item"]["data"]["id"]);
@@ -160,7 +159,7 @@ int parseMapping(const std::string& body) {
 
 std::string libraryUrl(mediaType type, const std::string& userId) {
 	std::string kind = kindOf(type);
-	return fmt::format(
+	return std::format(
 	    "{}/library-entries?filter[userId]={}&filter[kind]={}&include={},{}.mappings"
 	    "&page[limit]=500",
 	    kApiUrl, userId, kind, kind, kind);
@@ -169,9 +168,9 @@ std::string libraryUrl(mediaType type, const std::string& userId) {
 result<std::vector<entry>> parseLibrary(const std::string& body, mediaType type,
                                         std::string& next) {
 	auto reply = json::parse(body);
-	const json::value& data = reply.ok() ? reply.value()["data"] : json::value();
+	const json::value& data = reply.has_value() ? reply.value()["data"] : json::value();
 	if (not data.isArray())
-		return result<std::vector<entry>>::failure("unexpected reply from Kitsu");
+		return std::unexpected("unexpected reply from Kitsu");
 	const json::value& included = reply.value()["included"];
 	std::string kind = kindOf(type);
 	std::vector<entry> found;
@@ -207,12 +206,12 @@ result<std::vector<entry>> parseLibrary(const std::string& body, mediaType type,
 			found.push_back(std::move(e));
 	}
 	next = reply.value()["links"]["next"].asString().value_or("");
-	return result<std::vector<entry>>::success(std::move(found));
+	return found;
 }
 
 std::string libraryAttributes(const entry& title) {
 	// ratingTwenty runs from 2 to 20; null is no rating.
-	return fmt::format(R"({{"status":"{}","progress":{},"reconsumeCount":{},"ratingTwenty":{},)"
+	return std::format(R"({{"status":"{}","progress":{},"reconsumeCount":{},"ratingTwenty":{},)"
 	                   R"("startedAt":{},"finishedAt":{}}})",
 	                   libraryStatus(title.status), title.progress, title.rewatched,
 	                   title.score > 0 ? std::to_string(title.score * 2) : "null",
@@ -226,14 +225,14 @@ std::vector<std::string> tracker::asUser(const account& login) {
 
 std::optional<int> tracker::libraryEntry(mediaType type, int kitsuId, const account& login) const {
 	auto body = net_.fetch({"GET",
-	                        fmt::format("{}/library-entries?filter[userId]={}&filter[{}Id]={}"
+	                        std::format("{}/library-entries?filter[userId]={}&filter[{}Id]={}"
 	                                    "&page[limit]=1",
 	                                    kApiUrl, login.userId, kindOf(type), kitsuId),
 	                        asUser(login), ""});
 	if (not body)
 		return std::nullopt;
 	auto reply = json::parse(*body);
-	if (not reply.ok())
+	if (not reply.has_value())
 		return std::nullopt;
 	for (const auto& found : reply.value()["data"].items())
 		return idOf(found["id"]);
@@ -241,68 +240,67 @@ std::optional<int> tracker::libraryEntry(mediaType type, int kitsuId, const acco
 }
 
 result<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
-	using outcome = result<std::vector<entry>>;
-	auto people = get(fmt::format("{}/users?filter[name]={}", kApiUrl, web::urlEncoded(user)));
+	auto people = get(std::format("{}/users?filter[name]={}", kApiUrl, web::urlEncoded(user)));
 	if (not people)
-		return outcome::failure("could not reach Kitsu");
+		return std::unexpected("could not reach Kitsu");
 	auto reply = json::parse(*people);
 	std::string userId;
-	if (reply.ok() and not reply.value()["data"].items().empty())
+	if (reply.has_value() and not reply.value()["data"].items().empty())
 		userId = reply.value()["data"].items().front()["id"].asString().value_or("");
 	if (userId.empty())
-		return outcome::failure(fmt::format("Kitsu has no user named {}", user));
+		return std::unexpected(std::format("Kitsu has no user named {}", user));
 	std::vector<entry> all;
 	for (std::string page = libraryUrl(type, userId); not page.empty();) {
 		pause();
 		auto body = get(page);
 		if (not body)
-			return outcome::failure("could not reach Kitsu");
+			return std::unexpected("could not reach Kitsu");
 		auto entries = parseLibrary(*body, type, page);
-		if (not entries.ok())
+		if (not entries.has_value())
 			return entries;
 		all.insert(all.end(), entries.value().begin(), entries.value().end());
 	}
-	return outcome::success(std::move(all));
+	return all;
 }
 
-result<bool> tracker::push(const entry& title, const account& login) {
+done tracker::push(const entry& title, const account& login) {
 	if (title.kitsuId <= 0)
-		return result<bool>::failure(web::notLinked(provider::kKitsu));
+		return std::unexpected(web::notLinked(provider::kKitsu));
 	auto existing = libraryEntry(title.type, title.kitsuId, login);
 	if (not existing)
-		return result<bool>::failure("could not reach Kitsu");
+		return std::unexpected("could not reach Kitsu");
 	pause();
 	std::string kind = kindOf(title.type);
 	auto body =
 	    *existing > 0
-	        ? net_.fetch({"PATCH", fmt::format("{}/library-entries/{}", kApiUrl, *existing),
+	        ? net_.fetch({"PATCH", std::format("{}/library-entries/{}", kApiUrl, *existing),
 	                      asUser(login),
-	                      fmt::format(R"({{"data":{{"id":"{}","type":"libraryEntries",)"
+	                      std::format(R"({{"data":{{"id":"{}","type":"libraryEntries",)"
 	                                  R"("attributes":{}}}}})",
 	                                  *existing, libraryAttributes(title))})
 	        : net_.fetch(
 	              {"POST", kApiUrl + "/library-entries", asUser(login),
-	               fmt::format(R"({{"data":{{"type":"libraryEntries","attributes":{},)"
+	               std::format(R"({{"data":{{"type":"libraryEntries","attributes":{},)"
 	                           R"("relationships":{{"user":{{"data":{{"type":"users",)"
 	                           R"("id":"{}"}}}},"{}":{{"data":{{"type":"{}","id":"{}"}}}}}}}}}})",
 	                           libraryAttributes(title), login.userId, kind, kind, title.kitsuId)});
 	if (not body)
-		return result<bool>::failure("could not reach Kitsu, or it did not take the change");
-	return result<bool>::success(true);
+		return std::unexpected("could not reach Kitsu, or it did not take the change");
+	return done{};
 }
 
-result<bool> tracker::remove(mediaType type, int siteId, const account& login) {
+done tracker::remove(mediaType type, int siteId, const account& login) {
 	auto existing = libraryEntry(type, siteId, login);
 	if (not existing)
-		return result<bool>::failure("could not reach Kitsu");
+		return std::unexpected("could not reach Kitsu");
 	if (*existing == 0)
-		return result<bool>::success(true);
+		return done{};
 	pause();
 	auto body = net_.fetch(
-	    {"DELETE", fmt::format("{}/library-entries/{}", kApiUrl, *existing), asUser(login), ""});
+	    {"DELETE", std::format("{}/library-entries/{}", kApiUrl, *existing), asUser(login), ""});
 	if (not body)
-		return result<bool>::failure("could not reach Kitsu, or it did not take the change");
-	return result<bool>::success(true);
+		return std::unexpected("could not reach Kitsu, or it did not take the change");
+	return done{};
 }
 
 std::optional<std::string> tracker::get(const std::string& url) const {
@@ -312,7 +310,7 @@ std::optional<std::string> tracker::get(const std::string& url) const {
 result<std::vector<web::match>> tracker::search(mediaType type, const std::string& query) {
 	auto body = get(searchUrl(type, query));
 	if (not body)
-		return result<std::vector<web::match>>::failure("could not reach Kitsu");
+		return std::unexpected("could not reach Kitsu");
 	return parseSearch(*body, type);
 }
 
@@ -321,26 +319,26 @@ result<web::details> tracker::lookUp(const entry& known) {
 	if (id <= 0 and known.malId > 0) {
 		auto mapped = get(mappingUrl(known.type, known.malId));
 		if (not mapped)
-			return result<web::details>::failure("could not reach Kitsu");
+			return std::unexpected("could not reach Kitsu");
 		id = parseMapping(*mapped);
 		if (id <= 0)
-			return result<web::details>::failure("Kitsu does not know the title");
+			return std::unexpected("Kitsu does not know the title");
 		net_.pause();
 	}
 	if (id <= 0)
-		return result<web::details>::failure("the title has no id to look up");
+		return std::unexpected("the title has no id to look up");
 	auto body = get(titleUrl(known.type, id));
 	if (not body)
-		return result<web::details>::failure("could not reach Kitsu");
+		return std::unexpected("could not reach Kitsu");
 	return parseTitle(*body, known.type);
 }
 
 result<web::loginStart> tracker::startLogin() {
-	return result<web::loginStart>::success(
-	    {"",
-	     "Kitsu takes your email and password once, for a token; the password is\n"
-	     "not kept.",
-	     {{"Email", false}, {"Password", true}}});
+	return web::loginStart{
+	    "",
+	    "Kitsu takes your email and password once, for a token; the password is\n"
+	    "not kept.",
+	    {{"Email", false}, {"Password", true}}};
 }
 
 result<account> tracker::accountFor(std::vector<std::pair<std::string, std::string>> fields) {
@@ -354,36 +352,36 @@ result<account> tracker::accountFor(std::vector<std::pair<std::string, std::stri
 	                         web::formEncoded(fields)});
 	auto token = reply ? web::parseTokenReply(*reply) : std::nullopt;
 	if (not token)
-		return result<account>::failure(
+		return std::unexpected(
 		    "Kitsu did not take the login (is the email right?), or could not be reached");
 	auto body = net_.fetch({"GET",
 	                        kApiUrl + "/users?filter[self]=true",
 	                        {"Accept: application/vnd.api+json", web::bearer(token->token)},
 	                        ""});
-	auto me = body ? json::parse(*body) : result<json::value>::failure("");
+	auto me = body ? json::parse(*body) : std::unexpected("");
 	const json::value* user = nullptr;
-	if (me.ok() and not me.value()["data"].items().empty())
+	if (me.has_value() and not me.value()["data"].items().empty())
 		user = &me.value()["data"].items().front();
 	auto name = user ? (*user)["attributes"]["name"].asString() : std::nullopt;
 	if (not name)
-		return result<account>::failure("Kitsu did not say whose login it is");
-	return result<account>::success({provider::kKitsu, *name, (*user)["id"].asString().value_or(""),
-	                                 token->token, token->renewal, net_.now() + token->lifetime});
+		return std::unexpected("Kitsu did not say whose login it is");
+	return account{provider::kKitsu, *name,          (*user)["id"].asString().value_or(""),
+	               token->token,     token->renewal, net_.now() + token->lifetime};
 }
 
 result<account> tracker::finishLogin(const std::vector<std::string>& answers) {
 	if (answers.size() < 2 or answers[0].empty() or answers[1].empty())
-		return result<account>::failure("give the email and the password");
+		return std::unexpected("give the email and the password");
 	return accountFor(
 	    {{"grant_type", "password"}, {"username", answers[0]}, {"password", answers[1]}});
 }
 
 result<account> tracker::current(const account& login) {
 	if (not web::runningOut(login, net_.now()))
-		return result<account>::success(login);
+		return login;
 	auto renewed = accountFor({{"grant_type", "refresh_token"}, {"refresh_token", login.renewal}});
-	if (not renewed.ok())
-		return result<account>::failure(
+	if (not renewed.has_value())
+		return std::unexpected(
 		    "your Kitsu login has run out: log in again with 'catalist login kitsu'");
 	return renewed;
 }

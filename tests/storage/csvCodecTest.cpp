@@ -141,7 +141,7 @@ TEST_CASE("csvCodec reads the 0.3 layout and its extra columns, dropping them") 
 
 TEST_CASE("csvCodec reads an unknown status as planned instead of dropping the row") {
 	auto decoded = csvCodec::decodeEntries("1,0,manga,Edited by hand,Someday,0,0,0,0,0,0,,,\n");
-	REQUIRE(decoded.ok());
+	REQUIRE(decoded.has_value());
 	REQUIRE(decoded.value().size() == 1);
 	CHECK(decoded.value()[0].status == watchStatus::kPlanToWatch);
 	CHECK(decoded.value()[0].type == mediaType::kManga);
@@ -151,8 +151,8 @@ TEST_CASE("csvCodec names the first row it cannot read") {
 	auto decoded = csvCodec::decodeEntries(
 	    "1,0,anime,Fine,Watching,0,0,0,0,0,0,,,\n"
 	    "x,0,anime,Bad id,Watching,0,0,0,0,0,0,,,\n");
-	REQUIRE_FALSE(decoded.ok());
-	CHECK(decoded.errorMessage() == "row 2 has a column layout this version cannot read");
+	REQUIRE_FALSE(decoded.has_value());
+	CHECK(decoded.error() == "row 2 has a column layout this version cannot read");
 }
 
 TEST_CASE("csvCodec adds the Kitsu id as an 18th field, only when there is one") {

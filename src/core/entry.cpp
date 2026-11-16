@@ -1,8 +1,7 @@
 #include "core/entry.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
+#include <format>
 
 namespace catalist {
 
@@ -112,11 +111,11 @@ std::string pageOn(const entry& shown, provider site) {
 	std::string kind = shown.type == mediaType::kAnime ? "anime" : "manga";
 	switch (site) {
 		case provider::kAniList:
-			return fmt::format("https://anilist.co/{}/{}", kind, id);
+			return std::format("https://anilist.co/{}/{}", kind, id);
 		case provider::kMyAnimeList:
-			return fmt::format("https://myanimelist.net/{}/{}", kind, id);
+			return std::format("https://myanimelist.net/{}/{}", kind, id);
 		case provider::kKitsu:
-			return fmt::format("https://kitsu.app/{}/{}", kind, id);
+			return std::format("https://kitsu.app/{}/{}", kind, id);
 	}
 	return "";
 }

@@ -1,9 +1,8 @@
 #include "cli/args.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
 #include <cctype>
+#include <format>
 #include <istream>
 #include <numeric>
 
@@ -34,8 +33,8 @@ std::string unknownLong(const std::vector<option>& options, const std::string& n
 		if (not each.name.empty())
 			names.push_back(each.name);
 	auto guess = closestTo(name, names);
-	return fmt::format("unknown option '--{}'{}", name,
-	                   guess ? fmt::format(" (did you mean '--{}'?)", *guess) : "");
+	return std::format("unknown option '--{}'{}", name,
+	                   guess ? std::format(" (did you mean '--{}'?)", *guess) : "");
 }
 
 // Reads the arguments one at a time; `next` is the one being read.
@@ -61,13 +60,13 @@ struct reader {
 			return unknownLong(options, name);
 		if (found->value.empty()) {
 			if (equals != std::string::npos)
-				return fmt::format("option '--{}' takes no value", name);
+				return std::format("option '--{}' takes no value", name);
 			line.options[keyOf(*found)] = "";
 			return "";
 		}
 		auto value = equals != std::string::npos ? argument.substr(equals + 1) : takeValue();
 		if (not value)
-			return fmt::format("option '--{}' needs a value ({})", name, found->value);
+			return std::format("option '--{}' needs a value ({})", name, found->value);
 		line.options[keyOf(*found)] = *value;
 		return "";
 	}
@@ -77,7 +76,7 @@ struct reader {
 		for (size_t at = 1; at < argument.size(); ++at) {
 			const option* found = findShort(options, argument[at]);
 			if (not found)
-				return fmt::format("unknown option '-{}'", argument[at]);
+				return std::format("unknown option '-{}'", argument[at]);
 			if (found->value.empty()) {
 				line.options[keyOf(*found)] = "";
 				continue;
@@ -85,7 +84,7 @@ struct reader {
 			// What is left of the argument is the value; else the next one.
 			auto value = at + 1 < argument.size() ? argument.substr(at + 1) : takeValue();
 			if (not value)
-				return fmt::format("option '-{}' needs a value ({})", argument[at], found->value);
+				return std::format("option '-{}' needs a value ({})", argument[at], found->value);
 			line.options[keyOf(*found)] = *value;
 			return "";
 		}
@@ -96,7 +95,7 @@ struct reader {
 }  // namespace
 
 std::string spelled(const option& taken) {
-	return taken.name.empty() ? fmt::format("-{}", taken.letter) : fmt::format("--{}", taken.name);
+	return taken.name.empty() ? std::format("-{}", taken.letter) : std::format("--{}", taken.name);
 }
 
 size_t editDistance(const std::string& from, const std::string& to) {
@@ -133,11 +132,11 @@ result<parsed> parse(const std::vector<std::string>& arguments,
 			break;
 		std::string error = argument[1] == '-' ? read.readLong(argument) : read.readShort(argument);
 		if (not error.empty())
-			return result<parsed>::failure(error);
+			return std::unexpected(error);
 	}
 	read.line.operands.assign(arguments.begin() + static_cast<std::ptrdiff_t>(read.next),
 	                          arguments.end());
-	return result<parsed>::success(std::move(read.line));
+	return std::move(read.line);
 }
 
 std::vector<std::string> withLinesFor(const std::vector<std::string>& operands, std::istream& in) {

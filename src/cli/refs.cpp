@@ -1,9 +1,8 @@
 #include "cli/refs.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
 #include <cctype>
+#include <format>
 #include <sstream>
 
 #include "cli/args.hpp"
@@ -47,7 +46,7 @@ std::string of(const entry& named) {
 }
 
 std::string of(mediaType type, int id) {
-	return fmt::format("{}:{}", type == mediaType::kAnime ? 'a' : 'm', id);
+	return std::format("{}:{}", type == mediaType::kAnime ? 'a' : 'm', id);
 }
 
 bool titleHolds(const entry& shown, const std::string& text) {

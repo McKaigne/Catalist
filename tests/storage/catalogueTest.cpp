@@ -109,7 +109,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue getById and findByIds look in one m
 
 TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps the provider") {
 	catalogue db(tempDir() / "data");
-	REQUIRE(db.loadAll().ok());
+	REQUIRE(db.loadAll().has_value());
 	CHECK(db.getProvider() == catalist::provider::kAniList);
 	db.setProvider(catalist::provider::kMyAnimeList);
 	// Only the settings are written: a title added but not saved stays out.
@@ -228,7 +228,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue statistics count, average and estim
 TEST_CASE_FIXTURE(tempDirFixture, "catalogue loadAll says whether anything was stored") {
 	catalogue db(tempDir() / "data");
 	auto loaded = db.loadAll();
-	REQUIRE(loaded.ok());
+	REQUIRE(loaded.has_value());
 	CHECK_FALSE(loaded.value());
 	// Looking at an empty catalogue creates nothing.
 	CHECK_FALSE(std::filesystem::exists(tempDir() / "data"));
@@ -365,20 +365,20 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue beginWrite holds the catalogue unti
 	{
 		// A command that gives up before saving leaves nothing behind.
 		catalogue db(dir);
-		REQUIRE(db.beginWrite().ok());
-		REQUIRE(db.loadAll().ok());
+		REQUIRE(db.beginWrite().has_value());
+		REQUIRE(db.loadAll().has_value());
 		db.addEntry(makeEntry().title("Dropped on the way"));
 	}
 	{
 		catalogue db(dir);
-		REQUIRE(db.beginWrite().ok());
-		REQUIRE(db.loadAll().ok());
+		REQUIRE(db.beginWrite().has_value());
+		REQUIRE(db.loadAll().has_value());
 		CHECK(db.getEntries(mediaType::kAnime).empty());
 		db.addEntry(makeEntry().title("Kept"));
 		REQUIRE(db.saveAll());
 		// The save ended the write: another program can write again.
 		catalogue other(dir);
-		REQUIRE(other.beginWrite().ok());
+		REQUIRE(other.beginWrite().has_value());
 	}
 	catalogue after(dir);
 	REQUIRE(after.loadAll().value());
@@ -404,7 +404,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue peek reads the lists and leaves not
 	CHECK(db.getEntries(mediaType::kAnime)[0].title == "Odd Taxi");
 	// The file was closed again: another program writes without waiting.
 	catalogue writer(dir);
-	CHECK(writer.beginWrite().ok());
+	CHECK(writer.beginWrite().has_value());
 
 	catalist::test::writeText(tempDir() / "other/catalist.db", "this is not a database");
 	catalogue broken(tempDir() / "other");
@@ -417,15 +417,15 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue reports a failed write and a file i
 	db.addEntry(makeEntry().title("Nowhere to go"));
 	CHECK_FALSE(db.saveAll());
 	CHECK_FALSE(db.saveSettings());
-	CHECK_FALSE(db.beginWrite().ok());
+	CHECK_FALSE(db.beginWrite().has_value());
 	auto loaded = db.loadAll();
-	REQUIRE_FALSE(loaded.ok());
-	CHECK(loaded.errorMessage().find("cannot open " + (tempDir() / "data/catalist.db").string() +
-	                                 ": ") == 0);
+	REQUIRE_FALSE(loaded.has_value());
+	CHECK(loaded.error().find("cannot open " + (tempDir() / "data/catalist.db").string() + ": ") ==
+	      0);
 
 	catalist::test::writeText(tempDir() / "other/catalist.db", "this is not a database");
 	catalogue broken(tempDir() / "other");
-	CHECK_FALSE(broken.loadAll().ok());
+	CHECK_FALSE(broken.loadAll().has_value());
 	CHECK(catalist::test::readText(tempDir() / "other/catalist.db") == "this is not a database");
 }
 
@@ -508,7 +508,7 @@ TEST_CASE_FIXTURE(tempDirFixture,
 	watch(db, 2, 7, noteOf("second"));
 
 	auto undone = db.undo(1, false);
-	REQUIRE(undone.ok());
+	REQUIRE(undone.has_value());
 	REQUIRE(undone.value().steps.size() == 1);
 	CHECK(undone.value().steps[0].label == "second");
 	REQUIRE(undone.value().changes.size() == 1);
@@ -524,20 +524,20 @@ TEST_CASE_FIXTURE(tempDirFixture,
 		CHECK(progressOf(saved, 2) == 6);
 	}
 
-	REQUIRE(db.undo(1, false).ok());
+	REQUIRE(db.undo(1, false).has_value());
 	CHECK(progressOf(db, 2) == 5);
 	auto nothing = db.undo(1, false);
-	REQUIRE(nothing.ok());
+	REQUIRE(nothing.has_value());
 	CHECK(nothing.value().steps.empty());
 	CHECK(nothing.value().changes.empty());
 
 	// The step undone last is made again first.
 	auto redone = db.redo(1, false);
-	REQUIRE(redone.ok());
+	REQUIRE(redone.has_value());
 	REQUIRE(redone.value().steps.size() == 1);
 	CHECK(redone.value().steps[0].label == "first");
 	CHECK(progressOf(db, 2) == 6);
-	REQUIRE(db.redo(5, false).ok());
+	REQUIRE(db.redo(5, false).has_value());
 	CHECK(progressOf(db, 2) == 7);
 	CHECK(db.redo(1, false).value().steps.empty());
 	steps = db.history(0).value();
@@ -546,7 +546,7 @@ TEST_CASE_FIXTURE(tempDirFixture,
 
 	// Several at once, newest first; more than there are is all of them.
 	auto both = db.undo(9, false);
-	REQUIRE(both.ok());
+	REQUIRE(both.has_value());
 	REQUIRE(both.value().steps.size() == 2);
 	CHECK(both.value().steps[0].label == "second");
 	CHECK(both.value().steps[1].label == "first");
@@ -570,7 +570,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo keeps what the web filled in s
 	REQUIRE(db.updateEntry(taxi));
 	REQUIRE(db.saveAll());
 
-	REQUIRE(db.undo(1, false).ok());
+	REQUIRE(db.undo(1, false).has_value());
 	taxi = *db.getById(mediaType::kAnime, 2);
 	CHECK(taxi.progress == 5);
 	CHECK(taxi.released == 13);
@@ -590,8 +590,8 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo changes nothing when a title h
 
 	// The newer step could be taken back, the older one not: neither is.
 	auto refused = db.undo(2, false);
-	REQUIRE_FALSE(refused.ok());
-	CHECK(refused.errorMessage() ==
+	REQUIRE_FALSE(refused.has_value());
+	CHECK(refused.error() ==
 	      "cannot undo 'older' (2026-10-20 21:30:00): Odd Taxi (a:2) has changed since: "
 	      "progress is now 9, not 6");
 	CHECK(progressOf(db, 1) == 4);
@@ -607,7 +607,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo changes nothing when a title h
 	}
 
 	auto forced = db.undo(2, true);
-	REQUIRE(forced.ok());
+	REQUIRE(forced.has_value());
 	CHECK(forced.value().steps.size() == 2);
 	CHECK(progressOf(db, 1) == 0);
 	CHECK(progressOf(db, 2) == 5);
@@ -618,8 +618,8 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo changes nothing when a title h
 	REQUIRE(db.updateEntry(taxi));
 	REQUIRE(db.saveAll());
 	auto again = db.redo(1, false);
-	REQUIRE_FALSE(again.ok());
-	CHECK(again.errorMessage() ==
+	REQUIRE_FALSE(again.has_value());
+	CHECK(again.error() ==
 	      "cannot redo 'older' (2026-10-20 21:30:00): Odd Taxi (a:2) has changed since: "
 	      "progress is now 1, not 5");
 	CHECK(progressOf(db, 2) == 1);
@@ -636,7 +636,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo brings a removed title back un
 
 	// In its place: the lists are kept in the order of their ids.
 	CHECK_FALSE(db.restoreEntry(*db.getById(mediaType::kAnime, 3)));
-	REQUIRE(db.undo(1, false).ok());
+	REQUIRE(db.undo(1, false).has_value());
 	auto anime = db.getEntries(mediaType::kAnime);
 	REQUIRE(anime.size() == 3);
 	CHECK(anime[1].id == 2);
@@ -648,13 +648,13 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo brings a removed title back un
 		CHECK(saved.getById(mediaType::kAnime, 2)->title == "Odd Taxi");
 	}
 	// Redo removes it again; undo of an addition removes what was added.
-	REQUIRE(db.redo(1, false).ok());
+	REQUIRE(db.redo(1, false).has_value());
 	CHECK_FALSE(db.getById(mediaType::kAnime, 2));
 	int added = db.addEntry(makeEntry().title("Dandadan").anilistId(171018));
 	REQUIRE(db.saveAll(noteOf("add dandadan")));
-	REQUIRE(db.undo(1, false).ok());
+	REQUIRE(db.undo(1, false).has_value());
 	CHECK_FALSE(db.getById(mediaType::kAnime, added));
-	REQUIRE(db.redo(1, false).ok());
+	REQUIRE(db.redo(1, false).has_value());
 	CHECK(db.getById(mediaType::kAnime, added)->title == "Dandadan");
 }
 
@@ -669,8 +669,8 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo cannot bring a title back to a
 
 	for (bool force : {false, true}) {
 		auto refused = db.undo(1, force);
-		REQUIRE_FALSE(refused.ok());
-		CHECK(refused.errorMessage() ==
+		REQUIRE_FALSE(refused.has_value());
+		CHECK(refused.error() ==
 		      "cannot undo 'rm taxi' (2026-10-20 21:30:00): Odd Taxi (a:2) cannot come back: "
 		      "its ref is now that of Mushishi");
 	}
@@ -683,7 +683,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue forgets what was undone when new wo
 	seedForUndo(db);
 	watch(db, 2, 6, noteOf("first"));
 	watch(db, 2, 7, noteOf("second"));
-	REQUIRE(db.undo(1, false).ok());
+	REQUIRE(db.undo(1, false).has_value());
 	// A save outside the history leaves what can be redone.
 	auto frieren = *db.getById(mediaType::kAnime, 1);
 	frieren.released = 28;
@@ -711,7 +711,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps the last 100 steps") {
 	CHECK(steps.back().label == "6");
 	CHECK(steps.back().changes == 1);
 	auto all = db.undo(1000, false);
-	REQUIRE(all.ok());
+	REQUIRE(all.has_value());
 	CHECK(all.value().steps.size() == static_cast<size_t>(catalogue::kHistoryLength));
 	CHECK(progressOf(db, 1) == 5);
 }
@@ -803,7 +803,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo brings back a removed title's 
 	REQUIRE(db.saveAll());
 	REQUIRE(db.removeEntry(mediaType::kAnime, 1));
 	REQUIRE(db.saveAll(noteOf("rm frieren")));
-	REQUIRE(db.undo(1, false).ok());
+	REQUIRE(db.undo(1, false).has_value());
 	catalogue again(tempDir() / "data");
 	REQUIRE(again.loadAll().value());
 	CHECK(again.getById(mediaType::kAnime, 1)->kitsuId == 46474);

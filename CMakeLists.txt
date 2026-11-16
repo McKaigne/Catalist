@@ -7,13 +7,12 @@ project(catalist VERSION ${CATALIST_VERSION} LANGUAGES CXX)
 
 include(GNUInstallDirs)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # clangd reads build/compile_commands.json (see .clangd); without it every
 # project include shows up as an error in the editor.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(fmt REQUIRED)
 # The lists are kept in an SQLite file.
 find_package(SQLite3 REQUIRED)
 if(TARGET SQLite3::SQLite3)
@@ -77,7 +76,7 @@ add_library(catalistLib STATIC
   src/system.cpp
 )
 target_include_directories(catalistLib PUBLIC src "${CATALIST_GENERATED_DIR}")
-target_link_libraries(catalistLib PUBLIC fmt::fmt ${CATALIST_SQLITE})
+target_link_libraries(catalistLib PUBLIC ${CATALIST_SQLITE})
 target_compile_options(catalistLib PRIVATE ${CATALIST_WARNING_FLAGS})
 
 add_executable(catalist src/main.cpp)
@@ -128,7 +127,6 @@ add_executable(catalistTests
   tests/support/testSupport.cpp
   tests/core/dateTest.cpp
   tests/core/entryTest.cpp
-  tests/core/resultTest.cpp
   tests/core/textTest.cpp
   tests/core/versionTest.cpp
   tests/storage/accountsTest.cpp

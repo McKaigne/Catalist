@@ -20,7 +20,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli provider prints or sets the site titles are l
 	CHECK(err == "Your provider is now MyAnimeList.\n");
 	{
 		catalist::catalogue db("data");
-		REQUIRE(db.loadAll().ok());
+		REQUIRE(db.loadAll().has_value());
 		CHECK(db.getProvider() == catalist::provider::kMyAnimeList);
 	}
 	CHECK(run({"provider"}) == 0);

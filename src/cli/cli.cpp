@@ -1,8 +1,7 @@
 #include "cli/cli.hpp"
 
-#include <fmt/format.h>
-
 #include <algorithm>
+#include <format>
 #include <ostream>
 
 #include "cli/common.hpp"
@@ -38,21 +37,21 @@ std::vector<std::string> commandNames() {
 
 // "-s STATUS", "    --sort=KEY", "-h, --help".
 std::string optionLabel(const args::option& shown) {
-	std::string label = shown.letter ? fmt::format("-{}", shown.letter) : "  ";
+	std::string label = shown.letter ? std::format("-{}", shown.letter) : "  ";
 	if (not shown.name.empty())
-		label += fmt::format("{} --{}", shown.letter ? "," : " ", shown.name);
+		label += std::format("{} --{}", shown.letter ? "," : " ", shown.name);
 	if (not shown.value.empty())
-		label += fmt::format("{}{}", shown.name.empty() ? " " : "=", shown.value);
+		label += std::format("{}{}", shown.name.empty() ? " " : "=", shown.value);
 	return label;
 }
 
 void printCommandHelp(cliContext& ctx, const command& cmd) {
-	ctx.out << fmt::format("{}.\n\nUsage: catalist {}\n", cmd.summary, usageLine(cmd));
+	ctx.out << std::format("{}.\n\nUsage: catalist {}\n", cmd.summary, usageLine(cmd));
 	if (not cmd.aliases.empty()) {
 		std::string also;
 		for (const auto& alias : cmd.aliases)
-			also += fmt::format("{}catalist {}", also.empty() ? "" : ", ", alias);
-		ctx.out << fmt::format("Also:  {}\n", also);
+			also += std::format("{}catalist {}", also.empty() ? "" : ", ", alias);
+		ctx.out << std::format("Also:  {}\n", also);
 	}
 	if (not cmd.details.empty())
 		ctx.out << "\n" << cmd.details;
@@ -64,21 +63,21 @@ void printCommandHelp(cliContext& ctx, const command& cmd) {
 	for (const auto& each : options)
 		width = std::max(width, optionLabel(each).size() + 2);
 	for (const auto& each : options)
-		ctx.out << fmt::format("  {:<{}}{}\n", optionLabel(each), width, each.help);
+		ctx.out << std::format("  {:<{}}{}\n", optionLabel(each), width, each.help);
 }
 
 void printHelp(cliContext& ctx) {
-	ctx.out << fmt::format(
+	ctx.out << std::format(
 	    "Catalist {} - track anime and manga from the terminal.\n\n"
 	    "Usage: catalist [OPTION...] COMMAND [ARG...]\n\nCommands:\n",
 	    kVersionString);
 	for (const auto& each : commands())
 		if (not each.hidden)
-			ctx.out << fmt::format("  {:<12}{}\n", each.name, each.summary);
+			ctx.out << std::format("  {:<12}{}\n", each.name, each.summary);
 	ctx.out << "\nOptions, before the command:\n";
 	for (const auto& each : globalOptions())
-		ctx.out << fmt::format("  {:<18}{}\n", optionLabel(each), each.help);
-	ctx.out << fmt::format(
+		ctx.out << std::format("  {:<18}{}\n", optionLabel(each), each.help);
+	ctx.out << std::format(
 	    "\nName a title by its ref, the first column of 'catalist ls' (a:12 is an anime,\n"
 	    "m:3 a manga), or by part of its title:\n"
 	    "  catalist show a:12\n"
@@ -104,12 +103,12 @@ int runHelp(const command& self, const args::parsed& line, cliContext& ctx) {
 		return 0;
 	}
 	return usageError(ctx, self,
-	                  fmt::format("no command '{}'{}", name, didYouMean(name, commandNames())));
+	                  std::format("no command '{}'{}", name, didYouMean(name, commandNames())));
 }
 
 // A command line wrong before its command: no command, or one not known.
 int commandError(cliContext& ctx, const std::string& what) {
-	ctx.err << fmt::format(
+	ctx.err << std::format(
 	    "error: {}\nUsage: catalist [OPTION...] COMMAND [ARG...]\nRun 'catalist help' to see the "
 	    "commands.\n",
 	    what);
@@ -145,7 +144,7 @@ bool applyGlobals(cliContext& ctx, const args::parsed& line) {
 
 int unknownCommand(cliContext& ctx, const std::string& first) {
 	return commandError(
-	    ctx, fmt::format("unknown command '{}'{}", first, didYouMean(first, commandNames())));
+	    ctx, std::format("unknown command '{}'{}", first, didYouMean(first, commandNames())));
 }
 
 }  // namespace
@@ -160,14 +159,11 @@ const std::vector<command>& commands() {
 		      cli::accountCommands(), cli::syncCommands(), cli::transferCommands(),
 		      cli::historyCommands(), cli::setupCommands()})
 			table.insert(table.end(), group.begin(), group.end());
-		table.push_back({"help",
-		                 {},
-		                 "Show help for a command",
-		                 "",
-		                 {},
-		                 "[COMMAND]",
-		                 runHelp,
-		                 operandKind::kCommands});
+		table.push_back({.name = "help",
+		                 .summary = "Show help for a command",
+		                 .operands = "[COMMAND]",
+		                 .run = runHelp,
+		                 .completes = operandKind::kCommands});
 		return table;
 	}();
 	return all;
@@ -199,14 +195,14 @@ std::string usageLine(const command& shown) {
 		if (each.value.empty() and each.letter)
 			flags += each.letter;
 		else if (each.value.empty())
-			valued += fmt::format(" [--{}]", each.name);
+			valued += std::format(" [--{}]", each.name);
 		else if (each.letter)
-			valued += fmt::format(" [-{} {}]", each.letter, each.value);
+			valued += std::format(" [-{} {}]", each.letter, each.value);
 		else
-			valued += fmt::format(" [--{}={}]", each.name, each.value);
+			valued += std::format(" [--{}={}]", each.name, each.value);
 	}
-	return fmt::format("{}{}{}{}", shown.name, flags.empty() ? "" : fmt::format(" [-{}]", flags),
-	                   valued, shown.operands.empty() ? "" : fmt::format(" {}", shown.operands));
+	return std::format("{}{}{}{}", shown.name, flags.empty() ? "" : std::format(" [-{}]", flags),
+	                   valued, shown.operands.empty() ? "" : std::format(" {}", shown.operands));
 }
 
 int runCli(const std::vector<std::string>& args, cliContext& ctx) {
@@ -217,12 +213,12 @@ int runCli(const std::vector<std::string>& args, cliContext& ctx) {
 	std::vector<args::option> globals = globalOptions();
 	globals.push_back({'v', "", "", ""});
 	auto program = args::parse(args, globals);
-	if (not program.ok())
-		return commandError(ctx, program.errorMessage());
+	if (not program.has_value())
+		return commandError(ctx, program.error());
 	const args::parsed& before = program.value();
 	if (not applyGlobals(ctx, before))
 		return commandError(
-		    ctx, fmt::format("--color '{}' is not auto, always or never", before.get("color")));
+		    ctx, std::format("--color '{}' is not auto, always or never", before.get("color")));
 	if (before.has("version") or before.has("v")) {
 		ctx.out << "Catalist v" << kVersionString << "\n";
 		return 0;
@@ -242,8 +238,8 @@ int runCli(const std::vector<std::string>& args, cliContext& ctx) {
 	options.push_back(helpOption());
 	auto line = args::parse({before.operands.begin() + 1, before.operands.end()}, options);
 	// The scripts' own commands say nothing, whatever they are given.
-	if (not line.ok())
-		return cmd->hidden ? 0 : usageError(ctx, *cmd, line.errorMessage());
+	if (not line.has_value())
+		return cmd->hidden ? 0 : usageError(ctx, *cmd, line.error());
 	if (line.value().has("help")) {
 		printCommandHelp(ctx, *cmd);
 		return 0;

@@ -1,5 +1,5 @@
 {
-  description = "Catalist - local-first anime and manga tracker for the command line (C++17)";
+  description = "Catalist - local-first anime and manga tracker for the command line (C++23)";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -35,7 +35,6 @@
             ];
 
             buildInputs = with pkgs; [
-              fmt
               sqlite
             ];
 
@@ -72,7 +71,6 @@
               ninja
               git
               doctest
-              fmt
               sqlite
               curl
               clang-tools

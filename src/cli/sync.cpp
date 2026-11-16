@@ -1,6 +1,5 @@
-#include <fmt/format.h>
-
 #include <algorithm>
+#include <format>
 #include <ostream>
 
 #include "cli/common.hpp"
@@ -48,8 +47,8 @@ int sendTo(cliContext& ctx, provider site, const std::vector<pending>& mine,
 	}
 	auto tracker = trackerFor(ctx, site);
 	auto fresh = tracker->current(*login);
-	if (not fresh.ok()) {
-		ctx.err << "note: " << fresh.errorMessage() << ".\n";
+	if (not fresh.has_value()) {
+		ctx.err << "note: " << fresh.error() << ".\n";
 		left += mine.size();
 		return 0;
 	}
@@ -62,25 +61,25 @@ int sendTo(cliContext& ctx, provider site, const std::vector<pending>& mine,
 		const pending& each = mine[i];
 		if (i > 0)
 			ctx.net.pause();
-		result<bool> done = result<bool>::success(true);
+		done sent;
 		if (each.removed) {
-			done = tracker->remove(each.type, each.siteId, fresh.value());
+			sent = tracker->remove(each.type, each.siteId, fresh.value());
 		} else if (auto now = ctx.db.getById(each.type, each.id)) {
-			done = tracker->push(*now, fresh.value());
+			sent = tracker->push(*now, fresh.value());
 		} else {
 			// Removed from the lists since, and not from the site.
 			(void)ctx.db.sent(each);
 			continue;
 		}
-		if (done.ok() or done.errorMessage() == web::notLinked(site)) {
+		if (sent or sent.error() == web::notLinked(site)) {
 			(void)ctx.db.sent(each);
-			told += done.ok() ? 1 : 0;
+			told += sent ? 1 : 0;
 			continue;
 		}
 		// The site is not there, or said no: this one waits, and so does the
 		// rest for this site.
-		ctx.err << fmt::format("note: could not tell {} of {}: {}.\n", providerName(site),
-		                       refOf(each), done.errorMessage());
+		ctx.err << std::format("note: could not tell {} of {}: {}.\n", providerName(site),
+		                       refOf(each), sent.error());
 		left += mine.size() - i;
 		break;
 	}
@@ -116,9 +115,9 @@ sendReport sendOutbox(cliContext& ctx, bool everything) {
 void noteWaiting(cliContext& ctx, const sendReport& report) {
 	if (report.left == 0 or ctx.offline)
 		return;
-	ctx.err << fmt::format(
+	ctx.err << std::format(
 	    "note: {} to be sent to the sites; 'catalist sync' sends {}.\n",
-	    report.left == 1 ? "1 change waits" : fmt::format("{} changes wait", report.left),
+	    report.left == 1 ? "1 change waits" : std::format("{} changes wait", report.left),
 	    report.left == 1 ? "it" : "them");
 }
 
@@ -171,9 +170,9 @@ int runSync(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (line.has("forget")) {
 		for (const auto& each : waiting)
 			(void)ctx.db.sent(each);
-		ctx.err << fmt::format(
+		ctx.err << std::format(
 		    "Forgot {} the sites were not told of.\n",
-		    waiting.size() == 1 ? "1 change" : fmt::format("{} changes", waiting.size()));
+		    waiting.size() == 1 ? "1 change" : std::format("{} changes", waiting.size()));
 		return 0;
 	}
 	auto logins = readAccounts(ctx);
@@ -191,7 +190,7 @@ int runSync(const command& self, const args::parsed& line, cliContext& ctx) {
 		if (not ctx.db.queue(every))
 			return fail(ctx, "could not keep the changes to tell the sites of");
 		if (not line.has("q") and every.size() > 1)
-			ctx.err << fmt::format(
+			ctx.err << std::format(
 			    "Telling the sites of {}; MyAnimeList and Kitsu take a second "
 			    "each.\n",
 			    titles(every.size()));
@@ -203,14 +202,14 @@ int runSync(const command& self, const args::parsed& line, cliContext& ctx) {
 		if (report.told == 0 and report.left == 0)
 			ctx.err << "Nothing to send.\n";
 		else if (report.told > 0)
-			ctx.err << fmt::format(
+			ctx.err << std::format(
 			    "Told the sites of {}.\n",
-			    report.told == 1 ? "1 change" : fmt::format("{} changes", report.told));
+			    report.told == 1 ? "1 change" : std::format("{} changes", report.told));
 	}
 	if (report.left > 0)
-		return fail(ctx, fmt::format("{} still to be sent; try again later",
+		return fail(ctx, std::format("{} still to be sent; try again later",
 		                             report.left == 1 ? "1 change"
-		                                              : fmt::format("{} changes", report.left)));
+		                                              : std::format("{} changes", report.left)));
 	return 0;
 }
 
@@ -225,14 +224,14 @@ struct linkRequest {
 linkRequest readLink(const command& self, const args::parsed& line, cliContext& ctx, size_t most) {
 	linkRequest request;
 	if (line.operands.size() < 2 or line.operands.size() > most) {
-		request.code = usageError(ctx, self, fmt::format("give {}", self.operands));
+		request.code = usageError(ctx, self, std::format("give {}", self.operands));
 		return request;
 	}
 	auto site = parseProvider(line.operands[1]);
 	if (not site) {
 		request.code = usageError(
 		    ctx, self,
-		    fmt::format("unknown site '{}'; choose anilist, mal or kitsu", line.operands[1]));
+		    std::format("unknown site '{}'; choose anilist, mal or kitsu", line.operands[1]));
 		return request;
 	}
 	request.site = *site;
@@ -274,7 +273,7 @@ int runLink(const command& self, const args::parsed& line, cliContext& ctx) {
 		auto id = args::parseCount(line.operands[2]);
 		if (not id or *id == 0)
 			return usageError(ctx, self,
-			                  fmt::format("'{}' is not an id on {}", line.operands[2], name));
+			                  std::format("'{}' is not an id on {}", line.operands[2], name));
 		title = withSiteId(title, request.site, *id);
 	} else {
 		// Searched by its title, the person choosing as for add.
@@ -296,13 +295,13 @@ int runLink(const command& self, const args::parsed& line, cliContext& ctx) {
 	int id = idOn(title, request.site);
 	for (const auto& other : ctx.db.getEntries(title.type))
 		if (other.id != title.id and idOn(other, request.site) == id)
-			return fail(ctx, fmt::format("{} is {} {} already", refs::of(other), name, id));
+			return fail(ctx, std::format("{} is {} {} already", refs::of(other), name, id));
 	ctx.db.updateEntry(title);
 	// An id is no step for undo: undo puts back what you did to a title.
 	if (not ctx.db.saveAll())
 		return saveFailed(ctx);
 	if (not line.has("q"))
-		ctx.err << fmt::format("Linked {} ({}) to {} {}.\n", title.title, refs::of(title), name,
+		ctx.err << std::format("Linked {} ({}) to {} {}.\n", title.title, refs::of(title), name,
 		                       id);
 	tellSites(ctx, {{title.type, title.id, std::nullopt, title}});
 	return 0;
@@ -314,14 +313,14 @@ int runUnlink(const command& self, const args::parsed& line, cliContext& ctx) {
 		return request.code;
 	std::string name = providerName(request.site);
 	if (idOn(*request.title, request.site) == 0) {
-		ctx.err << fmt::format("{} is not linked to {}.\n", refs::of(*request.title), name);
+		ctx.err << std::format("{} is not linked to {}.\n", refs::of(*request.title), name);
 		return 0;
 	}
 	ctx.db.updateEntry(withSiteId(*request.title, request.site, 0));
 	if (not ctx.db.saveAll())
 		return saveFailed(ctx);
 	if (not line.has("q"))
-		ctx.err << fmt::format("Unlinked {} ({}) from {}: it stays on your list there.\n",
+		ctx.err << std::format("Unlinked {} ({}) from {}: it stays on your list there.\n",
 		                       request.title->title, refs::of(*request.title), name);
 	return 0;
 }
@@ -330,46 +329,42 @@ int runUnlink(const command& self, const args::parsed& line, cliContext& ctx) {
 
 std::vector<command> syncCommands() {
 	return {
-	    {"sync",
-	     {},
-	     "Tell the sites what they have not heard of yet",
-	     "Each change to a title (its status, score, progress, volumes,\n"
-	     "rewatches or dates) is sent at once to every site you are logged in to\n"
-	     "where the title is linked, as Mihon tells its trackers: your lists are\n"
-	     "the truth, and the site's entry is overwritten. What could not be sent\n"
-	     "(offline, a site down, a login run out, or more than ten changes at\n"
-	     "once) waits, and sync sends it. With --all every linked title is sent,\n"
-	     "as after a first login.\n",
-	     {{0, "all", "", "send every linked title, not only what waits"},
-	      {0, "forget", "", "drop what waits, telling the sites nothing"},
-	      kQuiet},
-	     "",
-	     runSync},
-	    {"link",
-	     {},
-	     "Link a title to its entry on a site",
-	     "Sets the title's id on the site: the ID given, or the match you choose\n"
-	     "of a search for its title there. A linked title is sent to that site\n"
-	     "when it changes (see 'sync'). Titles added from a site, imported or\n"
-	     "refreshed are linked to every site that knew their ids. Not a step\n"
-	     "for undo.\n",
-	     {{'a', "", "", "look in the anime list only"},
-	      {'m', "", "", "look in the manga list only"},
-	      kQuiet},
-	     "REF anilist|mal|kitsu [ID]",
-	     runLink,
-	     operandKind::kRefs},
-	    {"unlink",
-	     {},
-	     "Stop telling a site of a title",
-	     "Forgets the title's id on the site, so changes to it are no longer\n"
-	     "sent there. The site's entry stays as it is. Not a step for undo.\n",
-	     {{'a', "", "", "look in the anime list only"},
-	      {'m', "", "", "look in the manga list only"},
-	      kQuiet},
-	     "REF anilist|mal|kitsu",
-	     runUnlink,
-	     operandKind::kRefs},
+	    {.name = "sync",
+	     .summary = "Tell the sites what they have not heard of yet",
+	     .details = "Each change to a title (its status, score, progress, volumes,\n"
+	                "rewatches or dates) is sent at once to every site you are logged in to\n"
+	                "where the title is linked, as Mihon tells its trackers: your lists are\n"
+	                "the truth, and the site's entry is overwritten. What could not be sent\n"
+	                "(offline, a site down, a login run out, or more than ten changes at\n"
+	                "once) waits, and sync sends it. With --all every linked title is sent,\n"
+	                "as after a first login.\n",
+	     .options = {{0, "all", "", "send every linked title, not only what waits"},
+	                 {0, "forget", "", "drop what waits, telling the sites nothing"},
+	                 kQuiet},
+	     .run = runSync},
+	    {.name = "link",
+	     .summary = "Link a title to its entry on a site",
+	     .details = "Sets the title's id on the site: the ID given, or the match you choose\n"
+	                "of a search for its title there. A linked title is sent to that site\n"
+	                "when it changes (see 'sync'). Titles added from a site, imported or\n"
+	                "refreshed are linked to every site that knew their ids. Not a step\n"
+	                "for undo.\n",
+	     .options = {{'a', "", "", "look in the anime list only"},
+	                 {'m', "", "", "look in the manga list only"},
+	                 kQuiet},
+	     .operands = "REF anilist|mal|kitsu [ID]",
+	     .run = runLink,
+	     .completes = operandKind::kRefs},
+	    {.name = "unlink",
+	     .summary = "Stop telling a site of a title",
+	     .details = "Forgets the title's id on the site, so changes to it are no longer\n"
+	                "sent there. The site's entry stays as it is. Not a step for undo.\n",
+	     .options = {{'a', "", "", "look in the anime list only"},
+	                 {'m', "", "", "look in the manga list only"},
+	                 kQuiet},
+	     .operands = "REF anilist|mal|kitsu",
+	     .run = runUnlink,
+	     .completes = operandKind::kRefs},
 	};
 }
 

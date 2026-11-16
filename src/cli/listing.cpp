@@ -1,6 +1,5 @@
-#include <fmt/format.h>
-
 #include <algorithm>
+#include <format>
 #include <map>
 #include <ostream>
 #include <sstream>
@@ -34,7 +33,7 @@ std::string listTable(const cliContext& ctx, const std::vector<entry>& shown) {
 		                {statusToString(e.status, e.type), statusColor(e.status)},
 		                {e.score > 0 ? std::to_string(e.score) : "-"},
 		                {outOf(e.progress, e.totalUnits)},
-		                {fresh > 0 ? fmt::format("+{}", fresh) : "", output::kGreen}});
+		                {fresh > 0 ? std::format("+{}", fresh) : "", output::kGreen}});
 	}
 	return output::table(columns, rows, ctx.columns, ctx.color);
 }
@@ -61,7 +60,7 @@ int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 	for (std::string word; std::getline(given, word, ',');) {
 		auto status = parseStatus(word);
 		if (not status)
-			return usageError(ctx, self, fmt::format("unknown status '{}'", word));
+			return usageError(ctx, self, std::format("unknown status '{}'", word));
 		statuses.push_back(*status);
 	}
 	if (line.has("s") and statuses.empty())
@@ -72,13 +71,13 @@ int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 		if (not unlinked)
 			return usageError(
 			    ctx, self,
-			    fmt::format("--unlinked '{}' is not anilist, mal or kitsu", line.get("unlinked")));
+			    std::format("--unlinked '{}' is not anilist, mal or kitsu", line.get("unlinked")));
 	}
 	sortKey key = sortKey::kTitle;
 	if (line.has("sort")) {
 		auto found = kSortKeys.find(line.get("sort"));
 		if (found == kSortKeys.end())
-			return usageError(ctx, self, fmt::format("unknown sort key '{}'", line.get("sort")));
+			return usageError(ctx, self, std::format("unknown sort key '{}'", line.get("sort")));
 		key = found->second;
 	}
 	if (not load(ctx))
@@ -118,7 +117,7 @@ int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 
 // One labelled line of a card, the labels `width` columns wide.
 void cardRow(cliContext& ctx, const std::string& label, const std::string& value, int width = 13) {
-	ctx.out << "  " << paint(fmt::format("{:<{}}", label, width), output::kDim, ctx.color) << value
+	ctx.out << "  " << paint(std::format("{:<{}}", label, width), output::kDim, ctx.color) << value
 	        << "\n";
 }
 
@@ -143,10 +142,10 @@ void printCard(cliContext& ctx, const entry& e) {
 	if (not page.empty())
 		row("Page", page);
 	row("Status", paint(statusToString(e.status, e.type), statusColor(e.status), ctx.color));
-	row("Score", e.score > 0 ? fmt::format("{}/10", e.score) : "-");
+	row("Score", e.score > 0 ? std::format("{}/10", e.score) : "-");
 	row("Progress",
-	    fmt::format("{} {}", outOf(e.progress, e.totalUnits), unitName(e.type)) +
-	        (fresh > 0 ? paint(fmt::format("  (+{} new)", fresh), output::kGreen, ctx.color) : ""));
+	    std::format("{} {}", outOf(e.progress, e.totalUnits), unitName(e.type)) +
+	        (fresh > 0 ? paint(std::format("  (+{} new)", fresh), output::kGreen, ctx.color) : ""));
 	if (e.type == mediaType::kManga)
 		row("Volumes", outOf(e.volumes, e.totalVolumes));
 	row(e.type == mediaType::kAnime ? "Rewatched" : "Reread", std::to_string(e.rewatched));
@@ -194,12 +193,12 @@ std::vector<output::cell> statsCells(const catalogue& db, mediaType type) {
 		cells.push_back(output::number(static_cast<long long>(db.countByStatus(type, status))));
 	double mean = db.averageScore(type);
 	cells.push_back(mean > 0.0
-	                    ? output::cell{fmt::format("{:.2f}", mean), output::jsonForm::kNumber}
+	                    ? output::cell{std::format("{:.2f}", mean), output::jsonForm::kNumber}
 	                    : output::cell{"0", output::jsonForm::kNull});
 	cells.push_back(output::number(db.totalProgress(type)));
 	cells.push_back(output::number(db.totalVolumes(type)));
 	cells.push_back(output::number(db.totalRewatched(type)));
-	cells.push_back({fmt::format("{:.1f}", db.daysSpent(type)), output::jsonForm::kNumber});
+	cells.push_back({std::format("{:.1f}", db.daysSpent(type)), output::jsonForm::kNumber});
 	return cells;
 }
 
@@ -217,12 +216,12 @@ void printStatsCard(cliContext& ctx, mediaType type) {
 	row("Titles", std::to_string(db.getEntries(type).size()));
 	for (watchStatus status : kStatuses)
 		row(statusToString(status, type), std::to_string(db.countByStatus(type, status)));
-	row("Mean score", mean > 0.0 ? fmt::format("{:.2f}", mean) : "-");
+	row("Mean score", mean > 0.0 ? std::format("{:.2f}", mean) : "-");
 	row(anime ? "Episodes" : "Chapters", std::to_string(db.totalProgress(type)));
 	if (not anime)
 		row("Volumes", std::to_string(db.totalVolumes(type)));
 	row(anime ? "Rewatched" : "Reread", std::to_string(db.totalRewatched(type)));
-	row("Days spent", fmt::format("{:.1f}", db.daysSpent(type)));
+	row("Days spent", std::format("{:.1f}", db.daysSpent(type)));
 }
 
 int runStats(const command& self, const args::parsed& line, cliContext& ctx) {
@@ -254,57 +253,56 @@ int runStats(const command& self, const args::parsed& line, cliContext& ctx) {
 
 std::vector<command> listingCommands() {
 	return {
-	    {"ls",
-	     {},
-	     "List your titles",
-	     std::string("Lists both lists in title order. QUERY keeps the titles that hold its\n"
-	                 "words, in capitals or not; they need no quotes. -s takes several\n"
-	                 "statuses with commas between them: -s watching,on-hold.\n\n") +
+	    {.name = "ls",
+	     .summary = "List your titles",
+	     .details =
+	         std::string("Lists both lists in title order. QUERY keeps the titles that hold its\n"
+	                     "words, in capitals or not; they need no quotes. -s takes several\n"
+	                     "statuses with commas between them: -s watching,on-hold.\n\n") +
 	         kRowFormat,
-	     {{'a', "", "", "list anime only"},
-	      {'m', "", "", "list manga only"},
-	      {'s', "", "STATUS", "only watching, completed, on-hold, dropped, planned, or a,b",
-	       statusWords()},
-	      {0, "sort", "KEY", "new, updated, score, progress, date, status or title", sortWords()},
-	      {'r', "", "", "reverse the order"},
-	      {0,
-	       "unlinked",
-	       "SITE",
-	       "only titles with no id on the site",
-	       {"anilist", "mal", "kitsu"}},
-	      {'q', "", "", "print the refs and nothing else"},
-	      {0, "json", "", "print one JSON object a line"},
-	      {0, "header", "", "name the columns on the first line of a pipe"}},
-	     "[QUERY...]",
-	     runList,
-	     operandKind::kTitle},
-	    {"show",
-	     {},
-	     "Show titles in full",
-	     "A REF is a ref such as a:12, or part of a title; a REF of - reads REFs\n"
-	     "from standard input, one a line. Into a pipe a title is one line: the\n"
-	     "columns of ls, then total_volumes, released, anilist_id, mal_id, url\n"
-	     "and kitsu_id. url is the title's page on your provider.\n",
-	     withRefOptions({{0, "json", "", "print one JSON object a line"},
-	                     {0, "header", "", "name the columns on the first line of a pipe"}}),
-	     "REF...",
-	     runShow,
-	     operandKind::kRefs},
-	    {"stats",
-	     {},
-	     "Show the numbers of your lists",
-	     "Into a pipe each list is one line of fields with a tab between them:\n"
-	     "  type total watching completed on_hold dropped planned mean units\n"
-	     "  volumes rewatched days\n"
-	     "mean is the mean of the scores you gave (0 when there is none), units\n"
-	     "the episodes or chapters done, and days an estimate of the time they\n"
-	     "took: 24 minutes an episode, 5 minutes a chapter.\n",
-	     {{'a', "", "", "the anime list only"},
-	      {'m', "", "", "the manga list only"},
-	      {0, "json", "", "print one JSON object a line"},
-	      {0, "header", "", "name the columns on the first line of a pipe"}},
-	     "",
-	     runStats},
+	     .options = {{'a', "", "", "list anime only"},
+	                 {'m', "", "", "list manga only"},
+	                 {'s', "", "STATUS",
+	                  "only watching, completed, on-hold, dropped, planned, or a,b", statusWords()},
+	                 {0, "sort", "KEY", "new, updated, score, progress, date, status or title",
+	                  sortWords()},
+	                 {'r', "", "", "reverse the order"},
+	                 {0,
+	                  "unlinked",
+	                  "SITE",
+	                  "only titles with no id on the site",
+	                  {"anilist", "mal", "kitsu"}},
+	                 {'q', "", "", "print the refs and nothing else"},
+	                 {0, "json", "", "print one JSON object a line"},
+	                 {0, "header", "", "name the columns on the first line of a pipe"}},
+	     .operands = "[QUERY...]",
+	     .run = runList,
+	     .completes = operandKind::kTitle},
+	    {.name = "show",
+	     .summary = "Show titles in full",
+	     .details = "A REF is a ref such as a:12, or part of a title; a REF of - reads REFs\n"
+	                "from standard input, one a line. Into a pipe a title is one line: the\n"
+	                "columns of ls, then total_volumes, released, anilist_id, mal_id, url\n"
+	                "and kitsu_id. url is the title's page on your provider.\n",
+	     .options =
+	         withRefOptions({{0, "json", "", "print one JSON object a line"},
+	                         {0, "header", "", "name the columns on the first line of a pipe"}}),
+	     .operands = "REF...",
+	     .run = runShow,
+	     .completes = operandKind::kRefs},
+	    {.name = "stats",
+	     .summary = "Show the numbers of your lists",
+	     .details = "Into a pipe each list is one line of fields with a tab between them:\n"
+	                "  type total watching completed on_hold dropped planned mean units\n"
+	                "  volumes rewatched days\n"
+	                "mean is the mean of the scores you gave (0 when there is none), units\n"
+	                "the episodes or chapters done, and days an estimate of the time they\n"
+	                "took: 24 minutes an episode, 5 minutes a chapter.\n",
+	     .options = {{'a', "", "", "the anime list only"},
+	                 {'m', "", "", "the manga list only"},
+	                 {0, "json", "", "print one JSON object a line"},
+	                 {0, "header", "", "name the columns on the first line of a pipe"}},
+	     .run = runStats},
 	};
 }
 

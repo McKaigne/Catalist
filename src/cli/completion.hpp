@@ -22,6 +22,11 @@ namespace catalist::completion {
 // The completions for fish: the file `catalist.fish`.
 [[nodiscard]] std::string fish(const std::vector<command>& table);
 
+// The completion function for bash, for catalist and cl: the file
+// `catalist` of bash-completion's completions directory, or one to source.
+// It needs nothing from bash-completion itself.
+[[nodiscard]] std::string bash(const std::vector<command>& table);
+
 // The COMMANDS section of the manual page, in roff: each command with its
 // usage line, what it does and its options.
 [[nodiscard]] std::string manual(const std::vector<command>& table);

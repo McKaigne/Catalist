@@ -1,5 +1,5 @@
 # Writes what the built program says about itself: the manual page and the
-# completion scripts for zsh and fish. Run by the build:
+# completion scripts for zsh, fish and bash. Run by the build:
 #
 #   cmake -DPROGRAM=build/catalist -DTEMPLATE=docs/catalist.1.in
 #         -DOUT_DIR=build/share -P cmake/shellSupport.cmake
@@ -15,7 +15,7 @@ endforeach()
 
 # None of these read the lists; an empty directory makes sure of it.
 set(ENV{CATALIST_DATA_DIR} "${OUT_DIR}/no-data")
-file(MAKE_DIRECTORY "${OUT_DIR}/man/man1" "${OUT_DIR}/zsh" "${OUT_DIR}/fish")
+file(MAKE_DIRECTORY "${OUT_DIR}/man/man1" "${OUT_DIR}/zsh" "${OUT_DIR}/fish" "${OUT_DIR}/bash")
 
 function(catalist_write output)
   execute_process(
@@ -41,3 +41,8 @@ catalist_write("${OUT_DIR}/zsh/_catalist" completion zsh)
 catalist_write("${OUT_DIR}/fish/catalist.fish" completion fish)
 # `cl` is catalist under another name: fish completes it the same way.
 file(WRITE "${OUT_DIR}/fish/cl.fish" "complete -c cl -w catalist\n")
+# bash-completion loads a program's file when that program is first
+# completed, so `cl` needs a file of its own; the script serves both.
+catalist_write("${OUT_DIR}/bash/catalist" completion bash)
+file(READ "${OUT_DIR}/bash/catalist" bashScript)
+file(WRITE "${OUT_DIR}/bash/cl" "${bashScript}")

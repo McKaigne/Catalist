@@ -117,6 +117,49 @@ TEST_CASE("completion fish completes the commands, their options and the lists")
 	          "-a 'ls' -d 'List your titles'\n"));
 }
 
+TEST_CASE("completion scripts know the program's own options, before the command") {
+	std::string zsh = completion::zsh(sampleTable());
+	CHECK(has(zsh,
+	          "'--color=[colours: auto (at a terminal), always or never]:when:(auto always "
+	          "never)'"));
+	CHECK(has(zsh, "'(-t --table)-t[draw tables into a pipe as well ($COLUMNS wide)]'"));
+	CHECK(has(zsh, "'(- *)-V[print the version]'"));
+	std::string fish = completion::fish(sampleTable());
+	CHECK(has(fish,
+	          "complete -c catalist -n __catalist_no_command -l color -x -a 'auto always "
+	          "never'"));
+	CHECK(has(fish, "complete -c catalist -n __catalist_no_command -s t -l table"));
+	// The command is the first word after them; --color may have its value
+	// apart.
+	CHECK(has(fish, "if contains -- $words[1] --color\n"));
+}
+
+TEST_CASE("completion bash completes the commands, their options and the lists") {
+	std::string script = completion::bash(sampleTable());
+	CHECK(has(script, "\ncomplete -F _catalist catalist cl\n"));
+	CHECK_FALSE(has(script, "__secret"));
+	// The commands by all their names, quoted; then each one's options.
+	CHECK(has(script, "\t\t_catalist_offer 'ls + inc set import completion help'\n"));
+	CHECK(has(script, "\t'+'|'inc')\n"));
+	CHECK(
+	    has(script, "\t\t\t-s)\n\t\t\t\t_catalist_offer 'watching on-hold'\n\t\t\t\treturn ;;\n"));
+	CHECK(has(script, "\t\t\t--sort)\n\t\t\t\t_catalist_offer 'new title'\n"));
+	CHECK(has(script, "\t\t\t--sort=*)\n\t\t\t\t_catalist_offer_value 'new title'\n"));
+	CHECK(has(script, "\t\t\t-n)\n\t\t\t\t:\n\t\t\t\treturn ;;\n"));
+	CHECK(has(script, "_catalist_offer '-s --sort= -q -h --help'\n"));
+	// The program's own options, and a value of theirs apart.
+	CHECK(has(script, "_catalist_offer '--color= -t --table -V --version -h --help'\n"));
+	CHECK(has(script, "\t\t\t--color) ((at += 2)) ;;\n"));
+	// The operands, by kind.
+	CHECK(has(script, "\t'ls')\n"));
+	CHECK(has(script, "\t\tif ((operands == 0)); then\n\t\t\t_catalist_titles\n\t\tfi\n"));
+	CHECK(has(script, "\t\t\t_catalist_named\n\t\telse\n\t\t\t_catalist_fields\n"));
+	CHECK(has(script, "\t\t_catalist_files\n"));
+	CHECK(has(script, "\t\t\t_catalist_offer 'zsh fish'\n"));
+	// What only the lists know is asked of the program it completes.
+	CHECK(has(script, "\"${COMP_WORDS[0]}\" __complete \"$1\" 2>/dev/null"));
+}
+
 TEST_CASE("completion manual sets each command in roff") {
 	std::string page = completion::manual(sampleTable());
 	CHECK(page.rfind(".TP\n\\fBls\\fR [\\fB\\-q\\fR] [\\fB\\-s\\fR \\fISTATUS\\fR] "

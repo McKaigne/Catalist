@@ -40,6 +40,8 @@ jobs:
         run: |
           zsh -n build/share/zsh/_catalist
           fish --no-config -n build/share/fish/catalist.fish build/share/fish/cl.fish
+          bash -n build/share/bash/catalist
+          bash tests/smoke/completion.bash build/share/bash/catalist build/catalist
 
       - name: Verify CLI argument dispatcher
         run: ./build/catalist --version

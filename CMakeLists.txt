@@ -115,6 +115,8 @@ set(CATALIST_SHELL_FILES
   "${CATALIST_SHARE_DIR}/zsh/_catalist"
   "${CATALIST_SHARE_DIR}/fish/catalist.fish"
   "${CATALIST_SHARE_DIR}/fish/cl.fish"
+  "${CATALIST_SHARE_DIR}/bash/catalist"
+  "${CATALIST_SHARE_DIR}/bash/cl"
 )
 add_custom_command(
   OUTPUT ${CATALIST_SHELL_FILES}
@@ -153,6 +155,8 @@ install(FILES "${CATALIST_SHARE_DIR}/zsh/_catalist"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/zsh/site-functions)
 install(FILES "${CATALIST_SHARE_DIR}/fish/catalist.fish" "${CATALIST_SHARE_DIR}/fish/cl.fish"
   DESTINATION ${CATALIST_FISH_COMPLETIONS_DIR})
+install(FILES "${CATALIST_SHARE_DIR}/bash/catalist" "${CATALIST_SHARE_DIR}/bash/cl"
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/bash-completion/completions)
 
 enable_testing()
 
@@ -220,6 +224,12 @@ endif()
 if(CATALIST_BASH)
   add_test(NAME smoke.bash
     COMMAND "${CATALIST_BASH}" --posix "${smokeScript}" $<TARGET_FILE:catalist>)
+  add_test(NAME completion.bash COMMAND "${CATALIST_BASH}" -n "${CATALIST_SHARE_DIR}/bash/catalist")
+  # The script completes like a person typing, against a stub program.
+  add_test(NAME completion.bash.words
+    COMMAND "${CATALIST_BASH}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke/completion.bash"
+      "${CATALIST_SHARE_DIR}/bash/catalist" $<TARGET_FILE:catalist>)
+  set_tests_properties(completion.bash.words PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 if(CATALIST_ZSH)
   add_test(NAME smoke.zsh COMMAND "${CATALIST_ZSH}" -f "${smokeScript}" $<TARGET_FILE:catalist>)

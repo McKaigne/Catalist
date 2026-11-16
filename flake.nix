@@ -79,7 +79,9 @@
               sqlite
               curl
               clang-tools
-              # The shells the command-line tests run under.
+              # The shells the command-line tests run under; bash with
+              # readline, for the completion test.
+              bashInteractive
               dash
               zsh
               fish

@@ -28,6 +28,8 @@ struct cliContext {
 	// The terminal's width, for tables; 0 when output goes to a pipe or a
 	// file, which gets tab-separated lines instead.
 	int columns = 0;
+	// How wide a table drawn into a pipe (--table) is: $COLUMNS, else 80.
+	int tableWidth = 80;
 	// The local date and time, stamped on what a command changes.
 	std::function<std::string()> nowStamp = [] { return std::string(); };
 	// CATALIST_TX: commands run with the same label share one undo step.
@@ -69,6 +71,8 @@ struct command {
 // "ls [-amqr] [-s STATUS] [--sort=KEY] [QUERY]": the command with its
 // options and operands, as the help and the manual page show it.
 [[nodiscard]] std::string usageLine(const command& shown);
+// The options of the program itself, which come before the command.
+[[nodiscard]] const std::vector<args::option>& globalOptions();
 // The option every command takes besides its own.
 [[nodiscard]] const args::option& helpOption();
 

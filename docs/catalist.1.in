@@ -3,10 +3,10 @@
 catalist, cl \- local-first anime and manga tracker for the command line
 .SH SYNOPSIS
 .B catalist
-\fICOMMAND\fR [\fIOPTION\fR...] [\fIARG\fR...]
+[\fIOPTION\fR...] \fICOMMAND\fR [\fIOPTION\fR...] [\fIARG\fR...]
 .br
 .B cl
-\fICOMMAND\fR [\fIOPTION\fR...] [\fIARG\fR...]
+[\fIOPTION\fR...] \fICOMMAND\fR [\fIOPTION\fR...] [\fIARG\fR...]
 .SH DESCRIPTION
 .B catalist
 tracks the anime you watch and the manga you read in one SQLite file on
@@ -45,6 +45,21 @@ Each command that changes the lists is one step for \fBundo\fR; commands
 run with the same \fBCATALIST_TX\fR are one step together (see \fBtx\fR).
 \fBredo\fR makes again what \fBundo\fR took back, until the next change.
 The last 100 steps are kept.
+.SH OPTIONS
+These come before the command.
+.TP
+.BI \-\-color= WHEN
+Colours \fBauto\fR (at a terminal, the default), \fBalways\fR (into a pipe
+as well, as for \fBless \-R\fR) or \fBnever\fR.
+.TP
+.BR \-t ", " \-\-table
+Draw tables into a pipe or a file as well, \fBCOLUMNS\fR wide.
+.TP
+.BR \-V ", " \-\-version
+Print the version.
+.TP
+.BR \-h ", " \-\-help
+Show the commands.
 .SH COMMANDS
 @COMMANDS@
 .SH FILES
@@ -79,7 +94,13 @@ A label from \fBcatalist tx\fR. Commands run with the same label make one
 step for \fBundo\fR.
 .TP
 .B NO_COLOR
-When set, output has no colours.
+When set, output has no colours, unless \fB\-\-color=always\fR asks for them.
+.TP
+.B CLICOLOR_FORCE
+When set to anything but 0, output has colours into a pipe as well.
+.TP
+.B COLUMNS
+How wide \fB\-\-table\fR draws a table into a pipe; 80 when it is not set.
 .SH EXIT STATUS
 0 on success, 1 when the work failed (no title matched, a file could not
 be read, the lists could not be saved, AniList could not be reached), 2
@@ -93,6 +114,7 @@ catalist ls \-q \-s watching | catalist + \-
 catalist set a:12 score=9 status=completed
 catalist undo
 catalist export \-\-format=csv anime > anime.csv
+catalist \-\-color=always \-t ls | less \-R
 .fi
 .SH AUTHORS
 McKaigne <https://github.com/McKaigne/Catalist>

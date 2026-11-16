@@ -28,7 +28,15 @@ int main(int argc, char* argv[]) {
 	ctx.interactive = catalist::isInteractive();
 	ctx.columns = catalist::terminalColumns();
 	// https://no-color.org; a dumb terminal cannot show colours either.
-	ctx.color = ctx.columns > 0 and std::getenv("NO_COLOR") == nullptr and env("TERM") != "dumb";
+	// CLICOLOR_FORCE asks for them into a pipe as well.
+	bool forced = not env("CLICOLOR_FORCE").empty() and env("CLICOLOR_FORCE") != "0";
+	ctx.color = (ctx.columns > 0 or forced) and std::getenv("NO_COLOR") == nullptr and
+	            env("TERM") != "dumb";
+	// The shell's COLUMNS, for --table into a pipe; too narrow to be meant
+	// is not taken.
+	auto shellColumns = catalist::args::parseCount(env("COLUMNS"));
+	if (shellColumns and *shellColumns >= 20)
+		ctx.tableWidth = *shellColumns;
 	ctx.nowStamp = catalist::nowStamp;
 	ctx.txLabel = env("CATALIST_TX");
 	ctx.newTxLabel = catalist::newTxLabel;

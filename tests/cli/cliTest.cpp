@@ -23,7 +23,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli --version prints the version") {
 TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has its own") {
 	for (const char* flag : {"--help", "-h", "help"}) {
 		CHECK(run({flag}) == 0);
-		CHECK(has(out, "Usage: catalist COMMAND [ARG...]\n"));
+		CHECK(has(out, "Usage: catalist [OPTION...] COMMAND [ARG...]\n"));
+		CHECK(has(out,
+		          "\nOptions, before the command:\n"
+		          "      --color=WHEN  colours: auto (at a terminal), always or never\n"
+		          "  -t, --table       draw tables into a pipe as well ($COLUMNS wide)\n"));
 		CHECK(has(out, "  ls          List your titles\n"));
 		CHECK(has(out, "  +           Count one more episode or chapter\n"));
 		CHECK(has(out, "  undo        Take back what the last command changed\n"));
@@ -69,9 +73,9 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(run({"help", "tx"}) == 0);
 	CHECK(has(out, "export CATALIST_TX=$(catalist tx)\n"));
 	CHECK(run({"help", "add"}) == 0);
-	CHECK(has(
-	    out,
-	    "Usage: catalist add [-amq] [--pick=N] [--status=STATUS] [--score=N] [--progress=N] [--no-lookup] TITLE...\n"));
+	CHECK(has(out,
+	          "Usage: catalist add [-amq] [--pick=N] [--status=STATUS] [--score=N] "
+	          "[--progress=N] [--no-lookup] TITLE...\n"));
 	// The helps line up past the longest option.
 	CHECK(has(out, "      --status=STATUS  watching, completed, on-hold, dropped or planned\n"));
 	CHECK(has(out, "      --no-lookup      add TITLE as written, without asking AniList\n"));
@@ -104,7 +108,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 TEST_CASE_FIXTURE(cliFixture, "cli names itself as it was run") {
 	program = "cl";
 	CHECK(run({"help"}) == 0);
-	CHECK(has(out, "Usage: cl COMMAND [ARG...]\n"));
+	CHECK(has(out, "Usage: cl [OPTION...] COMMAND [ARG...]\n"));
 	CHECK(has(out, "  cl show a:12\n"));
 	CHECK(has(out, "Run 'cl help COMMAND'"));
 	CHECK_FALSE(has(out, "catalist "));
@@ -113,7 +117,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli names itself as it was run") {
 	CHECK(run({"lst"}) == 2);
 	CHECK(err ==
 	      "error: unknown command 'lst' (did you mean 'ls'?)\n"
-	      "Usage: cl COMMAND [ARG...]\n"
+	      "Usage: cl [OPTION...] COMMAND [ARG...]\n"
 	      "Run 'cl help' to see the commands.\n");
 	CHECK(run({"ls", "-x"}) == 2);
 	CHECK(err ==
@@ -147,13 +151,18 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 	CHECK(run({"lst"}) == 2);
 	CHECK(err ==
 	      "error: unknown command 'lst' (did you mean 'ls'?)\n"
-	      "Usage: catalist COMMAND [ARG...]\n"
+	      "Usage: catalist [OPTION...] COMMAND [ARG...]\n"
 	      "Run 'catalist help' to see the commands.\n");
 	CHECK(out.empty());
 	CHECK(run({"frobnicate"}) == 2);
 	CHECK(err.find("error: unknown command 'frobnicate'\n") == 0);
 	CHECK(run({"--frobnicate"}) == 2);
-	CHECK(err.find("error: unknown option '--frobnicate'\nUsage: catalist COMMAND") == 0);
+	CHECK(err.find("error: unknown option '--frobnicate'\nUsage: catalist [OPTION...] COMMAND") ==
+	      0);
+	CHECK(run({"--colour=always", "ls"}) == 2);
+	CHECK(err.find("error: unknown option '--colour' (did you mean '--color'?)\n") == 0);
+	CHECK(run({"--color=sometimes", "ls"}) == 2);
+	CHECK(err.find("error: --color 'sometimes' is not auto, always or never\n") == 0);
 	// The names the earlier command line had are gone.
 	for (const char* gone : {"list", "info", "version", "next", "edit", "remove", "delete"})
 		CHECK(run({gone}) == 2);
@@ -337,7 +346,33 @@ TEST_CASE_FIXTURE(cliFixture, "cli without a command says how to give one, with 
 	CHECK(run({}) == 2);
 	CHECK(out.empty());
 	CHECK(err ==
-	      "error: no command given\nUsage: cl COMMAND [ARG...]\n"
+	      "error: no command given\nUsage: cl [OPTION...] COMMAND [ARG...]\n"
 	      "Run 'cl help' to see the commands.\n");
 	CHECK_FALSE(std::filesystem::exists("data"));
+	// Options alone are no command either.
+	CHECK(run({"--color=never"}) == 2);
+	CHECK(err.find("error: no command given\n") == 0);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli draws tables and colours into a pipe when asked") {
+	seed();
+	CHECK(run({"-t", "ls"}) == 0);
+	CHECK(out.find("REF") == 0);
+	CHECK(has(out, "Odd Taxi"));
+	CHECK_FALSE(has(out, "\x1b["));
+	CHECK(run({"--table", "--color=always", "ls", "-a"}) == 0);
+	CHECK(has(out, "\x1b["));
+	// --json is what it says, table or not.
+	CHECK(run({"-t", "ls", "--json"}) == 0);
+	CHECK(out.find("{\"ref\":") == 0);
+	// Colours a terminal would show can be turned off.
+	color = true;
+	CHECK(run({"--color=never", "ls"}, "", 100) == 0);
+	CHECK_FALSE(has(out, "\x1b["));
+	// The global options come before the command; after it they are its own.
+	CHECK(run({"ls", "-t"}) == 2);
+	CHECK(err.find("error: unknown option '-t'\n") == 0);
+	// Version and help are global options too.
+	CHECK(run({"-t", "--version"}) == 0);
+	CHECK(out.find("Catalist v") == 0);
 }

@@ -71,11 +71,14 @@ void printHelp(cliContext& ctx) {
 	const std::string& program = ctx.program;
 	ctx.out << fmt::format(
 	    "Catalist {} - track anime and manga from the terminal.\n\n"
-	    "Usage: {} COMMAND [ARG...]\n\nCommands:\n",
+	    "Usage: {} [OPTION...] COMMAND [ARG...]\n\nCommands:\n",
 	    kVersionString, program);
 	for (const auto& each : commands())
 		if (not each.hidden)
 			ctx.out << fmt::format("  {:<12}{}\n", each.name, each.summary);
+	ctx.out << "\nOptions, before the command:\n";
+	for (const auto& each : globalOptions())
+		ctx.out << fmt::format("  {:<18}{}\n", optionLabel(each), each.help);
 	ctx.out << fmt::format(
 	    "\nName a title by its ref, the first column of '{0} ls' (a:12 is an anime,\n"
 	    "m:3 a manga), or by part of its title:\n"
@@ -108,8 +111,8 @@ int runHelp(const command& self, const args::parsed& line, cliContext& ctx) {
 // A command line wrong before its command: no command, or one not known.
 int commandError(cliContext& ctx, const std::string& what) {
 	ctx.err << fmt::format(
-	    "error: {}\nUsage: {} COMMAND [ARG...]\nRun '{} help' to see the commands.\n", what,
-	    ctx.program, ctx.program);
+	    "error: {}\nUsage: {} [OPTION...] COMMAND [ARG...]\nRun '{} help' to see the commands.\n",
+	    what, ctx.program, ctx.program);
 	return 2;
 }
 
@@ -121,9 +124,24 @@ int runDefault(cliContext& ctx) {
 	return list->run(*list, line.value(), ctx);
 }
 
+// What the options before the command ask for: colours, and tables into a
+// pipe. False on a WHEN that is not one.
+bool applyGlobals(cliContext& ctx, const args::parsed& line) {
+	std::string when = line.has("color") ? line.get("color") : "auto";
+	if (when == "always")
+		ctx.color = true;
+	else if (when == "never")
+		ctx.color = false;
+	else if (when != "auto")
+		return false;
+	// A table into a pipe is as wide as the shell says, and has no colours
+	// unless they are asked for.
+	if (line.has("table") and ctx.columns == 0)
+		ctx.columns = ctx.tableWidth;
+	return true;
+}
+
 int unknownCommand(cliContext& ctx, const std::string& first) {
-	if (first.rfind('-', 0) == 0 and first.size() > 1)
-		return commandError(ctx, fmt::format("unknown option '{}'", first));
 	return commandError(
 	    ctx, fmt::format("unknown command '{}'{}", first, didYouMean(first, commandNames())));
 }
@@ -152,6 +170,19 @@ const std::vector<command>& commands() {
 	return all;
 }
 
+const std::vector<args::option>& globalOptions() {
+	static const std::vector<args::option> all = {
+	    {0,
+	     "color",
+	     "WHEN",
+	     "colours: auto (at a terminal), always or never",
+	     {"auto", "always", "never"}},
+	    {'t', "table", "", "draw tables into a pipe as well ($COLUMNS wide)"},
+	    {'V', "version", "", "print the version"},
+	    {'h', "help", "", "show the commands"}};
+	return all;
+}
+
 const args::option& helpOption() {
 	static const args::option help{'h', "help", "", "show this help"};
 	return help;
@@ -175,26 +206,37 @@ std::string usageLine(const command& shown) {
 }
 
 int runCli(const std::vector<std::string>& args, cliContext& ctx) {
-	if (args.empty())
-		return ctx.columns > 0 ? runDefault(ctx) : commandError(ctx, "no command given");
-	const std::string& first = args.at(0);
 	ctx.typed.clear();
 	for (const auto& word : args)
 		ctx.typed += (ctx.typed.empty() ? "" : " ") + word;
-	if (first == "--version" or first == "-V" or first == "-v") {
+	// -v is what many programs print their version with.
+	std::vector<args::option> globals = globalOptions();
+	globals.push_back({'v', "", "", ""});
+	auto program = args::parse(args, globals);
+	if (not program.ok())
+		return commandError(ctx, program.errorMessage());
+	const args::parsed& before = program.value();
+	if (not applyGlobals(ctx, before))
+		return commandError(
+		    ctx, fmt::format("--color '{}' is not auto, always or never", before.get("color")));
+	if (before.has("version") or before.has("v")) {
 		ctx.out << "Catalist v" << kVersionString << "\n";
 		return 0;
 	}
-	if (first == "--help" or first == "-h") {
+	if (before.has("help")) {
 		printHelp(ctx);
 		return 0;
 	}
+	if (before.operands.empty())
+		return ctx.columns > 0 ? runDefault(ctx) : commandError(ctx, "no command given");
+
+	const std::string& first = before.operands[0];
 	const command* cmd = findCommand(first);
 	if (not cmd)
 		return unknownCommand(ctx, first);
 	std::vector<args::option> options = cmd->options;
 	options.push_back(helpOption());
-	auto line = args::parse({args.begin() + 1, args.end()}, options);
+	auto line = args::parse({before.operands.begin() + 1, before.operands.end()}, options);
 	// The scripts' own commands say nothing, whatever they are given.
 	if (not line.ok())
 		return cmd->hidden ? 0 : usageError(ctx, *cmd, line.errorMessage());

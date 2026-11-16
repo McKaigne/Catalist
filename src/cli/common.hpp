@@ -37,6 +37,12 @@ int saveFailed(cliContext& ctx);
 // object has them. A new column goes at the end: scripts count on the order.
 extern const std::vector<std::string> kColumns;
 [[nodiscard]] std::vector<output::cell> cellsOf(const entry& e);
+// Everything about a title: the columns of kColumns, then those of
+// kFullColumns (total_volumes, released, anilist_id, mal_id, url on `site`,
+// kitsu_id), as show and the exports print it.
+extern const std::vector<std::string> kFullColumns;
+[[nodiscard]] std::vector<std::string> allColumns();
+[[nodiscard]] std::vector<output::cell> fullCellsOf(const entry& e, provider site);
 // The terminal's colour for each status.
 [[nodiscard]] const char* statusColor(watchStatus status);
 // "episodes", "chapter".

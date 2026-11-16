@@ -14,19 +14,6 @@ namespace {
 
 using output::paint;
 
-// What `show` adds to the columns of a title (kColumns).
-const std::vector<std::string> kShowColumns = {"total_volumes", "released", "anilist_id",
-                                               "mal_id",        "url",      "kitsu_id"};
-
-std::vector<output::cell> showCellsOf(const entry& e, provider site) {
-	auto cells = cellsOf(e);
-	for (const auto& more :
-	     {output::known(e.totalVolumes), output::known(e.released), output::known(e.anilistId),
-	      output::known(e.malId), output::maybe(pageOn(e, site)), output::known(e.kitsuId)})
-		cells.push_back(more);
-	return cells;
-}
-
 const char* const kRowFormat =
     "At a terminal the titles are drawn as a table. Into a pipe or a file each\n"
     "title is one line of fields with a tab between them, so cut, awk and\n"
@@ -185,12 +172,10 @@ int runShow(const command& self, const args::parsed& line, cliContext& ctx) {
 		}
 		return 0;
 	}
-	std::vector<std::string> names = kColumns;
-	names.insert(names.end(), kShowColumns.begin(), kShowColumns.end());
 	std::vector<std::vector<output::cell>> rows;
 	for (const auto& e : *found)
-		rows.push_back(showCellsOf(e, ctx.db.getProvider()));
-	writeRows(ctx, names, rows, line.has("json"), line.has("header"));
+		rows.push_back(fullCellsOf(e, ctx.db.getProvider()));
+	writeRows(ctx, allColumns(), rows, line.has("json"), line.has("header"));
 	return 0;
 }
 

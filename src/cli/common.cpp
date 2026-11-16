@@ -136,6 +136,24 @@ std::vector<output::cell> cellsOf(const entry& e) {
 	        output::number(newReleases(e))};
 }
 
+extern const std::vector<std::string> kFullColumns = {"total_volumes", "released", "anilist_id",
+                                                      "mal_id",        "url",      "kitsu_id"};
+
+std::vector<std::string> allColumns() {
+	std::vector<std::string> names = kColumns;
+	names.insert(names.end(), kFullColumns.begin(), kFullColumns.end());
+	return names;
+}
+
+std::vector<output::cell> fullCellsOf(const entry& e, provider site) {
+	auto cells = cellsOf(e);
+	for (const auto& more :
+	     {output::known(e.totalVolumes), output::known(e.released), output::known(e.anilistId),
+	      output::known(e.malId), output::maybe(pageOn(e, site)), output::known(e.kitsuId)})
+		cells.push_back(more);
+	return cells;
+}
+
 // The terminal's colour for each status.
 const char* statusColor(watchStatus status) {
 	switch (status) {

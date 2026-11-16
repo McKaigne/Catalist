@@ -197,6 +197,8 @@ catalist export anime > anime.xml             # MyAnimeList XML on stdout
 catalist export manga > manga.xml
 catalist export --format=csv anime > anime.csv   # for a spreadsheet
 catalist export --format=json manga | jq .title  # one object a line
+catalist export --format=json > backup.jsonl     # everything, ids and all
+catalist import backup.jsonl                     # and back
 ```
 
 - **From a site:** `import --user NAME` reads NAME's public lists on your
@@ -214,7 +216,8 @@ Importing never overwrites what you track: a title already in the catalogue
 and only its totals are refreshed. Importing the same file twice adds
 nothing, and an import is one step for undo. Titles without a MyAnimeList
 id are left out of an XML export, with a note on stderr; the CSV and JSON
-exports have every title, with the columns of `ls`.
+exports have every title, with the columns of `show` (every site's id among
+them), and `import` reads the JSON back whole: it is the backup.
 
 ---
 

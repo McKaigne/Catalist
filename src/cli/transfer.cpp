@@ -4,17 +4,76 @@
 #include <istream>
 #include <iterator>
 #include <ostream>
+#include <sstream>
 
 #include "cli/common.hpp"
 #include "storage/malXml.hpp"
 #include "system.hpp"
+#include "web/json.hpp"
 
 namespace catalist::cli {
 
 namespace {
 
-// The titles of one MyAnimeList XML export, `-` being standard input. Fails
-// with what is wrong with the file.
+int numberOf(const json::value& field) {
+	auto number = field.asInteger();
+	return number and *number > 0 ? static_cast<int>(*number) : 0;
+}
+
+std::optional<isoDate> dateOf(const json::value& field) {
+	return isoDate::parse(field.asString().value_or(""));
+}
+
+// A title of `export --format=json` (or `show --json`): everything but the
+// ref, which the lists give anew. Nothing for a line that is not one.
+std::optional<entry> titleOf(const json::value& object) {
+	std::string type = object["type"].asString().value_or("");
+	auto status = parseStatus(object["status"].asString().value_or(""));
+	entry e;
+	e.title = object["title"].asString().value_or("");
+	if ((type != "anime" and type != "manga") or e.title.empty() or not status)
+		return std::nullopt;
+	e.type = type == "anime" ? mediaType::kAnime : mediaType::kManga;
+	e.status = *status;
+	e.score = numberOf(object["score"]);
+	e.progress = numberOf(object["progress"]);
+	e.totalUnits = numberOf(object["total"]);
+	e.volumes = numberOf(object["volumes"]);
+	e.rewatched = numberOf(object["rewatched"]);
+	e.startDate = dateOf(object["started"]);
+	e.finishDate = dateOf(object["finished"]);
+	e.updatedAt = dateOf(object["updated"]);
+	e.totalVolumes = numberOf(object["total_volumes"]);
+	e.released = numberOf(object["released"]);
+	e.anilistId = numberOf(object["anilist_id"]);
+	e.malId = numberOf(object["mal_id"]);
+	e.kitsuId = numberOf(object["kitsu_id"]);
+	return e;
+}
+
+// The titles of Catalist's own JSON Lines, a title a line. Fails on the
+// first line that is not one.
+result<std::vector<entry>> readJsonLines(const std::string& content, const std::string& name) {
+	using outcome = result<std::vector<entry>>;
+	std::vector<entry> found;
+	std::istringstream lines(content);
+	size_t number = 0;
+	for (std::string line; std::getline(lines, line);) {
+		++number;
+		if (line.find_first_not_of(" \t\r") == std::string::npos)
+			continue;
+		auto object = json::parse(line);
+		auto title = object.ok() ? titleOf(object.value()) : std::nullopt;
+		if (not title)
+			return outcome::failure(fmt::format(
+			    "line {} of {} is not a title as 'export --format=json' writes one", number, name));
+		found.push_back(*title);
+	}
+	return outcome::success(std::move(found));
+}
+
+// The titles of one MyAnimeList XML export, or of Catalist's own JSON
+// Lines, `-` being standard input. Fails with what is wrong with the file.
 result<std::vector<entry>> readExport(cliContext& ctx, const std::string& file) {
 	using outcome = result<std::vector<entry>>;
 	bool piped = file == "-";
@@ -28,6 +87,10 @@ result<std::vector<entry>> readExport(cliContext& ctx, const std::string& file) 
 	if (content->rfind("\x1f\x8b", 0) == 0)
 		return outcome::failure(fmt::format("{} is compressed; unpack it first (gunzip{})", name,
 		                                    piped ? "" : " " + file));
+	// `export --format=json`: a full backup, ids and all.
+	auto first = content->find_first_not_of(" \t\r\n");
+	if (first != std::string::npos and (*content)[first] == '{')
+		return readJsonLines(*content, name);
 	auto found = malXml::parse(*content);
 	if (found.empty())
 		return outcome::failure(
@@ -150,14 +213,15 @@ int runExport(const command& self, const args::parsed& line, cliContext& ctx) {
 			                       titles(written.skipped), written.skipped == 1 ? "was" : "were");
 		return 0;
 	}
+	// Everything about each title, its ids too: a backup `import` reads back.
 	std::vector<std::vector<output::cell>> rows;
 	for (const auto& e : list)
-		rows.push_back(cellsOf(e));
+		rows.push_back(fullCellsOf(e, ctx.db.getProvider()));
 	if (format == "json") {
-		writeRows(ctx, kColumns, rows, true, false);
+		writeRows(ctx, allColumns(), rows, true, false);
 		return 0;
 	}
-	ctx.out << output::csvLine(kColumns);
+	ctx.out << output::csvLine(allColumns());
 	for (size_t i = 0; i < rows.size() and ctx.out; ++i)
 		ctx.out << output::csvLine(rows[i]);
 	return 0;
@@ -170,10 +234,12 @@ std::vector<command> transferCommands() {
 	    {"import",
 	     {},
 	     "Add titles from MyAnimeList XML files, or a user's lists on a site",
-	     std::string("A FILE of - is read from standard input. MyAnimeList gzips its exports:\n"
-	                 "unpack them first (gunzip). With --user, the user's public lists are\n"
-	                 "read from your provider, or the site --from names, both of them unless\n"
-	                 "-a or -m keeps to one: moving in from AniList, MyAnimeList or Kitsu.\n\n"
+	     std::string("A FILE is a MyAnimeList XML export, or what 'export --format=json'\n"
+	                 "wrote; - is standard input. MyAnimeList gzips its exports: unpack them\n"
+	                 "first (gunzip).\n\n"
+	                 "With --user, NAME's public lists are read from your provider, or the\n"
+	                 "site --from names, both of them unless -a or -m keeps to one: moving\n"
+	                 "in from AniList, MyAnimeList or Kitsu.\n\n"
 	                 "A title already in your lists keeps your score, progress and dates;\n"
 	                 "only its totals and ids are refreshed. Everything is read before\n"
 	                 "anything is added: when one source is bad, nothing is changed. The\n"
@@ -190,12 +256,13 @@ std::vector<command> transferCommands() {
 	    {"export",
 	     {},
 	     "Print a list as MyAnimeList XML, CSV or JSON",
-	     "The XML is what MyAnimeList and AniList read on their import pages, and\n"
-	     "what 'import' reads; titles without a MyAnimeList id are left out of it,\n"
-	     "with a note. csv is a line of column names and a line a title, and json\n"
-	     "one object a line; both have every title and the columns of 'ls', and\n"
-	     "hold both lists when none is named. In the CSV a date that is not set\n"
-	     "and a total that is not known are empty.\n",
+	     "The XML is what the import pages of MyAnimeList, AniList and Kitsu read;\n"
+	     "titles without a MyAnimeList id are left out of it, with a note. csv is\n"
+	     "a line of column names and a line a title, and json one object a line;\n"
+	     "both have every title and the columns of 'show', every site's id among\n"
+	     "them, and hold both lists when none is named. The json is a backup:\n"
+	     "'import' reads it back whole. In the CSV a date that is not set and a\n"
+	     "total or an id that is not known are empty.\n",
 	     {{0, "format", "FORMAT", "xml (the default), csv or json", {"xml", "csv", "json"}}},
 	     "[anime|manga]",
 	     runExport,

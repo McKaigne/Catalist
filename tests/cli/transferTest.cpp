@@ -168,17 +168,19 @@ TEST_CASE_FIXTURE(cliFixture, "cli export prints what import read") {
 	CHECK(manga[0].title == "Berserk");
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli export --format=csv prints the columns of ls, quoted as CSV") {
+TEST_CASE_FIXTURE(cliFixture, "cli export --format=csv prints the columns of show, quoted as CSV") {
 	seed();
 	REQUIRE(run({"add", "--no-lookup", "Say \"hi\", twice"}) == 0);
 	CHECK(run({"export", "--format=csv", "anime"}) == 0);
 	CHECK(err.empty());
 	CHECK(out ==
 	      "ref,type,title,status,score,progress,total,volumes,rewatched,started,finished,"
-	      "updated,new\n"
-	      "a:1,anime,Sousou no Frieren,completed,10,28,28,0,0,,,,0\n"
-	      "a:2,anime,Odd Taxi,watching,8,5,13,0,0,2026-10-01,,,8\n"
-	      "a:3,anime,\"Say \"\"hi\"\", twice\",planned,0,0,,0,0,,,2026-10-20,0\n");
+	      "updated,new,total_volumes,released,anilist_id,mal_id,url,kitsu_id\n"
+	      "a:1,anime,Sousou no Frieren,completed,10,28,28,0,0,,,,0,,,154587,52991,"
+	      "https://anilist.co/anime/154587,\n"
+	      "a:2,anime,Odd Taxi,watching,8,5,13,0,0,2026-10-01,,,8,,13,128547,44265,"
+	      "https://anilist.co/anime/128547,\n"
+	      "a:3,anime,\"Say \"\"hi\"\", twice\",planned,0,0,,0,0,,,2026-10-20,0,,,,,,\n");
 	// The same at a terminal: a file is what it is for.
 	std::string csv = out;
 	CHECK(run({"export", "--format", "csv", "anime"}, "", 100) == 0);
@@ -196,10 +198,10 @@ TEST_CASE_FIXTURE(cliFixture, "cli export --format=json prints one object a titl
 	    has(out,
 	        "\n{\"ref\":\"a:2\",\"type\":\"anime\",\"title\":\"Odd Taxi\",\"status\":\"watching\","
 	        "\"score\":8,\"progress\":5,\"total\":13,"));
-	// The lines of `ls --json`.
+	// The lines of `show --json`, ids and all.
 	std::string json = out;
-	CHECK(run({"ls", "-a", "--sort=updated", "--json"}) == 0);
-	CHECK(out.size() == json.size());
+	CHECK(run({"show", "--json", "a:1", "a:2"}) == 0);
+	CHECK(out == json);
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli export --format=csv or json without a list holds both") {
@@ -256,7 +258,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli export of an empty catalogue is an empty list
 	CHECK(run({"export", "--format=csv", "manga"}) == 0);
 	CHECK(out ==
 	      "ref,type,title,status,score,progress,total,volumes,rewatched,started,finished,"
-	      "updated,new\n");
+	      "updated,new,total_volumes,released,anilist_id,mal_id,url,kitsu_id\n");
 	CHECK(run({"export", "--format=json", "manga"}) == 0);
 	CHECK(out.empty());
 	CHECK_FALSE(std::filesystem::exists("data"));
@@ -280,9 +282,34 @@ TEST_CASE_FIXTURE(cliFixture, "cli import --user moves in a user's lists from a 
 	CHECK(steps().size() == 1);
 
 	CHECK(run({"import", "--user", "Nobody"}) == 1);
-	CHECK(err == "error: could not reach AniList, or it has no public list of Nobody; check the "
-	             "connection and try again\n");
+	CHECK(err ==
+	      "error: could not reach AniList, or it has no public list of Nobody; check the "
+	      "connection and try again\n");
 	CHECK(run({"import", "--user", "Abel", "file.xml"}) == 2);
 	CHECK(run({"import", "-a", "file.xml"}) == 2);
 	CHECK(err.find("error: --from, -a and -m go with --user\n") == 0);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli export --format=json is a backup import reads back whole") {
+	seed();
+	REQUIRE(run({"link", "taxi", "kitsu", "43095"}) == 0);
+	REQUIRE(run({"set", "taxi", "rewatched=1", "finish=2026-10-19"}) == 0);
+	REQUIRE(run({"export", "--format=json"}) == 0);
+	std::string backup = out;
+	put("backup.jsonl", backup);
+
+	std::filesystem::remove_all("data");
+	CHECK(run({"import", "backup.jsonl"}) == 0);
+	CHECK(has(err, "backup.jsonl: 4 titles, 4 added, 0 in your lists already\n"));
+	CHECK(run({"export", "--format=json"}) == 0);
+	CHECK(out == backup);
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").kitsuId == 43095);
+	// Again: all of them are there already.
+	CHECK(run({"import", "-"}, backup) == 0);
+	CHECK(has(err, "standard input: 4 titles, 0 added, 4 in your lists already\n"));
+
+	put("bad.jsonl", "{\"type\":\"anime\",\"title\":\"x\",\"status\":\"planned\"}\n{\"a\":1}\n");
+	CHECK(run({"import", "bad.jsonl"}) == 1);
+	CHECK(err ==
+	      "error: line 2 of bad.jsonl is not a title as 'export --format=json' writes one\n");
 }

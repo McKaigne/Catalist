@@ -13,17 +13,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # project include shows up as an error in the editor.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(ftxui QUIET)
-if(NOT ftxui_FOUND)
-  include(FetchContent)
-  FetchContent_Declare(
-    ftxui
-    GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
-    GIT_TAG v7.0.3
-  )
-  FetchContent_MakeAvailable(ftxui)
-endif()
-
 find_package(fmt QUIET)
 if(NOT fmt_FOUND)
   include(FetchContent)
@@ -68,39 +57,43 @@ endif()
 set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 
 set(CATALIST_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
-configure_file(src/version.hpp.in "${CATALIST_GENERATED_DIR}/version.hpp" @ONLY)
+configure_file(src/core/version.hpp.in "${CATALIST_GENERATED_DIR}/core/version.hpp" @ONLY)
 
 # Everything but main(), so the tests link the same code the program runs.
 add_library(catalistLib STATIC
-  src/anilist.cpp
-  src/args.cpp
-  src/catalogue.cpp
-  src/cli.cpp
-  src/completion.cpp
-  src/date.cpp
-  src/entry.cpp
-  src/journal.cpp
-  src/json.cpp
-  src/malXml.cpp
-  src/output.cpp
-  src/refs.cpp
-  src/store.cpp
+  # The title, its dates and rules, and UTF-8 text: no I/O.
+  src/core/date.cpp
+  src/core/entry.cpp
+  src/core/text.cpp
+  # The lists in SQLite, the undo history, and the MyAnimeList XML format.
+  src/storage/catalogue.cpp
+  src/storage/csvCodec.cpp
+  src/storage/journal.cpp
+  src/storage/malXml.cpp
+  src/storage/store.cpp
+  # AniList's API and the JSON it answers in.
+  src/web/anilist.cpp
+  src/web/json.cpp
+  # The command line.
+  src/cli/args.cpp
+  src/cli/cli.cpp
+  src/cli/common.cpp
+  src/cli/completion.cpp
+  src/cli/history.cpp
+  src/cli/listing.cpp
+  src/cli/online.cpp
+  src/cli/output.cpp
+  src/cli/refs.cpp
+  src/cli/setup.cpp
+  src/cli/tracking.cpp
+  src/cli/transfer.cpp
+  # Everything that touches the world outside the program.
   src/system.cpp
-  src/text.cpp
-  src/tui/app.cpp
-  src/tui/catalogTab.cpp
-  src/tui/catalogView.cpp
-  src/tui/style.cpp
-  src/updater.cpp
 )
 target_include_directories(catalistLib PUBLIC src "${CATALIST_GENERATED_DIR}")
-target_link_libraries(catalistLib PUBLIC
-  fmt::fmt
-  ${CATALIST_SQLITE}
-  ftxui::screen
-  ftxui::dom
-  ftxui::component
-)
+# runProgram feeds a program's input from a second thread.
+find_package(Threads REQUIRED)
+target_link_libraries(catalistLib PUBLIC fmt::fmt ${CATALIST_SQLITE} Threads::Threads)
 target_compile_options(catalistLib PRIVATE ${CATALIST_WARNING_FLAGS})
 
 add_executable(catalist src/main.cpp)
@@ -127,10 +120,10 @@ add_custom_command(
   OUTPUT ${CATALIST_SHELL_FILES}
   COMMAND ${CMAKE_COMMAND}
     "-DPROGRAM=$<TARGET_FILE:catalist>"
-    "-DTEMPLATE=${CMAKE_CURRENT_SOURCE_DIR}/doc/catalist.1.in"
+    "-DTEMPLATE=${CMAKE_CURRENT_SOURCE_DIR}/docs/catalist.1.in"
     "-DOUT_DIR=${CATALIST_SHARE_DIR}"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/shellSupport.cmake"
-  DEPENDS catalist doc/catalist.1.in cmake/shellSupport.cmake
+  DEPENDS catalist docs/catalist.1.in cmake/shellSupport.cmake
   COMMENT "Writing the manual page and the completions"
   VERBATIM
 )
@@ -178,29 +171,32 @@ else()
 endif()
 
 add_executable(catalistTests
-  tests/anilistTest.cpp
-  tests/argsTest.cpp
-  tests/catalogueTest.cpp
-  tests/cliTest.cpp
-  tests/completionTest.cpp
-  tests/dateTest.cpp
-  tests/entryTest.cpp
-  tests/journalTest.cpp
-  tests/jsonTest.cpp
-  tests/malXmlTest.cpp
-  tests/outputTest.cpp
-  tests/refsTest.cpp
-  tests/resultTest.cpp
+  tests/testMain.cpp
   tests/support/sampleLibrary.cpp
   tests/support/testSupport.cpp
+  tests/core/dateTest.cpp
+  tests/core/entryTest.cpp
+  tests/core/resultTest.cpp
+  tests/core/textTest.cpp
+  tests/core/versionTest.cpp
+  tests/storage/catalogueTest.cpp
+  tests/storage/csvCodecTest.cpp
+  tests/storage/journalTest.cpp
+  tests/storage/malXmlTest.cpp
+  tests/web/anilistTest.cpp
+  tests/web/jsonTest.cpp
+  tests/cli/argsTest.cpp
+  tests/cli/cliTest.cpp
+  tests/cli/completionTest.cpp
+  tests/cli/historyTest.cpp
+  tests/cli/listingTest.cpp
+  tests/cli/onlineTest.cpp
+  tests/cli/outputTest.cpp
+  tests/cli/refsTest.cpp
+  tests/cli/setupTest.cpp
+  tests/cli/trackingTest.cpp
+  tests/cli/transferTest.cpp
   tests/systemTest.cpp
-  tests/testMain.cpp
-  tests/tui/appShellTest.cpp
-  tests/tui/catalogTabTest.cpp
-  tests/tui/styleTest.cpp
-  tests/tui/tuiHarness.cpp
-  tests/updaterTest.cpp
-  tests/versionTest.cpp
 )
 target_include_directories(catalistTests PRIVATE tests)
 target_compile_definitions(catalistTests PRIVATE
@@ -213,7 +209,7 @@ doctest_discover_tests(catalistTests)
 
 # The command line from the shells, as scripts use it; each shell found
 # runs it. A stub curl stands in for AniList.
-set(smokeScript "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli/smoke.sh")
+set(smokeScript "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke/smoke.sh")
 find_program(CATALIST_DASH dash)
 find_program(CATALIST_BASH bash)
 find_program(CATALIST_ZSH zsh)
@@ -231,7 +227,7 @@ if(CATALIST_ZSH)
 endif()
 if(CATALIST_FISH)
   add_test(NAME smoke.fish
-    COMMAND "${CATALIST_FISH}" --no-config "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli/smoke.fish"
+    COMMAND "${CATALIST_FISH}" --no-config "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke/smoke.fish"
       $<TARGET_FILE:catalist>)
   add_test(NAME completion.fish
     COMMAND "${CATALIST_FISH}" --no-config -n "${CATALIST_SHARE_DIR}/fish/catalist.fish"

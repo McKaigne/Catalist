@@ -31,10 +31,10 @@ jobs:
 
       - name: Run the command line from each shell
         run: |
-          dash tests/cli/smoke.sh build/catalist
-          bash --posix tests/cli/smoke.sh build/catalist
-          zsh -f tests/cli/smoke.sh build/catalist
-          fish --no-config tests/cli/smoke.fish build/catalist
+          dash tests/smoke/smoke.sh build/catalist
+          bash --posix tests/smoke/smoke.sh build/catalist
+          zsh -f tests/smoke/smoke.sh build/catalist
+          fish --no-config tests/smoke/smoke.fish build/catalist
 
       - name: Check the completion scripts parse
         run: |

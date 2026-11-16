@@ -1,5 +1,5 @@
 {
-  description = "Catalist - local-first anime and manga tracker for the terminal (C++17 / FTXUI)";
+  description = "Catalist - local-first anime and manga tracker for the command line (C++17)";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -36,7 +36,6 @@
             ];
 
             buildInputs = with pkgs; [
-              ftxui
               doctest
               fmt
               sqlite
@@ -44,22 +43,14 @@
 
             postInstall = ''
               wrapProgram $out/bin/catalist \
-                --prefix PATH : ${
-                  pkgs.lib.makeBinPath (
-                    with pkgs;
-                    [
-                      curl
-                      libsixel
-                    ]
-                  )
-                }
+                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.curl ]}
               # CMake installs `cl` as a link to catalist; the link must
               # reach the wrapper, which passes on the name it was run by.
               ln -sf catalist $out/bin/cl
             '';
 
             meta = {
-              description = "Anime and Manga Watchlist TUI";
+              description = "Anime and manga tracker for the command line";
               homepage = "https://github.com/McKaigne/Catalist";
               license = pkgs.lib.licenses.mit;
               platforms = pkgs.lib.platforms.unix;
@@ -83,12 +74,10 @@
               ninja
               pkg-config
               git
-              ftxui
               doctest
               fmt
               sqlite
               curl
-              libsixel
               clang-tools
               # The shells the command-line tests run under.
               dash

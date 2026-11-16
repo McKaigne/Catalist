@@ -1,31 +1,32 @@
 # Catalist Architectural Decision Records (ADRs)
 
 ## Module map
-Everything is in `src/`, each module a `.hpp`/`.cpp` pair:
+Each module is a `.hpp`/`.cpp` pair in a folder of `src/` by layer. A
+layer uses only the layers above it in this table, and `system`.
 
-| Module | Holds |
-| :--- | :--- |
-| `date`, `result` | `isoDate`; `result<T>`, a value or an error message |
-| `entry` | one anime or manga title, its statuses and the rules that change it (progress, status cycle, rating, counts, import merge) |
-| `catalogue` | the two lists in memory, kept in `catalist.db`; the import of the old CSV files; undo and redo |
-| `store` | a small RAII wrapper over SQLite (`database`, `statement`, `transaction`), the only code that includes `sqlite3.h` |
-| `journal` | pure functions over the undo history: what changed between two lists, merging steps, taking one back |
-| `malXml` | the MyAnimeList XML format lists are imported and exported in |
-| `json`, `anilist` | the web source: title search, and a title's details (both ids, totals, how much is out, the cover) |
-| `sync` | `iListSync`, where a future account sync with the provider plugs in (no implementation yet) |
-| `updater` | a worker thread for lookups and covers, one request every 2 s, results collected on the interface's tick |
-| `system` | everything that touches the OS: files, `runProgram` (curl, img2sixel), `today()`, the terminal's cell size |
-| `args`, `refs`, `output` | the command line's POSIX option parser; refs (`a:12`) and title matching; tables, tab-separated lines and JSON Lines |
-| `cli` | the command line: one table of commands and their handlers |
-| `completion` | the zsh and fish completions and the manual page's COMMANDS, written from the command table |
-| `text` | UTF-8 helpers: width, clipping, lower case |
-| `tui/app` | `iTab`, `appContext` and the shell (tab bar, bottom bar, global keys) |
-| `tui/catalogTab`, `tui/catalogView.cpp` | the Anime and Manga tabs (filters, stats card, list, cover, details): keys and state, and drawing |
-| `tui/style` | colours, icons, pill, marquee, key names, `textField` |
+| Folder | Module | Holds |
+| :--- | :--- | :--- |
+| `core/` | `date`, `result` | `isoDate`; `result<T>`, a value or an error message |
+| | `entry` | one anime or manga title, its statuses and the rules that change it (progress, status, score, counts, dates, import merge) |
+| | `text` | UTF-8 helpers: glyphs, terminal width, clipping, lower case |
+| `storage/` | `store` | a small RAII wrapper over SQLite (`database`, `statement`, `transaction`), the only code that includes `sqlite3.h` |
+| | `catalogue` | the two lists in memory, kept in `catalist.db`; the import of the old CSV files; undo and redo |
+| | `csvCodec` | the CSV form of a title: the files of 0.3.0 and earlier, and the rows of the undo history |
+| | `journal` | pure functions over the undo history: what changed between two lists, merging steps, taking one back |
+| | `malXml` | the MyAnimeList XML format lists are imported and exported in |
+| `web/` | `json`, `anilist` | the web source: title search, and a title's details (both ids, totals, how much is out) |
+| | `sync.hpp` | `iListSync`, where a future account sync with the provider plugs in (no implementation yet) |
+| `cli/` | `args`, `refs`, `output` | the POSIX option parser; refs (`a:12`) and title matching; tables, tab-separated lines and JSON Lines |
+| | `cli` | `cliContext`, the `command` row, the table put together, dispatch and help |
+| | `common` | what the commands share (naming titles, loading, saving and reporting a change), and one function per group of commands |
+| | `listing`, `tracking`, `online`, `transfer`, `history`, `setup` | the commands, by group: their handlers and their rows of the table (ADR-017) |
+| | `completion` | the zsh and fish completions and the manual page's COMMANDS, written from the command table |
+| `src/` | `system` | everything that touches the outside world: reading files, `runProgram` (curl), the clock, the terminal |
 
 `main.cpp` reads the environment, builds the catalogue on the data
-directory, then runs the command line, or the TUI when there is no command
-and a terminal is attached.
+directory and the `cliContext`, and runs the command line. Tests mirror the
+folders (`tests/core/`, `tests/storage/`, ...); `tests/smoke/` runs the
+built program from the shells, and `tests/support/` holds the fixtures.
 
 ## ADR-001: Comments Say Why, and Label Long Sections
 - **Context:** Inline comments explaining step-by-step logic drifted over time.
@@ -39,7 +40,7 @@ and a terminal is attached.
 
 ## ADR-003: Decoupled Multi-Provider Subsystem (superseded)
 - **Superseded** by ADR-013 and ADR-014: the only web source is AniList,
-  in `anilist`.
+  in `web/anilist`.
 
 ## ADR-004: Explicit Unix Filter and Standard Stream Discipline
 - **Context:** Terminal tools must integrate smoothly into shell pipelines.
@@ -55,50 +56,33 @@ and a terminal is attached.
   `iClock`) did the job, but each wrapped only one or two calls.
 - **Decision:** `system.cpp` is the only code that touches file streams,
   other programs, the terminal or the system clock, as plain functions:
-  `readFile`, `writeFileAtomic`, `runProgram`, `httpGet`, `httpPost`,
-  `today`, `nowStamp`, `newTxLabel`, `isInteractive`. The database file is
-  the other side effect, and `store.cpp` is the only code that includes
-  `sqlite3.h`. Where a test must swap one, the caller takes a function
-  instead: `anilist::search` takes an `anilist::poster`, and `appContext`
-  and `cliContext` carry `today`, `nowStamp` and the poster. The catalogue
-  opens its directory directly; tests give it a temporary one.
+  `readFile`, `runProgram`, `httpPost`, `today`, `nowStamp`, `newTxLabel`,
+  `isInteractive`, `terminalColumns`. The database file is the other side
+  effect, and `store.cpp` is the only code that includes `sqlite3.h`. Where
+  a test must swap one, the caller takes a function instead:
+  `anilist::search` takes an `anilist::poster`, and `cliContext` carries
+  `today`, `nowStamp`, `newTxLabel` and the poster. The catalogue opens its
+  directory directly; tests give it a temporary one.
 - **Composition root:** `main.cpp` reads the environment into a
   `dataDirEnv` (`getDefaultDataDir` is pure), builds the catalogue on the
-  data directory, and fills the `cliContext` or, through `runTui`, the
-  `appContext`. There are no singletons.
-- **Processes:** the programs run are curl and img2sixel, with `execvp`
-  and an argument list, so nothing passes through a shell.
+  data directory, and fills the `cliContext`. There are no singletons.
+- **Processes:** the only program run is curl, with `execvp` and an
+  argument list, so nothing passes through a shell.
 
 ## ADR-006: Shallow Control Flow
 - **Decision:** Function bodies nest at most three levels. Preconditions and
   errors return early; loops skip with `continue`; each distinct subtask is a
-  small, named helper (`onSearchKey`, `moveSidebarCursor`, `addPicked`). Declarative layout code (FTXUI element trees) may nest for
-  readability.
+  small, named helper (`readRefs`, `chooseMatch`, `removalConfirmed`).
 
-## ADR-007: Tabs Behind `iTab`, Drawn and Routed by Hand
-- **Context:** The TUI was one 2,600-line function whose event handling was a
-  single 700-line `CatchEvent` chain.
-- **Decision:** Each tab implements `iTab` (`title`, `icon`,
-  `render(appContext&)`, `onEvent(const Event&, appContext&)`, `hints()`,
-  `onTick`, `mode()`), the program's one interface. `appShell` owns the
-  two tabs in a fixed order: it switches tabs (number keys, `Tab`), quits,
-  ignores the mouse, turns the redraw timer into `onTick`, and leaves every
-  key to the tab while its mode is not normal (`capturesInput()`). It draws
-  the tab bar and the bottom bar (mode pill, status, hints). Tabs change the
-  catalogue through `appContext::save`, which writes it at once and reports a
-  failure in the status line.
-- **No component tree:** FTXUI only runs the loop (`Renderer` +
-  `CatchEvent`). Text entry is a `textField` drawn by hand, so focus never
-  has to be managed.
-- **One state per tab:** `catalogTab` knows what the keyboard is doing from
-  one `step` (browse, search, type a number, the three add steps, confirm
-  delete); `onEvent`, `mode()` and `hints()` are switches over it.
+## ADR-007: Tabs Behind `iTab`, Drawn and Routed by Hand (superseded)
+- **Superseded** by ADR-017: the terminal interface, and with it `iTab`,
+  moved to Catalist-TUI.
 
 ## ADR-008: Naming and Formatting
 - **Names:** types, functions, variables and files are camelCase;
-  interfaces are `i` + PascalCase (`iTab`); private members end in `_`;
-  constants and enumerators are `kPascalCase` (`mediaType::kAnime`,
-  `theme::kMauve`). Namespaces stay lower case and macros
+  interfaces are `i` + PascalCase (`iListSync`); private members end in
+  `_`; constants and enumerators are `kPascalCase` (`mediaType::kAnime`,
+  `output::kBold`). Namespaces stay lower case and macros
   SCREAMING_SNAKE_CASE. Names are descriptive (`widthPx`, `changedTitles`).
 - **Formatting:** `.clang-format` (Google-based): tabs for indentation,
   four wide, a 100-column limit, opening braces on the line of their
@@ -107,17 +91,17 @@ and a terminal is attached.
   resources are owned by objects that release them (RAII, e.g. the pipe
   ends in `runProgram`); the standard algorithms replace hand-written loops
   where they say it more plainly. A header is only added when nothing
-  already included does the job. Nothing is written to disk but
+  already included does the job. Includes name the folder
+  (`#include "storage/catalogue.hpp"`), and header guards follow the path
+  (`CATALIST_STORAGE_CATALOGUE_HPP_`). Nothing is written to disk but
   `catalist.db` (and SQLite's own journal beside it while it writes).
 
 ## ADR-009: One Version, Bumped Only for User-Visible Change
 - **Decision:** `VERSION` holds `MAJOR.MINOR.PATCH` and is the only place
   the number is written. CMake reads it into `project(VERSION)`, generates
-  `version.hpp` (`kVersionString`), and the program puts it in the man
-  page;
-  `flake.nix` reads it too, and CI checks `catalist --version` against it.
-  PATCH is for fixes and small tweaks, MINOR for new tabs, commands or
-  config keys (PATCH resets), MAJOR for big releases; the project stays on
+  `core/version.hpp` (`kVersionString`), and the program puts it in the
+  man page; `flake.nix` reads it too, and CI checks `catalist --version` against it.
+  PATCH is for fixes and small tweaks, MINOR for new commands or options (PATCH resets), MAJOR for big releases; the project stays on
   0.x until the first full-feature release. Internal refactors do not bump.
   Every bump adds a Keep a Changelog entry to `CHANGELOG.md`, is its own
   `release: vX.Y.Z` commit and gets an annotated tag.
@@ -125,19 +109,22 @@ and a terminal is attached.
 ## ADR-010: Hermetic Tests That Check Behaviour
 - **Decision:** Tests use doctest and are registered with ctest one case at a
   time. The test `main` points `CATALIST_DATA_DIR`, `HOME`,
-  `XDG_DATA_HOME` and `XDG_CONFIG_HOME` at a throwaway sandbox and pins `TZ=UTC` before any test
-  code runs; each test that touches files gets its own temp directory, and
+  `XDG_DATA_HOME` and `XDG_CONFIG_HOME` at a throwaway sandbox and pins
+  `TZ=UTC` before any test code runs; each test that touches files gets its own temp directory, and
   a failed write is simulated by a directory where the file should go.
   Everything runs offline: tests pass a fixed date and a `fakeWeb`
   (ADR-005).
 - **What a test checks:** the result the user would see: the lists as
-  another catalogue reads them back, the order of the rows
-  (`catalogTab::shown`), the status line, the exit code and output of a
+  another catalogue reads them back, the exit code and the output of a
   command. No test is skipped, expected to fail or switched off by an
   environment variable. `tests/fixtures/csv` holds the CSV layouts still
   imported (those of 0.2.1 and later).
-- **From the shells:** `tests/cli/smoke.sh` (POSIX sh, run under dash,
-  `bash --posix` and `zsh -f`) and `tests/cli/smoke.fish` drive the built
+- **Where:** the unit tests mirror `src/` (`tests/cli/listingTest.cpp`
+  tests `src/cli/listing.cpp`); the command tests share `cliFixture`
+  (`tests/support/cliFixture.hpp`), which runs `catalist ...` against a
+  temporary directory.
+- **From the shells:** `tests/smoke/smoke.sh` (POSIX sh, run under dash,
+  `bash --posix` and `zsh -f`) and `tests/smoke/smoke.fish` drive the built
   program as scripts do, with a stub `curl` first in `PATH` so nothing goes
   online. ctest registers them for each shell it finds, and checks the
   generated completions with `zsh -n` and `fish -n`.
@@ -148,9 +135,8 @@ and a terminal is attached.
 ## ADR-011: No Settings
 - **Context:** A settings tab, `settings.json`, themes and `catalist config`
   existed so users could change defaults that hardly anyone changed.
-- **Decision:** The defaults are fixed in code (Helix-style): Catppuccin
-  Mocha, the list sorted by new releases, the Anime tab first, fixed keys.
-  There is no configuration file; an old `settings.json` or `catalist.kdl`
+- **Decision:** The defaults are fixed in code (Helix-style). There is no
+  configuration file; an old `settings.json` or `catalist.kdl`
   is ignored. The provider (ADR-014) is the one choice kept, with the
   lists.
 
@@ -166,30 +152,14 @@ and a terminal is attached.
   converting them to that format) and go out with `catalist export`; neither
   touches an account. Re-importing merges by AniList or MyAnimeList id and never
   overwrites the user's score, progress or dates.
-- **Network:** the add flow (`a`) runs one AniList search on the UI thread on
-  the next tick, after the "Searching" status is drawn; without a
-  connection the title is added by hand. Lookups (after every change to a
-  title, once a run per title, and once a day for followed titles) and
-  covers run on the `updater`'s worker thread, one AniList request every
-  2 s; a fetch that failed is tried again after 15 s rather than given up;
-  the
-  shell folds finished lookups into the catalogue on its tick. Nothing
-  about the network is needed to use the lists.
-- **Quitting:** the worker's state is shared with its thread, so on exit
-  the updater waits only a moment for a request under way; a slow one
-  (offline, curl allows eight seconds) finishes alone and wakes nothing.
-- **Covers:** FTXUI cannot draw pictures. The cover card is drawn with only
-  a note in it, and after each frame the shell writes the sixel picture
-  (made by img2sixel, kept in memory) over the card's inside, saving and
-  restoring the cursor so FTXUI's next frame lands in place. This is why
-  `runTui` runs FTXUI's `Loop` one event at a time.
+- **Network:** only `add` and `search` ask AniList, one request at a time,
+  while the command runs (ADR-015). Nothing about the network is needed to
+  use the lists: `add --no-lookup` adds a title offline.
 - **Ids:** an entry's id only numbers it within its list (a new title gets
   the highest id + 1); the command line shows it as the title's ref
   (`a:12`), which can be given again after the title with the highest id
-  is removed. Two titles are the same only when
-  they share an AniList or a MyAnimeList id. The updater keys a title by its
-  AniList id, or by its MyAnimeList id until a lookup reveals the AniList
-  one, after which both keys name the same title.
+  is removed. Two titles are the same only when they share an AniList or a
+  MyAnimeList id.
 
 ## ADR-014: AniList Only; a Provider, Ready for Sync
 - **Context:** Jikan (MyAnimeList's unofficial API) could not be reached
@@ -198,24 +168,22 @@ and a terminal is attached.
   id.
 - **Decision:** AniList is the only web source. Entries store both ids. The
   user picks one provider (AniList by default, or MyAnimeList); its ids are
-  the ones the interfaces show and accept, and its name is the bottom-left
-  pill. The provider lives in the catalogue (`getProvider`, `setProvider`,
+  the ones a title's page link (`show`) uses. The provider lives in the catalogue (`getProvider`, `setProvider`,
   `saveSettings`, the `setting` table of `catalist.db`).
 - **Room for sync:** `sync.hpp` declares `iListSync` (`pull`, `push`,
   `remove`) for one site. A sync would be one class per site, made for the
   chosen provider only, matching titles with `idOn(entry, site)`, its token
-  kept outside the catalogue, its requests queued on the updater's worker
-  thread, its state shown in the provider pill. Nothing implements it yet.
+  kept outside the catalogue. Nothing implements it yet.
 
 ## ADR-015: The Command Line Is for Daily Tracking, Scripts and Pipes
 - **Context:** the first list-manager CLI named titles by the provider's
   id, took options anywhere, looked titles up before every change, and
   could not be undone, so it was neither quick to type nor safe to script.
-- **One table:** each command is a row in `cli.cpp` (name, aliases,
+- **One table:** each command is a row of the table (name, aliases,
   summary, details, options with their values and choices, operands and
   their kind, handler, hidden). The row drives `help`, each `--help`, typo
   suggestions, the usage lines, the manual page (`__man` fills
-  `doc/catalist.1.in`), and the zsh and fish completions (`completion`).
+  `docs/catalist.1.in`), and the zsh and fish completions (`completion`).
   The build runs the program to write the page and the scripts, so they
   cannot fall behind it.
 - **POSIX options:** `args` parses grouped short options, `-n3`,
@@ -229,14 +197,14 @@ and a terminal is attached.
   JSON Lines, `--header` for the column names, `-q` for only the refs or
   nothing. A failed write to `stdout`, as when `head` has gone, ends the
   command quietly with 0.
-- **Network:** only `add` and `search` call AniList, synchronously; the CLI
-  never starts the updater. `add` fails offline unless `--no-lookup`.
+- **Network:** only `add` and `search` call AniList, synchronously. `add`
+  fails offline unless `--no-lookup`.
 - **Mutating commands:** take the write lock (`beginWrite`), load, resolve
   every operand before changing anything, apply the entry rules
-  (`setStatus`, `setScore`, `stepProgress`, `setCount`, as the TUI does),
+  (`setStatus`, `setScore`, `stepProgress`, `setCount`),
   save with an undo note, then print one line per changed field.
-- **No terminal:** `catalist` with no command and no terminal on stdin or
-  stdout prints its usage on stderr and exits with 2.
+- **No command:** `catalist` alone prints its usage on stderr and exits
+  with 2.
 - **Completion:** the scripts know the commands and options by heart and
   ask the hidden `catalist __complete refs|titles|statuses|fields` for the
   rest. It opens the database read-only (`catalogue::peek`): no lock is
@@ -269,9 +237,32 @@ and a terminal is attached.
   back or forward per entry (`transition`): only the fields the step
   changed are checked and set, so web data found since is kept. A title
   changed since stops the step unless forced; a removed title comes back
-  under its old id, never over another title. The TUI's saves are steps
-  too; its background lookups are not.
+  under its old id, never over another title.
 - **Old files:** with no `catalist.db`, the CSV files and `settings` of
   0.3.0 and earlier are read from the data directory or, when
   `CATALIST_DATA_DIR` is unset, from `~/.config/catalist`, into a new
   database, once; they are never changed.
+
+## ADR-017: Command Line Only, in Folders by Layer
+- **Context:** the program had two ways in, a full-screen interface (FTXUI,
+  covers through img2sixel, a worker thread keeping totals current) and the
+  command line. The owner wants two programs, each simple: this one for the
+  command line, Catalist-TUI for the interface.
+- **Decision:** this program is the command line only. FTXUI, libsixel, the
+  updater thread, covers, the daily id look-ups and the interface's entry
+  rules (status cycle, one star more) are gone; `text` measures glyph
+  widths with its own table instead of FTXUI's. `catalist` alone is a
+  usage error.
+- **One database, two programs:** `catalist.db` keeps the schema of
+  ADR-016, so Catalist-TUI can work on the same file. This program writes
+  only the `provider` setting and leaves other keys (Catalist-TUI's
+  `linked`) as they are. Totals and released counts change only when a
+  title is added, imported or set by hand here, or when Catalist-TUI
+  checks it.
+- **Layout:** `src/` has a folder per layer (`core`, `storage`, `web`,
+  `cli`) and `system` beside `main.cpp`; see the module map. The commands
+  are grouped in files (`listing`, `tracking`, `online`, `transfer`,
+  `history`, `setup`), each with its handlers and its rows of the table,
+  sharing `cli/common`; `cli.cpp` collects the groups into the table in
+  help order and runs it. A new command goes in the file of its group, or
+  a new group file listed in `common.hpp` and `commands()`.

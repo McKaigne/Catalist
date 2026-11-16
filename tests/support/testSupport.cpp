@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <fstream>
 #include <random>
 #include <stdexcept>
 
@@ -59,7 +60,11 @@ std::string readText(const std::filesystem::path& file) {
 }
 
 void writeText(const std::filesystem::path& file, const std::string& text) {
-	if (not writeFileAtomic(file, text))
+	if (not file.parent_path().empty())
+		std::filesystem::create_directories(file.parent_path());
+	std::ofstream stream(file, std::ios::binary | std::ios::trunc);
+	stream << text;
+	if (not stream.good())
 		throw std::runtime_error("could not write " + file.string());
 }
 
@@ -67,23 +72,8 @@ void makeUnwritable(const std::filesystem::path& file) {
 	std::filesystem::create_directories(file);
 }
 
-void fakeWeb::respond(const std::string& urlFragment, const std::string& body) {
-	bodies[urlFragment] = body;
-}
-
-std::optional<std::string> fakeWeb::get(const std::string& url) {
-	requested.push_back(url);
-	// The longest matching fragment wins, so "anime/9/episodes" beats
-	// "anime/9".
-	const std::string* answer = nullptr;
-	size_t matched = 0;
-	for (const auto& [fragment, body] : bodies) {
-		if (url.find(fragment) != std::string::npos and fragment.size() >= matched) {
-			answer = &body;
-			matched = fragment.size();
-		}
-	}
-	return answer ? std::optional<std::string>(*answer) : std::nullopt;
+void fakeWeb::respond(const std::string& fragment, const std::string& body) {
+	bodies[fragment] = body;
 }
 
 std::optional<std::string> fakeWeb::post(const std::string& url, const std::string& json) {
@@ -102,10 +92,6 @@ std::optional<std::string> fakeWeb::post(const std::string& url, const std::stri
 
 anilist::poster fakeWeb::poster() {
 	return [this](const std::string& url, const std::string& json) { return post(url, json); };
-}
-
-updater::fetcher fakeWeb::fetcher() {
-	return [this](const std::string& url) { return get(url); };
 }
 
 entry findTitle(const catalogue& db, mediaType type, const std::string& title) {

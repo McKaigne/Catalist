@@ -1,7 +1,7 @@
 # Writes what the built program says about itself: the manual page and the
 # completion scripts for zsh and fish. Run by the build:
 #
-#   cmake -DPROGRAM=build/catalist -DTEMPLATE=doc/catalist.1.in
+#   cmake -DPROGRAM=build/catalist -DTEMPLATE=docs/catalist.1.in
 #         -DOUT_DIR=build/share -P cmake/shellSupport.cmake
 #
 # The program writes them from its own table of commands, so the page and

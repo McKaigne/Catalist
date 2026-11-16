@@ -29,26 +29,6 @@ std::optional<std::string> readFile(const std::filesystem::path& file) {
 	return std::string((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
 }
 
-bool writeFileAtomic(const std::filesystem::path& file, const std::string& content) {
-	std::error_code ec;
-	if (not file.parent_path().empty())
-		std::filesystem::create_directories(file.parent_path(), ec);
-	std::filesystem::path tempFile = fmt::format("{}.tmp", file.string());
-	bool written = false;
-	{
-		std::ofstream stream(tempFile, std::ios::binary | std::ios::trunc);
-		stream << content;
-		stream.flush();
-		written = stream.is_open() and stream.good();
-	}
-	if (written)
-		std::filesystem::rename(tempFile, file, ec);
-	if (written and not ec)
-		return true;
-	std::filesystem::remove(tempFile, ec);
-	return false;
-}
-
 namespace {
 
 // Owns a file descriptor and closes it when it goes out of scope.
@@ -150,23 +130,6 @@ std::optional<std::string> runProgram(const std::vector<std::string>& arguments,
 	return succeeded ? std::optional<std::string>(output) : std::nullopt;
 }
 
-bool hasProgram(const std::string& name) {
-	const char* path = std::getenv("PATH");
-	std::string directories = path ? path : "";
-	size_t start = 0;
-	while (start <= directories.size()) {
-		size_t end = directories.find(':', start);
-		if (end == std::string::npos)
-			end = directories.size();
-		std::filesystem::path candidate =
-		    std::filesystem::path(directories.substr(start, end - start)) / name;
-		if (access(candidate.c_str(), X_OK) == 0)
-			return true;
-		start = end + 1;
-	}
-	return false;
-}
-
 namespace {
 
 // -f turns an HTTP error into a failed exit; a server that does not answer
@@ -175,12 +138,6 @@ const std::vector<std::string> kCurl = {"curl", "-sfL", "--connect-timeout", "4"
                                         "8",    "-A",   "catalist"};
 
 }  // namespace
-
-std::optional<std::string> httpGet(const std::string& url) {
-	std::vector<std::string> arguments = kCurl;
-	arguments.push_back(url);
-	return runProgram(arguments);
-}
 
 std::optional<std::string> httpPost(const std::string& url, const std::string& json) {
 	std::vector<std::string> arguments = kCurl;
@@ -207,14 +164,6 @@ std::string nowStamp() {
 std::string newTxLabel() {
 	auto seconds = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 	return fmt::format("{}-{}", static_cast<long long>(seconds), static_cast<long long>(getpid()));
-}
-
-std::optional<cellSize> terminalCellSize() {
-	winsize window{};
-	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) != 0 or window.ws_col == 0 or
-	    window.ws_row == 0 or window.ws_xpixel == 0 or window.ws_ypixel == 0)
-		return std::nullopt;
-	return cellSize{window.ws_xpixel / window.ws_col, window.ws_ypixel / window.ws_row};
 }
 
 bool isInteractive() {

@@ -1,7 +1,7 @@
 #ifndef CATALIST_TESTS_SUPPORT_SAMPLE_LIBRARY_HPP_
 #define CATALIST_TESTS_SUPPORT_SAMPLE_LIBRARY_HPP_
 
-#include "catalogue.hpp"
+#include "storage/catalogue.hpp"
 
 namespace catalist::test {
 

@@ -1,0 +1,92 @@
+.TH CATALIST 1 "November 2026" "v@PROJECT_VERSION@" "User Commands"
+.SH NAME
+catalist, cl \- local-first anime and manga tracker for the command line
+.SH SYNOPSIS
+.B catalist
+\fICOMMAND\fR [\fIOPTION\fR...] [\fIARG\fR...]
+.br
+.B cl
+\fICOMMAND\fR [\fIOPTION\fR...] [\fIARG\fR...]
+.SH DESCRIPTION
+.B catalist
+tracks the anime you watch and the manga you read in one SQLite file on
+your computer, from the shell, in scripts and in pipes.
+.B cl
+is the same program under a shorter name.
+.PP
+Only \fBadd\fR and \fBsearch\fR go online, to AniList's public API,
+through curl. A title's total, and how many of its episodes were out, are
+what AniList said when it was added.
+.PP
+A \fIREF\fR names a title: its ref, the first column of \fBls\fR
+(\fBa:12\fR is an anime, \fBm:3\fR a manga), or part of its title, in
+capitals or not. A title that is exactly the words given wins; otherwise
+several matches are an error, unless \fB\-\-all\fR takes them all. A lone
+\fB\-\fR reads the refs from standard input, one a line, so
+\fBcatalist ls \-q\fR can feed another command. The ref of a removed title
+can be given to the next title added.
+.PP
+Options come before the operands, may be grouped (\fB\-amq\fR), and take
+their value joined or apart (\fB\-n3\fR, \fB\-n 3\fR,
+\fB\-\-sort=title\fR); \fB\-\-\fR ends them. Every command takes
+\fB\-h\fR and \fB\-\-help\fR.
+.PP
+At a terminal, lists are tables. Into a pipe or a file, each title is one
+line of fields with a tab between them, and \fB\-\-json\fR prints one JSON
+object a line. Messages, questions and errors go to standard error.
+.PP
+Each command that changes the lists is one step for \fBundo\fR; commands
+run with the same \fBCATALIST_TX\fR are one step together (see \fBtx\fR).
+\fBredo\fR makes again what \fBundo\fR took back, until the next change.
+The last 100 steps are kept.
+.SH COMMANDS
+@COMMANDS@
+.SH FILES
+.TP
+.I ~/.local/share/catalist/catalist.db
+The lists, the provider and the steps \fBundo\fR and \fBredo\fR can take,
+in one SQLite file.
+.TP
+.I ~/.config/catalist/anime.csv, manga.csv, settings
+The files of Catalist 0.3.0 and earlier. When there is no
+\fIcatalist.db\fR yet, they are read into a new one, once, and left as they
+were.
+.PP
+Catalist-TUI, the full-screen interface, keeps its lists in the same
+\fIcatalist.db\fR.
+.SH ENVIRONMENT
+.TP
+.B CATALIST_DATA_DIR
+Keep the lists in this directory. The old files are then looked for in
+it, too.
+.TP
+.B XDG_DATA_HOME
+When set to an absolute path, the lists are kept in
+\fI$XDG_DATA_HOME/catalist\fR.
+.TP
+.B XDG_CONFIG_HOME
+Where the old files of Catalist 0.3.0 and earlier are looked for:
+\fI$XDG_CONFIG_HOME/catalist\fR.
+.TP
+.B CATALIST_TX
+A label from \fBcatalist tx\fR. Commands run with the same label make one
+step for \fBundo\fR.
+.TP
+.B NO_COLOR
+When set, output has no colours.
+.SH EXIT STATUS
+0 on success, 1 when the work failed (no title matched, a file could not
+be read, the lists could not be saved, AniList could not be reached), 2
+when the command line is wrong or names no command. A pipe closed early, as by \fBhead\fR, is
+not a failure.
+.SH EXAMPLES
+.nf
+catalist add \-\-pick 1 frieren
+catalist + frieren
+catalist ls \-q \-s watching | catalist + \-
+catalist set a:12 score=9 status=completed
+catalist undo
+catalist export \-\-format=csv anime > anime.csv
+.fi
+.SH AUTHORS
+McKaigne <https://github.com/McKaigne/Catalist>

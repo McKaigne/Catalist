@@ -162,3 +162,18 @@ TEST_CASE("csvCodec names the first row it cannot read") {
 	REQUIRE_FALSE(decoded.ok());
 	CHECK(decoded.errorMessage() == "row 2 has a column layout this version cannot read");
 }
+
+TEST_CASE("csvCodec adds the Kitsu id as an 18th field, only when there is one") {
+	catalist::entry known =
+	    catalist::test::makeEntry().id(1).title("Frieren").malId(52991).kitsuId(46474);
+	std::string row = csvCodec::encodeEntry(known);
+	auto fields = csvCodec::splitFields(row);
+	REQUIRE(fields.size() == 18);
+	CHECK(fields[17] == "46474");
+	CHECK(csvCodec::decodeEntry(fields, mediaType::kAnime)->kitsuId == 46474);
+	// Without one, the row is the 17 fields Catalist-TUI writes.
+	known.kitsuId = 0;
+	auto plain = csvCodec::splitFields(csvCodec::encodeEntry(known));
+	CHECK(plain.size() == 17);
+	CHECK(csvCodec::decodeEntry(plain, mediaType::kAnime)->kitsuId == 0);
+}

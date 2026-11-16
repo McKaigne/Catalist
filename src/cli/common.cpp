@@ -8,6 +8,7 @@
 
 #include "cli/refs.hpp"
 #include "core/text.hpp"
+#include "web/sites.hpp"
 
 namespace catalist::cli {
 
@@ -364,6 +365,38 @@ result<int> countGiven(const args::parsed& line, int otherwise) {
 		return result<int>::failure(
 		    fmt::format("-n '{}' is not a count of one or more", line.get("n")));
 	return result<int>::success(*count);
+}
+
+extern const args::option kFrom{
+    0, "from", "SITE", "ask anilist, mal or kitsu, not your provider", {"anilist", "mal", "kitsu"}};
+
+bool fromKnown(const command& cmd, const args::parsed& line, cliContext& ctx) {
+	if (not line.has("from") or parseProvider(line.get("from")))
+		return true;
+	usageError(ctx, cmd,
+	           fmt::format("--from '{}' is not anilist, mal or kitsu{}", line.get("from"),
+	                       didYouMean(line.get("from"), kFrom.choices)));
+	return false;
+}
+
+bool asksProvider(const args::parsed& line) {
+	return not line.has("from");
+}
+
+provider siteOf(const args::parsed& line, const cliContext& ctx) {
+	if (auto named = line.has("from") ? parseProvider(line.get("from")) : std::nullopt)
+		return *named;
+	return ctx.db.getProvider();
+}
+
+std::unique_ptr<web::iTracker> trackerFor(const cliContext& ctx, provider site) {
+	return web::makeTracker(site, ctx.net);
+}
+
+std::string webError(const std::string& message) {
+	if (message.rfind("could not reach ", 0) == 0)
+		return message + "; check the connection and try again";
+	return message;
 }
 
 extern const args::option kQuiet{'q', "", "", "print nothing"};

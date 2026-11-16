@@ -14,7 +14,7 @@ layer uses only the layers above it in this table, and `system`.
 | | `csvCodec` | the CSV form of a title: the files of 0.3.0 and earlier, and the rows of the undo history |
 | | `journal` | pure functions over the undo history: what changed between two lists, merging steps, taking one back |
 | | `malXml` | the MyAnimeList XML format lists are imported and exported in |
-| `web/` | `http`, `tracker`, `json`, `anilist` | the sites: one request type, the `iTracker` interface every site implements (title search, a title's details: ids, totals, how much is out), and AniList's adapter |
+| `web/` | `http`, `tracker`, `sites`, `anilist`, `mal`, `kitsu`, `json` | the sites: one request type, the `iTracker` interface every site implements (title search, a title's details: ids, totals, how much is out), the adapters of AniList, MyAnimeList and Kitsu, and the factory that picks one |
 | | `sync.hpp` | `iListSync`, where a future account sync with the provider plugs in (no implementation yet) |
 | `cli/` | `args`, `refs`, `output` | the POSIX option parser; refs (`a:12`) and title matching; tables, tab-separated lines and JSON Lines |
 | | `cli` | `cliContext`, the `command` row, the table put together, dispatch and help |

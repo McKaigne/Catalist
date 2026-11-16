@@ -26,19 +26,23 @@ TEST_CASE_FIXTURE(cliFixture, "cli provider prints or sets the site titles are l
 	CHECK(run({"provider"}) == 0);
 	CHECK(out == "mal\n");
 	CHECK(run({"show", "taxi"}) == 0);
-	CHECK(has(out, "\thttps://myanimelist.net/anime/44265\n"));
+	CHECK(has(out, "\thttps://myanimelist.net/anime/44265\t0\n"));
 	CHECK(run({"show", "taxi"}, "", 100) == 0);
 	CHECK(has(out, "  Page         https://myanimelist.net/anime/44265\n"));
 	CHECK(run({"provider", "myanimelist"}) == 0);
 	CHECK(err == "Nothing changed.\n");
 
-	CHECK(run({"provider", "kitsu"}) == 2);
-	CHECK(err.find("error: unknown provider 'kitsu'; choose anilist or mal\n"
-	               "Usage: catalist provider [anilist|mal]\n") == 0);
+	CHECK(run({"provider", "shikimori"}) == 2);
+	CHECK(err.find("error: unknown provider 'shikimori'; choose anilist, mal or kitsu\n"
+	               "Usage: catalist provider [anilist|mal|kitsu]\n") == 0);
+	CHECK(run({"provider", "kitsu"}) == 0);
+	CHECK(err == "Your provider is now Kitsu.\n");
+	CHECK(run({"provider"}) == 0);
+	CHECK(out == "kitsu\n");
 	CHECK(run({"provider", "anilist", "mal"}) == 2);
 	CHECK(run({"provider", "anilist"}) == 0);
 	CHECK(run({"show", "taxi"}) == 0);
-	CHECK(has(out, "\thttps://anilist.co/anime/128547\n"));
+	CHECK(has(out, "\thttps://anilist.co/anime/128547\t0\n"));
 	// A setting is not a step for undo.
 	CHECK(steps().empty());
 }

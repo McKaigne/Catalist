@@ -14,9 +14,11 @@ your computer, from the shell, in scripts and in pipes.
 .B cl
 is the same program under a shorter name.
 .PP
-Only \fBadd\fR and \fBsearch\fR go online, to AniList's public API,
-through curl. A title's total, and how many of its episodes were out, are
-what AniList said when it was added.
+Only \fBadd\fR and \fBsearch\fR go online, through curl, to the public
+API of your provider (AniList, MyAnimeList or Kitsu; see \fBprovider\fR)
+or of the site \fB\-\-from\fR names. A title's total, and how many of its
+episodes were out, are what the site said when it was added. Each title
+keeps its id on every site that is known.
 .PP
 A \fIREF\fR names a title: its ref, the first column of \fBls\fR
 (\fBa:12\fR is an anime, \fBm:3\fR a manga), or part of its title, in
@@ -99,11 +101,16 @@ When set, output has no colours, unless \fB\-\-color=always\fR asks for them.
 .B CLICOLOR_FORCE
 When set to anything but 0, output has colours into a pipe as well.
 .TP
+.B CATALIST_MAL_CLIENT_ID
+The id MyAnimeList gave Catalist (https://myanimelist.net/apiconfig), in
+place of the one it was built with. MyAnimeList answers nothing without
+one.
+.TP
 .B COLUMNS
 How wide \fB\-\-table\fR draws a table into a pipe; 80 when it is not set.
 .SH EXIT STATUS
 0 on success, 1 when the work failed (no title matched, a file could not
-be read, the lists could not be saved, AniList could not be reached), 2
+be read, the lists could not be saved, a site could not be reached), 2
 when the command line is wrong or names no command. A pipe closed early, as by \fBhead\fR, is
 not a failure.
 .SH EXAMPLES

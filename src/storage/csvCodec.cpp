@@ -175,6 +175,10 @@ std::optional<entry> decodeEntry(const std::vector<std::string>& fields, mediaTy
 		decoded.released = intOrZero(fields[14]);
 		decoded.checkedAt = decodeDate(fields[15]);
 	}
+	// The Kitsu id, after the AniList id: only rows of the undo history have
+	// it. Catalist-TUI reads such a row and leaves the field alone.
+	if (current and fields.size() > 17)
+		decoded.kitsuId = intOrZero(fields[17]);
 	return decoded;
 }
 
@@ -191,12 +195,12 @@ result<std::vector<entry>> decodeEntries(std::string_view text, mediaType type) 
 }
 
 std::string encodeEntry(const entry& e) {
-	return fmt::format("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, e.malId,
-	                   typeKey(e.type), escapeField(e.title),
-	                   escapeField(statusToString(e.status, e.type)), e.score, e.progress,
-	                   e.totalUnits, e.volumes, e.totalVolumes, e.rewatched,
-	                   formatDate(e.startDate), formatDate(e.finishDate), formatDate(e.updatedAt),
-	                   e.released, formatDate(e.checkedAt), e.anilistId);
+	return fmt::format(
+	    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}{}", e.id, e.malId, typeKey(e.type),
+	    escapeField(e.title), escapeField(statusToString(e.status, e.type)), e.score, e.progress,
+	    e.totalUnits, e.volumes, e.totalVolumes, e.rewatched, formatDate(e.startDate),
+	    formatDate(e.finishDate), formatDate(e.updatedAt), e.released, formatDate(e.checkedAt),
+	    e.anilistId, e.kitsuId > 0 ? fmt::format(",{}", e.kitsuId) : "");
 }
 
 std::string encodeEntries(const std::vector<entry>& entries) {

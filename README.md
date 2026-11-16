@@ -5,12 +5,12 @@ in **C++17**. It is made for daily tracking, scripts and pipes, and every
 change can be undone and redone.
 
 Your lists live on your computer in one SQLite file. Catalist goes online
-only when you add or search for a title, through
-[AniList](https://anilist.co)'s public API, which needs no account. AniList
-also knows every title's MyAnimeList id, so each entry carries both, and
-Catalist works the same for AniList and MyAnimeList users. Everything else
-works offline. Lists move in and out as MyAnimeList XML, which both sites
-read.
+only when you add or search for a title, through the public API of
+[AniList](https://anilist.co), [MyAnimeList](https://myanimelist.net) or
+[Kitsu](https://kitsu.app). The three work the same way, and each entry
+keeps its id on every site that is known, so Catalist serves users of all
+three. Everything else works offline. Lists move in and out as MyAnimeList
+XML, which all three sites read.
 
 The full-screen terminal interface of earlier versions is now a separate
 program, Catalist-TUI. Both keep their lists in the same `catalist.db`, so
@@ -18,11 +18,17 @@ they can be used side by side.
 
 ## Provider
 
-Your **provider** is the site you use: AniList (the default) or
-MyAnimeList. `catalist show` links to a title's page there. Only one is
-chosen at a time (`catalist provider mal` to switch). It is kept with the
-lists, and is where syncing with your account will plug in later (not done
-yet: lists are local only).
+Your **provider** is the site you use: AniList (the default), MyAnimeList
+or Kitsu (`catalist provider kitsu` to switch). `search` and `add` ask it,
+unless `--from SITE` names another for one command, and `catalist show`
+links to a title's page there. Telling the sites what changes in your
+lists, as Mihon tells its trackers, will come later: for now the lists are
+local only.
+
+MyAnimeList's API answers only programs it has registered, even about
+public titles. Register Catalist once at
+<https://myanimelist.net/apiconfig> and build with
+`-DCATALIST_MAL_CLIENT_ID=...`, or set `CATALIST_MAL_CLIENT_ID`.
 
 ---
 
@@ -97,9 +103,9 @@ cl help set                        # what a command takes
   `--header` names the columns. Messages and questions go to stderr. Exit
   codes: 0 done, 1 failed, 2 wrong command line (also `catalist` with no
   command).
-- **Network:** only `add` and `search` go online. `add` fails when AniList
+- **Network:** only `add` and `search` go online. `add` fails when the site
   cannot be reached, unless `--no-lookup` adds the title as written. What
-  AniList said when a title was added (its total, and how many episodes
+  the site said when a title was added (its total, and how many episodes
   were out, which the `new` column counts from) stays as it was until
   Catalist-TUI checks the title again or `set total=` changes it.
 
@@ -209,7 +215,7 @@ src/main.cpp      reads the environment and runs the command line
 src/system.*      everything that touches the outside world: files, curl, the clock, the terminal
 src/core/         a title and its rules, dates, results, UTF-8 text (no I/O)
 src/storage/      the lists in SQLite, the undo history, the old CSV files, MyAnimeList XML
-src/web/          AniList's API, the JSON it answers in, and the seam for a future sync
+src/web/          AniList, MyAnimeList and Kitsu behind one tracker interface, and the JSON they answer in
 src/cli/          the command line: parser, refs, output, completion, and the commands
                   (listing, tracking, online, transfer, history, setup)
 tests/            unit tests, one folder per source folder; tests/smoke runs the program from the shells

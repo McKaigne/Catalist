@@ -24,6 +24,10 @@ struct request {
 // passes httpFetch; tests pass a fake.
 using fetcher = std::function<std::optional<std::string>(const request&)>;
 
+// Text as it may stand in a URL's query: letters, digits and -._~ as they
+// are, every other byte as %XX.
+[[nodiscard]] std::string urlEncoded(const std::string& text);
+
 }  // namespace catalist::web
 
 #endif  // CATALIST_WEB_HTTP_HPP_

@@ -176,19 +176,22 @@ TEST_CASE_FIXTURE(cliFixture, "cli search prints the matches and which are yours
 	   "startDate":{"year":2026}}]}}})");
 	CHECK(run({"search", "frieren"}) == 0);
 	CHECK(out ==
-	      "1\tanime\tSousou no Frieren\t2023\t28\t8.9\t154587\t52991\ta:1\n"
-	      "2\tanime\tSousou no Frieren 2nd Season\t2026\t0\t0\t182255\t59978\t-\n");
+	      "1\tanime\tSousou no Frieren\t2023\t28\t8.9\t154587\t52991\ta:1\t0\n"
+	      "2\tanime\tSousou no Frieren 2nd Season\t2026\t0\t0\t182255\t59978\t-\t0\n");
 	CHECK(err.empty());
 	CHECK(run({"search", "--header", "frieren"}) == 0);
-	CHECK(out.find("pick\ttype\ttitle\tyear\ttotal\tscore\tanilist_id\tmal_id\tref\n1\tanime\t") ==
-	      0);
+	CHECK(
+	    out.find(
+	        "pick\ttype\ttitle\tyear\ttotal\tscore\tanilist_id\tmal_id\tref\tkitsu_id\n1\tanime\t") ==
+	    0);
 	CHECK(run({"search", "--json", "frieren"}, "", 100) == 0);
-	CHECK(out ==
-	      "{\"pick\":1,\"type\":\"anime\",\"title\":\"Sousou no Frieren\",\"year\":2023,"
-	      "\"total\":28,\"score\":8.9,\"anilist_id\":154587,\"mal_id\":52991,\"ref\":\"a:1\"}\n"
-	      "{\"pick\":2,\"type\":\"anime\",\"title\":\"Sousou no Frieren 2nd Season\","
-	      "\"year\":2026,\"total\":null,\"score\":null,\"anilist_id\":182255,\"mal_id\":59978,"
-	      "\"ref\":null}\n");
+	CHECK(
+	    out ==
+	    "{\"pick\":1,\"type\":\"anime\",\"title\":\"Sousou no Frieren\",\"year\":2023,"
+	    "\"total\":28,\"score\":8.9,\"anilist_id\":154587,\"mal_id\":52991,\"ref\":\"a:1\",\"kitsu_id\":null}\n"
+	    "{\"pick\":2,\"type\":\"anime\",\"title\":\"Sousou no Frieren 2nd Season\","
+	    "\"year\":2026,\"total\":null,\"score\":null,\"anilist_id\":182255,\"mal_id\":59978,"
+	    "\"ref\":null,\"kitsu_id\":null}\n");
 
 	// A table at a terminal, with how to add one of them.
 	CHECK(run({"search", "frieren"}, "", 100) == 0);
@@ -207,7 +210,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli search -m searches manga") {
 	web.respond(R"("search":"berserk","type":"MANGA")", R"({"data":{"Page":{"media":[
 	  {"id":30002,"idMal":2,"title":{"romaji":"Berserk"},"startDate":{"year":1989}}]}}})");
 	CHECK(run({"search", "-m", "berserk"}) == 0);
-	CHECK(out == "1\tmanga\tBerserk\t1989\t0\t0\t30002\t2\tm:1\n");
+	CHECK(out == "1\tmanga\tBerserk\t1989\t0\t0\t30002\t2\tm:1\t0\n");
 	CHECK(run({"search", "-m", "berserk"}, "", 100) == 0);
 	CHECK(has(out, "CHAPTERS"));
 	CHECK(err == "Add one with: catalist add -m --pick=N QUERY\n");
@@ -272,4 +275,63 @@ TEST_CASE_FIXTURE(cliFixture, "cli add takes a score and the progress made alrea
 	CHECK(err.find("error: --score '11' is not 0 to 10\n") == 0);
 	CHECK(run({"add", "--no-lookup", "--progress=lots", "x"}) == 2);
 	CHECK(err.find("error: --progress 'lots' is not a count\n") == 0);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli search and add ask the site --from names, or the provider") {
+	seed();
+	const char* frieren = R"({"data":[{"id":"46474","type":"anime","attributes":{
+	  "canonicalTitle":"Sousou no Frieren","episodeCount":28,"startDate":"2023-09-29",
+	  "averageRating":"89.6","status":"finished"},
+	  "relationships":{"mappings":{"data":[{"type":"mappings","id":"7"}]}}}],
+	  "included":[{"id":"7","type":"mappings",
+	  "attributes":{"externalSite":"myanimelist/anime","externalId":"52991"}}]})";
+	web.respond("GET https://kitsu.app/api/edge/anime?filter[text]=frieren", frieren);
+	CHECK(run({"search", "--from", "kitsu", "frieren"}) == 0);
+	// Kitsu's mapping says which title of the lists it is.
+	CHECK(out == "1\tanime\tSousou no Frieren\t2023\t28\t9.0\t0\t52991\ta:1\t46474\n");
+	CHECK(web.posted.empty());
+
+	// With Kitsu as the provider, --from is not needed.
+	CHECK(run({"provider", "kitsu"}) == 0);
+	CHECK(run({"search", "frieren"}, "", 100) == 0);
+	CHECK(has(err, "Add one with: catalist add --pick=N QUERY\n"));
+
+	// A title Kitsu does not have.
+	web.respond("GET https://kitsu.app/api/edge/anime?filter[text]=zzz", R"({"data":[]})");
+	CHECK(run({"add", "zzz"}) == 1);
+	CHECK(err == "error: Kitsu has no anime matching 'zzz'\n");
+
+	CHECK(run({"search", "--from=shikimori", "frieren"}) == 2);
+	CHECK(err.find("error: --from 'shikimori' is not anilist, mal or kitsu\n") == 0);
+	CHECK(run({"add", "--no-lookup", "--from=mal", "x"}) == 2);
+	CHECK(err.find("error: --from chooses among a site's matches; --no-lookup asks none\n") == 0);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli add from Kitsu keeps every id Kitsu knows") {
+	seed();
+	web.respond("GET https://kitsu.app/api/edge/anime?filter[text]=dandadan",
+	            R"({"data":[{"id":"48291","type":"anime","attributes":{"canonicalTitle":"Dandadan"},
+	            "relationships":{"mappings":{"data":[]}}}]})");
+	web.respond("GET https://kitsu.app/api/edge/anime/48291?include=mappings",
+	            R"({"data":{"id":"48291","type":"anime","attributes":{"canonicalTitle":"Dandadan",
+	            "episodeCount":12,"status":"finished"},
+	            "relationships":{"mappings":{"data":[{"type":"mappings","id":"1"},
+	            {"type":"mappings","id":"2"}]}}},"included":[
+	            {"id":"1","type":"mappings","attributes":{"externalSite":"myanimelist/anime","externalId":"57334"}},
+	            {"id":"2","type":"mappings","attributes":{"externalSite":"anilist/anime","externalId":"171018"}}]})");
+	CHECK(run({"add", "--from", "kitsu", "dandadan"}) == 0);
+	auto added = savedTitle(mediaType::kAnime, "Dandadan");
+	CHECK(added.kitsuId == 48291);
+	CHECK(added.malId == 57334);
+	CHECK(added.anilistId == 171018);
+	CHECK(added.totalUnits == 12);
+	// Known by any of its ids: AniList's answer finds it in the list.
+	CHECK(run({"show", "--json", "dandadan"}) == 0);
+	CHECK(has(out, "\"kitsu_id\":48291}"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli says what MyAnimeList needs before it can be asked") {
+	CHECK(run({"search", "--from", "mal", "frieren"}) == 1);
+	CHECK(has(err, "error: MyAnimeList answers only programs with a client id"));
+	CHECK(web.sent.empty());
 }

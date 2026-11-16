@@ -67,6 +67,10 @@ public:
 		built_.anilistId = value;
 		return *this;
 	}
+	entryBuilder& kitsuId(int value) {
+		built_.kitsuId = value;
+		return *this;
+	}
 	entryBuilder& title(std::string value) {
 		built_.title = std::move(value);
 		return *this;

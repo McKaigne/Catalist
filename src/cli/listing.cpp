@@ -15,14 +15,14 @@ namespace {
 using output::paint;
 
 // What `show` adds to the columns of a title (kColumns).
-const std::vector<std::string> kShowColumns = {"total_volumes", "released", "anilist_id", "mal_id",
-                                               "url"};
+const std::vector<std::string> kShowColumns = {"total_volumes", "released", "anilist_id",
+                                               "mal_id",        "url",      "kitsu_id"};
 
 std::vector<output::cell> showCellsOf(const entry& e, provider site) {
 	auto cells = cellsOf(e);
 	for (const auto& more :
 	     {output::known(e.totalVolumes), output::known(e.released), output::known(e.anilistId),
-	      output::known(e.malId), output::maybe(pageOn(e, site))})
+	      output::known(e.malId), output::maybe(pageOn(e, site)), output::known(e.kitsuId)})
 		cells.push_back(more);
 	return cells;
 }
@@ -144,6 +144,7 @@ void printCard(cliContext& ctx, const entry& e) {
 	row("Type", typeToString(e.type));
 	row("AniList", idText(e.anilistId));
 	row("MyAnimeList", idText(e.malId));
+	row("Kitsu", idText(e.kitsuId));
 	if (not page.empty())
 		row("Page", page);
 	row("Status", paint(statusToString(e.status, e.type), statusColor(e.status), ctx.color));
@@ -284,7 +285,8 @@ std::vector<command> listingCommands() {
 	     "Show titles in full",
 	     "A REF is a ref such as a:12, or part of a title; a REF of - reads REFs\n"
 	     "from standard input, one a line. Into a pipe a title is one line: the\n"
-	     "columns of ls, then total_volumes, released, anilist_id, mal_id and url.\n",
+	     "columns of ls, then total_volumes, released, anilist_id, mal_id, url\n"
+	     "and kitsu_id. url is the title's page on your provider.\n",
 	     withRefOptions({{0, "json", "", "print one JSON object a line"},
 	                     {0, "header", "", "name the columns on the first line of a pipe"}}),
 	     "REF...",

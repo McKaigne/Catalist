@@ -58,7 +58,27 @@ std::optional<watchStatus> parseStatus(const std::string& str) {
 }
 
 std::string providerName(provider site) {
-	return site == provider::kAniList ? "AniList" : "MyAnimeList";
+	switch (site) {
+		case provider::kAniList:
+			return "AniList";
+		case provider::kMyAnimeList:
+			return "MyAnimeList";
+		case provider::kKitsu:
+			return "Kitsu";
+	}
+	return "AniList";
+}
+
+std::string providerKey(provider site) {
+	switch (site) {
+		case provider::kAniList:
+			return "anilist";
+		case provider::kMyAnimeList:
+			return "mal";
+		case provider::kKitsu:
+			return "kitsu";
+	}
+	return "anilist";
 }
 
 std::optional<provider> parseProvider(const std::string& name) {
@@ -68,11 +88,21 @@ std::optional<provider> parseProvider(const std::string& name) {
 		return provider::kAniList;
 	if (lower == "myanimelist" or lower == "mal")
 		return provider::kMyAnimeList;
+	if (lower == "kitsu")
+		return provider::kKitsu;
 	return std::nullopt;
 }
 
 int idOn(const entry& shown, provider site) {
-	return site == provider::kAniList ? shown.anilistId : shown.malId;
+	switch (site) {
+		case provider::kAniList:
+			return shown.anilistId;
+		case provider::kMyAnimeList:
+			return shown.malId;
+		case provider::kKitsu:
+			return shown.kitsuId;
+	}
+	return 0;
 }
 
 std::string pageOn(const entry& shown, provider site) {
@@ -80,8 +110,15 @@ std::string pageOn(const entry& shown, provider site) {
 	if (id <= 0)
 		return "";
 	std::string kind = shown.type == mediaType::kAnime ? "anime" : "manga";
-	return site == provider::kAniList ? fmt::format("https://anilist.co/{}/{}", kind, id)
-	                                  : fmt::format("https://myanimelist.net/{}/{}", kind, id);
+	switch (site) {
+		case provider::kAniList:
+			return fmt::format("https://anilist.co/{}/{}", kind, id);
+		case provider::kMyAnimeList:
+			return fmt::format("https://myanimelist.net/{}/{}", kind, id);
+		case provider::kKitsu:
+			return fmt::format("https://kitsu.app/{}/{}", kind, id);
+	}
+	return "";
 }
 
 std::string typeToString(mediaType type) {
@@ -289,6 +326,8 @@ entry mergeImported(entry existing, const entry& incoming) {
 		existing.malId = incoming.malId;
 	if (incoming.anilistId > 0)
 		existing.anilistId = incoming.anilistId;
+	if (incoming.kitsuId > 0)
+		existing.kitsuId = incoming.kitsuId;
 	if (existing.score == 0 and incoming.score > 0)
 		existing.score = incoming.score;
 	if (existing.progress == 0 and incoming.progress > 0)
@@ -305,6 +344,8 @@ entry applyWebFacts(entry target, const webFacts& facts, const isoDate& today) {
 		target.anilistId = facts.anilistId;
 	if (target.malId == 0)
 		target.malId = facts.malId;
+	if (target.kitsuId == 0)
+		target.kitsuId = facts.kitsuId;
 	if (facts.totalUnits > 0)
 		target.totalUnits = facts.totalUnits;
 	if (facts.totalVolumes > 0)

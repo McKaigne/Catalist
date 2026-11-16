@@ -946,3 +946,90 @@ TEST_CASE("catalogue old data dir is the config directory, unless CATALIST_DATA_
 	CHECK(oldDir(dirs{"/custom", "", "/xdg/config", "/home/me"}).empty());
 	CHECK(oldDir(dirs{}).empty());
 }
+
+TEST_CASE_FIXTURE(tempDirFixture,
+                  "catalogue keeps Kitsu ids beside the entries Catalist-TUI writes") {
+	catalogue db(tempDir() / "data");
+	db.addEntry(makeEntry().title("Sousou no Frieren").malId(52991).kitsuId(46474));
+	db.addEntry(makeEntry().title("Odd Taxi").malId(44265));
+	REQUIRE(db.saveAll());
+	{
+		catalogue again(tempDir() / "data");
+		REQUIRE(again.loadAll().value());
+		CHECK(again.getById(mediaType::kAnime, 1)->kitsuId == 46474);
+		CHECK(again.getById(mediaType::kAnime, 2)->kitsuId == 0);
+		CHECK(again.findByIds(mediaType::kAnime, 0, 0, 46474)->title == "Sousou no Frieren");
+	}
+	// The file stays one Catalist-TUI opens and writes: the same version, and
+	// `entry` with the columns it binds.
+	catalist::store::database raw;
+	REQUIRE(raw.open(db.getStorePath()));
+	auto version = raw.prepare("PRAGMA user_version");
+	REQUIRE(version.step());
+	CHECK(version.intAt(0) == 1);
+	auto columns = raw.prepare("SELECT COUNT(*) FROM pragma_table_info('entry')");
+	REQUIRE(columns.step());
+	CHECK(columns.intAt(0) == 17);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture,
+                  "catalogue drops a Kitsu id whose title another program replaced") {
+	catalogue db(tempDir() / "data");
+	db.addEntry(makeEntry().title("Sousou no Frieren").malId(52991).kitsuId(46474));
+	REQUIRE(db.saveAll());
+	{
+		// Catalist-TUI removes the title, and gives its ref to the next one.
+		catalist::store::database raw;
+		REQUIRE(raw.open(db.getStorePath()));
+		REQUIRE(raw.run("UPDATE entry SET title = 'Dandadan', mal_id = 57334 WHERE id = 1"));
+	}
+	catalogue again(tempDir() / "data");
+	REQUIRE(again.loadAll().value());
+	CHECK(again.getById(mediaType::kAnime, 1)->kitsuId == 0);
+	// Saved again, the stale row is gone.
+	again.addEntry(makeEntry().title("Odd Taxi").malId(44265));
+	REQUIRE(again.saveAll());
+	catalist::store::database raw;
+	REQUIRE(raw.open(db.getStorePath()));
+	auto rows = raw.prepare("SELECT COUNT(*) FROM entry_id");
+	REQUIRE(rows.step());
+	CHECK(rows.intAt(0) == 0);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue reads a file that has no Kitsu ids yet") {
+	catalogue db(tempDir() / "data");
+	db.addEntry(makeEntry().title("Odd Taxi").malId(44265));
+	REQUIRE(db.saveAll());
+	{
+		catalist::store::database raw;
+		REQUIRE(raw.open(db.getStorePath()));
+		REQUIRE(raw.run("DROP TABLE entry_id"));
+	}
+	// The completion scripts' read-only look, too.
+	catalogue peeked(tempDir() / "data");
+	CHECK(peeked.peek());
+	catalogue again(tempDir() / "data");
+	REQUIRE(again.loadAll().value());
+	CHECK(again.getEntries(mediaType::kAnime).size() == 1);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo brings back a removed title's Kitsu id") {
+	catalogue db(tempDir() / "data");
+	db.addEntry(makeEntry().title("Sousou no Frieren").malId(52991).kitsuId(46474));
+	REQUIRE(db.saveAll());
+	REQUIRE(db.removeEntry(mediaType::kAnime, 1));
+	REQUIRE(db.saveAll(noteOf("rm frieren")));
+	REQUIRE(db.undo(1, false).ok());
+	catalogue again(tempDir() / "data");
+	REQUIRE(again.loadAll().value());
+	CHECK(again.getById(mediaType::kAnime, 1)->kitsuId == 46474);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue merges an added title known by its Kitsu id") {
+	catalogue db(tempDir() / "data");
+	db.addEntry(makeEntry().title("Sousou no Frieren").kitsuId(46474));
+	int again = db.addEntry(makeEntry().title("Frieren").kitsuId(46474).malId(52991));
+	CHECK(again == 1);
+	CHECK(db.getEntries(mediaType::kAnime).size() == 1);
+	CHECK(db.getById(mediaType::kAnime, 1)->malId == 52991);
+}

@@ -8,6 +8,7 @@
 #include <thread>
 
 #include "cli/cli.hpp"
+#include "core/version.hpp"
 #include "storage/catalogue.hpp"
 #include "system.hpp"
 
@@ -27,7 +28,10 @@ int main(int argc, char* argv[]) {
 
 	// A second apart, as the sites ask of programs that send many requests.
 	catalist::web::link net{catalist::httpFetch,
-	                        [] { std::this_thread::sleep_for(std::chrono::seconds(1)); }};
+	                        [] { std::this_thread::sleep_for(std::chrono::seconds(1)); },
+	                        env("CATALIST_MAL_CLIENT_ID")};
+	if (net.malClientId.empty())
+		net.malClientId = catalist::kMalClientId;
 	catalist::cliContext ctx{db, std::cin, std::cout, std::cerr, catalist::today, net};
 	ctx.interactive = catalist::isInteractive();
 	ctx.columns = catalist::terminalColumns();

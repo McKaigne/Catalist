@@ -78,7 +78,8 @@ outcome comeBack(const std::vector<entry>& list, const entry& back) {
 			return outcome::failure(fmt::format("{} cannot come back: its ref is now that of {}",
 			                                    nameOf(back), other.title));
 		bool same = (back.anilistId > 0 and other.anilistId == back.anilistId) or
-		            (back.malId > 0 and other.malId == back.malId);
+		            (back.malId > 0 and other.malId == back.malId) or
+		            (back.kitsuId > 0 and other.kitsuId == back.kitsuId);
 		if (same)
 			return outcome::failure(
 			    fmt::format("{} is in your lists again, as {}", back.title, nameOf(other)));

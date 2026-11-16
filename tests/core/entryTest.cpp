@@ -301,7 +301,15 @@ TEST_CASE("entries show the chosen provider's id and page") {
 	CHECK(catalist::pageOn(makeEntry(), catalist::provider::kAniList).empty());
 	CHECK(catalist::parseProvider("MAL") == catalist::provider::kMyAnimeList);
 	CHECK(catalist::parseProvider("AniList") == catalist::provider::kAniList);
-	CHECK_FALSE(catalist::parseProvider("kitsu").has_value());
+	CHECK(catalist::parseProvider("Kitsu") == catalist::provider::kKitsu);
+	CHECK_FALSE(catalist::parseProvider("shikimori").has_value());
+	// Kitsu's id is the one Kitsu gave; without it there is no page there.
+	CHECK(catalist::pageOn(frieren, catalist::provider::kKitsu).empty());
+	entry onKitsu = makeEntry().kitsuId(46474);
+	CHECK(catalist::idOn(onKitsu, catalist::provider::kKitsu) == 46474);
+	CHECK(catalist::pageOn(onKitsu, catalist::provider::kKitsu) == "https://kitsu.app/anime/46474");
+	CHECK(catalist::providerKey(catalist::provider::kKitsu) == "kitsu");
+	CHECK(catalist::providerKey(catalist::provider::kMyAnimeList) == "mal");
 }
 
 TEST_CASE("applyWebFacts fills in an id the entry lacked, never replaces one") {

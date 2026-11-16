@@ -12,17 +12,19 @@ enum class mediaType { kAnime, kManga };
 
 // The site whose ids the program shows and accepts, and which a future sync
 // would keep the catalogue in step with. Only one is chosen at a time.
-enum class provider { kAniList, kMyAnimeList };
+enum class provider { kAniList, kMyAnimeList, kKitsu };
 
 enum class watchStatus { kWatching, kCompleted, kOnHold, kDropped, kPlanToWatch };
 
 struct entry {
 	// Numbers the title within its list: the 12 of the ref a:12.
 	int id = 0;
-	// The title on each site; 0 while not known. AniList knows both, so a
-	// lookup fills in whichever is missing.
+	// The title on each site; 0 while not known. AniList knows its own and
+	// MyAnimeList's, so a lookup fills in whichever is missing; Kitsu's comes
+	// from Kitsu, by the MyAnimeList id.
 	int anilistId = 0;
 	int malId = 0;
+	int kitsuId = 0;
 	std::string title;
 	mediaType type = mediaType::kAnime;
 	watchStatus status = watchStatus::kWatching;
@@ -53,9 +55,12 @@ std::string typeToString(mediaType type);
 // "anime" or "manga".
 [[nodiscard]] std::string typeKey(mediaType type);
 
-// "AniList" or "MyAnimeList".
+// "AniList", "MyAnimeList" or "Kitsu".
 [[nodiscard]] std::string providerName(provider site);
-// "anilist", "al", "myanimelist" or "mal", in any case.
+// "anilist", "mal" or "kitsu": the word the command line and the settings
+// write it as.
+[[nodiscard]] std::string providerKey(provider site);
+// "anilist", "al", "myanimelist", "mal" or "kitsu", in any case.
 [[nodiscard]] std::optional<provider> parseProvider(const std::string& name);
 // The title's id on the site, 0 when not known, and its page there (empty
 // then).
@@ -123,6 +128,7 @@ struct webFacts {
 	int released = 0;
 	int anilistId = 0;
 	int malId = 0;
+	int kitsuId = 0;
 };
 
 // Takes the totals and the released count from a web check, keeping the

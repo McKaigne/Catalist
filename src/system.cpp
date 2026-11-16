@@ -133,9 +133,10 @@ std::optional<std::string> runProgram(const std::vector<std::string>& arguments,
 namespace {
 
 // -f turns an HTTP error into a failed exit; a server that does not answer
-// is given up on after four seconds, and the whole request after eight.
-const std::vector<std::string> kCurl = {"curl", "-sfL", "--connect-timeout", "4", "-m",
-                                        "8",    "-A",   "catalist"};
+// is given up on after four seconds, and the whole request after eight. -g
+// leaves the brackets of a URL (Kitsu's filter[text]) to the server.
+const std::vector<std::string> kCurl = {"curl", "-sfLg", "--connect-timeout", "4", "-m",
+                                        "8",    "-A",    "catalist"};
 
 }  // namespace
 

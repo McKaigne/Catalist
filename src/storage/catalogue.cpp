@@ -52,6 +52,17 @@ const char* kInsertEntry =
     "INSERT OR REPLACE INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 const char* kInsertSetting = "INSERT OR REPLACE INTO setting VALUES (?, ?)";
 
+// The ids a title has on sites `entry` has no column for (Kitsu's), kept
+// beside it: Catalist-TUI shares the file and writes `entry` with exactly
+// its columns. A row also holds the MyAnimeList and AniList ids the title
+// had when it was written, so that a row whose title the TUI removed, and
+// whose ref it gave to another, is not read as that other title's.
+const char* kSiteIdTable =
+    "CREATE TABLE IF NOT EXISTS entry_id ("
+    " type TEXT NOT NULL, id INTEGER NOT NULL, site TEXT NOT NULL,"
+    " site_id INTEGER NOT NULL, mal_id INTEGER NOT NULL, anilist_id INTEGER NOT NULL,"
+    " PRIMARY KEY (type, id, site))";
+
 // How long peek waits for another program's write: not long enough to be
 // felt at the prompt.
 constexpr int kPeekWaitMs = 100;
@@ -102,6 +113,32 @@ entry readEntry(const store::statement& from) {
 	row.checkedAt = isoDate::parse(from.textAt(15));
 	row.anilistId = number(16);
 	return row;
+}
+
+bool hasTable(const store::database& db, const std::string& name) {
+	auto found = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?");
+	return found.bind(name).step();
+}
+
+// Gives each entry its Kitsu id from entry_id, where the row is still the
+// entry's own.
+bool readSiteIds(const store::database& db, std::vector<entry>& anime, std::vector<entry>& manga) {
+	// A file no Catalist with Kitsu has written to yet.
+	if (not hasTable(db, "entry_id"))
+		return true;
+	auto rows = db.prepare(
+	    "SELECT type, id, site_id, mal_id, anilist_id FROM entry_id WHERE site = 'kitsu'");
+	while (rows.step()) {
+		auto& list = rows.textAt(0) == "manga" ? manga : anime;
+		int id = static_cast<int>(rows.intAt(1));
+		auto found =
+		    std::find_if(list.begin(), list.end(), [id](const entry& e) { return e.id == id; });
+		bool same = found != list.end() and found->malId == rows.intAt(3) and
+		            found->anilistId == rows.intAt(4);
+		if (same)
+			found->kitsuId = static_cast<int>(rows.intAt(2));
+	}
+	return rows.ok();
 }
 
 // ---- The undo history ----
@@ -231,7 +268,8 @@ std::vector<std::pair<std::string, std::string>> readOldSettings(
 // site's id says so.
 bool sameTitle(const entry& existing, const entry& incoming) {
 	return (incoming.anilistId > 0 and existing.anilistId == incoming.anilistId) or
-	       (incoming.malId > 0 and existing.malId == incoming.malId);
+	       (incoming.malId > 0 and existing.malId == incoming.malId) or
+	       (incoming.kitsuId > 0 and existing.kitsuId == incoming.kitsuId);
 }
 
 int nextId(const std::vector<entry>& list) {
@@ -362,10 +400,12 @@ std::optional<entry> catalogue::getById(mediaType type, int id) const {
 	return found == list.end() ? std::nullopt : std::optional<entry>(*found);
 }
 
-std::optional<entry> catalogue::findByIds(mediaType type, int anilistId, int malId) const {
+std::optional<entry> catalogue::findByIds(mediaType type, int anilistId, int malId,
+                                          int kitsuId) const {
 	entry wanted;
 	wanted.anilistId = anilistId;
 	wanted.malId = malId;
+	wanted.kitsuId = kitsuId;
 	const auto& list = getList(type);
 	auto found = std::find_if(list.begin(), list.end(),
 	                          [&wanted](const entry& e) { return sameTitle(e, wanted); });
@@ -597,7 +637,7 @@ bool catalogue::readStore() {
 			site = parseProvider(settings.textAt(1)).value_or(site);
 	}
 	// An error ends a statement the way its last row does.
-	if (not rows.ok() or not settings.ok())
+	if (not rows.ok() or not settings.ok() or not readSiteIds(db_, anime, manga))
 		return false;
 
 	animeEntries_ = std::move(anime);
@@ -645,12 +685,31 @@ bool catalogue::writeRows() {
 				return false;
 		}
 	}
+	return writeSiteIds();
+}
+
+// The Kitsu ids, written anew: the rows of titles that are gone go too.
+bool catalogue::writeSiteIds() {
+	if (not db_.run(kSiteIdTable) or not db_.run("DELETE FROM entry_id WHERE site = 'kitsu'"))
+		return false;
+	auto insert = db_.prepare("INSERT INTO entry_id VALUES (?, ?, 'kitsu', ?, ?, ?)");
+	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
+		for (const auto& row : getList(type)) {
+			if (row.kitsuId <= 0)
+				continue;
+			insert.bind(typeKey(type)).bind(row.id).bind(row.kitsuId);
+			if (not insert.bind(row.malId).bind(row.anilistId).run())
+				return false;
+		}
+	}
 	return true;
 }
 
 bool catalogue::writeSettings() {
 	auto set = db_.prepare(kInsertSetting);
-	std::string site = provider_ == provider::kAniList ? "anilist" : "myanimelist";
+	// MyAnimeList as Catalist 0.3 wrote it; Catalist-TUI reads "kitsu" as
+	// AniList, its default.
+	std::string site = provider_ == provider::kMyAnimeList ? "myanimelist" : providerKey(provider_);
 	return set.bind(std::string(kProviderKey)).bind(site).run();
 }
 

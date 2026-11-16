@@ -14,14 +14,9 @@ namespace catalist::cli {
 
 namespace {
 
-// The provider as the command line names it.
-std::string providerKey(provider site) {
-	return site == provider::kAniList ? "anilist" : "mal";
-}
-
 int runProvider(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (line.operands.size() > 1)
-		return usageError(ctx, self, "name one provider: anilist or mal");
+		return usageError(ctx, self, "name one provider: anilist, mal or kitsu");
 	if (line.operands.empty()) {
 		if (not load(ctx))
 			return 1;
@@ -31,7 +26,7 @@ int runProvider(const command& self, const args::parsed& line, cliContext& ctx) 
 	auto chosen = parseProvider(line.operands[0]);
 	if (not chosen)
 		return usageError(ctx, self,
-		                  fmt::format("unknown provider '{}'{}; choose anilist or mal",
+		                  fmt::format("unknown provider '{}'{}; choose anilist, mal or kitsu",
 		                              line.operands[0], didYouMean(line.operands[0], self.words)));
 	if (not loadForWrite(ctx))
 		return 1;
@@ -105,15 +100,15 @@ std::vector<command> setupCommands() {
 	     {},
 	     "Show or choose your provider",
 	     "Your provider is the site your titles are looked at on: AniList (the\n"
-	     "default) or MyAnimeList. 'show' gives a title's page there. Without\n"
-	     "an operand the provider is printed, as\n"
-	     "anilist or mal. Syncing with your account there is not done: your lists\n"
-	     "stay on this computer. Choosing a provider is not a step for undo.\n",
+	     "default), MyAnimeList or Kitsu. 'search', 'add' and 'refresh' ask it\n"
+	     "unless --from names another site, and 'show' gives a title's page\n"
+	     "there. Without an operand the provider is printed, as anilist, mal or\n"
+	     "kitsu. Choosing a provider is not a step for undo.\n",
 	     {},
-	     "[anilist|mal]",
+	     "[anilist|mal|kitsu]",
 	     runProvider,
 	     operandKind::kWords,
-	     {"anilist", "mal"}},
+	     {"anilist", "mal", "kitsu"}},
 	    {"completion",
 	     {},
 	     "Print the completion script of a shell",

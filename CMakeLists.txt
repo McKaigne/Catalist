@@ -56,6 +56,10 @@ endif()
 
 set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 
+# MyAnimeList's API wants an app's id even for public data: register one at
+# https://myanimelist.net/apiconfig. CATALIST_MAL_CLIENT_ID in the
+# environment overrides it at run time.
+set(CATALIST_MAL_CLIENT_ID "" CACHE STRING "The client id MyAnimeList gave Catalist")
 set(CATALIST_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 configure_file(src/core/version.hpp.in "${CATALIST_GENERATED_DIR}/core/version.hpp" @ONLY)
 
@@ -71,9 +75,13 @@ add_library(catalistLib STATIC
   src/storage/journal.cpp
   src/storage/malXml.cpp
   src/storage/store.cpp
-  # AniList's API and the JSON it answers in.
+  # The sites behind one tracker interface, and the JSON they answer in.
   src/web/anilist.cpp
+  src/web/http.cpp
   src/web/json.cpp
+  src/web/kitsu.cpp
+  src/web/mal.cpp
+  src/web/sites.cpp
   # The command line.
   src/cli/args.cpp
   src/cli/cli.cpp
@@ -189,6 +197,8 @@ add_executable(catalistTests
   tests/storage/malXmlTest.cpp
   tests/web/anilistTest.cpp
   tests/web/jsonTest.cpp
+  tests/web/kitsuTest.cpp
+  tests/web/malTest.cpp
   tests/cli/argsTest.cpp
   tests/cli/cliTest.cpp
   tests/cli/completionTest.cpp

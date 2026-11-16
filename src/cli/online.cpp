@@ -5,18 +5,10 @@
 #include "cli/common.hpp"
 #include "cli/refs.hpp"
 #include "core/text.hpp"
-#include "web/anilist.hpp"
 
 namespace catalist::cli {
 
 namespace {
-
-// What to say when a request to AniList failed.
-std::string webError(const std::string& message) {
-	if (message == "could not reach AniList")
-		return "could not reach AniList; check the connection and try again";
-	return message;
-}
 
 // The list `add` and `search` work in: anime unless -m says manga. Nothing
 // when both -a and -m are given.
@@ -37,21 +29,22 @@ std::string lengthOf(const web::match& match, mediaType type) {
 // there is no such match.
 std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, mediaType type,
                                       const std::string& query, std::optional<int> pick) {
+	std::string name = providerName(site.site());
 	auto found = site.search(type, query);
 	if (not found.ok()) {
 		fail(ctx, webError(found.errorMessage()));
-		ctx.err << fmt::format("To add a title without AniList: {} add --no-lookup TITLE\n",
+		ctx.err << fmt::format("To add a title without {}: {} add --no-lookup TITLE\n", name,
 		                       ctx.program);
 		return std::nullopt;
 	}
 	const auto& matches = found.value();
 	if (matches.empty()) {
-		fail(ctx, fmt::format("AniList has no {} matching '{}'", typeKey(type), query));
+		fail(ctx, fmt::format("{} has no {} matching '{}'", name, typeKey(type), query));
 		return std::nullopt;
 	}
 	if (pick and static_cast<size_t>(*pick) > matches.size()) {
 		fail(ctx, fmt::format(
-		              "--pick={}, but AniList has only {} for '{}'", *pick,
+		              "--pick={}, but {} has only {} for '{}'", *pick, name,
 		              matches.size() == 1 ? "one match" : fmt::format("{} matches", matches.size()),
 		              query));
 		return std::nullopt;
@@ -61,8 +54,8 @@ std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, medi
 	if (matches.size() == 1)
 		return matches[0];
 
-	ctx.err << fmt::format("{}'{}' matches {} {} on AniList:\n",
-	                       ctx.interactive ? "" : "error: ", query, matches.size(), typeKey(type));
+	ctx.err << fmt::format("{}'{}' matches {} {} on {}:\n", ctx.interactive ? "" : "error: ", query,
+	                       matches.size(), typeKey(type), name);
 	for (size_t i = 0; i < matches.size(); ++i)
 		ctx.err << fmt::format("  {:>2}  {:<4}  {}  ({})\n", i + 1,
 		                       matches[i].year.empty() ? "-" : matches[i].year, matches[i].name,
@@ -79,11 +72,12 @@ std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, medi
 	return matches[*chosen];
 }
 
-// The title as AniList has it: its name, both ids, the totals and how much
-// is out. Fails with what to tell the person.
+// The title as the site has it: its name, the ids it knows, the totals and
+// how much is out. Fails with what to tell the person.
 result<entry> lookedUp(cliContext& ctx, web::iTracker& site, entry blank, const web::match& match) {
 	blank.anilistId = match.anilistId;
 	blank.malId = match.malId;
+	blank.kitsuId = match.kitsuId;
 	auto details = site.lookUp(blank);
 	if (not details.ok())
 		return result<entry>::failure(webError(details.errorMessage()));
@@ -139,9 +133,12 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 			                  fmt::format("--progress '{}' is not a count", line.get("progress")));
 	}
 	bool byHand = line.has("no-lookup");
-	if (byHand and pick)
+	if (byHand and (pick or line.has("from")))
 		return usageError(ctx, self,
-		                  "--pick chooses among AniList's matches; --no-lookup has none");
+		                  fmt::format("{} chooses among a site's matches; --no-lookup asks none",
+		                              pick ? "--pick" : "--from"));
+	if (not fromKnown(self, line, ctx))
+		return 2;
 
 	isoDate today = ctx.today();
 	entry added;
@@ -149,14 +146,16 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 	added.title = *name;
 	added.status = watchStatus::kPlanToWatch;
 	added.updatedAt = today;
-	// AniList is asked before the catalogue is taken for writing: no other
+	// The site is asked before the catalogue is taken for writing: no other
 	// program waits while the person chooses.
 	if (not byHand) {
-		anilist::tracker site(ctx.net);
-		auto match = chooseMatch(ctx, site, *type, added.title, pick);
+		if (asksProvider(line) and not load(ctx))
+			return 1;
+		auto site = trackerFor(ctx, siteOf(line, ctx));
+		auto match = chooseMatch(ctx, *site, *type, added.title, pick);
 		if (not match)
 			return 1;
-		auto found = lookedUp(ctx, site, added, *match);
+		auto found = lookedUp(ctx, *site, added, *match);
 		if (not found.ok())
 			return fail(ctx, found.errorMessage());
 		added = found.value();
@@ -172,7 +171,7 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 
 	if (not loadForWrite(ctx))
 		return 1;
-	if (auto mine = ctx.db.findByIds(*type, added.anilistId, added.malId)) {
+	if (auto mine = ctx.db.findByIds(*type, added.anilistId, added.malId, added.kitsuId)) {
 		ctx.err << fmt::format("{} is in your {} list already, as {} ({}).\nNothing changed.\n",
 		                       mine->title, typeKey(*type), refs::of(*mine),
 		                       statusKey(mine->status));
@@ -186,10 +185,10 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 
 // The columns of a match of `search`. `pick` is its place in the list, the
 // N of `add --pick=N`; `ref` is the title in your lists, when it is there.
-const std::vector<std::string> kSearchColumns = {"pick",  "type",       "title",  "year", "total",
-                                                 "score", "anilist_id", "mal_id", "ref"};
+const std::vector<std::string> kSearchColumns = {
+    "pick", "type", "title", "year", "total", "score", "anilist_id", "mal_id", "ref", "kitsu_id"};
 
-// AniList's score out of 10, to one decimal; 0 while there is none.
+// The site's score out of 10, to one decimal; 0 while there is none.
 output::cell scoreCell(double score) {
 	if (score <= 0.0)
 		return {"0", output::jsonForm::kNull};
@@ -229,27 +228,31 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 		return 2;
 	if (query->empty())
 		return usageError(ctx, self, "give the QUERY to search for");
+	if (not fromKnown(self, line, ctx))
+		return 2;
 	if (not load(ctx))
 		return 1;
-	anilist::tracker site(ctx.net);
-	auto found = site.search(*type, *query);
+	auto site = trackerFor(ctx, siteOf(line, ctx));
+	auto found = site->search(*type, *query);
 	if (not found.ok())
 		return fail(ctx, webError(found.errorMessage()));
 	const auto& matches = found.value();
 	std::vector<std::string> mine;
 	for (const auto& match : matches) {
-		auto tracked = ctx.db.findByIds(*type, match.anilistId, match.malId);
+		auto tracked = ctx.db.findByIds(*type, match.anilistId, match.malId, match.kitsuId);
 		mine.push_back(tracked ? refs::of(*tracked) : "");
 	}
 
 	if (not line.has("json") and ctx.columns > 0) {
 		if (matches.empty()) {
-			ctx.err << fmt::format("AniList has no {} matching '{}'.\n", typeKey(*type), *query);
+			ctx.err << fmt::format("{} has no {} matching '{}'.\n", providerName(site->site()),
+			                       typeKey(*type), *query);
 			return 0;
 		}
 		ctx.out << matchTable(ctx, *type, matches, mine);
-		ctx.err << fmt::format("Add one with: {} add{} --pick=N QUERY\n", ctx.program,
-		                       *type == mediaType::kManga ? " -m" : "");
+		ctx.err << fmt::format("Add one with: {} add{}{} --pick=N QUERY\n", ctx.program,
+		                       *type == mediaType::kManga ? " -m" : "",
+		                       line.has("from") ? " --from=" + line.get("from") : "");
 		return 0;
 	}
 	std::vector<std::vector<output::cell>> rows;
@@ -261,7 +264,7 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 		                                   : output::cell{match.year, output::jsonForm::kNumber},
 		                output::known(match.totalUnits), scoreCell(match.score),
 		                output::known(match.anilistId), output::known(match.malId),
-		                output::maybe(mine[i])});
+		                output::maybe(mine[i]), output::known(match.kitsuId)});
 	}
 	writeRows(ctx, kSearchColumns, rows, line.has("json"), line.has("header"));
 	return 0;
@@ -273,40 +276,45 @@ std::vector<command> onlineCommands() {
 	return {
 	    {"add",
 	     {},
-	     "Add a title found on AniList",
-	     std::string("Searches AniList for TITLE, an anime unless -m is given, and adds the\n"
-	                 "match: the only one, the one you choose when there are several, or the\n"
-	                 "one --pick names by its number in that list ('search' prints the same\n"
-	                 "list). Where nobody can be asked, several matches without --pick are an\n"
-	                 "error. A new title is planned, or watching once it has a --progress,\n"
-	                 "unless --status says otherwise. A title that is in your list already\n"
-	                 "is left as it is.\n\n"
-	                 "With --no-lookup AniList is not asked: TITLE is added as it is written,\n"
+	     "Add a title found on AniList, MyAnimeList or Kitsu",
+	     std::string("Searches your provider (see 'provider'), or the site --from names, for\n"
+	                 "TITLE, an anime unless -m is given, and adds the match: the only one,\n"
+	                 "the one you choose when there are several, or the one --pick names by\n"
+	                 "its number in that list ('search' prints the same list). Where nobody\n"
+	                 "can be asked, several matches without --pick are an error. A new title\n"
+	                 "is planned, or watching once it has a --progress, unless --status says\n"
+	                 "otherwise. A title that is in your list already is left as it is.\n\n"
+	                 "With --no-lookup no site is asked: TITLE is added as it is written,\n"
 	                 "without ids or totals ('set' can give it a total).\n\n") +
 	         kChangeFormat,
 	     {{'a', "", "", "add an anime (the default)"},
 	      {'m', "", "", "add a manga"},
+	      kFrom,
 	      {0, "pick", "N", "take the Nth match without asking"},
 	      {0, "status", "STATUS", "watching, completed, on-hold, dropped or planned",
 	       statusWords()},
 	      {0, "score", "N", "give it a score as well, 0 to 10"},
 	      {0, "progress", "N", "the episodes or chapters done already"},
-	      {0, "no-lookup", "", "add TITLE as written, without asking AniList"},
+	      {0, "no-lookup", "", "add TITLE as written, without asking a site"},
 	      kQuiet},
 	     "TITLE...",
 	     runAdd,
 	     operandKind::kText},
 	    {"search",
 	     {},
-	     "Search AniList without adding anything",
-	     "Prints up to ten matches for QUERY, anime unless -m is given, best\n"
-	     "first. At a terminal they are drawn as a table. Into a pipe each is one\n"
-	     "line of fields with a tab between them:\n"
-	     "  pick type title year total score anilist_id mal_id ref\n"
+	     "Search a site without adding anything",
+	     "Prints up to ten matches for QUERY on your provider, or the site --from\n"
+	     "names, anime unless -m is given, best first. At a terminal they are\n"
+	     "drawn as a table. Into a pipe each is one line of fields with a tab\n"
+	     "between them:\n"
+	     "  pick type title year total score anilist_id mal_id ref kitsu_id\n"
 	     "pick is the N of 'add --pick=N'; ref is the title in your lists, or '-'.\n"
-	     "A year that is not known is '-', a total or a score that is not is 0.\n",
+	     "A year that is not known is '-', a total, a score or an id that is not\n"
+	     "is 0. Each site knows its own ids; AniList also MyAnimeList's, and Kitsu\n"
+	     "both of the others'.\n",
 	     {{'a', "", "", "search anime (the default)"},
 	      {'m', "", "", "search manga"},
+	      kFrom,
 	      {0, "json", "", "print one JSON object a line"},
 	      {0, "header", "", "name the columns on the first line of a pipe"}},
 	     "QUERY...",

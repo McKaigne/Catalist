@@ -174,21 +174,21 @@ TEST_CASE_FIXTURE(cliFixture, "cli show prints a title's line into a pipe") {
 	CHECK(
 	    out ==
 	    "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t8\t0\t13\t128547\t44265\t"
-	    "https://anilist.co/anime/128547\n");
+	    "https://anilist.co/anime/128547\t0\n");
 	CHECK(err.empty());
 	CHECK(run({"show", "--header", "m:1"}) == 0);
 	CHECK(out ==
 	      "ref\ttype\ttitle\tstatus\tscore\tprogress\ttotal\tvolumes\trewatched\tstarted\t"
-	      "finished\tupdated\tnew\ttotal_volumes\treleased\tanilist_id\tmal_id\turl\n"
+	      "finished\tupdated\tnew\ttotal_volumes\treleased\tanilist_id\tmal_id\turl\tkitsu_id\n"
 	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t2019-05-01\t-\t-\t0\t0\t0\t30002\t2\t"
-	      "https://anilist.co/manga/30002\n");
+	      "https://anilist.co/manga/30002\t0\n");
 	CHECK(run({"show", "--json", "m:1"}) == 0);
 	CHECK(out ==
 	      "{\"ref\":\"m:1\",\"type\":\"manga\",\"title\":\"Berserk\",\"status\":\"watching\","
 	      "\"score\":0,\"progress\":364,\"total\":null,\"volumes\":0,\"rewatched\":0,"
 	      "\"started\":\"2019-05-01\",\"finished\":null,\"updated\":null,\"new\":0,"
 	      "\"total_volumes\":null,\"released\":null,\"anilist_id\":30002,\"mal_id\":2,"
-	      "\"url\":\"https://anilist.co/manga/30002\"}\n");
+	      "\"url\":\"https://anilist.co/manga/30002\",\"kitsu_id\":null}\n");
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli show takes several titles, by ref, by title or from a pipe") {
@@ -228,6 +228,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli show draws a card at a terminal") {
 	      "  Type         Anime\n"
 	      "  AniList      128547\n"
 	      "  MyAnimeList  44265\n"
+	      "  Kitsu        -\n"
 	      "  Page         https://anilist.co/anime/128547\n"
 	      "  Status       Watching\n"
 	      "  Score        8/10\n"

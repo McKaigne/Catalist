@@ -2,6 +2,7 @@
 #define CATALIST_CLI_COMMON_HPP_
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -131,6 +132,23 @@ int changeTitles(const command& self, const args::parsed& line, cliContext& ctx,
 
 // The N of -n, or `otherwise` when it is not given.
 [[nodiscard]] result<int> countGiven(const args::parsed& line, int otherwise);
+
+// ---- The sites ----
+
+// --from SITE: a site to ask other than the provider.
+extern const args::option kFrom;
+// Checks the site --from names. False, after the usage error, when it names
+// none.
+[[nodiscard]] bool fromKnown(const command& cmd, const args::parsed& line, cliContext& ctx);
+// Whether the command needs the catalogue read to know its site: no --from.
+[[nodiscard]] bool asksProvider(const args::parsed& line);
+// The site a command asks: --from's, else the provider (read the catalogue
+// first).
+[[nodiscard]] provider siteOf(const args::parsed& line, const cliContext& ctx);
+// The site's adapter, reached through the context's link.
+[[nodiscard]] std::unique_ptr<web::iTracker> trackerFor(const cliContext& ctx, provider site);
+// What to say when a request to a site failed.
+[[nodiscard]] std::string webError(const std::string& message);
 
 // What the helps share.
 extern const args::option kQuiet;

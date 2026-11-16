@@ -32,7 +32,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 		CHECK(has(out, "  +           Count one more episode or chapter\n"));
 		CHECK(has(out, "  undo        Take back what the last command changed\n"));
 		CHECK(has(out, "  help        Show help for a command\n"));
-		CHECK(has(out, "  add         Add a title found on AniList\n"));
+		CHECK(has(out, "  add         Add a title found on AniList, MyAnimeList or Kitsu\n"));
 		CHECK(has(out, "  catalist show a:12\n"));
 		CHECK(has(out, "kept in\ndata.\n"));
 		CHECK(err.empty());
@@ -74,17 +74,17 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(has(out, "export CATALIST_TX=$(catalist tx)\n"));
 	CHECK(run({"help", "add"}) == 0);
 	CHECK(has(out,
-	          "Usage: catalist add [-amq] [--pick=N] [--status=STATUS] [--score=N] "
-	          "[--progress=N] [--no-lookup] TITLE...\n"));
+	          "Usage: catalist add [-amq] [--from=SITE] [--pick=N] [--status=STATUS] "
+	          "[--score=N] [--progress=N] [--no-lookup] TITLE...\n"));
 	// The helps line up past the longest option.
 	CHECK(has(out, "      --status=STATUS  watching, completed, on-hold, dropped or planned\n"));
-	CHECK(has(out, "      --no-lookup      add TITLE as written, without asking AniList\n"));
+	CHECK(has(out, "      --no-lookup      add TITLE as written, without asking a site\n"));
 	CHECK(has(out, "  -q                   print nothing\n"));
 	CHECK(run({"help", "rm"}) == 0);
 	CHECK(has(out, "Usage: catalist rm [-amfq] [--all] REF...\n"));
 	CHECK(run({"help", "search"}) == 0);
-	CHECK(has(out, "Usage: catalist search [-am] [--json] [--header] QUERY...\n"));
-	CHECK(has(out, "  pick type title year total score anilist_id mal_id ref\n"));
+	CHECK(has(out, "Usage: catalist search [-am] [--from=SITE] [--json] [--header] QUERY...\n"));
+	CHECK(has(out, "  pick type title year total score anilist_id mal_id ref kitsu_id\n"));
 	CHECK(run({"help", "stats"}) == 0);
 	CHECK(has(out, "Usage: catalist stats [-am] [--json] [--header]\n"));
 	CHECK(run({"help", "import"}) == 0);
@@ -92,7 +92,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(run({"help", "export"}) == 0);
 	CHECK(has(out, "Usage: catalist export [--format=FORMAT] [anime|manga]\n"));
 	CHECK(run({"help", "provider"}) == 0);
-	CHECK(has(out, "Usage: catalist provider [anilist|mal]\n"));
+	CHECK(has(out, "Usage: catalist provider [anilist|mal|kitsu]\n"));
 
 	CHECK(run({"help", "frobnicate"}) == 2);
 	CHECK(err ==

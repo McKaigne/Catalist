@@ -77,13 +77,14 @@ public:
 	explicit catalogue(std::filesystem::path dataDir, std::filesystem::path oldDir = {});
 
 	// Adds a title under a fresh id and returns it. A title that shares its
-	// AniList or MyAnimeList id with a stored one is merged into that entry
+	// AniList, MyAnimeList or Kitsu id with a stored one is merged into that entry
 	// instead (see mergeImported), so importing a list twice adds nothing.
 	int addEntry(entry added);
 	[[nodiscard]] const std::vector<entry>& getEntries(mediaType type) const;
 	[[nodiscard]] std::optional<entry> getById(mediaType type, int id) const;
-	// The entry with either id (0 matches nothing).
-	[[nodiscard]] std::optional<entry> findByIds(mediaType type, int anilistId, int malId) const;
+	// The entry with any of the ids (0 matches nothing).
+	[[nodiscard]] std::optional<entry> findByIds(mediaType type, int anilistId, int malId,
+	                                             int kitsuId = 0) const;
 
 	// The site whose ids are shown, kept beside the lists (AniList when
 	// nothing is stored). loadAll reads it; saveSettings and saveAll write
@@ -176,6 +177,7 @@ private:
 	[[nodiscard]] result<bool> importOldFiles(const std::filesystem::path& from);
 	[[nodiscard]] bool readStore();
 	[[nodiscard]] bool writeRows();
+	[[nodiscard]] bool writeSiteIds();
 	[[nodiscard]] bool writeSettings();
 	// The rows, and the settings when they changed.
 	[[nodiscard]] bool writeChanged();

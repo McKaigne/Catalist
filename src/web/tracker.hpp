@@ -21,6 +21,8 @@ struct link {
 	fetcher fetch;
 	// The wait between two requests to one site, so that none is flooded.
 	std::function<void()> pause = [] {};
+	// MyAnimeList's id for this program; its API answers nothing without.
+	std::string malClientId{};
 };
 
 // One match of a search on a site.
@@ -28,6 +30,7 @@ struct match {
 	// The ids the site knows the title by; 0 for those it does not.
 	int anilistId = 0;
 	int malId = 0;
+	int kitsuId = 0;
 	std::string name;
 	// Episodes or chapters; 0 while the series is still running.
 	int totalUnits = 0;

@@ -5,7 +5,7 @@ in **C++17**. It is made for daily tracking, scripts and pipes, and every
 change can be undone and redone.
 
 Your lists live on your computer in one SQLite file. Catalist goes online
-only when you add or search for a title, through the public API of
+only when you add, search for or refresh a title, through the public API of
 [AniList](https://anilist.co), [MyAnimeList](https://myanimelist.net) or
 [Kitsu](https://kitsu.app). The three work the same way, and each entry
 keeps its id on every site that is known, so Catalist serves users of all
@@ -103,11 +103,12 @@ cl help set                        # what a command takes
   `--header` names the columns. Messages and questions go to stderr. Exit
   codes: 0 done, 1 failed, 2 wrong command line (also `catalist` with no
   command).
-- **Network:** only `add` and `search` go online. `add` fails when the site
-  cannot be reached, unless `--no-lookup` adds the title as written. What
-  the site said when a title was added (its total, and how many episodes
-  were out, which the `new` column counts from) stays as it was until
-  Catalist-TUI checks the title again or `set total=` changes it.
+- **Network:** only `add`, `search` and `refresh` go online. `add` fails
+  when the site cannot be reached, unless `--no-lookup` adds the title as
+  written. A title's total, and how many episodes are out (which the `new`
+  column counts from), are what the site said when it was added, until
+  `refresh` asks again (without REFs, about everything you watch, read or
+  have on hold; AniList answers fifty titles a request).
 
 ### Pipes
 

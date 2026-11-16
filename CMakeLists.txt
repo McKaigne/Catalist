@@ -82,6 +82,7 @@ add_library(catalistLib STATIC
   src/web/kitsu.cpp
   src/web/mal.cpp
   src/web/sites.cpp
+  src/web/tracker.cpp
   # The command line.
   src/cli/args.cpp
   src/cli/cli.cpp

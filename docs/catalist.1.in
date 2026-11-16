@@ -14,11 +14,11 @@ your computer, from the shell, in scripts and in pipes.
 .B cl
 is the same program under a shorter name.
 .PP
-Only \fBadd\fR and \fBsearch\fR go online, through curl, to the public
-API of your provider (AniList, MyAnimeList or Kitsu; see \fBprovider\fR)
-or of the site \fB\-\-from\fR names. A title's total, and how many of its
-episodes were out, are what the site said when it was added. Each title
-keeps its id on every site that is known.
+Only \fBadd\fR, \fBsearch\fR and \fBrefresh\fR go online, through curl,
+to the public API of your provider (AniList, MyAnimeList or Kitsu; see
+\fBprovider\fR) or of the site \fB\-\-from\fR names. A title's total, and
+how many of its episodes are out, are what the site said when it was added
+or last refreshed. Each title keeps its id on every site that is known.
 .PP
 A \fIREF\fR names a title: its ref, the first column of \fBls\fR
 (\fBa:12\fR is an anime, \fBm:3\fR a manga), or part of its title, in

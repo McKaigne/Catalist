@@ -335,3 +335,55 @@ TEST_CASE_FIXTURE(cliFixture, "cli says what MyAnimeList needs before it can be 
 	CHECK(has(err, "error: MyAnimeList answers only programs with a client id"));
 	CHECK(web.sent.empty());
 }
+
+TEST_CASE_FIXTURE(cliFixture, "cli refresh asks what is out of the titles being followed") {
+	seed();
+	web.respond(R"("ids":[128547],"type":"ANIME")",
+	            R"({"data":{"Page":{"media":[{"id":128547,"idMal":44265,"episodes":13,
+	            "status":"FINISHED"}]}}})");
+	web.respond(R"("ids":[30002],"type":"MANGA")",
+	            R"({"data":{"Page":{"media":[{"id":30002,"idMal":2,"chapters":380,
+	            "volumes":42,"status":"FINISHED"}]}}})");
+	CHECK(run({"refresh"}) == 0);
+	// Only a total a person sees is a change; what is out is kept quietly.
+	CHECK(out == "m:1\tBerserk\ttotal\t0\t380\n");
+	CHECK(err == "Checked 2 titles on AniList; 2 have new episodes or chapters out.\n");
+	// One request for each list.
+	CHECK(web.sent.size() == 2);
+	auto berserk = savedTitle(mediaType::kManga, "Berserk");
+	CHECK(berserk.totalUnits == 380);
+	CHECK(berserk.released == 380);
+	CHECK(berserk.totalVolumes == 42);
+	REQUIRE(steps().size() == 1);
+	CHECK(steps()[0].label == "refresh");
+
+	// Asked again, nothing a person sees changes: no step for undo.
+	CHECK(run({"refresh", "-q"}) == 0);
+	CHECK(out.empty());
+	CHECK(err.empty());
+	CHECK(steps().size() == 1);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli refresh takes REFs, and says what it could not find") {
+	seed();
+	CHECK(run({"add", "-q", "--no-lookup", "--status=watching", "Home Video"}) == 0);
+	web.respond(R"("ids":[154587],"type":"ANIME")",
+	            R"({"data":{"Page":{"media":[{"id":154587,"idMal":52991,"episodes":28,
+	            "status":"FINISHED"}]}}})");
+	CHECK(run({"refresh", "a:1", "home"}) == 0);
+	CHECK(err ==
+	      "note: AniList could not find a:3.\n"
+	      "Checked 1 title on AniList.\n");
+
+	// Offline: nothing is saved.
+	CHECK(run({"refresh", "taxi"}) == 1);
+	CHECK(err == "error: could not reach AniList; check the connection and try again\n");
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").checkedAt ==
+	      catalist::test::requireDate("2026-10-20"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli refresh with nothing followed says what to give it") {
+	CHECK(run({"refresh"}) == 0);
+	CHECK(err == "Nothing is being watched or read: name the titles to refresh.\n");
+	CHECK(web.sent.empty());
+}

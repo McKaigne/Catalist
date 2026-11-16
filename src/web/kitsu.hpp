@@ -37,6 +37,9 @@ public:
 	                                                     const std::string& query) override;
 	[[nodiscard]] result<web::details> lookUp(const entry& known) override;
 
+protected:
+	void pause() const override { net_.pause(); }
+
 private:
 	// The reply to a GET; nothing when Kitsu cannot be reached.
 	[[nodiscard]] std::optional<std::string> get(const std::string& url) const;

@@ -31,6 +31,13 @@ struct titleRef {
 [[nodiscard]] std::string searchRequest(mediaType type, const std::string& query);
 [[nodiscard]] result<std::vector<web::match>> parseSearch(const std::string& body, mediaType type);
 
+// One request for up to kBatchSize titles of one type, by their AniList ids
+// or, with `byMal`, their MyAnimeList ids; the titles of its reply, in no
+// particular order.
+inline constexpr size_t kBatchSize = 50;
+[[nodiscard]] std::string batchRequest(mediaType type, const std::vector<int>& ids, bool byMal);
+[[nodiscard]] result<std::vector<web::details>> parseBatch(const std::string& body, mediaType type);
+
 class tracker : public web::iTracker {
 public:
 	explicit tracker(web::link net) : net_(std::move(net)) {}
@@ -39,6 +46,12 @@ public:
 	[[nodiscard]] result<std::vector<web::match>> search(mediaType type,
 	                                                     const std::string& query) override;
 	[[nodiscard]] result<web::details> lookUp(const entry& known) override;
+	// kBatchSize titles a request.
+	[[nodiscard]] std::vector<result<web::details>> lookUpMany(
+	    const std::vector<entry>& known) override;
+
+protected:
+	void pause() const override { net_.pause(); }
 
 private:
 	// The reply to a query; nothing when AniList cannot be reached.

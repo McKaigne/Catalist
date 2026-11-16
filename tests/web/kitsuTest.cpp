@@ -92,3 +92,21 @@ TEST_CASE("kitsu finds a title by its MyAnimeList id through a mapping") {
 	known.malId = 2;
 	CHECK(site.lookUp(known).errorMessage() == "could not reach Kitsu");
 }
+
+TEST_CASE("kitsu looks titles up one at a time, and stops once it is not there") {
+	catalist::test::fakeWeb web;
+	web.respond("GET https://kitsu.app/api/edge/anime/46474?include=mappings", kFrieren);
+	int pauses = 0;
+	auto net = web.link();
+	net.pause = [&pauses] { ++pauses; };
+	kitsu::tracker site(net);
+	catalist::entry frieren = catalist::test::makeEntry().kitsuId(46474);
+	catalist::entry gone = catalist::test::makeEntry().kitsuId(1);
+	auto found = site.lookUpMany({frieren, gone, frieren});
+	REQUIRE(found.size() == 3);
+	CHECK(found[0].ok());
+	CHECK(found[1].errorMessage() == "could not reach Kitsu");
+	CHECK(found[2].errorMessage() == "could not reach Kitsu");
+	CHECK(web.sent.size() == 2);
+	CHECK(pauses == 1);
+}

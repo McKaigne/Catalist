@@ -1,5 +1,6 @@
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <ostream>
 
 #include "cli/common.hpp"
@@ -270,6 +271,123 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 	return 0;
 }
 
+// "a:1, m:3".
+std::string joinedWith(const std::vector<std::string>& words, const std::string& between) {
+	std::string all;
+	for (const auto& word : words)
+		all += (all.empty() ? "" : between) + word;
+	return all;
+}
+
+// What refresh checks when no REF is given: the titles being followed.
+bool followed(const entry& e) {
+	return e.status == watchStatus::kWatching or e.status == watchStatus::kOnHold;
+}
+
+// The titles refresh is to check, read from the lists; nothing, with the
+// exit code, when there are none to go on with.
+struct refreshList {
+	std::vector<entry> titles;
+	std::optional<int> stop;
+};
+
+refreshList titlesToRefresh(const command& self, const args::parsed& line, cliContext& ctx) {
+	refreshList wanted;
+	if (not line.operands.empty()) {
+		auto request = readRefs(self, line, ctx);
+		if (request.stop) {
+			wanted.stop = request.stop;
+			return wanted;
+		}
+		auto found = load(ctx) ? resolve(ctx, request.refs, request.how) : std::nullopt;
+		if (not found)
+			wanted.stop = 1;
+		else
+			wanted.titles = *found;
+		return wanted;
+	}
+	if (not load(ctx)) {
+		wanted.stop = 1;
+		return wanted;
+	}
+	auto only = onlyType(line);
+	for (mediaType type : {mediaType::kAnime, mediaType::kManga})
+		for (const auto& e : ctx.db.getEntries(type))
+			if ((not only or *only == type) and followed(e))
+				wanted.titles.push_back(e);
+	return wanted;
+}
+
+int runRefresh(const command& self, const args::parsed& line, cliContext& ctx) {
+	if (not fromKnown(self, line, ctx))
+		return 2;
+	auto wanted = titlesToRefresh(self, line, ctx);
+	if (wanted.stop)
+		return *wanted.stop;
+	bool quiet = line.has("q");
+	if (wanted.titles.empty()) {
+		if (not quiet)
+			ctx.err << "Nothing is being watched or read: name the titles to refresh.\n";
+		return 0;
+	}
+
+	// The site is asked before the catalogue is taken for writing, as by
+	// add: nothing waits on the network.
+	auto site = trackerFor(ctx, siteOf(line, ctx));
+	std::string name = providerName(site->site());
+	if (not quiet and wanted.titles.size() > 1 and site->site() != provider::kAniList)
+		ctx.err << fmt::format("Asking {} about {}, one a second.\n", name,
+		                       titles(wanted.titles.size()));
+	auto answers = site->lookUpMany(wanted.titles);
+	std::vector<std::string> unknown;
+	for (size_t i = 0; i < answers.size(); ++i) {
+		if (answers[i].ok())
+			continue;
+		if (web::unreachable(answers[i].errorMessage()))
+			return fail(ctx, webError(answers[i].errorMessage()));
+		unknown.push_back(refs::of(wanted.titles[i]));
+	}
+
+	if (not loadForWrite(ctx))
+		return 1;
+	isoDate today = ctx.today();
+	std::vector<journal::change> changes;
+	size_t fresh = 0;
+	for (size_t i = 0; i < answers.size(); ++i) {
+		const entry& asked = wanted.titles[i];
+		auto now = answers[i].ok() ? ctx.db.getById(asked.type, asked.id) : std::nullopt;
+		// Removed meanwhile by another program: nothing to refresh.
+		if (not now)
+			continue;
+		entry after = applyWebFacts(*now, answers[i].value().facts, today);
+		ctx.db.updateEntry(after);
+		changes.push_back({after.type, after.id, *now, after});
+		fresh += newReleases(after) > 0 ? 1 : 0;
+	}
+	// What is out and the ids are kept, but only a new total is a step for
+	// undo, as for import.
+	bool shown = std::any_of(changes.begin(), changes.end(), [](const journal::change& made) {
+		return not journal::changedFields(made).empty();
+	});
+	if (shown) {
+		int code = saveAndReport(ctx, line, changes);
+		if (code != 0)
+			return code;
+	} else if (not ctx.db.saveAll()) {
+		return saveFailed(ctx);
+	}
+	if (quiet)
+		return 0;
+	if (not unknown.empty())
+		ctx.err << fmt::format("note: {} could not find {}.\n", name, joinedWith(unknown, ", "));
+	ctx.err << fmt::format("Checked {} on {}{}.\n", titles(changes.size()), name,
+	                       fresh == 0
+	                           ? ""
+	                           : fmt::format("; {} new episodes or chapters out",
+	                                         fresh == 1 ? "1 has" : fmt::format("{} have", fresh)));
+	return 0;
+}
+
 }  // namespace
 
 std::vector<command> onlineCommands() {
@@ -320,6 +438,21 @@ std::vector<command> onlineCommands() {
 	     "QUERY...",
 	     runSearch,
 	     operandKind::kText},
+	    {"refresh",
+	     {},
+	     "Ask a site what is out of the titles you follow",
+	     std::string("Asks your provider, or the site --from names, for each title's totals\n"
+	                 "and how many of its episodes or chapters are out (what the new column\n"
+	                 "of ls counts from), and fills in the ids that site knows. Without a\n"
+	                 "REF it asks about the titles you are watching or reading, or have on\n"
+	                 "hold. AniList answers fifty titles a request; MyAnimeList and Kitsu\n"
+	                 "one a second, and only AniList says how much of a running show has\n"
+	                 "aired. A changed total is a step for undo.\n\n") +
+	         kRefsHelp + "\n" + kChangeFormat,
+	     withRefOptions({kFrom, kQuiet}),
+	     "[REF...]",
+	     runRefresh,
+	     operandKind::kRefs},
 	};
 }
 

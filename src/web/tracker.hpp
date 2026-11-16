@@ -66,7 +66,20 @@ public:
 	// The title by the site's own id, else by its MyAnimeList id. Fails when
 	// it has neither, when the site does not know it, or cannot be reached.
 	[[nodiscard]] virtual result<details> lookUp(const entry& known) = 0;
+
+	// What lookUp says of each title, in the order given. Here one request
+	// a title, a pause apart; a site that answers many in one request does
+	// better. Once the site cannot be reached, every title left fails so.
+	[[nodiscard]] virtual std::vector<result<details>> lookUpMany(const std::vector<entry>& known);
+
+protected:
+	// The pause between two requests of lookUpMany.
+	virtual void pause() const = 0;
 };
+
+// "could not reach AniList": the site is not there, as opposed to a title
+// it does not know.
+[[nodiscard]] bool unreachable(const std::string& message);
 
 }  // namespace catalist::web
 

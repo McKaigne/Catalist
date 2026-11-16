@@ -33,6 +33,9 @@ public:
 	                                                     const std::string& query) override;
 	[[nodiscard]] result<web::details> lookUp(const entry& known) override;
 
+protected:
+	void pause() const override { net_.pause(); }
+
 private:
 	// The reply to a GET with the client id; nothing when MyAnimeList cannot
 	// be reached.

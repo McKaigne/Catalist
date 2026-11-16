@@ -46,6 +46,7 @@ int main(int argc, char* argv[]) {
 	ctx.accountsFile = catalist::accounts::defaultPath(env("CATALIST_DATA_DIR"),
 	                                                   env("XDG_STATE_HOME"), env("HOME"));
 	ctx.readSecret = catalist::readSecretLine;
+	ctx.offline = not env("CATALIST_OFFLINE").empty() and env("CATALIST_OFFLINE") != "0";
 	ctx.columns = catalist::terminalColumns();
 	// https://no-color.org; a dumb terminal cannot show colours either.
 	// CLICOLOR_FORCE asks for them into a pipe as well.

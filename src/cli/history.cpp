@@ -32,6 +32,7 @@ int runReplay(const command& self, const args::parsed& line, cliContext& ctx) {
 		ctx.err << fmt::format("Nothing to {}.\n", self.name);
 		return 0;
 	}
+	tellSites(ctx, done.value().changes);
 	if (line.has("q"))
 		return 0;
 	for (const auto& step : done.value().steps)

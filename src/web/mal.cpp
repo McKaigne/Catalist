@@ -22,6 +22,23 @@ int countOrZero(const json::value& field) {
 	return count and *count > 0 ? static_cast<int>(*count) : 0;
 }
 
+std::string listStatus(watchStatus status, mediaType type) {
+	bool anime = type == mediaType::kAnime;
+	switch (status) {
+		case watchStatus::kWatching:
+			return anime ? "watching" : "reading";
+		case watchStatus::kCompleted:
+			return "completed";
+		case watchStatus::kOnHold:
+			return "on_hold";
+		case watchStatus::kDropped:
+			return "dropped";
+		case watchStatus::kPlanToWatch:
+			return anime ? "plan_to_watch" : "plan_to_read";
+	}
+	return anime ? "plan_to_watch" : "plan_to_read";
+}
+
 web::match matchOf(const json::value& node, mediaType type) {
 	web::match found;
 	found.malId = countOrZero(node["id"]);
@@ -77,6 +94,48 @@ result<web::details> parseTitle(const std::string& body, mediaType type) {
 	if (status == "finished_airing" or status == "finished" or status == "discontinued")
 		found.facts.released = match.totalUnits;
 	return result<web::details>::success(std::move(found));
+}
+
+std::string listStatusForm(const entry& title) {
+	bool anime = title.type == mediaType::kAnime;
+	std::vector<std::pair<std::string, std::string>> fields = {
+	    {"status", listStatus(title.status, title.type)}, {"score", std::to_string(title.score)}};
+	if (anime) {
+		fields.emplace_back("num_watched_episodes", std::to_string(title.progress));
+		fields.emplace_back("num_times_rewatched", std::to_string(title.rewatched));
+	} else {
+		fields.emplace_back("num_chapters_read", std::to_string(title.progress));
+		fields.emplace_back("num_volumes_read", std::to_string(title.volumes));
+		fields.emplace_back("num_times_reread", std::to_string(title.rewatched));
+	}
+	if (title.startDate)
+		fields.emplace_back("start_date", title.startDate->toString());
+	if (title.finishDate)
+		fields.emplace_back("finish_date", title.finishDate->toString());
+	return web::formEncoded(fields);
+}
+
+result<bool> tracker::push(const entry& title, const account& login) {
+	if (title.malId <= 0)
+		return result<bool>::failure(web::notLinked(provider::kMyAnimeList));
+	auto body = net_.fetch(
+	    {"PATCH",
+	     fmt::format("{}/{}/{}/my_list_status", kApiUrl, kindOf(title.type), title.malId),
+	     {"Content-Type: application/x-www-form-urlencoded", web::bearer(login.token)},
+	     listStatusForm(title)});
+	if (not body)
+		return result<bool>::failure("could not reach MyAnimeList, or it did not take the change");
+	return result<bool>::success(true);
+}
+
+result<bool> tracker::remove(mediaType type, int siteId, const account& login) {
+	auto body = net_.fetch({"DELETE",
+	                        fmt::format("{}/{}/{}/my_list_status", kApiUrl, kindOf(type), siteId),
+	                        {web::bearer(login.token)},
+	                        ""});
+	if (not body)
+		return result<bool>::failure("could not reach MyAnimeList, or it did not take the change");
+	return result<bool>::success(true);
 }
 
 std::string tracker::cannotAsk() const {

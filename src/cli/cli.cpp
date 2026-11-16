@@ -138,6 +138,8 @@ bool applyGlobals(cliContext& ctx, const args::parsed& line) {
 	// unless they are asked for.
 	if (line.has("table") and ctx.columns == 0)
 		ctx.columns = ctx.tableWidth;
+	if (line.has("offline"))
+		ctx.offline = true;
 	return true;
 }
 
@@ -155,8 +157,8 @@ const std::vector<command>& commands() {
 		std::vector<command> table;
 		for (const auto& group :
 		     {cli::listingCommands(), cli::trackingCommands(), cli::onlineCommands(),
-		      cli::accountCommands(), cli::transferCommands(), cli::historyCommands(),
-		      cli::setupCommands()})
+		      cli::accountCommands(), cli::syncCommands(), cli::transferCommands(),
+		      cli::historyCommands(), cli::setupCommands()})
 			table.insert(table.end(), group.begin(), group.end());
 		table.push_back({"help",
 		                 {},
@@ -179,6 +181,7 @@ const std::vector<args::option>& globalOptions() {
 	     "colours: auto (at a terminal), always or never",
 	     {"auto", "always", "never"}},
 	    {'t', "table", "", "draw tables into a pipe as well ($COLUMNS wide)"},
+	    {0, "offline", "", "keep what the sites are to be told until 'sync'"},
 	    {'V', "version", "", "print the version"},
 	    {'h', "help", "", "show the commands"}};
 	return all;

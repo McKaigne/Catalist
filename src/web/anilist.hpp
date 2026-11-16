@@ -38,6 +38,11 @@ inline constexpr size_t kBatchSize = 50;
 [[nodiscard]] std::string batchRequest(mediaType type, const std::vector<int>& ids, bool byMal);
 [[nodiscard]] result<std::vector<web::details>> parseBatch(const std::string& body, mediaType type);
 
+// The mutation that sets a title on the account's list, and the query for
+// the list entry of a title (to remove it).
+[[nodiscard]] std::string saveRequest(const entry& title);
+[[nodiscard]] std::string listEntryRequest(int mediaId, const std::string& userId);
+
 class tracker : public web::iTracker {
 public:
 	explicit tracker(web::link net) : net_(std::move(net)) {}
@@ -54,6 +59,8 @@ public:
 	[[nodiscard]] result<web::loginStart> startLogin() override;
 	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
 	[[nodiscard]] result<account> current(const account& login) override;
+	[[nodiscard]] result<bool> push(const entry& title, const account& login) override;
+	[[nodiscard]] result<bool> remove(mediaType type, int siteId, const account& login) override;
 
 protected:
 	void pause() const override { net_.pause(); }

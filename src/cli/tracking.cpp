@@ -214,7 +214,10 @@ int runRemove(const command& self, const args::parsed& line, cliContext& ctx) {
 		ctx.db.removeEntry(gone.type, gone.id);
 		changes.push_back({gone.type, gone.id, gone, std::nullopt});
 	}
-	return saveAndReport(ctx, line, changes);
+	int code = saveAndReport(ctx, line, changes);
+	if (code == 0 and line.has("remote"))
+		tellSitesGone(ctx, *found);
+	return code;
 }
 
 // done, hold, drop, plan and resume differ in their name and their words.
@@ -286,9 +289,12 @@ std::vector<command> trackingCommands() {
 	     "Remove titles",
 	     std::string("At a terminal rm asks first. Where nobody can be asked, in a script or\n"
 	                 "with REFs from standard input, it removes nothing without -f. 'undo'\n"
-	                 "brings a removed title back under its ref.\n\n") +
+	                 "brings a removed title back under its ref. The sites you are logged in\n"
+	                 "to keep the title on your lists there, unless --remote is given.\n\n") +
 	         kRefsHelp + "\n" + kChangeFormat,
-	     withRefOptions({{'f', "", "", "remove without asking"}, kQuiet}),
+	     withRefOptions({{'f', "", "", "remove without asking"},
+	                     {0, "remote", "", "take them off your lists on the sites as well"},
+	                     kQuiet}),
 	     "REF...",
 	     runRemove,
 	     operandKind::kRefs},

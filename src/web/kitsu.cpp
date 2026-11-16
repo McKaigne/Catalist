@@ -47,6 +47,27 @@ void readMappings(const json::value& item, const json::value& included, mediaTyp
 	}
 }
 
+std::string libraryStatus(watchStatus status) {
+	switch (status) {
+		case watchStatus::kWatching:
+			return "current";
+		case watchStatus::kCompleted:
+			return "completed";
+		case watchStatus::kOnHold:
+			return "on_hold";
+		case watchStatus::kDropped:
+			return "dropped";
+		case watchStatus::kPlanToWatch:
+			return "planned";
+	}
+	return "planned";
+}
+
+// An ISO 8601 time at midnight, UTC, or null.
+std::string timeOf(const std::optional<isoDate>& day) {
+	return day ? fmt::format(R"("{}T00:00:00.000Z")", day->toString()) : "null";
+}
+
 int unitsOf(const json::value& attributes, mediaType type) {
 	return countOrZero(attributes[type == mediaType::kAnime ? "episodeCount" : "chapterCount"]);
 }
@@ -121,6 +142,76 @@ int parseMapping(const std::string& body) {
 	for (const auto& mapping : reply.value()["data"].items())
 		return idOf(mapping["relationships"]["item"]["data"]["id"]);
 	return 0;
+}
+
+std::string libraryAttributes(const entry& title) {
+	// ratingTwenty runs from 2 to 20; null is no rating.
+	return fmt::format(R"({{"status":"{}","progress":{},"reconsumeCount":{},"ratingTwenty":{},)"
+	                   R"("startedAt":{},"finishedAt":{}}})",
+	                   libraryStatus(title.status), title.progress, title.rewatched,
+	                   title.score > 0 ? std::to_string(title.score * 2) : "null",
+	                   timeOf(title.startDate), timeOf(title.finishDate));
+}
+
+std::vector<std::string> tracker::asUser(const account& login) {
+	return {"Content-Type: application/vnd.api+json", "Accept: application/vnd.api+json",
+	        web::bearer(login.token)};
+}
+
+std::optional<int> tracker::libraryEntry(mediaType type, int kitsuId, const account& login) const {
+	auto body = net_.fetch({"GET",
+	                        fmt::format("{}/library-entries?filter[userId]={}&filter[{}Id]={}"
+	                                    "&page[limit]=1",
+	                                    kApiUrl, login.userId, kindOf(type), kitsuId),
+	                        asUser(login), ""});
+	if (not body)
+		return std::nullopt;
+	auto reply = json::parse(*body);
+	if (not reply.ok())
+		return std::nullopt;
+	for (const auto& found : reply.value()["data"].items())
+		return idOf(found["id"]);
+	return 0;
+}
+
+result<bool> tracker::push(const entry& title, const account& login) {
+	if (title.kitsuId <= 0)
+		return result<bool>::failure(web::notLinked(provider::kKitsu));
+	auto existing = libraryEntry(title.type, title.kitsuId, login);
+	if (not existing)
+		return result<bool>::failure("could not reach Kitsu");
+	pause();
+	std::string kind = kindOf(title.type);
+	auto body =
+	    *existing > 0
+	        ? net_.fetch({"PATCH", fmt::format("{}/library-entries/{}", kApiUrl, *existing),
+	                      asUser(login),
+	                      fmt::format(R"({{"data":{{"id":"{}","type":"libraryEntries",)"
+	                                  R"("attributes":{}}}}})",
+	                                  *existing, libraryAttributes(title))})
+	        : net_.fetch(
+	              {"POST", kApiUrl + "/library-entries", asUser(login),
+	               fmt::format(R"({{"data":{{"type":"libraryEntries","attributes":{},)"
+	                           R"("relationships":{{"user":{{"data":{{"type":"users",)"
+	                           R"("id":"{}"}}}},"{}":{{"data":{{"type":"{}","id":"{}"}}}}}}}}}})",
+	                           libraryAttributes(title), login.userId, kind, kind, title.kitsuId)});
+	if (not body)
+		return result<bool>::failure("could not reach Kitsu, or it did not take the change");
+	return result<bool>::success(true);
+}
+
+result<bool> tracker::remove(mediaType type, int siteId, const account& login) {
+	auto existing = libraryEntry(type, siteId, login);
+	if (not existing)
+		return result<bool>::failure("could not reach Kitsu");
+	if (*existing == 0)
+		return result<bool>::success(true);
+	pause();
+	auto body = net_.fetch(
+	    {"DELETE", fmt::format("{}/library-entries/{}", kApiUrl, *existing), asUser(login), ""});
+	if (not body)
+		return result<bool>::failure("could not reach Kitsu, or it did not take the change");
+	return result<bool>::success(true);
 }
 
 std::optional<std::string> tracker::get(const std::string& url) const {

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "cli/cli.hpp"
+#include "storage/accounts.hpp"
 #include "support/testSupport.hpp"
 
 // What the tests of the command line share: a run of `catalist ...` against
@@ -130,6 +131,20 @@ struct cliFixture : catalist::test::tempDirFixture {
 		                .checkedAt("2026-10-20"));
 		REQUIRE(db.saveAll());
 		REQUIRE(db.saveSettings());
+	}
+
+	// A login on the site, as `catalist login` leaves one.
+	void logIn(catalist::provider site, const std::string& user = "Abel") {
+		auto logins = catalist::accounts::parse(catalist::test::readText("state/accounts"));
+		logins = catalist::accounts::with(logins, {site, user, "77", "tok", "", 0});
+		catalist::test::writeText("state/accounts", catalist::accounts::format(logins));
+	}
+
+	// What waits to be sent to the sites.
+	std::vector<catalist::pending> waiting() {
+		catalist::catalogue db("data");
+		REQUIRE(db.loadAll().ok());
+		return db.outbox();
 	}
 
 	// The steps of the undo history, newest first.

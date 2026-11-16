@@ -21,9 +21,12 @@ they can be used side by side.
 Your **provider** is the site you use: AniList (the default), MyAnimeList
 or Kitsu (`catalist provider kitsu` to switch). `search` and `add` ask it,
 unless `--from SITE` names another for one command, and `catalist show`
-links to a title's page there. Telling the sites what changes in your
-lists, as Mihon tells its trackers, will come later: for now the lists are
-local only.
+links to a title's page there.
+
+## Tracking
+
+As Mihon tells its trackers, Catalist tells the sites you are logged in to
+what changes in your lists, one way: your lists are the truth.
 
 `catalist login anilist|mal|kitsu` logs in to a site; `catalist accounts`
 lists the logins and `catalist logout SITE` forgets one. Each site has its
@@ -31,6 +34,17 @@ own way (AniList shows a token to paste back, MyAnimeList sends the browser
 to an address to paste back, Kitsu takes your email and password once, for
 a token). The tokens are kept apart from your lists, readable by you only,
 in `~/.local/state/catalist/accounts`; passwords never are.
+
+Logged in, each change to a title's status, score, progress, volumes,
+rewatches or dates is sent at once to every such site where the title is
+**linked** (has its id there). Titles added from a site, imported or
+refreshed are linked to every site that knew their ids; `catalist link REF
+SITE [ID]` links one by hand, `catalist ls --unlinked SITE` lists those that
+are not, and `catalist unlink REF SITE` stops telling a site of one. What
+could not be sent (offline, a site down, `--offline`, more than ten changes
+at once) waits, and `catalist sync` sends it; `catalist sync --all` sends
+every linked title, as after a first login. `rm` leaves the sites' lists
+alone unless `--remote` is given.
 
 MyAnimeList's API answers only programs it has registered, even about
 public titles. Register Catalist once at

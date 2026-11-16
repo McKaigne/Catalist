@@ -141,6 +141,14 @@ bool readSiteIds(const store::database& db, std::vector<entry>& anime, std::vect
 	return rows.ok();
 }
 
+// Titles the sites are still to be told of: kept beside the lists, so a
+// change made offline is sent the next time a site can be reached.
+const char* kOutboxTable =
+    "CREATE TABLE IF NOT EXISTS outbox ("
+    " seq INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT NOT NULL, type TEXT NOT NULL,"
+    " id INTEGER NOT NULL, removed INTEGER NOT NULL, site_id INTEGER NOT NULL,"
+    " UNIQUE (site, type, id, removed))";
+
 // ---- The undo history ----
 
 std::optional<entry> decodeRow(const std::string& row, mediaType type) {
@@ -485,6 +493,49 @@ provider catalogue::getProvider() const {
 
 void catalogue::setProvider(provider site) {
 	provider_ = site;
+}
+
+// What the sites are still to be told.
+
+std::vector<pending> catalogue::outbox() {
+	std::vector<pending> waiting;
+	if (not openStore().ok() or not hasTable(db_, "outbox"))
+		return waiting;
+	auto rows = db_.prepare("SELECT site, type, id, removed, site_id FROM outbox ORDER BY seq");
+	while (rows.step()) {
+		auto site = parseProvider(rows.textAt(0));
+		if (not site)
+			continue;
+		waiting.push_back({*site, rows.textAt(1) == "manga" ? mediaType::kManga : mediaType::kAnime,
+		                   static_cast<int>(rows.intAt(2)), rows.intAt(3) != 0,
+		                   static_cast<int>(rows.intAt(4))});
+	}
+	return waiting;
+}
+
+bool catalogue::queue(const std::vector<pending>& more) {
+	return commit([this, &more] {
+		if (not db_.run(kOutboxTable))
+			return false;
+		auto insert = db_.prepare(
+		    "INSERT OR IGNORE INTO outbox (site, type, id, removed, site_id)"
+		    " VALUES (?, ?, ?, ?, ?)");
+		for (const auto& each : more) {
+			insert.bind(providerKey(each.site)).bind(typeKey(each.type)).bind(each.id);
+			if (not insert.bind(each.removed ? 1 : 0).bind(each.siteId).run())
+				return false;
+		}
+		return true;
+	});
+}
+
+bool catalogue::sent(const pending& done) {
+	return commit([this, &done] {
+		auto remove = db_.prepare(
+		    "DELETE FROM outbox WHERE site = ? AND type = ? AND id = ? AND removed = ?");
+		remove.bind(providerKey(done.site)).bind(typeKey(done.type)).bind(done.id);
+		return remove.bind(done.removed ? 1 : 0).run();
+	});
 }
 
 // Opening and setting up the store.

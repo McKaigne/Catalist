@@ -147,6 +147,13 @@ extern const args::option kFrom;
 [[nodiscard]] provider siteOf(const args::parsed& line, const cliContext& ctx);
 // The site's adapter, reached through the context's link.
 [[nodiscard]] std::unique_ptr<web::iTracker> trackerFor(const cliContext& ctx, provider site);
+// The match to take of a search on the site: the only one, the one `pick`
+// numbers, or the one chosen at a terminal. Nothing, with the reason on
+// standard error, when there is no such match.
+[[nodiscard]] std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site,
+                                                    mediaType type, const std::string& query,
+                                                    std::optional<int> pick);
+
 // What to say when a request to a site failed.
 [[nodiscard]] std::string webError(const std::string& message);
 
@@ -154,6 +161,25 @@ extern const args::option kFrom;
 [[nodiscard]] std::vector<account> readAccounts(const cliContext& ctx);
 // Writes them, readable by their owner only; false when that failed.
 [[nodiscard]] bool saveAccounts(const cliContext& ctx, const std::vector<account>& logins);
+
+// ---- Telling the sites (sync.cpp) ----
+
+// What a send did: how many titles the sites were told of, and how many
+// still wait.
+struct sendReport {
+	size_t told = 0;
+	size_t left = 0;
+};
+// Tells the logged-in sites what waits in the outbox, oldest first: all of
+// it with `everything`, else as long as it is a few. The lists are read.
+sendReport sendOutbox(cliContext& ctx, bool everything);
+// "note: 3 changes wait to be sent", when some do.
+void noteWaiting(cliContext& ctx, const sendReport& report);
+// After a save: queues each changed title for every logged-in site where
+// it is linked, and sends what waits.
+void tellSites(cliContext& ctx, const std::vector<journal::change>& changes);
+// After rm --remote: queues the titles to come off the sites' lists.
+void tellSitesGone(cliContext& ctx, const std::vector<entry>& gone);
 
 // What the helps share.
 extern const args::option kQuiet;
@@ -172,6 +198,8 @@ extern const char* const kChangeFormat;
 [[nodiscard]] std::vector<command> onlineCommands();
 // accounts.cpp: login, logout and accounts.
 [[nodiscard]] std::vector<command> accountCommands();
+// sync.cpp: sync, link and unlink.
+[[nodiscard]] std::vector<command> syncCommands();
 // transfer.cpp: import and export.
 [[nodiscard]] std::vector<command> transferCommands();
 // history.cpp: undo, redo, log and tx.

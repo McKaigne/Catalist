@@ -79,6 +79,14 @@ int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 	}
 	if (line.has("s") and statuses.empty())
 		return usageError(ctx, self, "-s needs a status");
+	std::optional<provider> unlinked;
+	if (line.has("unlinked")) {
+		unlinked = parseProvider(line.get("unlinked"));
+		if (not unlinked)
+			return usageError(
+			    ctx, self,
+			    fmt::format("--unlinked '{}' is not anilist, mal or kitsu", line.get("unlinked")));
+	}
 	sortKey key = sortKey::kTitle;
 	if (line.has("sort")) {
 		auto found = kSortKeys.find(line.get("sort"));
@@ -97,7 +105,7 @@ int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 		for (const auto& e : ctx.db.getEntries(type))
 			if ((statuses.empty() or
 			     std::find(statuses.begin(), statuses.end(), e.status) != statuses.end()) and
-			    refs::titleHolds(e, *query))
+			    refs::titleHolds(e, *query) and (not unlinked or idOn(e, *unlinked) == 0))
 				shown.push_back(e);
 	}
 	catalogue::sortEntries(shown, key, line.has("r"));
@@ -274,6 +282,11 @@ std::vector<command> listingCommands() {
 	       statusWords()},
 	      {0, "sort", "KEY", "new, updated, score, progress, date, status or title", sortWords()},
 	      {'r', "", "", "reverse the order"},
+	      {0,
+	       "unlinked",
+	       "SITE",
+	       "only titles with no id on the site",
+	       {"anilist", "mal", "kitsu"}},
 	      {'q', "", "", "print the refs and nothing else"},
 	      {0, "json", "", "print one JSON object a line"},
 	      {0, "header", "", "name the columns on the first line of a pipe"}},

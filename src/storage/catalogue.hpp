@@ -46,6 +46,16 @@ struct txNote {
 	bool group = false;
 };
 
+// A title a site is still to be told of: what the lists now hold of it, or,
+// for a title removed from both, its id on that site.
+struct pending {
+	provider site = provider::kAniList;
+	mediaType type = mediaType::kAnime;
+	int id = 0;
+	bool removed = false;
+	int siteId = 0;
+};
+
 // One step of the undo history: what one command (or one group) changed.
 struct txRecord {
 	long long id = 0;
@@ -165,6 +175,16 @@ public:
 	// The steps of the history, newest first; all of them when `limit` is 0.
 	// Empty until loadAll has found something stored.
 	[[nodiscard]] result<std::vector<txRecord>> history(int limit);
+
+	// ---- What the sites are still to be told ----
+
+	// The titles waiting, oldest first; none when nothing waits or the file
+	// cannot be read.
+	[[nodiscard]] std::vector<pending> outbox();
+	// Adds them; one already waiting is not added twice.
+	[[nodiscard]] bool queue(const std::vector<pending>& more);
+	// Takes one off: it was told, or it cannot be.
+	[[nodiscard]] bool sent(const pending& done);
 
 private:
 	std::vector<entry>& getList(mediaType type);

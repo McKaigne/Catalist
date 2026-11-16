@@ -101,6 +101,7 @@ add_library(catalistLib STATIC
   src/cli/output.cpp
   src/cli/refs.cpp
   src/cli/setup.cpp
+  src/cli/sync.cpp
   src/cli/tracking.cpp
   src/cli/transfer.cpp
   # Everything that touches the world outside the program.
@@ -208,6 +209,7 @@ add_executable(catalistTests
   tests/web/jsonTest.cpp
   tests/web/kitsuTest.cpp
   tests/web/loginTest.cpp
+  tests/web/pushTest.cpp
   tests/web/malTest.cpp
   tests/cli/accountsTest.cpp
   tests/cli/argsTest.cpp
@@ -219,6 +221,7 @@ add_executable(catalistTests
   tests/cli/outputTest.cpp
   tests/cli/refsTest.cpp
   tests/cli/setupTest.cpp
+  tests/cli/syncTest.cpp
   tests/cli/trackingTest.cpp
   tests/cli/transferTest.cpp
   tests/systemTest.cpp

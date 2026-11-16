@@ -86,7 +86,10 @@ int runLogin(const command& self, const args::parsed& line, cliContext& ctx) {
 		return fail(ctx, login.errorMessage());
 	if (not saveAccounts(ctx, accounts::with(readAccounts(ctx), login.value())))
 		return fail(ctx, fmt::format("could not save the login to {}", ctx.accountsFile.string()));
-	ctx.err << fmt::format("Logged in to {} as {}.\n", providerName(*site), login.value().user);
+	ctx.err << fmt::format(
+	    "Logged in to {} as {}. Each change to a linked title is now sent there;\n"
+	    "send your lists there now with: {} sync --all\n",
+	    providerName(*site), login.value().user, ctx.program);
 	return 0;
 }
 

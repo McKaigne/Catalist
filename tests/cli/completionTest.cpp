@@ -148,7 +148,7 @@ TEST_CASE("completion bash completes the commands, their options and the lists")
 	CHECK(has(script, "\t\t\t-n)\n\t\t\t\t:\n\t\t\t\treturn ;;\n"));
 	CHECK(has(script, "_catalist_offer '-s --sort= -q -h --help'\n"));
 	// The program's own options, and a value of theirs apart.
-	CHECK(has(script, "_catalist_offer '--color= -t --table -V --version -h --help'\n"));
+	CHECK(has(script, "_catalist_offer '--color= -t --table --offline -V --version -h --help'\n"));
 	CHECK(has(script, "\t\t\t--color) ((at += 2)) ;;\n"));
 	// The operands, by kind.
 	CHECK(has(script, "\t'ls')\n"));

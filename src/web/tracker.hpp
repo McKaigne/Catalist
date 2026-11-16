@@ -115,6 +115,17 @@ public:
 	// again.
 	[[nodiscard]] virtual result<account> current(const account& login) = 0;
 
+	// ---- Telling the site, one way ----
+
+	// Puts the title on the account's list as it is in Catalist's: status,
+	// score, progress, volumes, rewatches and dates. Catalist's lists are the
+	// truth; the site's entry is overwritten. Fails when the title has no id
+	// on this site, when the site cannot be reached, or says no.
+	[[nodiscard]] virtual result<bool> push(const entry& title, const account& login) = 0;
+	// Takes the title with this id on the site off the account's list; a
+	// title that is not on it is gone already.
+	[[nodiscard]] virtual result<bool> remove(mediaType type, int siteId, const account& login) = 0;
+
 protected:
 	// The pause between two requests of lookUpMany.
 	virtual void pause() const = 0;
@@ -135,6 +146,10 @@ struct tokenReply {
 
 // "Authorization: Bearer <token>".
 [[nodiscard]] std::string bearer(const std::string& token);
+
+// The word for "this title has no id on the site": push fails with it, and
+// the caller tells it apart from a site that said no.
+[[nodiscard]] std::string notLinked(provider site);
 
 // Whether the login's token runs out within a minute (or has).
 [[nodiscard]] bool runningOut(const account& login, long long now);

@@ -25,6 +25,10 @@ inline const std::string kTokenUrl = "https://myanimelist.net/v1/oauth2/token";
 [[nodiscard]] std::string titleUrl(mediaType type, int malId);
 [[nodiscard]] result<web::details> parseTitle(const std::string& body, mediaType type);
 
+// The form that sets a title on the account's list. A date the title has
+// not is left out: MyAnimeList keeps the one it had.
+[[nodiscard]] std::string listStatusForm(const entry& title);
+
 class tracker : public web::iTracker {
 public:
 	explicit tracker(web::link net) : net_(std::move(net)) {}
@@ -38,6 +42,8 @@ public:
 	[[nodiscard]] result<web::loginStart> startLogin() override;
 	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
 	[[nodiscard]] result<account> current(const account& login) override;
+	[[nodiscard]] result<bool> push(const entry& title, const account& login) override;
+	[[nodiscard]] result<bool> remove(mediaType type, int siteId, const account& login) override;
 
 protected:
 	void pause() const override { net_.pause(); }

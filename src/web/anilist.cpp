@@ -26,6 +26,30 @@ std::string jsonString(const std::string& text) {
 	return quoted + "\"";
 }
 
+std::string listStatus(watchStatus status) {
+	switch (status) {
+		case watchStatus::kWatching:
+			return "CURRENT";
+		case watchStatus::kCompleted:
+			return "COMPLETED";
+		case watchStatus::kOnHold:
+			return "PAUSED";
+		case watchStatus::kDropped:
+			return "DROPPED";
+		case watchStatus::kPlanToWatch:
+			return "PLANNING";
+	}
+	return "PLANNING";
+}
+
+// A FuzzyDateInput; all null clears the date.
+std::string fuzzyDate(const std::optional<isoDate>& day) {
+	if (not day)
+		return R"({"year":null,"month":null,"day":null})";
+	return fmt::format(R"({{"year":{},"month":{},"day":{}}})", day->year(), day->month(),
+	                   day->day());
+}
+
 int countOrZero(const json::value& field) {
 	auto count = field.asInteger();
 	return count and *count > 0 ? static_cast<int>(*count) : 0;
@@ -79,6 +103,25 @@ std::string searchRequest(mediaType type, const std::string& query) {
 	    R"(episodes chapters volumes averageScore startDate{{year}}}}}}}}",)"
 	    R"("variables":{{"search":{},"type":"{}"}}}})",
 	    jsonString(query), typeName(type));
+}
+
+std::string saveRequest(const entry& title) {
+	// scoreRaw is out of 100 whatever scale the person chose on AniList.
+	return fmt::format(
+	    R"({{"query":"mutation($m:Int,$s:MediaListStatus,$c:Int,$p:Int,$v:Int,$r:Int,)"
+	    R"($a:FuzzyDateInput,$f:FuzzyDateInput){{SaveMediaListEntry(mediaId:$m,status:$s,)"
+	    R"(scoreRaw:$c,progress:$p,progressVolumes:$v,repeat:$r,startedAt:$a,completedAt:$f))"
+	    R"({{id}}}}",)"
+	    R"("variables":{{"m":{},"s":"{}","c":{},"p":{},"v":{},"r":{},"a":{},"f":{}}}}})",
+	    title.anilistId, listStatus(title.status), title.score * 10, title.progress, title.volumes,
+	    title.rewatched, fuzzyDate(title.startDate), fuzzyDate(title.finishDate));
+}
+
+std::string listEntryRequest(int mediaId, const std::string& userId) {
+	return fmt::format(
+	    R"({{"query":"query($m:Int,$u:Int){{MediaList(mediaId:$m,userId:$u){{id}}}}",)"
+	    R"("variables":{{"m":{},"u":{}}}}})",
+	    mediaId, userId.empty() ? "0" : userId);
 }
 
 std::string batchRequest(mediaType type, const std::vector<int>& ids, bool byMal) {
@@ -162,6 +205,36 @@ result<account> tracker::finishLogin(const std::vector<std::string>& answers) {
 	return result<account>::success({provider::kAniList, *name,
 	                                 std::to_string(countOrZero(viewer["id"])), token, "",
 	                                 net_.now() + kYear});
+}
+
+result<bool> tracker::push(const entry& title, const account& login) {
+	if (title.anilistId <= 0)
+		return result<bool>::failure(web::notLinked(provider::kAniList));
+	auto body = ask(saveRequest(title), login.token);
+	if (not body)
+		return result<bool>::failure("could not reach AniList, or it did not take the change");
+	auto reply = json::parse(*body);
+	if (not reply.ok() or reply.value()["data"]["SaveMediaListEntry"]["id"].isNull())
+		return result<bool>::failure("AniList did not take the change");
+	return result<bool>::success(true);
+}
+
+result<bool> tracker::remove(mediaType, int siteId, const account& login) {
+	// AniList answers an error, which curl -f makes nothing, for a title that
+	// is not on the list: it is gone already.
+	auto body = ask(listEntryRequest(siteId, login.userId), login.token);
+	auto reply = body ? json::parse(*body) : result<json::value>::failure("");
+	int listId = reply.ok() ? countOrZero(reply.value()["data"]["MediaList"]["id"]) : 0;
+	if (listId == 0)
+		return result<bool>::success(true);
+	pause();
+	auto gone = ask(fmt::format(R"({{"query":"mutation($i:Int){{DeleteMediaListEntry(id:$i))"
+	                            R"({{deleted}}}}","variables":{{"i":{}}}}})",
+	                            listId),
+	                login.token);
+	if (not gone)
+		return result<bool>::failure("could not reach AniList, or it did not take the change");
+	return result<bool>::success(true);
 }
 
 result<account> tracker::current(const account& login) {

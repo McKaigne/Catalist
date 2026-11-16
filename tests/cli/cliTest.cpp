@@ -39,14 +39,16 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	}
 	CHECK(run({"help", "ls"}) == 0);
 	CHECK(out.find("List your titles.\n\n"
-	               "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] "
-	               "[QUERY...]\n") == 0);
+	               "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--unlinked=SITE] [--json] "
+	               "[--header] [QUERY...]\n") == 0);
 	CHECK(has(out, "ref type title status score progress total volumes rewatched\n"));
-	CHECK(has(out, "\nOptions:\n  -a                list anime only\n"));
-	CHECK(has(out,
-	          "  -s STATUS         only watching, completed, on-hold, dropped, planned, or a,b\n"));
-	CHECK(has(out, "      --sort=KEY    new, updated, score, progress, date, status or title\n"));
-	CHECK(out.rfind("  -h, --help        show this help\n") + 35 == out.size());
+	CHECK(has(out, "\nOptions:\n  -a                   list anime only\n"));
+	CHECK(has(
+	    out,
+	    "  -s STATUS            only watching, completed, on-hold, dropped, planned, or a,b\n"));
+	CHECK(
+	    has(out, "      --sort=KEY       new, updated, score, progress, date, status or title\n"));
+	CHECK(out.rfind("  -h, --help           show this help\n") + 38 == out.size());
 	CHECK(err.empty());
 	std::string fromHelp = out;
 	for (const char* flag : {"-h", "--help"}) {
@@ -81,7 +83,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(has(out, "      --no-lookup      add TITLE as written, without asking a site\n"));
 	CHECK(has(out, "  -q                   print nothing\n"));
 	CHECK(run({"help", "rm"}) == 0);
-	CHECK(has(out, "Usage: catalist rm [-amfq] [--all] REF...\n"));
+	CHECK(has(out, "Usage: catalist rm [-amfq] [--all] [--remote] REF...\n"));
 	CHECK(run({"help", "search"}) == 0);
 	CHECK(has(out, "Usage: catalist search [-am] [--from=SITE] [--json] [--header] QUERY...\n"));
 	CHECK(has(out, "  pick type title year total score anilist_id mal_id ref kitsu_id\n"));
@@ -122,7 +124,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli names itself as it was run") {
 	CHECK(run({"ls", "-x"}) == 2);
 	CHECK(err ==
 	      "error: unknown option '-x'\n"
-	      "Usage: cl ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] [QUERY...]\n"
+	      "Usage: cl ls [-amrq] [-s STATUS] [--sort=KEY] [--unlinked=SITE] [--json] [--header] "
+	      "[QUERY...]\n"
 	      "Run 'cl help ls' for more.\n");
 	CHECK(run({"show", "naruto"}) == 1);
 	CHECK(has(err, "See what is there with: cl ls\n"));
@@ -172,7 +175,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 	CHECK(run({"ls", "--jsno"}) == 2);
 	CHECK(err ==
 	      "error: unknown option '--jsno' (did you mean '--json'?)\n"
-	      "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--json] [--header] [QUERY...]\n"
+	      "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--unlinked=SITE] [--json] "
+	      "[--header] [QUERY...]\n"
 	      "Run 'catalist help ls' for more.\n");
 	CHECK(run({"ls", "-ax"}) == 2);
 	CHECK(err.find("error: unknown option '-x'\n") == 0);

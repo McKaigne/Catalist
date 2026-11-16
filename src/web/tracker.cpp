@@ -34,6 +34,10 @@ std::optional<tokenReply> parseTokenReply(const std::string& body) {
 	return found.token.empty() ? std::nullopt : std::optional<tokenReply>(found);
 }
 
+std::string notLinked(provider site) {
+	return "not linked to " + providerName(site);
+}
+
 std::string bearer(const std::string& token) {
 	return "Authorization: Bearer " + token;
 }

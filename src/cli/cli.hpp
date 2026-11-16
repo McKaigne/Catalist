@@ -39,6 +39,8 @@ struct cliContext {
 	// The terminal's width, for tables; 0 when output goes to a pipe or a
 	// file, which gets tab-separated lines instead.
 	int columns = 0;
+	// --offline or CATALIST_OFFLINE: what the sites are to be told waits.
+	bool offline = false;
 	// How wide a table drawn into a pipe (--table) is: $COLUMNS, else 80.
 	int tableWidth = 80;
 	// The local date and time, stamped on what a command changes.

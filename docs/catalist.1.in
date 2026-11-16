@@ -47,6 +47,12 @@ Each command that changes the lists is one step for \fBundo\fR; commands
 run with the same \fBCATALIST_TX\fR are one step together (see \fBtx\fR).
 \fBredo\fR makes again what \fBundo\fR took back, until the next change.
 The last 100 steps are kept.
+.PP
+Logged in to a site (\fBlogin\fR), Catalist tells it what changes in your
+lists, one way, as Mihon tells its trackers: each change to a title's
+status, score, progress, volumes, rewatches or dates is sent to every site
+you are logged in to where the title is linked (\fBlink\fR). What could not
+be sent waits until \fBsync\fR.
 .SH OPTIONS
 These come before the command.
 .TP
@@ -56,6 +62,9 @@ as well, as for \fBless \-R\fR) or \fBnever\fR.
 .TP
 .BR \-t ", " \-\-table
 Draw tables into a pipe or a file as well, \fBCOLUMNS\fR wide.
+.TP
+.B \-\-offline
+Send nothing to the sites; what they are to be told waits for \fBsync\fR.
 .TP
 .BR \-V ", " \-\-version
 Print the version.
@@ -102,6 +111,9 @@ step for \fBundo\fR.
 .TP
 .B NO_COLOR
 When set, output has no colours, unless \fB\-\-color=always\fR asks for them.
+.TP
+.B CATALIST_OFFLINE
+When set to anything but 0, as \fB\-\-offline\fR.
 .TP
 .B CLICOLOR_FORCE
 When set to anything but 0, output has colours into a pipe as well.

@@ -1033,3 +1033,25 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue merges an added title known by its 
 	CHECK(db.getEntries(mediaType::kAnime).size() == 1);
 	CHECK(db.getById(mediaType::kAnime, 1)->malId == 52991);
 }
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps what the sites are to be told, once each") {
+	catalogue db(tempDir() / "data");
+	db.addEntry(makeEntry().title("Odd Taxi"));
+	REQUIRE(db.saveAll());
+	CHECK(db.outbox().empty());
+	using catalist::pending;
+	using catalist::provider;
+	REQUIRE(db.queue({{provider::kAniList, mediaType::kAnime, 1},
+	                  {provider::kKitsu, mediaType::kAnime, 1},
+	                  {provider::kAniList, mediaType::kAnime, 1}}));
+	REQUIRE(db.queue({{provider::kKitsu, mediaType::kManga, 3, true, 46474}}));
+	auto waiting = db.outbox();
+	REQUIRE(waiting.size() == 3);
+	CHECK(waiting[0].site == provider::kAniList);
+	CHECK(waiting[2].removed);
+	CHECK(waiting[2].siteId == 46474);
+	REQUIRE(db.sent(waiting[0]));
+	catalogue again(tempDir() / "data");
+	REQUIRE(again.loadAll().value());
+	CHECK(again.outbox().size() == 2);
+}

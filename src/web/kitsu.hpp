@@ -29,6 +29,9 @@ inline const std::string kTokenUrl = "https://kitsu.app/api/oauth/token";
 // The Kitsu id the mapping names; 0 when there is none.
 [[nodiscard]] int parseMapping(const std::string& body);
 
+// The attributes of a library entry, as Catalist's lists have the title.
+[[nodiscard]] std::string libraryAttributes(const entry& title);
+
 class tracker : public web::iTracker {
 public:
 	explicit tracker(web::link net) : net_(std::move(net)) {}
@@ -42,6 +45,8 @@ public:
 	[[nodiscard]] result<web::loginStart> startLogin() override;
 	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
 	[[nodiscard]] result<account> current(const account& login) override;
+	[[nodiscard]] result<bool> push(const entry& title, const account& login) override;
+	[[nodiscard]] result<bool> remove(mediaType type, int siteId, const account& login) override;
 
 protected:
 	void pause() const override { net_.pause(); }
@@ -54,6 +59,13 @@ private:
 	// one; the account it is for.
 	[[nodiscard]] result<account> accountFor(
 	    std::vector<std::pair<std::string, std::string>> fields);
+
+	// The id of the account's library entry for the title; 0 when it has
+	// none. Nothing when Kitsu cannot be reached.
+	[[nodiscard]] std::optional<int> libraryEntry(mediaType type, int kitsuId,
+	                                              const account& login) const;
+	// The headers of a request made as the account.
+	[[nodiscard]] static std::vector<std::string> asUser(const account& login);
 
 	web::link net_;
 };

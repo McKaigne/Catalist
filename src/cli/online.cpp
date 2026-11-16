@@ -19,60 +19,6 @@ std::optional<mediaType> oneType(const args::parsed& line) {
 	return line.has("m") ? mediaType::kManga : mediaType::kAnime;
 }
 
-// "28 episodes", or "? chapters" while the total is not known.
-std::string lengthOf(const web::match& match, mediaType type) {
-	return fmt::format("{} {}", match.totalUnits > 0 ? std::to_string(match.totalUnits) : "?",
-	                   unitName(type, match.totalUnits));
-}
-
-// The match `add` is to take: the only one, the one --pick names, or the one
-// chosen at a terminal. Nothing, with the reason on standard error, when
-// there is no such match.
-std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, mediaType type,
-                                      const std::string& query, std::optional<int> pick) {
-	std::string name = providerName(site.site());
-	auto found = site.search(type, query);
-	if (not found.ok()) {
-		fail(ctx, webError(found.errorMessage()));
-		ctx.err << fmt::format("To add a title without {}: {} add --no-lookup TITLE\n", name,
-		                       ctx.program);
-		return std::nullopt;
-	}
-	const auto& matches = found.value();
-	if (matches.empty()) {
-		fail(ctx, fmt::format("{} has no {} matching '{}'", name, typeKey(type), query));
-		return std::nullopt;
-	}
-	if (pick and static_cast<size_t>(*pick) > matches.size()) {
-		fail(ctx, fmt::format(
-		              "--pick={}, but {} has only {} for '{}'", *pick, name,
-		              matches.size() == 1 ? "one match" : fmt::format("{} matches", matches.size()),
-		              query));
-		return std::nullopt;
-	}
-	if (pick)
-		return matches[static_cast<size_t>(*pick) - 1];
-	if (matches.size() == 1)
-		return matches[0];
-
-	ctx.err << fmt::format("{}'{}' matches {} {} on {}:\n", ctx.interactive ? "" : "error: ", query,
-	                       matches.size(), typeKey(type), name);
-	for (size_t i = 0; i < matches.size(); ++i)
-		ctx.err << fmt::format("  {:>2}  {:<4}  {}  ({})\n", i + 1,
-		                       matches[i].year.empty() ? "-" : matches[i].year, matches[i].name,
-		                       lengthOf(matches[i], type));
-	if (not ctx.interactive) {
-		ctx.err << "Take one by its number with --pick=N.\n";
-		return std::nullopt;
-	}
-	auto chosen = askWhich(ctx, matches.size());
-	if (not chosen) {
-		ctx.err << "Cancelled.\n";
-		return std::nullopt;
-	}
-	return matches[*chosen];
-}
-
 // The title as the site has it: its name, the ids it knows, the totals and
 // how much is out. Fails with what to tell the person.
 result<entry> lookedUp(cliContext& ctx, web::iTracker& site, entry blank, const web::match& match) {
@@ -389,6 +335,64 @@ int runRefresh(const command& self, const args::parsed& line, cliContext& ctx) {
 }
 
 }  // namespace
+
+namespace {
+
+// "28 episodes", or "? chapters" while the total is not known.
+std::string lengthOf(const web::match& match, mediaType type) {
+	return fmt::format("{} {}", match.totalUnits > 0 ? std::to_string(match.totalUnits) : "?",
+	                   unitName(type, match.totalUnits));
+}
+
+}  // namespace
+
+// The match `add` is to take: the only one, the one --pick names, or the one
+// chosen at a terminal. Nothing, with the reason on standard error, when
+// there is no such match.
+std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, mediaType type,
+                                      const std::string& query, std::optional<int> pick) {
+	std::string name = providerName(site.site());
+	auto found = site.search(type, query);
+	if (not found.ok()) {
+		fail(ctx, webError(found.errorMessage()));
+		ctx.err << fmt::format("To add a title without {}: {} add --no-lookup TITLE\n", name,
+		                       ctx.program);
+		return std::nullopt;
+	}
+	const auto& matches = found.value();
+	if (matches.empty()) {
+		fail(ctx, fmt::format("{} has no {} matching '{}'", name, typeKey(type), query));
+		return std::nullopt;
+	}
+	if (pick and static_cast<size_t>(*pick) > matches.size()) {
+		fail(ctx, fmt::format(
+		              "--pick={}, but {} has only {} for '{}'", *pick, name,
+		              matches.size() == 1 ? "one match" : fmt::format("{} matches", matches.size()),
+		              query));
+		return std::nullopt;
+	}
+	if (pick)
+		return matches[static_cast<size_t>(*pick) - 1];
+	if (matches.size() == 1)
+		return matches[0];
+
+	ctx.err << fmt::format("{}'{}' matches {} {} on {}:\n", ctx.interactive ? "" : "error: ", query,
+	                       matches.size(), typeKey(type), name);
+	for (size_t i = 0; i < matches.size(); ++i)
+		ctx.err << fmt::format("  {:>2}  {:<4}  {}  ({})\n", i + 1,
+		                       matches[i].year.empty() ? "-" : matches[i].year, matches[i].name,
+		                       lengthOf(matches[i], type));
+	if (not ctx.interactive) {
+		ctx.err << "Take one by its number with --pick=N.\n";
+		return std::nullopt;
+	}
+	auto chosen = askWhich(ctx, matches.size());
+	if (not chosen) {
+		ctx.err << "Cancelled.\n";
+		return std::nullopt;
+	}
+	return matches[*chosen];
+}
 
 std::vector<command> onlineCommands() {
 	return {

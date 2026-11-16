@@ -15,7 +15,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli login walks through a site's login and keeps 
 	CHECK(err ==
 	      "Open this page, let Catalist in, and copy the token AniList shows.\n"
 	      "  https://anilist.co/api/v2/oauth/authorize?client_id=al-id&response_type=token\n"
-	      "Token: Logged in to AniList as Abel.\n");
+	      "Token: Logged in to AniList as Abel. Each change to a linked title is now sent "
+	      "there;\nsend your lists there now with: catalist sync --all\n");
 	CHECK(out.empty());
 	auto kept = catalist::accounts::parse(catalist::test::readText("state/accounts"));
 	REQUIRE(kept.size() == 1);
@@ -65,6 +66,6 @@ TEST_CASE_FIXTURE(cliFixture, "cli login to Kitsu asks for the email, then the p
 	web.respond("GET https://kitsu.app/api/edge/users?filter[self]=true",
 	            R"({"data":[{"id":"77","attributes":{"name":"abel"}}]})");
 	CHECK(run({"login", "kitsu"}, "a@b.c\npw\n") == 0);
-	CHECK(has(err, "Email: Password: Logged in to Kitsu as abel.\n"));
+	CHECK(has(err, "Email: Password: Logged in to Kitsu as abel."));
 	CHECK_FALSE(has(catalist::test::readText("state/accounts"), "pw"));
 }

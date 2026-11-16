@@ -331,6 +331,7 @@ int saveAndReport(cliContext& ctx, const args::parsed& line,
 		return saveFailed(ctx);
 	if (not line.has("q"))
 		printChanges(ctx, changes);
+	tellSites(ctx, changes);
 	return 0;
 }
 

@@ -1,6 +1,7 @@
 #include "core/date.hpp"
 
 #include <charconv>
+#include <format>
 #include <iomanip>
 #include <sstream>
 
@@ -68,6 +69,11 @@ std::string isoDate::toString() const {
 	ss << std::setfill(char(48)) << std::setw(4) << year_ << "-" << std::setw(2) << month_ << "-"
 	   << std::setw(2) << day_;
 	return ss.str();
+}
+
+std::string stampOf(const std::tm& local) {
+	return std::format("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", local.tm_year + 1900,
+	                   local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min, local.tm_sec);
 }
 
 }  // namespace catalist

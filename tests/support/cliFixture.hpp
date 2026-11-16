@@ -56,11 +56,10 @@ struct cliFixture : catalist::test::tempDirFixture {
 		std::ostringstream errStream;
 		if (outClosed)
 			outStream.setstate(std::ios::badbit);
-		catalist::cliContext ctx{db, inStream, outStream, errStream, testToday, web.link()};
+		catalist::cliContext ctx{db, inStream, outStream, errStream, testClock, web.link()};
 		ctx.interactive = not input.empty();
 		ctx.columns = columns;
 		ctx.color = color;
-		ctx.nowStamp = [] { return std::string(kStamp); };
 		ctx.accountsFile = "state/accounts";
 		ctx.net.ids = ids;
 		ctx.net.now = [this] { return clock; };
@@ -161,9 +160,6 @@ struct cliFixture : catalist::test::tempDirFixture {
 		REQUIRE(db.updateEntry(changed));
 		REQUIRE(db.saveAll());
 	}
-
-	// When every change of a test is made.
-	static constexpr const char* kStamp = "2026-10-20 21:30:00";
 
 	catalist::test::fakeWeb web;
 	std::filesystem::path previousDir;

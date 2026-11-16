@@ -41,11 +41,13 @@ add_library(catalistLib STATIC
   # The title, its dates and rules, and UTF-8 text: no I/O.
   src/core/date.cpp
   src/core/entry.cpp
+  src/core/lists.cpp
   src/core/text.cpp
   # The lists in SQLite, the undo history, and the MyAnimeList XML format.
   src/storage/accounts.cpp
   src/storage/catalogue.cpp
   src/storage/csvCodec.cpp
+  src/storage/history.cpp
   src/storage/journal.cpp
   src/storage/malXml.cpp
   src/storage/store.cpp
@@ -95,6 +97,7 @@ add_custom_command(
   OUTPUT ${CATALIST_SHELL_FILES}
   COMMAND ${CMAKE_COMMAND}
     "-DPROGRAM=$<TARGET_FILE:catalist>"
+    "-DVERSION=${PROJECT_VERSION}"
     "-DTEMPLATE=${CMAKE_CURRENT_SOURCE_DIR}/docs/catalist.1.in"
     "-DOUT_DIR=${CATALIST_SHARE_DIR}"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/shellSupport.cmake"
@@ -127,6 +130,7 @@ add_executable(catalistTests
   tests/support/testSupport.cpp
   tests/core/dateTest.cpp
   tests/core/entryTest.cpp
+  tests/core/listsTest.cpp
   tests/core/textTest.cpp
   tests/core/versionTest.cpp
   tests/storage/accountsTest.cpp

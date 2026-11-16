@@ -1,18 +1,29 @@
 #include "web/tracker.hpp"
 
+#include <utility>
+
 #include "web/json.hpp"
 
 namespace catalist::web {
 
-bool unreachable(const std::string& message) {
-	return message.rfind("could not reach ", 0) == 0;
+std::unexpected<failure> unreachable(std::string message) {
+	return std::unexpected(failure{failure::kind::kUnreachable, std::move(message)});
 }
 
-std::vector<result<details>> iTracker::lookUpMany(const std::vector<entry>& known) {
-	std::vector<result<details>> found;
+std::unexpected<failure> notLinked(provider site) {
+	return std::unexpected(
+	    failure{failure::kind::kNotLinked, "not linked to " + providerName(site)});
+}
+
+std::unexpected<failure> refused(std::string message) {
+	return std::unexpected(failure{failure::kind::kRefused, std::move(message)});
+}
+
+std::vector<answer<details>> iTracker::lookUpMany(const std::vector<entry>& known) {
+	std::vector<answer<details>> found;
 	for (const auto& each : known) {
 		if (not found.empty() and not found.back().has_value() and
-		    unreachable(found.back().error())) {
+		    found.back().error().why == failure::kind::kUnreachable) {
 			found.push_back(found.back());
 			continue;
 		}
@@ -32,10 +43,6 @@ std::optional<tokenReply> parseTokenReply(const std::string& body) {
 	found.renewal = reply.value()["refresh_token"].asString().value_or("");
 	found.lifetime = reply.value()["expires_in"].asInteger().value_or(0);
 	return found.token.empty() ? std::nullopt : std::optional<tokenReply>(found);
-}
-
-std::string notLinked(provider site) {
-	return "not linked to " + providerName(site);
 }
 
 std::string bearer(const std::string& token) {

@@ -1,6 +1,7 @@
 #ifndef CATALIST_CLI_CLI_HPP_
 #define CATALIST_CLI_CLI_HPP_
 
+#include <ctime>
 #include <filesystem>
 #include <functional>
 #include <istream>
@@ -9,6 +10,7 @@
 #include <vector>
 
 #include "cli/args.hpp"
+#include "core/date.hpp"
 #include "storage/catalogue.hpp"
 #include "web/tracker.hpp"
 
@@ -21,7 +23,9 @@ struct cliContext {
 	std::istream& in;
 	std::ostream& out;
 	std::ostream& err;
-	std::function<isoDate()> today;
+	// The local date and time: main passes the computer's clock, the tests
+	// a fixed one.
+	std::function<std::tm()> clock;
 	// The sites, and how they are reached.
 	web::link net;
 	// Where the logins are kept (see storage/accounts.hpp).
@@ -43,11 +47,13 @@ struct cliContext {
 	bool offline = false;
 	// How wide a table drawn into a pipe (--table) is: $COLUMNS, else 80.
 	int tableWidth = 80;
-	// The local date and time, stamped on what a command changes.
-	std::function<std::string()> nowStamp = [] { return std::string(); };
 	// The command line as it was typed; runCli sets it. It names the undo
 	// step of what the command changes.
 	std::string typed{};
+
+	[[nodiscard]] isoDate today() const { return isoDate::fromLocalTm(clock()); }
+	// When a change is made, for the undo history.
+	[[nodiscard]] std::string stamp() const { return stampOf(clock()); }
 };
 
 // What a command's operands are, so the shell can complete them: nothing,

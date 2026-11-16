@@ -20,6 +20,11 @@ TEST_CASE("json parses nested objects arrays and scalars") {
 	CHECK(doc["none"].isNull());
 	CHECK(doc["neg"].asInteger() == -20);
 	CHECK(doc["missing"]["deeper"].isNull());
+	// A count is a whole number above 0; anything else counts as none.
+	CHECK(doc["data"].items()[0]["node"]["id"].asCount() == 5);
+	CHECK(doc["data"].items()[0]["score"].asCount() == 0);
+	CHECK(doc["neg"].asCount() == 0);
+	CHECK(doc["none"].asCount() == 0);
 }
 
 TEST_CASE("json decodes unicode escapes including surrogate pairs") {

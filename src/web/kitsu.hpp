@@ -21,9 +21,10 @@ inline const std::string kTokenUrl = "https://kitsu.app/api/oauth/token";
 
 // The request URLs, and readers for their replies.
 [[nodiscard]] std::string searchUrl(mediaType type, const std::string& query);
-[[nodiscard]] result<std::vector<web::match>> parseSearch(const std::string& body, mediaType type);
+[[nodiscard]] web::answer<std::vector<web::match>> parseSearch(const std::string& body,
+                                                               mediaType type);
 [[nodiscard]] std::string titleUrl(mediaType type, int kitsuId);
-[[nodiscard]] result<web::details> parseTitle(const std::string& body, mediaType type);
+[[nodiscard]] web::answer<web::details> parseTitle(const std::string& body, mediaType type);
 // The mapping of a MyAnimeList id to Kitsu's.
 [[nodiscard]] std::string mappingUrl(mediaType type, int malId);
 // The Kitsu id the mapping names; 0 when there is none.
@@ -32,8 +33,8 @@ inline const std::string kTokenUrl = "https://kitsu.app/api/oauth/token";
 // A user's library of one type: the first page's URL, and the entries of
 // a page with the URL of the next ("" after the last).
 [[nodiscard]] std::string libraryUrl(mediaType type, const std::string& userId);
-[[nodiscard]] result<std::vector<entry>> parseLibrary(const std::string& body, mediaType type,
-                                                      std::string& next);
+[[nodiscard]] web::answer<std::vector<entry>> parseLibrary(const std::string& body, mediaType type,
+                                                           std::string& next);
 
 // The attributes of a library entry, as Catalist's lists have the title.
 [[nodiscard]] std::string libraryAttributes(const entry& title);
@@ -43,17 +44,20 @@ public:
 	explicit tracker(web::link net) : net_(std::move(net)) {}
 
 	[[nodiscard]] provider site() const override { return provider::kKitsu; }
-	[[nodiscard]] result<std::vector<web::match>> search(mediaType type,
-	                                                     const std::string& query) override;
-	[[nodiscard]] result<web::details> lookUp(const entry& known) override;
+	[[nodiscard]] web::answer<std::vector<web::match>> search(mediaType type,
+	                                                          const std::string& query) override;
+	[[nodiscard]] web::answer<web::details> lookUp(const entry& known) override;
 	// OAuth 2's password grant, as Kitsu has it: the email and password are
 	// sent once, for a token, and not kept.
-	[[nodiscard]] result<web::loginStart> startLogin() override;
-	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
-	[[nodiscard]] result<account> current(const account& login) override;
-	[[nodiscard]] result<std::vector<entry>> pull(mediaType type, const std::string& user) override;
-	[[nodiscard]] done push(const entry& title, const account& login) override;
-	[[nodiscard]] done remove(mediaType type, int siteId, const account& login) override;
+	[[nodiscard]] web::answer<web::loginStart> startLogin() override;
+	[[nodiscard]] web::answer<account> finishLogin(
+	    const std::vector<std::string>& answers) override;
+	[[nodiscard]] web::answer<account> current(const account& login) override;
+	[[nodiscard]] web::answer<std::vector<entry>> pull(mediaType type,
+	                                                   const std::string& user) override;
+	[[nodiscard]] web::answer<void> push(const entry& title, const account& login) override;
+	[[nodiscard]] web::answer<void> remove(mediaType type, int siteId,
+	                                       const account& login) override;
 
 protected:
 	void pause() const override { net_.pause(); }
@@ -64,7 +68,7 @@ private:
 
 	// The token request with these fields, and the program's id when it has
 	// one; the account it is for.
-	[[nodiscard]] result<account> accountFor(
+	[[nodiscard]] web::answer<account> accountFor(
 	    std::vector<std::pair<std::string, std::string>> fields);
 
 	// The id of the account's library entry for the title; 0 when it has

@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
 		return std::string(value ? value : "");
 	};
 	catalist::dataDirEnv dirs{env("CATALIST_DATA_DIR"), env("XDG_DATA_HOME"), env("HOME")};
-	catalist::catalogue db(catalist::catalogue::getDefaultDataDir(dirs));
+	catalist::catalogue db(catalist::dataDirFor(dirs));
 
 	// A second apart, as the sites ask of programs that send many requests.
 	catalist::web::link net{catalist::httpFetch,
@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
 	           either("CATALIST_KITSU_CLIENT_SECRET", catalist::kKitsuClientSecret)};
 	net.now = catalist::unixNow;
 	net.random = catalist::randomText;
-	catalist::cliContext ctx{db, std::cin, std::cout, std::cerr, catalist::today, net};
+	catalist::cliContext ctx{db, std::cin, std::cout, std::cerr, catalist::localTime, net};
 	ctx.interactive = catalist::isInteractive();
 	ctx.accountsFile = catalist::accounts::defaultPath(env("CATALIST_DATA_DIR"),
 	                                                   env("XDG_STATE_HOME"), env("HOME"));
@@ -56,6 +56,5 @@ int main(int argc, char* argv[]) {
 	auto shellColumns = catalist::args::parseCount(env("COLUMNS"));
 	if (shellColumns and *shellColumns >= 20)
 		ctx.tableWidth = *shellColumns;
-	ctx.nowStamp = catalist::nowStamp;
 	return catalist::runCli({argv + 1, argv + argc}, ctx);
 }

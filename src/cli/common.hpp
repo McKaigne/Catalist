@@ -10,6 +10,7 @@
 #include "cli/cli.hpp"
 #include "cli/output.hpp"
 #include "core/entry.hpp"
+#include "core/lists.hpp"
 #include "core/result.hpp"
 #include "storage/journal.hpp"
 
@@ -160,8 +161,9 @@ extern const args::option kFrom;
                                                     mediaType type, const std::string& query,
                                                     std::optional<int> pick);
 
-// What to say when a request to a site failed.
-[[nodiscard]] std::string webError(const std::string& message);
+// What to say when a request to a site failed: when it could not be
+// reached, to check the connection.
+[[nodiscard]] std::string webError(const web::failure& why);
 
 // The logins, from the accounts file (none when there is no file).
 [[nodiscard]] std::vector<account> readAccounts(const cliContext& ctx);
@@ -196,6 +198,25 @@ extern const char* const kChangeFormat;
 
 // listing.cpp: ls, show and stats, which only read.
 [[nodiscard]] std::vector<command> listingCommands();
+// What `ls` lists, and how.
+struct listQuery {
+	// Words the titles hold.
+	std::string text{};
+	// Any of these; all of them when empty.
+	std::vector<watchStatus> statuses{};
+	std::optional<mediaType> only{};
+	// Only titles with no id on this site.
+	std::optional<provider> unlinked{};
+	sortKey key = sortKey::kTitle;
+	bool reverse = false;
+	// The refs alone, one a line.
+	bool refsOnly = false;
+	bool json = false;
+	bool header = false;
+};
+// Lists the titles the query asks for: a table at a terminal, else lines.
+// The exit code: 1 when the lists cannot be read.
+int printList(cliContext& ctx, const listQuery& query);
 // tracking.cpp: +, -, set, done, hold, drop, plan, resume and rm.
 [[nodiscard]] std::vector<command> trackingCommands();
 // The fields `set` takes, for the completion scripts.

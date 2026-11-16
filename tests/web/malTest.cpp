@@ -45,7 +45,7 @@ TEST_CASE("mal sends the client id, and asks nothing without one") {
 	auto net = web.link();
 	mal::tracker without(net);
 	auto refused = without.search(mediaType::kAnime, "frieren");
-	CHECK(refused.error().find("CATALIST_MAL_CLIENT_ID") != std::string::npos);
+	CHECK(refused.error().message.find("CATALIST_MAL_CLIENT_ID") != std::string::npos);
 	CHECK(web.sent.empty());
 
 	net.ids.mal = "abc";

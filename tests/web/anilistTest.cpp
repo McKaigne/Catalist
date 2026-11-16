@@ -128,7 +128,7 @@ TEST_CASE("anilist looks up many titles in one request, by either id") {
 	CHECK(found[0].value().facts.totalUnits == 28);
 	CHECK(found[1].value().facts.anilistId == 30002);
 	CHECK(found[2].value().facts.totalUnits == 13);
-	CHECK(found[3].error() == "the title has no id to look up");
+	CHECK(found[3].error().message == "the title has no id to look up");
 	// One request for each list, a pause between them.
 	CHECK(web.sent.size() == 2);
 	CHECK(pauses == 1);
@@ -141,8 +141,8 @@ TEST_CASE("anilist many-title lookups fail as one when AniList cannot be reached
 	    site.lookUpMany({catalist::test::makeEntry().anilistId(1),
 	                     catalist::test::makeEntry().type(mediaType::kManga).anilistId(2)});
 	REQUIRE(found.size() == 2);
-	CHECK(found[0].error() == "could not reach AniList");
-	CHECK(found[1].error() == "could not reach AniList");
+	CHECK(found[0].error().message == "could not reach AniList");
+	CHECK(found[1].error().message == "could not reach AniList");
 	// Once it is not there, it is not asked again.
 	CHECK(web.sent.size() == 1);
 }

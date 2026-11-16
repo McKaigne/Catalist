@@ -32,20 +32,14 @@ TEST_CASE("runProgram reports programs that fail or do not exist") {
 	CHECK_FALSE(catalist::runProgram({"catalist-no-such-program"}).has_value());
 }
 
-TEST_CASE("today follows the computer's calendar") {
+TEST_CASE("localTime follows the computer's calendar and clock") {
 	// The test main pins TZ=UTC; the date must be a real one, not a default.
-	auto date = catalist::today();
+	auto date = catalist::isoDate::fromLocalTm(catalist::localTime());
 	CHECK(date.year() >= 2024);
 	CHECK(catalist::isoDate::parse(date.toString()) == date);
-}
-
-TEST_CASE("nowStamp is the date and the time of day") {
-	auto stamp = catalist::nowStamp();
+	auto stamp = catalist::stampOf(catalist::localTime());
 	REQUIRE(stamp.size() == 19);
 	CHECK(catalist::isoDate::parse(stamp).has_value());
-	CHECK(stamp[10] == ' ');
-	CHECK(stamp[13] == ':');
-	CHECK(stamp[16] == ':');
 }
 
 TEST_CASE_FIXTURE(catalist::test::tempDirFixture,

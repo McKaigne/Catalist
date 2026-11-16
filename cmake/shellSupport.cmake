@@ -1,13 +1,13 @@
 # Writes what the built program says about itself: the manual page and the
 # completion scripts for zsh and fish. Run by the build:
 #
-#   cmake -DPROGRAM=build/catalist -DTEMPLATE=docs/catalist.1.in
+#   cmake -DPROGRAM=build/catalist -DVERSION=0.3.0 -DTEMPLATE=docs/catalist.1.in
 #         -DOUT_DIR=build/share -P cmake/shellSupport.cmake
 #
 # The program writes them from its own table of commands, so the page and
 # the scripts always know the commands it has.
 
-foreach(required PROGRAM TEMPLATE OUT_DIR)
+foreach(required PROGRAM VERSION TEMPLATE OUT_DIR)
   if(NOT DEFINED ${required})
     message(FATAL_ERROR "shellSupport.cmake: ${required} is not set")
   endif()
@@ -28,14 +28,18 @@ function(catalist_write output)
   endif()
 endfunction()
 
+# The manual page: the template with the version and the commands put in.
 execute_process(
   COMMAND "${PROGRAM}" __man
-  INPUT_FILE "${TEMPLATE}"
-  OUTPUT_FILE "${OUT_DIR}/man/man1/catalist.1"
+  OUTPUT_VARIABLE commands
   RESULT_VARIABLE failed
 )
 if(failed)
   message(FATAL_ERROR "${PROGRAM} __man failed: ${failed}")
 endif()
+file(READ "${TEMPLATE}" page)
+string(REPLACE "@PROJECT_VERSION@" "${VERSION}" page "${page}")
+string(REPLACE "@COMMANDS@\n" "${commands}" page "${page}")
+file(WRITE "${OUT_DIR}/man/man1/catalist.1" "${page}")
 catalist_write("${OUT_DIR}/zsh/_catalist" completion zsh)
 catalist_write("${OUT_DIR}/fish/catalist.fish" completion fish)

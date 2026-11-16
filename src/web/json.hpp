@@ -35,6 +35,8 @@ public:
 	[[nodiscard]] std::optional<double> asNumber() const;
 	// Whole numbers only; 3.5 or a string is absent.
 	[[nodiscard]] std::optional<long long> asInteger() const;
+	// A count, an id or a total: a whole number above 0, else 0.
+	[[nodiscard]] int asCount() const;
 	[[nodiscard]] std::optional<std::string> asString() const;
 
 	// A missing key, or indexing something that is not an object, yields null

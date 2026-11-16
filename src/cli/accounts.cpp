@@ -60,7 +60,7 @@ int runLogin(const command& self, const args::parsed& line, cliContext& ctx) {
 	auto tracker = trackerFor(ctx, *site);
 	auto start = tracker->startLogin();
 	if (not start.has_value())
-		return fail(ctx, start.error());
+		return fail(ctx, start.error().message);
 
 	ctx.err << start.value().explanation << "\n";
 	if (not start.value().page.empty())
@@ -82,7 +82,7 @@ int runLogin(const command& self, const args::parsed& line, cliContext& ctx) {
 	}
 	auto login = tracker->finishLogin(answers);
 	if (not login.has_value())
-		return fail(ctx, login.error());
+		return fail(ctx, login.error().message);
 	if (not saveAccounts(ctx, accounts::with(readAccounts(ctx), login.value())))
 		return fail(ctx, std::format("could not save the login to {}", ctx.accountsFile.string()));
 	ctx.err << std::format(

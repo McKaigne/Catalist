@@ -74,7 +74,8 @@ TEST_CASE("kitsu reads a user's library page by page") {
 	CHECK(found.value()[1].score == 0);
 
 	web.respond("filter[name]=nobody", R"({"data":[]})");
-	CHECK(site.pull(mediaType::kAnime, "nobody").error() == "Kitsu has no user named nobody");
+	CHECK(site.pull(mediaType::kAnime, "nobody").error().message ==
+	      "Kitsu has no user named nobody");
 }
 
 TEST_CASE("mal reads a user's list page by page") {

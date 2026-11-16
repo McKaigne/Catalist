@@ -86,11 +86,13 @@ TEST_CASE("kitsu finds a title by its MyAnimeList id through a mapping") {
 	// A title MyAnimeList has and Kitsu does not.
 	known.malId = 1;
 	web.respond("filter[externalId]=1&", R"({"data":[]})");
-	CHECK(site.lookUp(known).error() == "Kitsu does not know the title");
-	CHECK(site.lookUp(catalist::entry{}).error() == "the title has no id to look up");
+	CHECK(site.lookUp(known).error().message == "Kitsu does not know the title");
+	CHECK(site.lookUp(known).error().why == catalist::web::failure::kind::kRefused);
+	CHECK(site.lookUp(catalist::entry{}).error().message == "the title has no id to look up");
 	// Offline.
 	known.malId = 2;
-	CHECK(site.lookUp(known).error() == "could not reach Kitsu");
+	CHECK(site.lookUp(known).error().message == "could not reach Kitsu");
+	CHECK(site.lookUp(known).error().why == catalist::web::failure::kind::kUnreachable);
 }
 
 TEST_CASE("kitsu looks titles up one at a time, and stops once it is not there") {
@@ -105,8 +107,8 @@ TEST_CASE("kitsu looks titles up one at a time, and stops once it is not there")
 	auto found = site.lookUpMany({frieren, gone, frieren});
 	REQUIRE(found.size() == 3);
 	CHECK(found[0].has_value());
-	CHECK(found[1].error() == "could not reach Kitsu");
-	CHECK(found[2].error() == "could not reach Kitsu");
+	CHECK(found[1].error().message == "could not reach Kitsu");
+	CHECK(found[2].error().message == "could not reach Kitsu");
 	CHECK(web.sent.size() == 2);
 	CHECK(pauses == 1);
 }

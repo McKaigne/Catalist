@@ -31,12 +31,8 @@ namespace catalist {
 // an HTTP error status).
 [[nodiscard]] std::optional<std::string> httpFetch(const web::request& sent);
 
-// The date on this computer's calendar.
-[[nodiscard]] isoDate today();
-
-// The local date and time, "YYYY-MM-DD HH:MM:SS": when a change was made,
-// for the undo history.
-[[nodiscard]] std::string nowStamp();
+// The date and time on this computer's calendar and clock.
+[[nodiscard]] std::tm localTime();
 
 // Whether standard input and output are both a terminal (someone can be
 // asked a question), and the width of standard output's terminal in columns

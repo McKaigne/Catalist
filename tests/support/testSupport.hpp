@@ -1,6 +1,7 @@
 #ifndef CATALIST_TESTS_SUPPORT_TEST_SUPPORT_HPP_
 #define CATALIST_TESTS_SUPPORT_TEST_SUPPORT_HPP_
 
+#include <ctime>
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -139,6 +140,8 @@ private:
 
 // The date every test runs on: 2026-10-20.
 [[nodiscard]] isoDate testToday();
+// The clock of the command-line tests: 2026-10-20 21:30:00, testToday.
+[[nodiscard]] std::tm testClock();
 
 // The entry titled `title`; fails the test when there is none.
 [[nodiscard]] entry findTitle(const catalogue& db, mediaType type, const std::string& title);

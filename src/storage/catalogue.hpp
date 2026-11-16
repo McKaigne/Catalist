@@ -2,6 +2,7 @@
 #define CATALIST_STORAGE_CATALOGUE_HPP_
 
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -10,21 +11,10 @@
 #include "core/date.hpp"
 #include "core/entry.hpp"
 #include "core/result.hpp"
-#include "storage/csvCodec.hpp"
 #include "storage/journal.hpp"
 #include "storage/store.hpp"
 
 namespace catalist {
-
-enum class sortKey {
-	kNew,  // most new releases first, then the latest change
-	kUpdated,
-	kScore,
-	kStatus,
-	kTitle,
-	kProgress,
-	kDate
-};
 
 // The environment variables that decide where the data is kept; empty
 // when unset.
@@ -33,6 +23,10 @@ struct dataDirEnv {
 	std::string xdgDataHome;
 	std::string home;
 };
+
+// Where the lists are kept: CATALIST_DATA_DIR; else $XDG_DATA_HOME/catalist
+// when that is an absolute path; else ~/.local/share/catalist.
+[[nodiscard]] std::filesystem::path dataDirFor(const dataDirEnv& env);
 
 // How a save is entered in the undo history.
 struct txNote {
@@ -103,23 +97,6 @@ public:
 	// entry has that id by now.
 	bool restoreEntry(const entry& back);
 
-	// Each key has a natural order: new releases, last change, score, progress
-	// and date from high to low, title and status from first to last.
-	// `reverse` flips it.
-	static void sortEntries(std::vector<entry>& entries, sortKey key, bool reverse);
-
-	[[nodiscard]] size_t countByStatus(mediaType type, watchStatus status) const;
-	// Over rated entries only; 0 when nothing is rated.
-	[[nodiscard]] double averageScore(mediaType type) const;
-	[[nodiscard]] int totalProgress(mediaType type) const;
-	[[nodiscard]] int totalVolumes(mediaType type) const;
-	[[nodiscard]] int totalRewatched(mediaType type) const;
-	// An estimate: 24 minutes an episode, 5 minutes a chapter.
-	[[nodiscard]] double daysSpent(mediaType type) const;
-
-	// CATALIST_DATA_DIR; else $XDG_DATA_HOME/catalist when that is an
-	// absolute path; else ~/.local/share/catalist.
-	[[nodiscard]] static std::filesystem::path getDefaultDataDir(const dataDirEnv& env);
 	[[nodiscard]] std::filesystem::path getDataDir() const;
 	[[nodiscard]] std::filesystem::path getStorePath() const;
 
@@ -188,8 +165,7 @@ private:
 	[[nodiscard]] std::string replayStep(const txRecord& step, bool redoing, bool force);
 	// Runs `work` inside the write that beginWrite opened, or one of its
 	// own, and commits it.
-	template <typename writer>
-	[[nodiscard]] bool commit(writer work);
+	[[nodiscard]] bool commit(const std::function<bool()>& work);
 	void rememberSaved();
 
 	std::filesystem::path dataDir_;

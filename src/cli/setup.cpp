@@ -1,13 +1,9 @@
 #include <format>
-#include <istream>
-#include <iterator>
-#include <map>
 #include <ostream>
 
 #include "cli/common.hpp"
 #include "cli/completion.hpp"
 #include "cli/refs.hpp"
-#include "core/version.hpp"
 
 namespace catalist::cli {
 
@@ -74,18 +70,10 @@ int runComplete(const command&, const args::parsed& line, cliContext& ctx) {
 	return 0;
 }
 
-// The build's own command: the manual page is docs/catalist.1.in with the
-// version and the commands of the table put in.
+// The build's own command: the COMMANDS section of the manual page, which
+// cmake/shellSupport.cmake puts into docs/catalist.1.in.
 int runManual(const command&, const args::parsed&, cliContext& ctx) {
-	std::string page{std::istreambuf_iterator<char>(ctx.in), std::istreambuf_iterator<char>()};
-	const std::map<std::string, std::string> filled = {
-	    {"@PROJECT_VERSION@", kVersionString}, {"@COMMANDS@\n", completion::manual(commands())}};
-	for (const auto& [mark, text] : filled) {
-		auto at = page.find(mark);
-		if (at != std::string::npos)
-			page.replace(at, mark.size(), text);
-	}
-	ctx.out << page;
+	ctx.out << completion::manual(commands());
 	return 0;
 }
 
@@ -123,7 +111,7 @@ std::vector<command> setupCommands() {
 	     .run = runComplete,
 	     .hidden = true},
 	    {.name = "__man",
-	     .summary = "Fill in the manual page read from standard input",
+	     .summary = "Print the commands as the manual page lists them",
 	     .run = runManual,
 	     .hidden = true},
 	};

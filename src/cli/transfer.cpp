@@ -16,11 +16,6 @@ namespace catalist::cli {
 
 namespace {
 
-int numberOf(const json::value& field) {
-	auto number = field.asInteger();
-	return number and *number > 0 ? static_cast<int>(*number) : 0;
-}
-
 std::optional<isoDate> dateOf(const json::value& field) {
 	return isoDate::parse(field.asString().value_or(""));
 }
@@ -36,19 +31,19 @@ std::optional<entry> titleOf(const json::value& object) {
 		return std::nullopt;
 	e.type = type == "anime" ? mediaType::kAnime : mediaType::kManga;
 	e.status = *status;
-	e.score = numberOf(object["score"]);
-	e.progress = numberOf(object["progress"]);
-	e.totalUnits = numberOf(object["total"]);
-	e.volumes = numberOf(object["volumes"]);
-	e.rewatched = numberOf(object["rewatched"]);
+	e.score = object["score"].asCount();
+	e.progress = object["progress"].asCount();
+	e.totalUnits = object["total"].asCount();
+	e.volumes = object["volumes"].asCount();
+	e.rewatched = object["rewatched"].asCount();
 	e.startDate = dateOf(object["started"]);
 	e.finishDate = dateOf(object["finished"]);
 	e.updatedAt = dateOf(object["updated"]);
-	e.totalVolumes = numberOf(object["total_volumes"]);
-	e.released = numberOf(object["released"]);
-	e.anilistId = numberOf(object["anilist_id"]);
-	e.malId = numberOf(object["mal_id"]);
-	e.kitsuId = numberOf(object["kitsu_id"]);
+	e.totalVolumes = object["total_volumes"].asCount();
+	e.released = object["released"].asCount();
+	e.anilistId = object["anilist_id"].asCount();
+	e.malId = object["mal_id"].asCount();
+	e.kitsuId = object["kitsu_id"].asCount();
 	return e;
 }
 

@@ -288,7 +288,7 @@ int runRefresh(const command& self, const args::parsed& line, cliContext& ctx) {
 	for (size_t i = 0; i < answers.size(); ++i) {
 		if (answers[i].has_value())
 			continue;
-		if (web::unreachable(answers[i].error()))
+		if (answers[i].error().why == web::failure::kind::kUnreachable)
 			return fail(ctx, webError(answers[i].error()));
 		unknown.push_back(refs::of(wanted.titles[i]));
 	}

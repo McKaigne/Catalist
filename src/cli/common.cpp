@@ -20,7 +20,7 @@ using output::paint;
 // How a save of this run is entered in the undo history: under the command
 // as typed, cut to 60 characters.
 txNote undoNote(const cliContext& ctx) {
-	return {utf8::clip(ctx.typed, 60), ctx.nowStamp()};
+	return {utf8::clip(ctx.typed, 60), ctx.stamp()};
 }
 
 void sayNoMatch(cliContext& ctx, const std::string& ref, const naming& how) {
@@ -405,10 +405,10 @@ bool saveAccounts(const cliContext& ctx, const std::vector<account>& logins) {
 	return writePrivateFile(ctx.accountsFile, accounts::format(logins));
 }
 
-std::string webError(const std::string& message) {
-	if (message.rfind("could not reach ", 0) == 0)
-		return message + "; check the connection and try again";
-	return message;
+std::string webError(const web::failure& why) {
+	if (why.why == web::failure::kind::kUnreachable)
+		return why.message + "; check the connection and try again";
+	return why.message;
 }
 
 extern const args::option kQuiet{'q', "", "", "print nothing"};

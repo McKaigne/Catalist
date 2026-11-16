@@ -2,6 +2,7 @@
 #define CATALIST_WEB_TRACKER_HPP_
 
 #include <cstddef>
+#include <expected>
 #include <functional>
 #include <optional>
 #include <string>
@@ -9,7 +10,6 @@
 
 #include "core/account.hpp"
 #include "core/entry.hpp"
-#include "core/result.hpp"
 #include "web/http.hpp"
 
 // A tracking site. Every site does the same jobs behind this one interface,
@@ -72,6 +72,31 @@ struct match {
 	double score = 0.0;
 };
 
+// Why a site did not answer as asked. Callers act on the kind; the message
+// is what the person is told.
+struct failure {
+	enum class kind {
+		// No answer: no connection, a timeout, an error status.
+		kUnreachable,
+		// The title has no id on the site, so there is nothing to ask.
+		kNotLinked,
+		// The site answered, but not with what was asked.
+		kRefused,
+	};
+	kind why = kind::kRefused;
+	std::string message;
+};
+
+// What a site answers: the value asked for, or why not.
+template <typename T>
+using answer = std::expected<T, failure>;
+
+// "could not reach AniList" and the like.
+[[nodiscard]] std::unexpected<failure> unreachable(std::string message);
+// "not linked to AniList".
+[[nodiscard]] std::unexpected<failure> notLinked(provider site);
+[[nodiscard]] std::unexpected<failure> refused(std::string message);
+
 // What a site knows about one title.
 struct details {
 	std::string name;
@@ -91,29 +116,29 @@ public:
 
 	// Up to ten matches, best first. Fails when the site cannot be reached,
 	// which the caller must tell apart from a search that found nothing.
-	[[nodiscard]] virtual result<std::vector<match>> search(mediaType type,
+	[[nodiscard]] virtual answer<std::vector<match>> search(mediaType type,
 	                                                        const std::string& query) = 0;
 
 	// The title by the site's own id, else by its MyAnimeList id. Fails when
 	// it has neither, when the site does not know it, or cannot be reached.
-	[[nodiscard]] virtual result<details> lookUp(const entry& known) = 0;
+	[[nodiscard]] virtual answer<details> lookUp(const entry& known) = 0;
 
 	// What lookUp says of each title, in the order given. Here one request
 	// a title, a pause apart; a site that answers many in one request does
 	// better. Once the site cannot be reached, every title left fails so.
-	[[nodiscard]] virtual std::vector<result<details>> lookUpMany(const std::vector<entry>& known);
+	[[nodiscard]] virtual std::vector<answer<details>> lookUpMany(const std::vector<entry>& known);
 
 	// ---- Logging in ----
 
 	// The first half: what to show and ask the person. Fails when this
 	// build has no id from the site to log in with.
-	[[nodiscard]] virtual result<loginStart> startLogin() = 0;
+	[[nodiscard]] virtual answer<loginStart> startLogin() = 0;
 	// The second half: the answers, in the order asked, for the account.
-	[[nodiscard]] virtual result<account> finishLogin(const std::vector<std::string>& answers) = 0;
+	[[nodiscard]] virtual answer<account> finishLogin(const std::vector<std::string>& answers) = 0;
 	// The account with a token that has not run out: as it is while it has
 	// not, else renewed. Fails when it cannot be, and the person must log in
 	// again.
-	[[nodiscard]] virtual result<account> current(const account& login) = 0;
+	[[nodiscard]] virtual answer<account> current(const account& login) = 0;
 
 	// ---- Moving in ----
 
@@ -121,7 +146,7 @@ public:
 	// knows (so linked to it), the user's status, score out of 10, progress,
 	// volumes, rewatches and dates. Fails when the site cannot be reached,
 	// or has no public list of that user.
-	[[nodiscard]] virtual result<std::vector<entry>> pull(mediaType type,
+	[[nodiscard]] virtual answer<std::vector<entry>> pull(mediaType type,
 	                                                      const std::string& user) = 0;
 
 	// ---- Telling the site, one way ----
@@ -130,19 +155,15 @@ public:
 	// score, progress, volumes, rewatches and dates. Catalist's lists are the
 	// truth; the site's entry is overwritten. Fails when the title has no id
 	// on this site, when the site cannot be reached, or says no.
-	[[nodiscard]] virtual done push(const entry& title, const account& login) = 0;
+	[[nodiscard]] virtual answer<void> push(const entry& title, const account& login) = 0;
 	// Takes the title with this id on the site off the account's list; a
 	// title that is not on it is gone already.
-	[[nodiscard]] virtual done remove(mediaType type, int siteId, const account& login) = 0;
+	[[nodiscard]] virtual answer<void> remove(mediaType type, int siteId, const account& login) = 0;
 
 protected:
 	// The pause between two requests of lookUpMany.
 	virtual void pause() const = 0;
 };
-
-// "could not reach AniList": the site is not there, as opposed to a title
-// it does not know.
-[[nodiscard]] bool unreachable(const std::string& message);
 
 // What an OAuth token endpoint answers: the token, what renews it, and how
 // many seconds it lasts. Nothing when the reply has no token.
@@ -155,10 +176,6 @@ struct tokenReply {
 
 // "Authorization: Bearer <token>".
 [[nodiscard]] std::string bearer(const std::string& token);
-
-// The word for "this title has no id on the site": push fails with it, and
-// the caller tells it apart from a site that said no.
-[[nodiscard]] std::string notLinked(provider site);
 
 // The day of "2026-10-01", "2026-10-01T00:00:00.000Z" and the like; nothing
 // for anything shorter.

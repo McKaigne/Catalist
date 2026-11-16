@@ -27,16 +27,18 @@ struct titleRef {
 
 // The request bodies, and readers for their replies.
 [[nodiscard]] std::string lookupRequest(const titleRef& wanted);
-[[nodiscard]] result<web::details> parseLookup(const std::string& body, mediaType type);
+[[nodiscard]] web::answer<web::details> parseLookup(const std::string& body, mediaType type);
 [[nodiscard]] std::string searchRequest(mediaType type, const std::string& query);
-[[nodiscard]] result<std::vector<web::match>> parseSearch(const std::string& body, mediaType type);
+[[nodiscard]] web::answer<std::vector<web::match>> parseSearch(const std::string& body,
+                                                               mediaType type);
 
 // One request for up to kBatchSize titles of one type, by their AniList ids
 // or, with `byMal`, their MyAnimeList ids; the titles of its reply, in no
 // particular order.
 inline constexpr size_t kBatchSize = 50;
 [[nodiscard]] std::string batchRequest(mediaType type, const std::vector<int>& ids, bool byMal);
-[[nodiscard]] result<std::vector<web::details>> parseBatch(const std::string& body, mediaType type);
+[[nodiscard]] web::answer<std::vector<web::details>> parseBatch(const std::string& body,
+                                                                mediaType type);
 
 // The mutation that sets a title on the account's list, and the query for
 // the list entry of a title (to remove it).
@@ -46,27 +48,30 @@ inline constexpr size_t kBatchSize = 50;
 // The query for a user's whole list of one type, and the entries of its
 // reply.
 [[nodiscard]] std::string listRequest(mediaType type, const std::string& user);
-[[nodiscard]] result<std::vector<entry>> parseList(const std::string& body, mediaType type);
+[[nodiscard]] web::answer<std::vector<entry>> parseList(const std::string& body, mediaType type);
 
 class tracker : public web::iTracker {
 public:
 	explicit tracker(web::link net) : net_(std::move(net)) {}
 
 	[[nodiscard]] provider site() const override { return provider::kAniList; }
-	[[nodiscard]] result<std::vector<web::match>> search(mediaType type,
-	                                                     const std::string& query) override;
-	[[nodiscard]] result<web::details> lookUp(const entry& known) override;
+	[[nodiscard]] web::answer<std::vector<web::match>> search(mediaType type,
+	                                                          const std::string& query) override;
+	[[nodiscard]] web::answer<web::details> lookUp(const entry& known) override;
 	// kBatchSize titles a request.
-	[[nodiscard]] std::vector<result<web::details>> lookUpMany(
+	[[nodiscard]] std::vector<web::answer<web::details>> lookUpMany(
 	    const std::vector<entry>& known) override;
 	// AniList's implicit grant: its page shows a token to paste, good for a
 	// year, which cannot be renewed.
-	[[nodiscard]] result<web::loginStart> startLogin() override;
-	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
-	[[nodiscard]] result<account> current(const account& login) override;
-	[[nodiscard]] result<std::vector<entry>> pull(mediaType type, const std::string& user) override;
-	[[nodiscard]] done push(const entry& title, const account& login) override;
-	[[nodiscard]] done remove(mediaType type, int siteId, const account& login) override;
+	[[nodiscard]] web::answer<web::loginStart> startLogin() override;
+	[[nodiscard]] web::answer<account> finishLogin(
+	    const std::vector<std::string>& answers) override;
+	[[nodiscard]] web::answer<account> current(const account& login) override;
+	[[nodiscard]] web::answer<std::vector<entry>> pull(mediaType type,
+	                                                   const std::string& user) override;
+	[[nodiscard]] web::answer<void> push(const entry& title, const account& login) override;
+	[[nodiscard]] web::answer<void> remove(mediaType type, int siteId,
+	                                       const account& login) override;
 
 protected:
 	void pause() const override { net_.pause(); }

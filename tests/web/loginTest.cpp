@@ -57,7 +57,7 @@ TEST_CASE("anilist logs in with the token its page shows") {
 	catalist::anilist::tracker unreached(linkWith(offline));
 	CHECK_FALSE(unreached.finishLogin({"tok"}).has_value());
 	auto bare = offline.link();
-	CHECK(catalist::anilist::tracker(bare).startLogin().error().find(
+	CHECK(catalist::anilist::tracker(bare).startLogin().error().message.find(
 	          "CATALIST_ANILIST_CLIENT_ID") != std::string::npos);
 }
 
@@ -122,5 +122,6 @@ TEST_CASE("kitsu logs in with email and password, for a token it renews") {
 	     {login.value().user, login.value().userId, login.value().token, login.value().renewal})
 		CHECK(field.find("p w") == std::string::npos);
 
-	CHECK(site.finishLogin({"a@b.c", "wrong"}).error().find("did not take") != std::string::npos);
+	CHECK(site.finishLogin({"a@b.c", "wrong"}).error().message.find("did not take") !=
+	      std::string::npos);
 }

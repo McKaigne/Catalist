@@ -4,7 +4,7 @@
 #include <cstdlib>
 
 #include "storage/catalogue.hpp"
-#include "support/sampleLibrary.hpp"
+#include "storage/csvCodec.hpp"
 #include "support/testSupport.hpp"
 #include "system.hpp"
 
@@ -15,25 +15,9 @@ namespace csvCodec = catalist::csvCodec;
 
 using catalist::catalogue;
 using catalist::mediaType;
-using catalist::sortKey;
 using catalist::watchStatus;
 using catalist::test::makeEntry;
 using catalist::test::tempDirFixture;
-
-namespace {
-
-std::vector<std::string> titlesSortedBy(const catalogue& db, sortKey key, bool reverse) {
-	auto entries = db.getEntries(mediaType::kAnime);
-	catalogue::sortEntries(entries, key, reverse);
-	std::vector<std::string> titles;
-	for (const auto& e : entries)
-		titles.push_back(e.title);
-	return titles;
-}
-
-using titleList = std::vector<std::string>;
-
-}  // namespace
 
 TEST_CASE_FIXTURE(tempDirFixture, "catalogue round trip keeps quotes, commas and dates") {
 	catalogue db(tempDir());
@@ -169,60 +153,6 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue updateEntry replaces the entry with
 	CHECK(db.getById(mediaType::kAnime, id)->title == "After");
 	changed.id = 99;
 	CHECK_FALSE(db.updateEntry(changed));
-}
-
-TEST_CASE_FIXTURE(tempDirFixture,
-                  "sortEntries puts each key in its natural order and reverse flips it") {
-	catalogue db(tempDir() / "data");
-	catalist::test::seedSampleLibrary(db);
-	const titleList byRating = {"Sousou no Frieren", "Odd Taxi", "Ghost, \"in\" the Shell",
-	                            "A Very Long Title That Will Definitely Be "
-	                            "Truncated"};
-	CHECK(titlesSortedBy(db, sortKey::kScore, false) == byRating);
-	CHECK(titlesSortedBy(db, sortKey::kScore, true) ==
-	      titleList(byRating.rbegin(), byRating.rend()));
-	CHECK(titlesSortedBy(db, sortKey::kProgress, false) == byRating);
-
-	CHECK(titlesSortedBy(db, sortKey::kTitle, false) ==
-	      titleList{"A Very Long Title That Will Definitely Be Truncated",
-	                "Ghost, \"in\" the Shell", "Odd Taxi", "Sousou no Frieren"});
-	CHECK(titlesSortedBy(db, sortKey::kStatus, false) ==
-	      titleList{"Odd Taxi", "Sousou no Frieren", "Ghost, \"in\" the Shell",
-	                "A Very Long Title That Will Definitely Be Truncated"});
-	// By the date the list shows: finish when completed, else start, else the
-	// last change.
-	CHECK(titlesSortedBy(db, sortKey::kDate, false) ==
-	      titleList{"A Very Long Title That Will Definitely Be Truncated", "Sousou no Frieren",
-	                "Odd Taxi", "Ghost, \"in\" the Shell"});
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "sortEntries breaks ties by title") {
-	catalogue db(tempDir() / "data");
-	db.addEntry(makeEntry().title("Charlie").score(7));
-	db.addEntry(makeEntry().title("Alpha").score(7));
-	db.addEntry(makeEntry().title("Bravo").score(9));
-	CHECK(titlesSortedBy(db, sortKey::kScore, false) == titleList{"Bravo", "Alpha", "Charlie"});
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "catalogue statistics count, average and estimate time") {
-	catalogue db(tempDir() / "data");
-	catalist::test::seedSampleLibrary(db);
-	CHECK(db.countByStatus(mediaType::kAnime, watchStatus::kWatching) == 1);
-	CHECK(db.countByStatus(mediaType::kAnime, watchStatus::kOnHold) == 0);
-	CHECK(db.countByStatus(mediaType::kManga, watchStatus::kOnHold) == 1);
-	// Unrated titles do not pull the mean down.
-	CHECK(db.averageScore(mediaType::kAnime) == doctest::Approx(8.0));
-	CHECK(db.averageScore(mediaType::kManga) == doctest::Approx(9.5));
-	CHECK(db.totalProgress(mediaType::kAnime) == 36);
-	CHECK(db.totalProgress(mediaType::kManga) == 461);
-	CHECK(db.totalVolumes(mediaType::kManga) == 53);
-	CHECK(db.totalRewatched(mediaType::kAnime) == 1);
-	CHECK(db.daysSpent(mediaType::kAnime) == doctest::Approx(36 * 24 / 1440.0));
-	CHECK(db.daysSpent(mediaType::kManga) == doctest::Approx(461 * 5 / 1440.0));
-
-	catalogue empty(tempDir() / "elsewhere");
-	CHECK(empty.averageScore(mediaType::kAnime) == 0.0);
-	CHECK(empty.daysSpent(mediaType::kAnime) == 0.0);
 }
 
 TEST_CASE_FIXTURE(tempDirFixture, "catalogue loadAll says whether anything was stored") {
@@ -718,7 +648,7 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps the last 100 steps") {
 
 TEST_CASE("catalogue data dir: CATALIST_DATA_DIR, then XDG_DATA_HOME, then ~/.local/share") {
 	using dirs = catalist::dataDirEnv;
-	auto dataDir = [](const dirs& env) { return catalogue::getDefaultDataDir(env); };
+	auto dataDir = [](const dirs& env) { return catalist::dataDirFor(env); };
 	CHECK(dataDir(dirs{"/custom", "/xdg/data", "/home/me"}) == "/custom");
 	CHECK(dataDir(dirs{"", "/xdg/data", "/home/me"}) == "/xdg/data/catalist");
 	CHECK(dataDir(dirs{"", "", "/home/me"}) == "/home/me/.local/share/catalist");

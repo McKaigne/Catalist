@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-#include "core/version.hpp"
 #include "support/cliFixture.hpp"
 
 using catalist::test::cliFixture;
@@ -88,8 +87,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli __complete prints the refs and titles for the
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli __complete says nothing and exits 0 whatever goes wrong") {
-	// No lists yet: nothing is made, and the old files are not imported.
-	put("data/anime.csv", "id,mal_id,type,title\n1,52991,anime,Sousou no Frieren\n");
+	// No lists yet: nothing is made.
 	for (const char* what : {"refs", "titles"}) {
 		CHECK(run({"__complete", what}) == 0);
 		CHECK(out.empty());
@@ -112,15 +110,10 @@ TEST_CASE_FIXTURE(cliFixture, "cli __complete says nothing and exits 0 whatever 
 	}
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli __man fills in the version and the commands") {
-	CHECK(run({"__man"},
-	          ".TH CATALIST 1 \"\" \"v@PROJECT_VERSION@\"\n.SH COMMANDS\n@COMMANDS@\n"
-	          ".SH FILES\n") == 0);
-	CHECK(out.rfind(std::string(".TH CATALIST 1 \"\" \"v") + catalist::kVersionString +
-	                    "\"\n.SH COMMANDS\n.TP\n\\fBls\\fR ",
-	                0) == 0);
+TEST_CASE_FIXTURE(cliFixture, "cli __man prints the commands for the manual page") {
+	CHECK(run({"__man"}) == 0);
+	CHECK(out.rfind(".TP\n\\fBls\\fR ", 0) == 0);
 	CHECK(has(out, "\n.TP\n\\fBcompletion\\fR \\fBzsh\\fR|\\fBfish\\fR\n"));
-	CHECK(out.rfind("\n.SH FILES\n") + 11 == out.size());
 	CHECK_FALSE(has(out, "__complete"));
 	CHECK(err.empty());
 }

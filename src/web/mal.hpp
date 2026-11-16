@@ -21,15 +21,16 @@ inline const std::string kTokenUrl = "https://myanimelist.net/v1/oauth2/token";
 
 // The request URLs, and readers for their replies.
 [[nodiscard]] std::string searchUrl(mediaType type, const std::string& query);
-[[nodiscard]] result<std::vector<web::match>> parseSearch(const std::string& body, mediaType type);
+[[nodiscard]] web::answer<std::vector<web::match>> parseSearch(const std::string& body,
+                                                               mediaType type);
 [[nodiscard]] std::string titleUrl(mediaType type, int malId);
-[[nodiscard]] result<web::details> parseTitle(const std::string& body, mediaType type);
+[[nodiscard]] web::answer<web::details> parseTitle(const std::string& body, mediaType type);
 
 // A user's public list of one type: the first page's URL, and the entries
 // of a page with the URL of the next ("" after the last).
 [[nodiscard]] std::string listUrl(mediaType type, const std::string& user);
-[[nodiscard]] result<std::vector<entry>> parseList(const std::string& body, mediaType type,
-                                                   std::string& next);
+[[nodiscard]] web::answer<std::vector<entry>> parseList(const std::string& body, mediaType type,
+                                                        std::string& next);
 
 // The form that sets a title on the account's list. A date the title has
 // not is left out: MyAnimeList keeps the one it had.
@@ -40,17 +41,20 @@ public:
 	explicit tracker(web::link net) : net_(std::move(net)) {}
 
 	[[nodiscard]] provider site() const override { return provider::kMyAnimeList; }
-	[[nodiscard]] result<std::vector<web::match>> search(mediaType type,
-	                                                     const std::string& query) override;
-	[[nodiscard]] result<web::details> lookUp(const entry& known) override;
+	[[nodiscard]] web::answer<std::vector<web::match>> search(mediaType type,
+	                                                          const std::string& query) override;
+	[[nodiscard]] web::answer<web::details> lookUp(const entry& known) override;
 	// OAuth 2 with PKCE: its page sends the browser to the address the app
 	// was registered with, carrying a code to paste back.
-	[[nodiscard]] result<web::loginStart> startLogin() override;
-	[[nodiscard]] result<account> finishLogin(const std::vector<std::string>& answers) override;
-	[[nodiscard]] result<account> current(const account& login) override;
-	[[nodiscard]] result<std::vector<entry>> pull(mediaType type, const std::string& user) override;
-	[[nodiscard]] done push(const entry& title, const account& login) override;
-	[[nodiscard]] done remove(mediaType type, int siteId, const account& login) override;
+	[[nodiscard]] web::answer<web::loginStart> startLogin() override;
+	[[nodiscard]] web::answer<account> finishLogin(
+	    const std::vector<std::string>& answers) override;
+	[[nodiscard]] web::answer<account> current(const account& login) override;
+	[[nodiscard]] web::answer<std::vector<entry>> pull(mediaType type,
+	                                                   const std::string& user) override;
+	[[nodiscard]] web::answer<void> push(const entry& title, const account& login) override;
+	[[nodiscard]] web::answer<void> remove(mediaType type, int siteId,
+	                                       const account& login) override;
 
 protected:
 	void pause() const override { net_.pause(); }
@@ -62,7 +66,7 @@ private:
 	// Why nothing can be asked: no client id. Empty when something can.
 	[[nodiscard]] std::string cannotAsk() const;
 	// The account a token reply is for; asks MyAnimeList the user's name.
-	[[nodiscard]] result<account> accountFor(const std::optional<std::string>& reply);
+	[[nodiscard]] web::answer<account> accountFor(const std::optional<std::string>& reply);
 
 	web::link net_;
 	// PKCE's verifier, from startLogin to finishLogin.

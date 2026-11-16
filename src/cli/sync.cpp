@@ -34,56 +34,60 @@ std::string refOf(const pending& waiting) {
 	return refs::of(waiting.type, waiting.id);
 }
 
-// Tells one site what waits for it; the count told, and adds what still
-// waits to `left`.
-int sendTo(cliContext& ctx, provider site, const std::vector<pending>& mine,
-           std::vector<account>& logins, bool& loginsChanged, size_t& left) {
-	auto login = accounts::on(logins, site);
+// What telling one site did: how many titles it was told of, how many still
+// wait, and the login when its token was renewed on the way.
+struct siteReport {
+	size_t told = 0;
+	size_t left = 0;
+	std::optional<account> renewed;
+};
+
+// Tells one site what waits for it, in order, until one cannot be told.
+siteReport sendTo(cliContext& ctx, provider site, const std::vector<pending>& mine,
+                  const std::optional<account>& login) {
+	siteReport report;
 	// Logged out since: nobody to tell.
 	if (not login) {
 		for (const auto& each : mine)
 			(void)ctx.db.sent(each);
-		return 0;
+		return report;
 	}
 	auto tracker = trackerFor(ctx, site);
 	auto fresh = tracker->current(*login);
-	if (not fresh.has_value()) {
-		ctx.err << "note: " << fresh.error() << ".\n";
-		left += mine.size();
-		return 0;
+	if (not fresh) {
+		ctx.err << "note: " << fresh.error().message << ".\n";
+		report.left = mine.size();
+		return report;
 	}
-	if (fresh.value().token != login->token) {
-		logins = accounts::with(logins, fresh.value());
-		loginsChanged = true;
-	}
-	int told = 0;
+	if (fresh->token != login->token)
+		report.renewed = *fresh;
 	for (size_t i = 0; i < mine.size(); ++i) {
 		const pending& each = mine[i];
 		if (i > 0)
 			ctx.net.pause();
-		done sent;
+		web::answer<void> sent;
 		if (each.removed) {
-			sent = tracker->remove(each.type, each.siteId, fresh.value());
+			sent = tracker->remove(each.type, each.siteId, *fresh);
 		} else if (auto now = ctx.db.getById(each.type, each.id)) {
-			sent = tracker->push(*now, fresh.value());
+			sent = tracker->push(*now, *fresh);
 		} else {
 			// Removed from the lists since, and not from the site.
 			(void)ctx.db.sent(each);
 			continue;
 		}
-		if (sent or sent.error() == web::notLinked(site)) {
+		if (sent or sent.error().why == web::failure::kind::kNotLinked) {
 			(void)ctx.db.sent(each);
-			told += sent ? 1 : 0;
+			report.told += sent ? 1 : 0;
 			continue;
 		}
 		// The site is not there, or said no: this one waits, and so does the
 		// rest for this site.
 		ctx.err << std::format("note: could not tell {} of {}: {}.\n", providerName(site),
-		                       refOf(each), sent.error());
-		left += mine.size() - i;
+		                       refOf(each), sent.error().message);
+		report.left = mine.size() - i;
 		break;
 	}
-	return told;
+	return report;
 }
 
 }  // namespace
@@ -98,16 +102,23 @@ sendReport sendOutbox(cliContext& ctx, bool everything) {
 		return report;
 	}
 	auto logins = readAccounts(ctx);
-	bool loginsChanged = false;
+	bool renewed = false;
 	for (provider site : kSites) {
 		std::vector<pending> mine;
 		std::copy_if(waiting.begin(), waiting.end(), std::back_inserter(mine),
 		             [site](const pending& each) { return each.site == site; });
-		if (not mine.empty())
-			report.told += sendTo(ctx, site, mine, logins, loginsChanged, report.left);
+		if (mine.empty())
+			continue;
+		auto sent = sendTo(ctx, site, mine, accounts::on(logins, site));
+		report.told += sent.told;
+		report.left += sent.left;
+		if (sent.renewed) {
+			logins = accounts::with(logins, *sent.renewed);
+			renewed = true;
+		}
 	}
 	// A renewed token is kept for next time.
-	if (loginsChanged and not saveAccounts(ctx, logins))
+	if (renewed and not saveAccounts(ctx, logins))
 		ctx.err << "note: could not save the renewed login.\n";
 	return report;
 }

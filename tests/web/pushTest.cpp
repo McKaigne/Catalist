@@ -47,7 +47,8 @@ TEST_CASE("anilist sets the whole list entry, the score out of 100") {
 	CHECK(web.sent.size() == 1);
 	catalist::entry unlinked = oddTaxi();
 	unlinked.anilistId = 0;
-	CHECK(site.push(unlinked, kLogin).error() == "not linked to AniList");
+	CHECK(site.push(unlinked, kLogin).error().message == "not linked to AniList");
+	CHECK(site.push(unlinked, kLogin).error().why == catalist::web::failure::kind::kNotLinked);
 }
 
 TEST_CASE("anilist removes a title by its list entry, and is done when there is none") {

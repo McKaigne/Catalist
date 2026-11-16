@@ -6,6 +6,7 @@
 
 #include "cli/common.hpp"
 #include "cli/refs.hpp"
+#include "core/lists.hpp"
 
 namespace catalist::cli {
 
@@ -51,68 +52,39 @@ std::vector<std::string> sortWords() {
 }
 
 int runList(const command& self, const args::parsed& line, cliContext& ctx) {
-	auto query = readText(self, line, ctx);
-	if (not query)
+	auto text = readText(self, line, ctx);
+	if (not text)
 		return 2;
+	listQuery query{.text = *text,
+	                .only = onlyType(line),
+	                .reverse = line.has("r"),
+	                .refsOnly = line.has("q"),
+	                .json = line.has("json"),
+	                .header = line.has("header")};
 	// -s watching,on-hold: any of them; no -s, all of them.
-	std::vector<watchStatus> statuses;
 	std::istringstream given(line.get("s"));
 	for (std::string word; std::getline(given, word, ',');) {
 		auto status = parseStatus(word);
 		if (not status)
 			return usageError(ctx, self, std::format("unknown status '{}'", word));
-		statuses.push_back(*status);
+		query.statuses.push_back(*status);
 	}
-	if (line.has("s") and statuses.empty())
+	if (line.has("s") and query.statuses.empty())
 		return usageError(ctx, self, "-s needs a status");
-	std::optional<provider> unlinked;
 	if (line.has("unlinked")) {
-		unlinked = parseProvider(line.get("unlinked"));
-		if (not unlinked)
+		query.unlinked = parseProvider(line.get("unlinked"));
+		if (not query.unlinked)
 			return usageError(
 			    ctx, self,
 			    std::format("--unlinked '{}' is not anilist, mal or kitsu", line.get("unlinked")));
 	}
-	sortKey key = sortKey::kTitle;
 	if (line.has("sort")) {
 		auto found = kSortKeys.find(line.get("sort"));
 		if (found == kSortKeys.end())
 			return usageError(ctx, self, std::format("unknown sort key '{}'", line.get("sort")));
-		key = found->second;
+		query.key = found->second;
 	}
-	if (not load(ctx))
-		return 1;
-
-	auto only = onlyType(line);
-	std::vector<entry> shown;
-	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
-		if (only and *only != type)
-			continue;
-		for (const auto& e : ctx.db.getEntries(type))
-			if ((statuses.empty() or
-			     std::find(statuses.begin(), statuses.end(), e.status) != statuses.end()) and
-			    refs::titleHolds(e, *query) and (not unlinked or idOn(e, *unlinked) == 0))
-				shown.push_back(e);
-	}
-	catalogue::sortEntries(shown, key, line.has("r"));
-
-	if (line.has("q")) {
-		for (const auto& e : shown)
-			ctx.out << refs::of(e) << "\n";
-		return 0;
-	}
-	if (not line.has("json") and ctx.columns > 0) {
-		if (shown.empty())
-			ctx.err << "No titles to list.\n";
-		else
-			ctx.out << listTable(ctx, shown);
-		return 0;
-	}
-	std::vector<std::vector<output::cell>> rows;
-	for (const auto& e : shown)
-		rows.push_back(cellsOf(e));
-	writeRows(ctx, kColumns, rows, line.has("json"), line.has("header"));
-	return 0;
+	return printList(ctx, query);
 }
 
 // One labelled line of a card, the labels `width` columns wide.
@@ -185,43 +157,41 @@ const std::vector<std::string> kStatsColumns = {"type",    "total",   "watching"
                                                 "on_hold", "dropped", "planned",   "mean",
                                                 "units",   "volumes", "rewatched", "days"};
 
-std::vector<output::cell> statsCells(const catalogue& db, mediaType type) {
-	std::vector<output::cell> cells = {
-	    output::text(typeKey(type)),
-	    output::number(static_cast<long long>(db.getEntries(type).size()))};
+std::vector<output::cell> statsCells(const std::vector<entry>& list, mediaType type) {
+	std::vector<output::cell> cells = {output::text(typeKey(type)),
+	                                   output::number(static_cast<long long>(list.size()))};
 	for (watchStatus status : kStatuses)
-		cells.push_back(output::number(static_cast<long long>(db.countByStatus(type, status))));
-	double mean = db.averageScore(type);
+		cells.push_back(output::number(static_cast<long long>(countByStatus(list, status))));
+	double mean = averageScore(list);
 	cells.push_back(mean > 0.0
 	                    ? output::cell{std::format("{:.2f}", mean), output::jsonForm::kNumber}
 	                    : output::cell{"0", output::jsonForm::kNull});
-	cells.push_back(output::number(db.totalProgress(type)));
-	cells.push_back(output::number(db.totalVolumes(type)));
-	cells.push_back(output::number(db.totalRewatched(type)));
-	cells.push_back({std::format("{:.1f}", db.daysSpent(type)), output::jsonForm::kNumber});
+	cells.push_back(output::number(totalProgress(list)));
+	cells.push_back(output::number(totalVolumes(list)));
+	cells.push_back(output::number(totalRewatched(list)));
+	cells.push_back({std::format("{:.1f}", daysSpent(list)), output::jsonForm::kNumber});
 	return cells;
 }
 
 // The numbers of one list, for a terminal.
-void printStatsCard(cliContext& ctx, mediaType type) {
+void printStatsCard(cliContext& ctx, const std::vector<entry>& list, mediaType type) {
 	// Wide enough for "Plan to Watch".
 	constexpr int kLabelWidth = 15;
-	const catalogue& db = ctx.db;
 	bool anime = type == mediaType::kAnime;
-	double mean = db.averageScore(type);
+	double mean = averageScore(list);
 	auto row = [&ctx](const std::string& label, const std::string& value) {
 		cardRow(ctx, label, value, kLabelWidth);
 	};
 	ctx.out << paint(typeToString(type), output::kBold, ctx.color) << "\n";
-	row("Titles", std::to_string(db.getEntries(type).size()));
+	row("Titles", std::to_string(list.size()));
 	for (watchStatus status : kStatuses)
-		row(statusToString(status, type), std::to_string(db.countByStatus(type, status)));
+		row(statusToString(status, type), std::to_string(countByStatus(list, status)));
 	row("Mean score", mean > 0.0 ? std::format("{:.2f}", mean) : "-");
-	row(anime ? "Episodes" : "Chapters", std::to_string(db.totalProgress(type)));
+	row(anime ? "Episodes" : "Chapters", std::to_string(totalProgress(list)));
 	if (not anime)
-		row("Volumes", std::to_string(db.totalVolumes(type)));
-	row(anime ? "Rewatched" : "Reread", std::to_string(db.totalRewatched(type)));
-	row("Days spent", std::format("{:.1f}", db.daysSpent(type)));
+		row("Volumes", std::to_string(totalVolumes(list)));
+	row(anime ? "Rewatched" : "Reread", std::to_string(totalRewatched(list)));
+	row("Days spent", std::format("{:.1f}", daysSpent(list)));
 }
 
 int runStats(const command& self, const args::parsed& line, cliContext& ctx) {
@@ -238,18 +208,52 @@ int runStats(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (not line.has("json") and ctx.columns > 0) {
 		for (size_t i = 0; i < types.size() and ctx.out; ++i) {
 			ctx.out << (i > 0 ? "\n" : "");
-			printStatsCard(ctx, types[i]);
+			printStatsCard(ctx, ctx.db.getEntries(types[i]), types[i]);
 		}
 		return 0;
 	}
 	std::vector<std::vector<output::cell>> rows;
 	for (mediaType type : types)
-		rows.push_back(statsCells(ctx.db, type));
+		rows.push_back(statsCells(ctx.db.getEntries(type), type));
 	writeRows(ctx, kStatsColumns, rows, line.has("json"), line.has("header"));
 	return 0;
 }
 
 }  // namespace
+
+int printList(cliContext& ctx, const listQuery& query) {
+	if (not load(ctx))
+		return 1;
+	std::vector<entry> shown;
+	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
+		if (query.only and *query.only != type)
+			continue;
+		for (const auto& e : ctx.db.getEntries(type))
+			if ((query.statuses.empty() or std::ranges::contains(query.statuses, e.status)) and
+			    refs::titleHolds(e, query.text) and
+			    (not query.unlinked or idOn(e, *query.unlinked) == 0))
+				shown.push_back(e);
+	}
+	sortEntries(shown, query.key, query.reverse);
+
+	if (query.refsOnly) {
+		for (const auto& e : shown)
+			ctx.out << refs::of(e) << "\n";
+		return 0;
+	}
+	if (not query.json and ctx.columns > 0) {
+		if (shown.empty())
+			ctx.err << "No titles to list.\n";
+		else
+			ctx.out << listTable(ctx, shown);
+		return 0;
+	}
+	std::vector<std::vector<output::cell>> rows;
+	for (const auto& e : shown)
+		rows.push_back(cellsOf(e));
+	writeRows(ctx, kColumns, rows, query.json, query.header);
+	return 0;
+}
 
 std::vector<command> listingCommands() {
 	return {

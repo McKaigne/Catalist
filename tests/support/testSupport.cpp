@@ -8,6 +8,7 @@
 #include <random>
 #include <stdexcept>
 
+#include "storage/csvCodec.hpp"
 #include "system.hpp"
 
 namespace catalist::test {
@@ -53,6 +54,16 @@ entryBuilder makeEntry() {
 
 isoDate testToday() {
 	return requireDate("2026-10-20");
+}
+
+std::tm testClock() {
+	std::tm local{};
+	local.tm_year = 2026 - 1900;
+	local.tm_mon = 10 - 1;
+	local.tm_mday = 20;
+	local.tm_hour = 21;
+	local.tm_min = 30;
+	return local;
 }
 
 std::string readText(const std::filesystem::path& file) {

@@ -144,75 +144,6 @@ const char* kOutboxTable =
     " id INTEGER NOT NULL, removed INTEGER NOT NULL, site_id INTEGER NOT NULL,"
     " UNIQUE (site, type, id, removed))";
 
-// ---- The undo history ----
-
-std::optional<entry> decodeRow(const std::string& row) {
-	return row.empty() ? std::nullopt : csvCodec::decodeEntry(csvCodec::splitFields(row));
-}
-
-std::string encodeRow(const std::optional<entry>& row) {
-	return row ? csvCodec::encodeEntry(*row) : std::string();
-}
-
-// The changes of one step in the order they were made; nothing when they
-// cannot be read.
-std::optional<std::vector<journal::change>> readChanges(const store::database& db, long long tx) {
-	std::vector<journal::change> changes;
-	auto rows = db.prepare("SELECT type, id, before, after FROM change WHERE tx = ? ORDER BY seq");
-	rows.bind(tx);
-	while (rows.step()) {
-		mediaType type = rows.textAt(0) == "manga" ? mediaType::kManga : mediaType::kAnime;
-		changes.push_back({type, static_cast<int>(rows.intAt(1)), decodeRow(rows.textAt(2)),
-		                   decodeRow(rows.textAt(3))});
-	}
-	return rows.ok() ? std::optional(changes) : std::nullopt;
-}
-
-bool writeChanges(const store::database& db, long long tx,
-                  const std::vector<journal::change>& changes) {
-	auto insert = db.prepare("INSERT INTO change VALUES (?, ?, ?, ?, ?, ?)");
-	int seq = 0;
-	for (const auto& made : changes) {
-		insert.bind(tx).bind(seq++).bind(typeKey(made.type)).bind(made.id);
-		if (not insert.bind(encodeRow(made.before)).bind(encodeRow(made.after)).run())
-			return false;
-	}
-	return true;
-}
-
-// The steps that `where` selects and orders (all of them when `limit` is
-// not positive); nothing when they cannot be read.
-std::optional<std::vector<txRecord>> readSteps(const store::database& db, const std::string& where,
-                                               int limit) {
-	std::vector<txRecord> steps;
-	auto rows = db.prepare(std::format(
-	    "SELECT id, stamp, label, undone,"
-	    " (SELECT COUNT(*) FROM change WHERE change.tx = tx.id) FROM tx WHERE {} LIMIT ?",
-	    where));
-	rows.bind(limit > 0 ? limit : -1);
-	while (rows.step())
-		steps.push_back({rows.intAt(0), rows.textAt(1), rows.textAt(2), rows.intAt(3) != 0,
-		                 static_cast<int>(rows.intAt(4))});
-	return rows.ok() ? std::optional(steps) : std::nullopt;
-}
-
-// Enters the changes as a step, forgetting the oldest beyond the last 100.
-bool writeJournal(store::database& db, const txNote& note,
-                  const std::vector<journal::change>& changes) {
-	// New work ends what could be redone.
-	if (not db.run("DELETE FROM change WHERE tx IN (SELECT id FROM tx WHERE undone = 1);"
-	               "DELETE FROM tx WHERE undone = 1;"))
-		return false;
-	auto insert = db.prepare("INSERT INTO tx (stamp, label) VALUES (?, ?)");
-	if (not insert.bind(note.stamp).bind(note.label).run() or
-	    not writeChanges(db, db.lastInsertId(), changes))
-		return false;
-	return db.run(
-	    std::format("DELETE FROM tx WHERE id NOT IN (SELECT id FROM tx ORDER BY id DESC LIMIT {});"
-	                "DELETE FROM change WHERE tx NOT IN (SELECT id FROM tx);",
-	                catalogue::kHistoryLength));
-}
-
 const entry* findById(const std::vector<entry>& list, int id) {
 	auto found =
 	    std::find_if(list.begin(), list.end(), [id](const entry& e) { return e.id == id; });
@@ -233,51 +164,9 @@ int nextId(const std::vector<entry>& list) {
 	return highest == list.end() ? 1 : highest->id + 1;
 }
 
-// The sum of one count over a list, e.g. sumOf(list, &entry::progress).
-int sumOf(const std::vector<entry>& list, int entry::* count) {
-	int total = 0;
-	for (const auto& e : list)
-		total += e.*count;
-	return total;
-}
-
-// True when `a` comes before `b` in the natural order of `key`; ties fall
-// back to the title so the order never depends on how the list was stored.
-bool comesBefore(const entry& a, const entry& b, sortKey key) {
-	switch (key) {
-		case sortKey::kNew:
-			if (newReleases(a) != newReleases(b))
-				return newReleases(a) > newReleases(b);
-			[[fallthrough]];
-		case sortKey::kUpdated:
-			if (a.updatedAt != b.updatedAt)
-				return a.updatedAt > b.updatedAt;
-			break;
-		case sortKey::kScore:
-			if (a.score != b.score)
-				return a.score > b.score;
-			break;
-		case sortKey::kProgress:
-			if (a.progress != b.progress)
-				return a.progress > b.progress;
-			break;
-		case sortKey::kDate:
-			if (listDate(a) != listDate(b))
-				return listDate(a) > listDate(b);
-			break;
-		case sortKey::kStatus:
-			if (a.status != b.status)
-				return static_cast<int>(a.status) < static_cast<int>(b.status);
-			break;
-		case sortKey::kTitle:
-			break;
-	}
-	return a.title < b.title;
-}
-
 }  // namespace
 
-std::filesystem::path catalogue::getDefaultDataDir(const dataDirEnv& env) {
+std::filesystem::path dataDirFor(const dataDirEnv& env) {
 	if (not env.catalistDataDir.empty())
 		return env.catalistDataDir;
 	// The XDG specification: a relative path there is invalid and ignored.
@@ -309,15 +198,6 @@ const std::vector<entry>& catalogue::getList(mediaType type) const {
 
 const std::vector<entry>& catalogue::getSaved(mediaType type) const {
 	return type == mediaType::kAnime ? savedAnime_ : savedManga_;
-}
-
-void catalogue::sortEntries(std::vector<entry>& entries, sortKey key, bool reverse) {
-	// Stable, so titles that compare equal keep the order they came in and
-	// the same command prints the same lines every time.
-	std::stable_sort(entries.begin(), entries.end(),
-	                 [key, reverse](const entry& a, const entry& b) {
-		                 return reverse ? comesBefore(b, a, key) : comesBefore(a, b, key);
-	                 });
 }
 
 int catalogue::addEntry(entry added) {
@@ -385,42 +265,6 @@ bool catalogue::restoreEntry(const entry& back) {
 	    std::find_if(list.begin(), list.end(), [&back](const entry& e) { return e.id > back.id; });
 	list.insert(after, back);
 	return true;
-}
-
-size_t catalogue::countByStatus(mediaType type, watchStatus status) const {
-	const auto& list = getList(type);
-	return static_cast<size_t>(std::count_if(
-	    list.begin(), list.end(), [status](const entry& e) { return e.status == status; }));
-}
-
-double catalogue::averageScore(mediaType type) const {
-	int sum = 0;
-	int rated = 0;
-	for (const auto& e : getList(type)) {
-		if (e.score > 0) {
-			sum += e.score;
-			++rated;
-		}
-	}
-	return rated == 0 ? 0.0 : static_cast<double>(sum) / rated;
-}
-
-int catalogue::totalProgress(mediaType type) const {
-	return sumOf(getList(type), &entry::progress);
-}
-
-int catalogue::totalVolumes(mediaType type) const {
-	return sumOf(getList(type), &entry::volumes);
-}
-
-int catalogue::totalRewatched(mediaType type) const {
-	return sumOf(getList(type), &entry::rewatched);
-}
-
-double catalogue::daysSpent(mediaType type) const {
-	constexpr double kMinutesPerDay = 1440.0;
-	double minutesPerUnit = type == mediaType::kAnime ? 24.0 : 5.0;
-	return totalProgress(type) * minutesPerUnit / kMinutesPerDay;
 }
 
 provider catalogue::getProvider() const {
@@ -590,8 +434,7 @@ void catalogue::rememberSaved() {
 
 // Writing.
 
-template <typename writer>
-bool catalogue::commit(writer work) {
+bool catalogue::commit(const std::function<bool()>& work) {
 	if (not openStore().has_value())
 		return false;
 	if (not write_)
@@ -665,100 +508,6 @@ bool catalogue::saveAll() {
 	if (done)
 		rememberSaved();
 	return done;
-}
-
-bool catalogue::saveAll(const txNote& note) {
-	auto changes = journal::diff(savedAnime_, animeEntries_);
-	auto manga = journal::diff(savedManga_, mangaEntries_);
-	changes.insert(changes.end(), manga.begin(), manga.end());
-	if (changes.empty())
-		return saveAll();
-	bool done = commit([&] { return writeChanged() and writeJournal(db_, note, changes); });
-	if (done)
-		rememberSaved();
-	return done;
-}
-
-// Undo and redo.
-
-result<replay> catalogue::undo(int count, bool force) {
-	return walkHistory(false, count, force);
-}
-
-result<replay> catalogue::redo(int count, bool force) {
-	return walkHistory(true, count, force);
-}
-
-std::string catalogue::replayStep(const txRecord& step, bool redoing, bool force) {
-	auto changes = readChanges(db_, step.id);
-	if (not changes)
-		return std::format("cannot read {}: {}", getStorePath().string(), db_.lastError());
-	// What was done last is taken back first.
-	if (not redoing)
-		std::reverse(changes->begin(), changes->end());
-	for (const auto& made : *changes) {
-		const auto& from = redoing ? made.before : made.after;
-		const auto& to = redoing ? made.after : made.before;
-		auto next = journal::transition(getList(made.type), from, to, force);
-		if (not next.has_value())
-			return std::format("cannot {} '{}' ({}): {}", redoing ? "redo" : "undo", step.label,
-			                   step.stamp, next.error());
-		if (not next.value())
-			removeEntry(made.type, made.id);
-		else if (not updateEntry(*next.value()))
-			restoreEntry(*next.value());
-	}
-	return "";
-}
-
-result<replay> catalogue::walkHistory(bool redoing, int count, bool force) {
-	auto opened = openStore();
-	if (not opened.has_value())
-		return std::unexpected(opened.error());
-	auto steps = readSteps(
-	    db_, redoing ? "undone = 1 ORDER BY id ASC" : "undone = 0 ORDER BY id DESC", count);
-	if (not steps)
-		return std::unexpected(
-		    std::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
-	if (steps->empty())
-		return {};
-
-	// The lists as they are, to go back to when a step cannot be taken.
-	std::vector<entry> anime = animeEntries_;
-	std::vector<entry> manga = mangaEntries_;
-	std::string problem;
-	for (size_t i = 0; i < steps->size() and problem.empty(); ++i)
-		problem = replayStep((*steps)[i], redoing, force);
-
-	auto mark = [&] {
-		auto set = db_.prepare("UPDATE tx SET undone = ? WHERE id = ?");
-		return std::all_of(steps->begin(), steps->end(), [&](const txRecord& step) {
-			return set.bind(redoing ? 0 : 1).bind(step.id).run();
-		});
-	};
-	if (problem.empty() and not commit([&] { return writeChanged() and mark(); }))
-		problem = std::format("could not save the catalogue to {}", getDataDir().string());
-	if (not problem.empty()) {
-		animeEntries_ = std::move(anime);
-		mangaEntries_ = std::move(manga);
-		return std::unexpected(problem);
-	}
-
-	replay done{*steps, journal::diff(anime, animeEntries_)};
-	auto more = journal::diff(manga, mangaEntries_);
-	done.changes.insert(done.changes.end(), more.begin(), more.end());
-	rememberSaved();
-	return done;
-}
-
-result<std::vector<txRecord>> catalogue::history(int limit) {
-	if (not db_.isOpen())
-		return {};
-	auto steps = readSteps(db_, "1 ORDER BY id DESC", limit);
-	if (not steps)
-		return std::unexpected(
-		    std::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
-	return std::move(*steps);
 }
 
 }  // namespace catalist

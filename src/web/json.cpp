@@ -286,6 +286,11 @@ std::optional<long long> value::asInteger() const {
 	return static_cast<long long>(*number);
 }
 
+int value::asCount() const {
+	auto count = asInteger();
+	return count and *count > 0 ? static_cast<int>(*count) : 0;
+}
+
 std::optional<std::string> value::asString() const {
 	if (auto text = std::get_if<std::string>(&data_))
 		return *text;

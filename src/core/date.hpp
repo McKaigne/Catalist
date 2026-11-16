@@ -45,6 +45,10 @@ private:
 	int day_ = 0;
 };
 
+// "2026-10-20 21:30:00": a local date and time, as a step of the undo
+// history is stamped.
+[[nodiscard]] std::string stampOf(const std::tm& local);
+
 }  // namespace catalist
 
 #endif  // CATALIST_CORE_DATE_HPP_

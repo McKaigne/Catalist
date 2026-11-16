@@ -6,30 +6,31 @@ layer uses only the layers above it in this table, and `system`.
 
 | Folder | Module | Holds |
 | :--- | :--- | :--- |
-| `core/` | `date`, `result` | `isoDate`; `result<T>`, a value or an error message |
+| `core/` | `date`, `result` | `isoDate` and the stamp of a step; `result<T>` and `done`, `std::expected` with an error message |
 | | `account.hpp` | a login on a site: user, token, renewal, expiry |
 | | `entry` | one anime or manga title, its statuses and the rules that change it (progress, status, score, counts, dates, import merge) |
+| | `lists` | what a list of titles works out to: its order (`sortEntries`) and its numbers (`countByStatus`, `averageScore`, ...) |
 | | `text` | UTF-8 helpers: glyphs, terminal width, clipping, lower case |
 | `storage/` | `store` | a small RAII wrapper over SQLite (`database`, `statement`, `transaction`), the only code that includes `sqlite3.h` |
-| | `catalogue` | the two lists in memory, kept in `catalist.db` with the Kitsu ids beside them; the import of the old CSV files; undo and redo; the outbox of what the sites are still to be told |
+| | `catalogue` | the two lists in memory, kept in `catalist.db` with the Kitsu ids beside them, and the outbox of what the sites are still to be told; `history.cpp` holds its undo and redo |
 | | `accounts` | the logins file: its place, and its lines in and out |
-| | `csvCodec` | the CSV form of a title: the files of 0.3.0 and earlier, and the rows of the undo history |
-| | `journal` | pure functions over the undo history: what changed between two lists, merging steps, taking one back |
+| | `csvCodec` | the CSV form of a title: the rows of the undo history, and the files of 0.3.0 and earlier that `import` reads |
+| | `journal` | pure functions over the undo history: what changed between two lists, taking a step back or forward |
 | | `malXml` | the MyAnimeList XML format lists are imported and exported in |
 | `web/` | `http`, `json` | one request type, form and URL encoding; the JSON the sites answer in |
-| | `tracker` | `iTracker`, the one interface every site implements (ADR-018): search, look titles up, log in, read a user's list, push a title, remove one |
+| | `tracker` | `iTracker`, the one interface every site implements (ADR-018): search, look titles up, log in, read a user's list, push a title, remove one; `answer<T>` and `failure`, what a site answers |
 | | `anilist`, `mal`, `kitsu`, `sites` | the adapters of AniList, MyAnimeList and Kitsu, and `makeTracker`, which picks one |
 | `cli/` | `args`, `refs`, `output` | the POSIX option parser; refs (`a:12`) and title matching; tables, tab-separated lines and JSON Lines |
 | | `cli` | `cliContext`, the `command` row, the table put together, dispatch and help |
 | | `common` | what the commands share (naming titles, loading, saving and reporting a change), and one function per group of commands |
 | | `listing`, `tracking`, `online`, `accounts`, `sync`, `transfer`, `history`, `setup` | the commands, by group: their handlers and their rows of the table (ADR-017) |
-| | `completion` | the zsh, fish and bash completions and the manual page's COMMANDS, written from the command table |
-| `src/` | `system` | everything that touches the outside world: reading and writing files, `runProgram` and `httpFetch` (curl), the clock, the terminal, random text |
+| | `completion` | the zsh and fish completions and the manual page's COMMANDS, written from the command table |
+| `src/` | `system` | everything that touches the outside world: reading and writing files, `runProgram` and `httpFetch` (curl), the clock (`localTime`), the terminal, random text |
 
 `main.cpp` reads the environment, builds the catalogue on the data
 directory and the `cliContext`, and runs the command line. Tests mirror the
 folders (`tests/core/`, `tests/storage/`, ...); `tests/smoke/` runs the
-built program from the shells, and `tests/support/` holds the fixtures.
+built program from `sh`, and `tests/support/` holds the fixtures.
 
 ## ADR-001: Comments Say Why, and Label Long Sections
 - **Context:** Inline comments explaining step-by-step logic drifted over time.
@@ -39,7 +40,10 @@ built program from the shells, and `tests/support/` holds the fixtures.
 
 ## ADR-002: Strong Types and Optionality over Magic Sentinels
 - **Context:** Magic values (`-1`, `"0000-00-00"`) caused error-prone checks.
-- **Decision:** Use `std::optional<T>` and `result<T>` instead of magic sentinels.
+- **Decision:** Use `std::optional<T>` and `result<T>` (`std::expected`)
+  instead of magic sentinels. A site's failure says what kind it is
+  (`web::failure`: unreachable, not linked, refused) rather than leaving
+  callers to read its message.
 
 ## ADR-003: Decoupled Multi-Provider Subsystem (superseded)
 - **Superseded** by ADR-013 and ADR-014: the only web source is AniList,
@@ -59,19 +63,20 @@ built program from the shells, and `tests/support/` holds the fixtures.
   `iClock`) did the job, but each wrapped only one or two calls.
 - **Decision:** `system.cpp` is the only code that touches file streams,
   other programs, the terminal or the system clock, as plain functions:
-  `readFile`, `runProgram`, `httpFetch`, `today`, `nowStamp`, `newTxLabel`,
-  `isInteractive`, `terminalColumns`. The database file is the other side
-  effect, and `store.cpp` is the only code that includes `sqlite3.h`. Where
-  a test must swap one, the caller takes a function instead:
-  a site takes a `web::link` (the `fetch` function and the pause between
-  requests), and `cliContext` carries `today`, `nowStamp`, `newTxLabel` and
-  the link. The catalogue opens its
-  directory directly; tests give it a temporary one.
+  `readFile`, `runProgram`, `httpFetch`, `localTime`, `isInteractive`,
+  `terminalColumns`. The database file is the other side effect, and
+  `store.cpp` is the only code that includes `sqlite3.h`. Where a test must
+  swap one, the caller takes a function instead: a site takes a
+  `web::link` (the `fetch` function and the pause between requests), and
+  `cliContext` carries one `clock` (its `today()` and `stamp()` come from
+  it) and the link. The catalogue opens its directory directly; tests give
+  it a temporary one.
 - **Composition root:** `main.cpp` reads the environment into a
-  `dataDirEnv` (`getDefaultDataDir` is pure), builds the catalogue on the
-  data directory, and fills the `cliContext`. There are no singletons.
+  `dataDirEnv` (`dataDirFor` is pure), builds the catalogue on the data
+  directory, and fills the `cliContext`. There are no singletons.
 - **Processes:** the only program run is curl, with `execvp` and an
-  argument list, so nothing passes through a shell.
+  argument list, so nothing passes through a shell. `runProgram` writes
+  the input and reads the output in one `poll` loop, without a thread.
 
 ## ADR-006: Shallow Control Flow
 - **Decision:** Function bodies nest at most three levels. Preconditions and
@@ -91,7 +96,10 @@ built program from the shells, and `tests/support/` holds the fixtures.
 - **Formatting:** `.clang-format` (Google-based): tabs for indentation,
   four wide, a 100-column limit, opening braces on the line of their
   statement. Logical operators are written `and`, `or`, `not`.
-- **Idioms:** strings are built with `fmt::format`, not by concatenation;
+- **Idioms:** C++23. Strings are built with `std::format`, not by
+  concatenation; a value or an error is a `std::expected`
+  (`result<T>`, `done`); rows of plain structs, such as the command table,
+  name their fields with designated initialisers;
   resources are owned by objects that release them (RAII, e.g. the pipe
   ends in `runProgram`); the standard algorithms replace hand-written loops
   where they say it more plainly. A header is only added when nothing
@@ -121,20 +129,19 @@ built program from the shells, and `tests/support/` holds the fixtures.
 - **What a test checks:** the result the user would see: the lists as
   another catalogue reads them back, the exit code and the output of a
   command. No test is skipped, expected to fail or switched off by an
-  environment variable. `tests/fixtures/csv` holds the CSV layouts still
-  imported (those of 0.2.1 and later).
+  environment variable.
 - **Where:** the unit tests mirror `src/` (`tests/cli/listingTest.cpp`
   tests `src/cli/listing.cpp`); the command tests share `cliFixture`
   (`tests/support/cliFixture.hpp`), which runs `catalist ...` against a
   temporary directory.
-- **From the shells:** `tests/smoke/smoke.sh` (POSIX sh, run under dash,
-  `bash --posix` and `zsh -f`) and `tests/smoke/smoke.fish` drive the built
-  program as scripts do, with a stub `curl` first in `PATH` so nothing goes
-  online. ctest registers them for each shell it finds, and checks the
-  generated completions with `zsh -n` and `fish -n`.
+- **From a shell:** `tests/smoke/smoke.sh` drives the built program as a
+  POSIX script does, run by `sh`, with a stub `curl` first in `PATH` so
+  nothing goes online. ctest also checks that the generated completions
+  parse, with `zsh -n` and `fish -n` when those shells are installed.
 - **Targets:** one library (`catalistLib`, everything but `main.cpp`), the
-  program and one test binary (`catalistTests`). CI also runs the suite
-  under AddressSanitizer and UBSan.
+  program and one test binary (`catalistTests`); `-DBUILD_TESTING=OFF`
+  builds without doctest. CI also runs the suite under AddressSanitizer and
+  UBSan.
 
 ## ADR-011: No Settings
 - **Context:** A settings tab, `settings.json`, themes and `catalist config`
@@ -190,10 +197,10 @@ built program from the shells, and `tests/support/` holds the fixtures.
 - **One table:** each command is a row of the table (name, aliases,
   summary, details, options with their values and choices, operands and
   their kind, handler, hidden). The row drives `help`, each `--help`, typo
-  suggestions, the usage lines, the manual page (`__man` fills
-  `docs/catalist.1.in`), and the zsh and fish completions (`completion`).
-  The build runs the program to write the page and the scripts, so they
-  cannot fall behind it.
+  suggestions, the usage lines, the manual page (`__man` prints its
+  COMMANDS, which the build puts into `docs/catalist.1.in`), and the zsh
+  and fish completions (`completion`). The build runs the program to write
+  the page and the scripts, so they cannot fall behind it.
 - **POSIX options:** `args` parses grouped short options, `-n3`,
   `--name=value` (and `--name value`), `--`, and a lone `-`; options come
   before operands. A wrong command line exits with 2 and the usage line.
@@ -214,17 +221,17 @@ built program from the shells, and `tests/support/` holds the fixtures.
   every operand before changing anything, apply the entry rules
   (`setStatus`, `setScore`, `stepProgress`, `setCount`),
   save with an undo note, then print one line per changed field.
-- **No command:** `catalist` alone prints its usage on stderr and exits
-  with 2.
+- **No command:** `catalist` alone at a terminal lists what is being
+  watched (`printList`, as `ls -s watching --sort=new` would); into a pipe
+  it prints its usage on stderr and exits with 2.
 - **Completion:** the scripts know the commands and options by heart and
   ask the hidden `catalist __complete refs|titles|statuses|fields` for the
   rest. It opens the database read-only (`catalogue::peek`): no lock is
-  waited for beyond 100 ms, nothing is created or imported, and any
-  failure prints nothing and exits with 0.
-- **Testing:** `cliContext` carries the streams, the date, the stamp, the
-  `web::link`, `CATALIST_TX` and whether a terminal is attached, so
-  tests drive every command with string streams and a fake web
-  (ADR-010).
+  waited for beyond 100 ms, nothing is created, and any failure prints
+  nothing and exits with 0.
+- **Testing:** `cliContext` carries the streams, the clock, the
+  `web::link` and whether a terminal is attached, so tests drive every
+  command with string streams and a fake web (ADR-010).
 
 ## ADR-016: One SQLite File, with an Undo History
 - **Context:** two CSV files and a `settings` file could not hold an undo
@@ -243,16 +250,14 @@ built program from the shells, and `tests/support/` holds the fixtures.
   new work), and only the last 100 are kept. `beginWrite` starts the
   transaction before the load (`BEGIN IMMEDIATE`), so nothing another
   program does comes between what a command reads and what it saves.
-- **Undo and redo:** `journal` computes the changes (`diff`), merges the
-  commands of one `CATALIST_TX` into one step (`merge`), and takes a step
-  back or forward per entry (`transition`): only the fields the step
+- **Undo and redo:** `journal` computes the changes (`diff`) and takes a
+  step back or forward per entry (`transition`): only the fields the step
   changed are checked and set, so web data found since is kept. A title
   changed since stops the step unless forced; a removed title comes back
   under its old id, never over another title.
-- **Old files:** with no `catalist.db`, the CSV files and `settings` of
-  0.3.0 and earlier are read from the data directory or, when
-  `CATALIST_DATA_DIR` is unset, from `~/.config/catalist`, into a new
-  database, once; they are never changed.
+- **Old files:** the CSV files of 0.3.0 and earlier are read by
+  `catalist import`, as any other list is (ADR-020); they are never
+  changed.
 
 ## ADR-017: Command Line Only, in Folders by Layer
 - **Context:** the program had two ways in, a full-screen interface (FTXUI,
@@ -339,3 +344,21 @@ built program from the shells, and `tests/support/` holds the fixtures.
   saves it, keeps the Kitsu ids and the outbox, and each program undoes
   the other's steps. Changes made in the TUI are not queued for the sites;
   `sync --all` sends them.
+
+## ADR-020: Few Dependencies, Little Machinery
+- **Context:** the build fetched fmt, SQLite and doctest when the system
+  had none, asked pkg-config where fish keeps completions, and linked
+  Threads for one writer thread. The code carried a hand-made `result<T>`,
+  site errors told apart by their wording, command rows of ten positional
+  fields, and four features that each ran through many files: the `cl`
+  name, bash completions, the first-run import of 0.3.0's files and
+  `CATALIST_TX` groups.
+- **Decision:** the build needs CMake, a C++23 compiler and SQLite, and
+  doctest for the tests; nothing is downloaded. `std::format` replaced fmt
+  and `std::expected` replaced `result<T>`'s own class. `cl` is a shell
+  alias away, zsh and fish keep their completions (bash has none), 0.3.0's
+  files go through `import`, and `undo -n N` takes several steps back. ctest runs the
+  smoke script once, from `sh`.
+- **Rule:** a dependency or a feature that threads through several layers
+  has to earn it; when the standard library or a shell does the job, it
+  does.

@@ -90,6 +90,8 @@ void fakeWeb::respond(const std::string& fragment, const std::string& body) {
 std::optional<std::string> fakeWeb::fetch(const web::request& asked) {
 	std::string request = std::format("{} {} {}", asked.method, asked.url, asked.body);
 	sent.push_back(request);
+	if (whileAsked)
+		whileAsked();
 	if (not asked.body.empty())
 		posted.push_back(asked.body);
 	const std::string* answer = nullptr;

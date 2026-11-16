@@ -61,6 +61,10 @@ void writeRows(cliContext& ctx, const std::vector<std::string>& names,
 // written with: watching, completed, on-hold, dropped and planned.
 extern const std::vector<watchStatus> kStatuses;
 [[nodiscard]] std::vector<std::string> statusWords();
+// A status as the command line takes it: one of statusWords(), or
+// "reading" for watching, in capitals or not. Nothing for any other word:
+// the command line guesses nothing (import reads the sites' spellings).
+[[nodiscard]] std::optional<watchStatus> statusNamed(const std::string& word);
 
 // ---- Naming titles ----
 
@@ -229,7 +233,7 @@ int printList(cliContext& ctx, const listQuery& query);
 [[nodiscard]] std::vector<command> syncCommands();
 // transfer.cpp: import and export.
 [[nodiscard]] std::vector<command> transferCommands();
-// history.cpp: undo, redo, log and tx.
+// history.cpp: undo, redo and log.
 [[nodiscard]] std::vector<command> historyCommands();
 // setup.cpp: provider and completion, and the hidden commands of the
 // completion scripts and the build.

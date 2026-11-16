@@ -84,10 +84,11 @@ std::vector<command> setupCommands() {
 	    {.name = "provider",
 	     .summary = "Show or choose your provider",
 	     .details = "Your provider is the site your titles are looked at on: AniList (the\n"
-	                "default), MyAnimeList or Kitsu. 'search', 'add' and 'refresh' ask it\n"
-	                "unless --from names another site, and 'show' gives a title's page\n"
-	                "there. Without an operand the provider is printed, as anilist, mal or\n"
-	                "kitsu. Choosing a provider is not a step for undo.\n",
+	                "default), MyAnimeList or Kitsu. 'search', 'add', 'refresh' and\n"
+	                "'import --user' ask it unless --from names another site, and 'show'\n"
+	                "gives a title's page there. Without an operand the provider is\n"
+	                "printed, as anilist, mal or kitsu. Choosing a provider is not a step\n"
+	                "for undo.\n",
 	     .operands = "[anilist|mal|kitsu]",
 	     .run = runProvider,
 	     .completes = operandKind::kWords,

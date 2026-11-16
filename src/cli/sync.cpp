@@ -246,7 +246,9 @@ linkRequest readLink(const command& self, const args::parsed& line, cliContext& 
 		return request;
 	}
 	request.site = *site;
-	if (not loadForWrite(ctx)) {
+	// Only read: link may ask the site first, and no other program is to
+	// wait on that.
+	if (not load(ctx)) {
 		request.code = 1;
 		return request;
 	}
@@ -257,6 +259,17 @@ linkRequest readLink(const command& self, const args::parsed& line, cliContext& 
 	}
 	request.title = found->front();
 	return request;
+}
+
+// Takes the catalogue for writing and reads the title again, as it is now.
+// Nothing, with the reason on standard error, when it is gone meanwhile.
+std::optional<entry> heldAgain(cliContext& ctx, const entry& title) {
+	if (not loadForWrite(ctx))
+		return std::nullopt;
+	auto now = ctx.db.getById(title.type, title.id);
+	if (not now)
+		fail(ctx, std::format("{} was removed meanwhile", refs::of(title)));
+	return now;
 }
 
 entry withSiteId(entry title, provider site, int id) {
@@ -278,31 +291,36 @@ int runLink(const command& self, const args::parsed& line, cliContext& ctx) {
 	auto request = readLink(self, line, ctx, 3);
 	if (not request.title)
 		return request.code;
-	entry title = *request.title;
 	std::string name = providerName(request.site);
+	// The ids to give the title: the one given, or those of the match
+	// chosen of a search for its title, the person choosing as for add.
+	entry chosen;
 	if (line.operands.size() == 3) {
 		auto id = args::parseCount(line.operands[2]);
 		if (not id or *id == 0)
 			return usageError(ctx, self,
 			                  std::format("'{}' is not an id on {}", line.operands[2], name));
-		title = withSiteId(title, request.site, *id);
+		chosen = withSiteId(chosen, request.site, *id);
 	} else {
-		// Searched by its title, the person choosing as for add.
 		auto site = trackerFor(ctx, request.site);
-		auto match = chooseMatch(ctx, *site, title.type, title.title, std::nullopt);
+		auto match = chooseMatch(ctx, *site, request.title->type, request.title->title,
+		                         std::nullopt);
 		if (not match)
 			return 1;
-		// The match's id on the site, and the other ids it knows that the
-		// title lacks.
-		entry chosen;
 		chosen.anilistId = match->anilistId;
 		chosen.malId = match->malId;
 		chosen.kitsuId = match->kitsuId;
-		for (provider other : kSites)
-			if (idOn(title, other) == 0)
-				title = withSiteId(title, other, idOn(chosen, other));
-		title = withSiteId(title, request.site, idOn(chosen, request.site));
 	}
+	auto held = heldAgain(ctx, *request.title);
+	if (not held)
+		return 1;
+	// The id on the site, and the other ids the match knows that the title
+	// lacks.
+	entry title = *held;
+	for (provider other : kSites)
+		if (idOn(title, other) == 0)
+			title = withSiteId(title, other, idOn(chosen, other));
+	title = withSiteId(title, request.site, idOn(chosen, request.site));
 	int id = idOn(title, request.site);
 	for (const auto& other : ctx.db.getEntries(title.type))
 		if (other.id != title.id and idOn(other, request.site) == id)
@@ -323,16 +341,19 @@ int runUnlink(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (not request.title)
 		return request.code;
 	std::string name = providerName(request.site);
-	if (idOn(*request.title, request.site) == 0) {
-		ctx.err << std::format("{} is not linked to {}.\n", refs::of(*request.title), name);
+	auto title = heldAgain(ctx, *request.title);
+	if (not title)
+		return 1;
+	if (idOn(*title, request.site) == 0) {
+		ctx.err << std::format("{} is not linked to {}.\n", refs::of(*title), name);
 		return 0;
 	}
-	ctx.db.updateEntry(withSiteId(*request.title, request.site, 0));
+	ctx.db.updateEntry(withSiteId(*title, request.site, 0));
 	if (not ctx.db.saveAll())
 		return saveFailed(ctx);
 	if (not line.has("q"))
 		ctx.err << std::format("Unlinked {} ({}) from {}: it stays on your list there.\n",
-		                       request.title->title, refs::of(*request.title), name);
+		                       title->title, refs::of(*title), name);
 	return 0;
 }
 

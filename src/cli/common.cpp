@@ -198,6 +198,16 @@ std::vector<std::string> statusWords() {
 	return words;
 }
 
+std::optional<watchStatus> statusNamed(const std::string& word) {
+	std::string wanted = utf8::lowercase(word);
+	if (wanted == "reading")
+		return watchStatus::kWatching;
+	for (watchStatus status : kStatuses)
+		if (statusKey(status) == wanted)
+			return status;
+	return std::nullopt;
+}
+
 std::optional<std::string> readText(const command& cmd, const args::parsed& line, cliContext& ctx) {
 	std::string text;
 	for (size_t i = 0; i < line.operands.size(); ++i) {

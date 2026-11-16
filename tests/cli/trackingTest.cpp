@@ -176,6 +176,15 @@ TEST_CASE_FIXTURE(cliFixture, "cli set checks every value before touching anythi
 	CHECK(err.find(
 	          "error: status 'bored' is not watching, completed, on-hold, dropped or planned\n") ==
 	      0);
+	// Nothing is guessed: a word that holds a status is not one.
+	CHECK(run({"set", "taxi", "status=unwatched"}) == 2);
+	CHECK(run({"set", "taxi", "status=4"}) == 2);
+	CHECK(run({"ls", "-s", "rewatching"}) == 2);
+	CHECK(err.find("error: unknown status 'rewatching'") == 0);
+	CHECK(run({"ls", "-s", "watchng"}) == 2);
+	CHECK(err.find("error: unknown status 'watchng' (did you mean 'watching'?)\n") == 0);
+	CHECK(run({"add", "--no-lookup", "--status=plan", "Some OVA"}) == 2);
+	CHECK(run({"ls", "-q", "-s", "Reading,ON-HOLD"}) == 0);
 	CHECK(run({"set", "taxi", "progress=lots"}) == 2);
 	CHECK(err.find("error: progress 'lots' is not a count\n") == 0);
 	CHECK(run({"set", "taxi", "progress=-1"}) == 2);

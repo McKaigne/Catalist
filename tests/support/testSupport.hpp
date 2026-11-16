@@ -3,6 +3,7 @@
 
 #include <ctime>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -48,6 +49,8 @@ struct fakeWeb {
 	// The bodies of the requests that had one.
 	std::vector<std::string> posted;
 	std::map<std::string, std::string> bodies;
+	// Runs at each request, as the site is being asked.
+	std::function<void()> whileAsked;
 };
 
 // Test data must spell dates correctly; a typo should fail loudly instead

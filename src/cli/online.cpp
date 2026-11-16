@@ -53,9 +53,11 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 		return 2;
 	if (name->empty())
 		return usageError(ctx, self, "name the title to add");
-	auto status = parseStatus(line.has("status") ? line.get("status") : "planned");
+	auto status = statusNamed(line.has("status") ? line.get("status") : "planned");
 	if (not status)
-		return usageError(ctx, self, std::format("unknown status '{}'", line.get("status")));
+		return usageError(ctx, self,
+		                  std::format("unknown status '{}'{}", line.get("status"),
+		                              didYouMean(line.get("status"), statusWords())));
 	std::optional<int> pick;
 	if (line.has("pick")) {
 		pick = args::parseCount(line.get("pick"));

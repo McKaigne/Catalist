@@ -103,6 +103,25 @@ TEST_CASE_FIXTURE(cliFixture, "cli tells a site only of the titles linked to it"
 	CHECK(run({"link", "taxi", "myspace"}) == 2);
 }
 
+TEST_CASE_FIXTURE(cliFixture, "cli link asks the site before it takes the lists for writing") {
+	seed();
+	REQUIRE(run({"add", "--no-lookup", "Dandadan"}) == 0);
+	web.respond(R"("search":"Dandadan","type":"ANIME")", R"({"data":{"Page":{"media":[
+	  {"id":171018,"idMal":57334,"title":{"romaji":"Dandadan"},"episodes":12}]}}})");
+	// Another program can write while the site is asked.
+	bool othersCouldWrite = false;
+	web.whileAsked = [&othersCouldWrite] {
+		catalist::catalogue other("data");
+		othersCouldWrite = other.beginWrite().has_value();
+	};
+	CHECK(run({"link", "dandadan", "anilist"}) == 0);
+	CHECK(othersCouldWrite);
+	CHECK(err == "Linked Dandadan (a:3) to AniList 171018.\n");
+	auto linked = savedTitle(mediaType::kAnime, "Dandadan");
+	CHECK(linked.anilistId == 171018);
+	CHECK(linked.malId == 57334);
+}
+
 TEST_CASE_FIXTURE(cliFixture, "cli rm leaves the sites' lists alone, unless --remote") {
 	seed();
 	logIn(provider::kAniList);

@@ -53,7 +53,7 @@ const std::vector<settable>& settables() {
 	     }},
 	    {"status", "", "watching, completed, on-hold, dropped or planned",
 	     [](entry e, text value, day today) {
-		     auto status = parseStatus(value);
+		     auto status = statusNamed(value);
 		     return status ? std::optional(setStatus(e, *status, today)) : std::nullopt;
 	     }},
 	    {"score", "", "0 to 10",

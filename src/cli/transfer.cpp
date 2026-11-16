@@ -109,7 +109,8 @@ struct source {
 };
 
 // Adds the titles of each source to the lists, as import does: a title
-// there already keeps what the person gave it. One step for undo.
+// there already keeps what the person gave it, and gets only what it lacks.
+// One step for undo.
 int addSources(cliContext& ctx, const args::parsed& line, const std::vector<source>& sources) {
 	if (not loadForWrite(ctx))
 		return 1;
@@ -246,8 +247,9 @@ std::vector<command> transferCommands() {
 	             "With --user, NAME's public lists are read from your provider, or the\n"
 	             "site --from names, both of them unless -a or -m keeps to one: moving\n"
 	             "in from AniList, MyAnimeList or Kitsu.\n\n"
-	             "A title already in your lists keeps your score, progress and dates;\n"
-	             "only its totals and ids are refreshed. Everything is read before\n"
+	             "A title already in your lists keeps the score, progress and dates you\n"
+	             "gave it; the import fills in only those still empty, and refreshes its\n"
+	             "totals and ids. Everything is read before\n"
 	             "anything is added: when one source is bad, nothing is changed. The\n"
 	             "titles keep their ids, so they are linked to the sites that know them.\n\n") +
 	         kChangeFormat,

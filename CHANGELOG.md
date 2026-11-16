@@ -111,6 +111,12 @@ Catalist-TUI, which keeps its lists in the same file.
 - Dates such as 2024-13-45 or 2023-02-29 are rejected instead of stored.
 - A failed save (full disk, read-only folder) is reported with exit code 1
   instead of looking like success.
+- `link REF SITE` searches the site before it takes the lists for writing,
+  so another program (or Catalist-TUI) no longer waits on the search and
+  the choice.
+- Statuses on the command line (`ls -s`, `set status=`, `add --status`) are
+  the five words and `reading`; a word that only holds one, such as
+  `unwatched`, is an error with a suggestion instead of a guess.
 
 ### Removed
 - The full-screen terminal interface (the Anime and Manga tabs, their keys,

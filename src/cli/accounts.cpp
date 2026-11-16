@@ -1,5 +1,6 @@
 #include "storage/accounts.hpp"
 
+#include <chrono>
 #include <format>
 #include <istream>
 #include <ostream>
@@ -33,18 +34,8 @@ std::optional<provider> siteOperand(const command& self, const args::parsed& lin
 std::string dayOf(long long seconds) {
 	if (seconds <= 0)
 		return "-";
-	// Howard Hinnant's days-to-civil.
-	long long days = seconds / 86400;
-	days += 719468;
-	long long era = (days >= 0 ? days : days - 146096) / 146097;
-	long long dayOfEra = days - era * 146097;
-	long long yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146096) / 365;
-	long long dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100);
-	long long monthIndex = (5 * dayOfYear + 2) / 153;
-	long long day = dayOfYear - (153 * monthIndex + 2) / 5 + 1;
-	long long month = monthIndex < 10 ? monthIndex + 3 : monthIndex - 9;
-	long long year = yearOfEra + era * 400 + (month <= 2 ? 1 : 0);
-	return std::format("{:04}-{:02}-{:02}", year, month, day);
+	std::chrono::sys_days day{std::chrono::days{seconds / 86400}};
+	return std::format("{:%F}", day);
 }
 
 std::string trimmed(std::string text) {

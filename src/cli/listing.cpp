@@ -64,9 +64,11 @@ int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 	// -s watching,on-hold: any of them; no -s, all of them.
 	std::istringstream given(line.get("s"));
 	for (std::string word; std::getline(given, word, ',');) {
-		auto status = parseStatus(word);
+		auto status = statusNamed(word);
 		if (not status)
-			return usageError(ctx, self, std::format("unknown status '{}'", word));
+			return usageError(ctx, self,
+			                  std::format("unknown status '{}'{}", word,
+			                              didYouMean(word, statusWords())));
 		query.statuses.push_back(*status);
 	}
 	if (line.has("s") and query.statuses.empty())

@@ -20,6 +20,21 @@ TEST_CASE("output keeps a tab or a line break out of a field") {
 	      "say \"hi\"\tback\\slash\t葬送\n");
 }
 
+TEST_CASE("output writes one line of comma-separated fields, quoted where it must be") {
+	CHECK(output::csvLine(std::vector<std::string>{"a:1", "anime", "Odd Taxi"}) ==
+	      "a:1,anime,Odd Taxi\n");
+	CHECK(output::csvLine(std::vector<std::string>{"a, b", "say \"hi\"", "c\nd", "葬送"}) ==
+	      "\"a, b\",\"say \"\"hi\"\"\",\"c\nd\",葬送\n");
+	CHECK(output::csvLine(std::vector<std::string>{"", "x", ""}) == ",x,\n");
+	CHECK(output::csvLine(std::vector<std::string>{}) == "\n");
+}
+
+TEST_CASE("output leaves a CSV field empty where JSON has null") {
+	CHECK(output::csvLine(std::vector<output::cell>{
+	          output::text("Odd Taxi"), output::number(5), output::known(0), output::known(13),
+	          output::date(std::nullopt), output::maybe("")}) == "Odd Taxi,5,,13,,\n");
+}
+
 TEST_CASE("output gives every kind of value a text for a line") {
 	CHECK(output::text("Odd Taxi").text == "Odd Taxi");
 	CHECK(output::number(13).text == "13");

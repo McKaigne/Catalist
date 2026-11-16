@@ -33,6 +33,13 @@ struct cell {
 [[nodiscard]] std::string tsvLine(const std::vector<std::string>& fields);
 [[nodiscard]] std::string tsvLine(const std::vector<cell>& cells);
 
+// One line of comma-separated fields, with its line end, quoted as RFC 4180
+// has it: a field that holds a comma, a quote or a line break goes in double
+// quotes, with each quote in it doubled. A cell that JSON writes as null (no
+// date, a total that is not known) is an empty field.
+[[nodiscard]] std::string csvLine(const std::vector<std::string>& fields);
+[[nodiscard]] std::string csvLine(const std::vector<cell>& cells);
+
 // The text as a JSON string, quotes included.
 [[nodiscard]] std::string jsonString(const std::string& value);
 // One JSON object on one line, with its line end: `names[i]` is the key of

@@ -77,7 +77,6 @@ add_library(catalistLib STATIC
   src/args.cpp
   src/catalogue.cpp
   src/cli.cpp
-  src/cliLegacy.cpp
   src/date.cpp
   src/entry.cpp
   src/journal.cpp

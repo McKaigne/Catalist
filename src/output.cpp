@@ -105,6 +105,30 @@ std::string tsvLine(const std::vector<cell>& cells) {
 	return tsvLine(fields);
 }
 
+std::string csvLine(const std::vector<std::string>& fields) {
+	std::string line;
+	for (size_t i = 0; i < fields.size(); ++i) {
+		const std::string& field = fields[i];
+		line += i > 0 ? "," : "";
+		if (field.find_first_of(",\"\r\n") == std::string::npos) {
+			line += field;
+			continue;
+		}
+		line += '"';
+		for (char c : field)
+			line += c == '"' ? std::string("\"\"") : std::string(1, c);
+		line += '"';
+	}
+	return line + "\n";
+}
+
+std::string csvLine(const std::vector<cell>& cells) {
+	std::vector<std::string> fields;
+	for (const auto& each : cells)
+		fields.push_back(each.json == jsonForm::kNull ? "" : each.text);
+	return csvLine(fields);
+}
+
 std::string jsonString(const std::string& value) {
 	std::string quoted = "\"";
 	for (unsigned char c : value) {

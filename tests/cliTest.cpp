@@ -227,9 +227,26 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(has(out, "Usage: catalist undo [-fq] [-n N]\n"));
 	CHECK(run({"help", "tx"}) == 0);
 	CHECK(has(out, "export CATALIST_TX=$(catalist tx)\n"));
-	// A command that still has its old form.
+	CHECK(run({"help", "add"}) == 0);
+	CHECK(
+	    has(out, "Usage: catalist add [-amq] [--pick=N] [--status=STATUS] [--no-lookup] TITLE\n"));
+	// The helps line up past the longest option.
+	CHECK(has(out, "      --status=STATUS  watching, completed, on-hold, dropped or planned\n"));
+	CHECK(has(out, "      --no-lookup      add TITLE as written, without asking AniList\n"));
+	CHECK(has(out, "  -q                   print nothing\n"));
 	CHECK(run({"help", "rm"}) == 0);
-	CHECK(has(out, "Usage: catalist rm [anime|manga] <TITLE|ID>"));
+	CHECK(has(out, "Usage: catalist rm [-amfq] [--all] REF...\n"));
+	CHECK(run({"help", "search"}) == 0);
+	CHECK(has(out, "Usage: catalist search [-am] [--json] [--header] QUERY\n"));
+	CHECK(has(out, "  pick type title year total score anilist_id mal_id ref\n"));
+	CHECK(run({"help", "stats"}) == 0);
+	CHECK(has(out, "Usage: catalist stats [-am] [--json] [--header]\n"));
+	CHECK(run({"help", "import"}) == 0);
+	CHECK(has(out, "Usage: catalist import [-q] FILE...\n"));
+	CHECK(run({"help", "export"}) == 0);
+	CHECK(has(out, "Usage: catalist export [--format=FORMAT] anime|manga\n"));
+	CHECK(run({"help", "provider"}) == 0);
+	CHECK(has(out, "Usage: catalist provider [anilist|mal]\n"));
 
 	CHECK(run({"help", "frobnicate"}) == 2);
 	CHECK(err ==
@@ -296,7 +313,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 	CHECK(run({"--frobnicate"}) == 2);
 	CHECK(err.find("error: unknown option '--frobnicate'\nUsage: catalist [COMMAND]") == 0);
 	// The names the earlier command line had are gone.
-	for (const char* gone : {"list", "info", "version", "next", "edit"})
+	for (const char* gone : {"list", "info", "version", "next", "edit", "remove", "delete"})
 		CHECK(run({gone}) == 2);
 	CHECK(run({"udno"}) == 2);
 	CHECK(err.find("error: unknown command 'udno' (did you mean 'undo'?)\n") == 0);
@@ -318,17 +335,15 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 	CHECK(err.find("error: unknown option '--al' (did you mean '--all'?)\n") == 0);
 	CHECK(out.empty());
 
-	// The commands that still have their old form.
-	CHECK(run({"add", "anime", "frieren", "--progres", "3"}) == 2);
-	CHECK(err.find("error: unknown option '--progres' (did you mean '--progress'?)\n"
+	CHECK(run({"add", "--stauts", "watching", "frieren"}) == 2);
+	CHECK(err.find("error: unknown option '--stauts' (did you mean '--status'?)\n"
 	               "Usage: catalist add ") == 0);
 	CHECK(has(err, "Run 'catalist help add' for more.\n"));
-	CHECK(run({"add", "anime", "frieren", "--rating"}) == 2);
-	CHECK(err.find("error: --rating needs a value (N)") == 0);
+	CHECK(run({"add", "--pick"}) == 2);
+	CHECK(err.find("error: option '--pick' needs a value (N)\n") == 0);
+	CHECK(run({"rm", "--yes", "taxi"}) == 2);
 	CHECK(run({"import"}) == 2);
-	CHECK(err.find("error: give at least one file") == 0);
-	CHECK(run({"export", "books"}) == 2);
-	CHECK(run({"export", "anime", "manga"}) == 2);
+	CHECK(err.find("error: give at least one file, or - for standard input\n") == 0);
 	CHECK(out.empty());
 }
 
@@ -947,10 +962,10 @@ TEST_CASE_FIXTURE(cliFixture, "cli undo takes back the last command, and redo ma
 
 TEST_CASE_FIXTURE(cliFixture, "cli undo brings a removed title back under its ref") {
 	seed();
-	REQUIRE(run({"rm", "taxi", "--yes"}) == 0);
+	REQUIRE(run({"rm", "-f", "taxi"}) == 0);
 	CHECK(saved(mediaType::kAnime).size() == 1);
 	CHECK(run({"undo"}) == 0);
-	CHECK(err == "Undid 'rm taxi --yes' (2026-10-20 21:30:00).\n");
+	CHECK(err == "Undid 'rm -f taxi' (2026-10-20 21:30:00).\n");
 	CHECK(out == "a:2\tOdd Taxi\tadded\t-\twatching\n");
 	auto taxi = savedTitle(mediaType::kAnime, "Odd Taxi");
 	CHECK(taxi.id == 2);
@@ -960,7 +975,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli undo brings a removed title back under its re
 	CHECK(out == "Odd Taxi  removed\n");
 	CHECK(saved(mediaType::kAnime).size() == 1);
 	CHECK(run({"undo"}, "", 100) == 0);
-	CHECK(out == "Odd Taxi  added as watching\n");
+	CHECK(out == "Odd Taxi  added as watching (a:2)\n");
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli undo changes nothing when a title has changed since") {
@@ -1056,7 +1071,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli tx prints a label, and commands run under one
 	REQUIRE(run({"+", "taxi"}) == 0);
 	REQUIRE(run({"+", "-"}, "a:2\nm:1\n") == 0);
 	REQUIRE(run({"done", "m:2"}) == 0);
-	REQUIRE(run({"rm", "manga", "berserk", "--yes"}) == 0);
+	REQUIRE(run({"rm", "-fm", "berserk"}) == 0);
 	group.clear();
 
 	auto history = steps();
@@ -1088,18 +1103,59 @@ TEST_CASE_FIXTURE(cliFixture, "cli stops quietly when nobody reads what a change
 	CHECK(run({"tx"}) == 0);
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli rm asks first, and wants --yes in a pipe") {
+TEST_CASE_FIXTURE(cliFixture, "cli rm asks first, and wants -f where nobody can be asked") {
 	seed();
 	CHECK(run({"rm", "taxi"}) == 1);
-	CHECK(err == "error: pass --yes to remove Odd Taxi without being asked\n");
+	CHECK(err == "error: nobody to ask here: pass -f to remove Odd Taxi (a:2)\n");
 	CHECK(run({"rm", "taxi"}, "n\n") == 1);
-	CHECK(has(err, "Remove Odd Taxi from your anime list? [y/N]: "));
+	CHECK(err == "Remove Odd Taxi (a:2) from your lists? [y/N]: Cancelled.\n");
+	CHECK(out.empty());
 	CHECK(saved(mediaType::kAnime).size() == 2);
-	CHECK(run({"remove", "taxi"}, "y\n") == 0);
-	CHECK(out == "Removed Odd Taxi.\n");
-	CHECK(run({"delete", "anime", "frieren", "--yes"}) == 0);
+	CHECK(steps().empty());
+
+	CHECK(run({"rm", "taxi"}, "y\n", 100) == 0);
+	CHECK(out == "Odd Taxi  removed\n");
+	CHECK(run({"rm", "-f", "a:1"}) == 0);
+	CHECK(out == "a:1\tSousou no Frieren\tremoved\tcompleted\t-\n");
+	CHECK(err.empty());
 	CHECK(saved(mediaType::kAnime).empty());
 	CHECK(saved(mediaType::kManga).size() == 2);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli rm removes several titles as one step") {
+	seed();
+	// One question for all of them.
+	CHECK(run({"rm", "--all", "frieren"}, "yes\n") == 0);
+	CHECK(has(err, "  a:1  Sousou no Frieren\n"));
+	CHECK(has(err, "  m:2  Sousou no Frieren\n"));
+	CHECK(has(err, "Remove these 2 titles from your lists? [y/N]: "));
+	CHECK(saved(mediaType::kAnime).size() == 1);
+	CHECK(saved(mediaType::kManga).size() == 1);
+	REQUIRE(steps().size() == 1);
+	CHECK(steps()[0].changes == 2);
+
+	// REFs from standard input leave nobody to ask.
+	CHECK(run({"rm", "-"}, "a:2\nm:1\n") == 1);
+	CHECK(has(err, "error: nobody to ask here: pass -f to remove these 2 titles\n"));
+	CHECK(saved(mediaType::kAnime).size() == 1);
+	CHECK(run({"rm", "-fq", "-"}, "a:2\nm:1\n") == 0);
+	CHECK(out.empty());
+	CHECK(err.empty());
+	CHECK(saved(mediaType::kAnime).empty());
+	CHECK(saved(mediaType::kManga).empty());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli rm removes nothing when a REF is wrong") {
+	seed();
+	CHECK(run({"rm", "-f", "taxi", "nope"}) == 1);
+	CHECK(saved(mediaType::kAnime).size() == 2);
+	// Two titles are called Frieren.
+	CHECK(run({"rm", "-f", "frieren"}) == 1);
+	CHECK(saved(mediaType::kAnime).size() == 2);
+	CHECK(saved(mediaType::kManga).size() == 2);
+	CHECK(run({"rm"}) == 2);
+	CHECK(run({"rm", "-f"}) == 2);
+	CHECK(out.empty());
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli add finds the title on AniList and adds it") {
@@ -1109,27 +1165,55 @@ TEST_CASE_FIXTURE(cliFixture, "cli add finds the title on AniList and adds it") 
 	   "startDate":{"year":2024}}]}}})");
 	web.respond(R"({"id":171018,"type":"ANIME")", R"({"data":{"Media":{"id":171018,
 	  "idMal":57334,"title":{"romaji":"Dandadan"},"episodes":12,"status":"FINISHED"}}})");
-	CHECK(run({"add", "anime", "dandadan", "-s", "watching", "-p", "3"}) == 0);
-	CHECK(out == "Added Dandadan to your anime list as Watching.\n");
+	CHECK(run({"add", "--status", "watching", "dandadan"}) == 0);
+	CHECK(out == "a:3\tDandadan\tadded\t-\twatching\n");
+	CHECK(err.empty());
 	auto added = savedTitle(mediaType::kAnime, "Dandadan");
 	CHECK(added.anilistId == 171018);
 	CHECK(added.malId == 57334);
 	CHECK(added.totalUnits == 12);
 	CHECK(added.released == 12);
-	CHECK(added.progress == 3);
+	CHECK(added.progress == 0);
 	CHECK(catalist::formatDate(added.startDate) == "2026-10-20");
+	CHECK(catalist::formatDate(added.updatedAt) == "2026-10-20");
 
 	// Once is enough.
-	CHECK(run({"add", "anime", "dandadan"}) == 1);
-	CHECK(err ==
-	      "error: Dandadan is already in your anime list (Watching)\n"
-	      "Change it with: catalist set a:3 ...\n");
-	// By id too.
-	CHECK(run({"add", "anime", "171018"}) == 1);
-	CHECK(has(err, "already in your anime list"));
+	CHECK(run({"add", "dandadan"}) == 0);
+	CHECK(err == "Dandadan is in your anime list already, as a:3 (watching).\nNothing changed.\n");
+	CHECK(out.empty());
+	CHECK(saved(mediaType::kAnime).size() == 3);
+
+	// One step for undo, and the ref is free again.
+	REQUIRE(steps().size() == 1);
+	CHECK(steps()[0].label == "add --status watching dandadan");
+	CHECK(run({"undo"}) == 0);
+	CHECK(saved(mediaType::kAnime).size() == 2);
+	CHECK(run({"add", "-q", "--status=completed", "dandadan"}) == 0);
+	CHECK(out.empty());
+	added = savedTitle(mediaType::kAnime, "Dandadan");
+	CHECK(added.id == 3);
+	CHECK(added.status == watchStatus::kCompleted);
+	CHECK(added.progress == 12);
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli add with several matches asks, or lists them into a pipe") {
+TEST_CASE_FIXTURE(cliFixture, "cli add -m adds a manga, planned unless told otherwise") {
+	web.respond(R"("search":"vagabond","type":"MANGA")", R"({"data":{"Page":{"media":[
+	  {"id":30656,"idMal":656,"title":{"romaji":"Vagabond"},"chapters":327,
+	   "startDate":{"year":1998}}]}}})");
+	web.respond(R"({"id":30656,"type":"MANGA")", R"({"data":{"Media":{"id":30656,
+	  "idMal":656,"title":{"romaji":"Vagabond"},"chapters":327,"volumes":37,
+	  "status":"HIATUS"}}})");
+	CHECK(run({"add", "-m", "vagabond"}, "", 100) == 0);
+	CHECK(out == "Vagabond  added as planned (m:1)\n");
+	auto added = savedTitle(mediaType::kManga, "Vagabond");
+	CHECK(added.status == watchStatus::kPlanToWatch);
+	CHECK(added.totalUnits == 327);
+	CHECK(added.totalVolumes == 37);
+	CHECK_FALSE(added.startDate);
+	CHECK(saved(mediaType::kAnime).empty());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli add with several matches asks, or wants --pick") {
 	seed();
 	web.respond(R"("search":"fullmetal","type":"ANIME")", R"({"data":{"Page":{"media":[
 	  {"id":5114,"idMal":5114,"title":{"romaji":"Fullmetal Alchemist: Brotherhood"},
@@ -1143,76 +1227,262 @@ TEST_CASE_FIXTURE(cliFixture, "cli add with several matches asks, or lists them 
 	            R"({"data":{"Media":{"id":5114,"idMal":5114,
 	                "title":{"romaji":"Fullmetal Alchemist: Brotherhood"},"episodes":64}}})");
 
-	CHECK(run({"add", "anime", "fullmetal"}) == 1);
+	CHECK(run({"add", "fullmetal"}) == 1);
 	CHECK(err ==
-	      "error: 'fullmetal' matches 2 titles on AniList:\n"
-	      "     5114  2009  Fullmetal Alchemist: Brotherhood  (64 episodes)\n"
-	      "      121  2003  Fullmetal Alchemist  (51 episodes)\n"
-	      "Add one by its AniList id, e.g. catalist add anime 5114, or pass --yes for "
-	      "the first.\n");
+	      "error: 'fullmetal' matches 2 anime on AniList:\n"
+	      "   1  2009  Fullmetal Alchemist: Brotherhood  (64 episodes)\n"
+	      "   2  2003  Fullmetal Alchemist  (51 episodes)\n"
+	      "Take one by its number with --pick=N.\n");
+	CHECK(out.empty());
 	CHECK(saved(mediaType::kAnime).size() == 2);
 
-	CHECK(run({"add", "anime", "fullmetal"}, "2\n") == 0);
-	CHECK(out == "Added Fullmetal Alchemist to your anime list as Plan to Watch.\n");
-	CHECK(run({"add", "anime", "fullmetal", "--yes"}) == 0);
-	CHECK(has(out, "Added Fullmetal Alchemist: Brotherhood"));
+	// At a terminal the person chooses; an empty answer cancels.
+	CHECK(run({"add", "fullmetal"}, "\n") == 1);
+	CHECK(err.find("'fullmetal' matches 2 anime on AniList:\n") == 0);
+	CHECK(has(err, "Which one? [1-2, Enter to cancel]: Cancelled.\n"));
+	CHECK(saved(mediaType::kAnime).size() == 2);
+	CHECK(run({"add", "fullmetal"}, "2\n") == 0);
+	CHECK(out == "a:3\tFullmetal Alchemist\tadded\t-\tplanned\n");
+
+	CHECK(run({"add", "--pick=1", "fullmetal"}) == 0);
+	CHECK(out == "a:4\tFullmetal Alchemist: Brotherhood\tadded\t-\tplanned\n");
+	CHECK(err.empty());
 	CHECK(saved(mediaType::kAnime).size() == 4);
+	// --pick wins over the question.
+	CHECK(run({"add", "--pick", "2", "fullmetal"}, "1\n") == 0);
+	CHECK(has(err, "Fullmetal Alchemist is in your anime list already, as a:3 (planned).\n"));
+
+	CHECK(run({"add", "--pick=3", "fullmetal"}) == 1);
+	CHECK(err == "error: --pick=3, but AniList has only 2 matches for 'fullmetal'\n");
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli add says what went wrong") {
 	seed();
-	CHECK(run({"add", "dandadan"}) == 2);
-	CHECK(has(err, "say which list"));
-	CHECK(run({"add", "anime"}) == 2);
-	CHECK(run({"add", "anime", "x", "-r", "12"}) == 2);
+	CHECK(run({"add"}) == 2);
+	CHECK(err.find("error: name one title; quote a title of several words\n"
+	               "Usage: catalist add ") == 0);
+	CHECK(run({"add", "odd", "taxi"}) == 2);
+	CHECK(run({"add", ""}) == 2);
+	CHECK(run({"add", "-am", "x"}) == 2);
+	CHECK(err.find("error: give -a or -m, not both\n") == 0);
+	CHECK(run({"add", "--status", "nope", "x"}) == 2);
+	CHECK(err.find("error: unknown status 'nope'\n") == 0);
+	CHECK(run({"add", "--pick", "0", "x"}) == 2);
+	CHECK(run({"add", "--pick", "two", "x"}) == 2);
+	CHECK(err.find("error: --pick 'two' is not the number of a match\n") == 0);
+	CHECK(run({"add", "--no-lookup", "--pick=1", "x"}) == 2);
+	// A wrong command line asks AniList nothing.
+	CHECK(web.posted.empty());
+
 	// The fake web answers nothing: offline.
-	CHECK(run({"add", "anime", "dandadan"}) == 1);
-	CHECK(err == "error: could not reach AniList; check the connection and try again\n");
+	CHECK(run({"add", "dandadan"}) == 1);
+	CHECK(err ==
+	      "error: could not reach AniList; check the connection and try again\n"
+	      "To add a title without AniList: catalist add --no-lookup TITLE\n");
 	web.respond(R"("search":"zzz")", R"({"data":{"Page":{"media":[]}}})");
-	CHECK(run({"add", "manga", "zzz"}) == 1);
+	CHECK(run({"add", "-m", "zzz"}) == 1);
 	CHECK(err == "error: AniList has no manga matching 'zzz'\n");
+	// Found by the search, gone when looked up.
+	web.respond(R"("search":"ghost","type":"ANIME")", R"({"data":{"Page":{"media":[
+	  {"id":999,"idMal":null,"title":{"romaji":"Ghost"}}]}}})");
 	web.respond(R"({"id":999,"type":"ANIME")", R"({"data":{"Media":null}})");
-	CHECK(run({"add", "anime", "999"}) == 1);
-	CHECK(err == "error: AniList knows no anime with AniList id 999\n");
+	CHECK(run({"add", "ghost"}) == 1);
+	CHECK(err == "error: AniList does not know the title\n");
+	CHECK(out.empty());
+	CHECK(saved(mediaType::kAnime).size() == 2);
+	CHECK(steps().empty());
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli search shows the matches and which are tracked") {
+TEST_CASE_FIXTURE(cliFixture, "cli add --no-lookup adds a title as written, without AniList") {
+	CHECK(run({"add", "--no-lookup", "Home Video"}) == 0);
+	CHECK(out == "a:1\tHome Video\tadded\t-\tplanned\n");
+	CHECK(err.empty());
+	CHECK(web.posted.empty());
+	auto added = savedTitle(mediaType::kAnime, "Home Video");
+	CHECK(added.anilistId == 0);
+	CHECK(added.malId == 0);
+	CHECK(added.totalUnits == 0);
+
+	CHECK(run({"add", "--no-lookup", "-m", "--status=reading", "Zine"}) == 0);
+	CHECK(out == "m:1\tZine\tadded\t-\twatching\n");
+	CHECK(catalist::formatDate(savedTitle(mediaType::kManga, "Zine").startDate) == "2026-10-20");
+
+	// Nothing but the name tells two such titles apart: said, and added.
+	CHECK(run({"add", "--no-lookup", "home video"}) == 0);
+	CHECK(err == "note: your anime list has a title of that name already, a:1.\n");
+	CHECK(out == "a:2\thome video\tadded\t-\tplanned\n");
+	CHECK(saved(mediaType::kAnime).size() == 2);
+	CHECK(web.posted.empty());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli search prints the matches and which are yours") {
 	seed();
 	web.respond(R"("search":"frieren","type":"ANIME")", R"({"data":{"Page":{"media":[
 	  {"id":154587,"idMal":52991,"title":{"romaji":"Sousou no Frieren"},"episodes":28,
-	   "startDate":{"year":2023}},
+	   "averageScore":89,"startDate":{"year":2023}},
 	  {"id":182255,"idMal":59978,"title":{"romaji":"Sousou no Frieren 2nd Season"},
 	   "startDate":{"year":2026}}]}}})");
-	CHECK(run({"search", "anime", "frieren"}) == 0);
+	CHECK(run({"search", "frieren"}) == 0);
 	CHECK(out ==
-	      "154587\t2023\tSousou no Frieren\t28\ttracked\n"
-	      "182255\t2026\tSousou no Frieren 2nd Season\t0\t\n");
-	CHECK(run({"search", "anime", "frieren"}, "", 100) == 0);
-	CHECK(has(out, " 154587  2023  Sousou no Frieren  (28 episodes)  in your list\n"));
-	CHECK(has(out, "(running)\n"));
-	CHECK(run({"search", "frieren"}) == 2);
+	      "1\tanime\tSousou no Frieren\t2023\t28\t8.9\t154587\t52991\ta:1\n"
+	      "2\tanime\tSousou no Frieren 2nd Season\t2026\t0\t0\t182255\t59978\t-\n");
+	CHECK(err.empty());
+	CHECK(run({"search", "--header", "frieren"}) == 0);
+	CHECK(out.find("pick\ttype\ttitle\tyear\ttotal\tscore\tanilist_id\tmal_id\tref\n1\tanime\t") ==
+	      0);
+	CHECK(run({"search", "--json", "frieren"}, "", 100) == 0);
+	CHECK(out ==
+	      "{\"pick\":1,\"type\":\"anime\",\"title\":\"Sousou no Frieren\",\"year\":2023,"
+	      "\"total\":28,\"score\":8.9,\"anilist_id\":154587,\"mal_id\":52991,\"ref\":\"a:1\"}\n"
+	      "{\"pick\":2,\"type\":\"anime\",\"title\":\"Sousou no Frieren 2nd Season\","
+	      "\"year\":2026,\"total\":null,\"score\":null,\"anilist_id\":182255,\"mal_id\":59978,"
+	      "\"ref\":null}\n");
+
+	// A table at a terminal, with how to add one of them.
+	CHECK(run({"search", "frieren"}, "", 100) == 0);
+	CHECK(out ==
+	      "#  YEAR  TITLE                         EPISODES  SCORE  YOURS\n"
+	      "1  2023  Sousou no Frieren                   28    8.9  a:1\n"
+	      "2  2026  Sousou no Frieren 2nd Season         ?      -\n");
+	CHECK(err == "Add one with: catalist add --pick=N QUERY\n");
+	// Nothing is added, and no step is made.
+	CHECK(saved(mediaType::kAnime).size() == 2);
+	CHECK(steps().empty());
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli provider decides which ids are shown and accepted") {
+TEST_CASE_FIXTURE(cliFixture, "cli search -m searches manga") {
+	seed();
+	web.respond(R"("search":"berserk","type":"MANGA")", R"({"data":{"Page":{"media":[
+	  {"id":30002,"idMal":2,"title":{"romaji":"Berserk"},"startDate":{"year":1989}}]}}})");
+	CHECK(run({"search", "-m", "berserk"}) == 0);
+	CHECK(out == "1\tmanga\tBerserk\t1989\t0\t0\t30002\t2\tm:1\n");
+	CHECK(run({"search", "-m", "berserk"}, "", 100) == 0);
+	CHECK(has(out, "CHAPTERS"));
+	CHECK(err == "Add one with: catalist add -m --pick=N QUERY\n");
+	// The anime of that name is another search.
+	CHECK(run({"search", "berserk"}) == 1);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli search says what went wrong") {
+	CHECK(run({"search"}) == 2);
+	CHECK(err.find("error: give one QUERY; quote a title of several words\n"
+	               "Usage: catalist search ") == 0);
+	CHECK(run({"search", "odd", "taxi"}) == 2);
+	CHECK(run({"search", "-am", "taxi"}) == 2);
+	CHECK(web.posted.empty());
+
+	// The fake web answers nothing: offline.
+	CHECK(run({"search", "dandadan"}) == 1);
+	CHECK(err == "error: could not reach AniList; check the connection and try again\n");
+	CHECK(out.empty());
+
+	// No match is not a failure.
+	web.respond(R"("search":"zzz")", R"({"data":{"Page":{"media":[]}}})");
+	CHECK(run({"search", "zzz"}) == 0);
+	CHECK(out.empty());
+	CHECK(err.empty());
+	CHECK(run({"search", "zzz"}, "", 100) == 0);
+	CHECK(out.empty());
+	CHECK(err == "AniList has no anime matching 'zzz'.\n");
+	// Searching writes nothing, not even the data directory.
+	CHECK_FALSE(std::filesystem::exists("data"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli stats prints one line of numbers a list") {
+	seed();
+	CHECK(run({"stats"}) == 0);
+	CHECK(out ==
+	      "anime\t2\t1\t1\t0\t0\t0\t9.00\t33\t0\t0\t0.6\n"
+	      "manga\t2\t1\t0\t0\t0\t1\t0\t364\t0\t0\t1.3\n");
+	CHECK(err.empty());
+	CHECK(run({"stats", "-m", "--header"}) == 0);
+	CHECK(out ==
+	      "type\ttotal\twatching\tcompleted\ton_hold\tdropped\tplanned\tmean\tunits\tvolumes\t"
+	      "rewatched\tdays\n"
+	      "manga\t2\t1\t0\t0\t0\t1\t0\t364\t0\t0\t1.3\n");
+	CHECK(run({"stats", "-a", "--json"}, "", 100) == 0);
+	CHECK(out ==
+	      "{\"type\":\"anime\",\"total\":2,\"watching\":1,\"completed\":1,\"on_hold\":0,"
+	      "\"dropped\":0,\"planned\":0,\"mean\":9.00,\"units\":33,\"volumes\":0,"
+	      "\"rewatched\":0,\"days\":0.6}\n");
+	// No score given yet: there is no mean.
+	CHECK(run({"stats", "-m", "--json"}) == 0);
+	CHECK(has(out, "\"planned\":1,\"mean\":null,\"units\":364,"));
+	CHECK(run({"stats", "anime"}) == 2);
+	CHECK(err.find("error: stats takes no operands\nUsage: catalist stats ") == 0);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli stats draws a card a list at a terminal") {
+	seed();
+	CHECK(run({"stats"}, "", 100) == 0);
+	CHECK(out ==
+	      "Anime\n"
+	      "  Titles         2\n"
+	      "  Watching       1\n"
+	      "  Completed      1\n"
+	      "  On-Hold        0\n"
+	      "  Dropped        0\n"
+	      "  Plan to Watch  0\n"
+	      "  Mean score     9.00\n"
+	      "  Episodes       33\n"
+	      "  Rewatched      0\n"
+	      "  Days spent     0.6\n"
+	      "\n"
+	      "Manga\n"
+	      "  Titles         2\n"
+	      "  Reading        1\n"
+	      "  Completed      0\n"
+	      "  On-Hold        0\n"
+	      "  Dropped        0\n"
+	      "  Plan to Read   1\n"
+	      "  Mean score     -\n"
+	      "  Chapters       364\n"
+	      "  Volumes        0\n"
+	      "  Reread         0\n"
+	      "  Days spent     1.3\n");
+	CHECK(run({"stats", "-m"}, "", 100) == 0);
+	CHECK(out.find("Manga\n") == 0);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli stats of an empty catalogue is all zeros, and writes nothing") {
+	CHECK(run({"stats"}) == 0);
+	CHECK(out ==
+	      "anime\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0.0\n"
+	      "manga\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0.0\n");
+	CHECK_FALSE(std::filesystem::exists("data"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli provider prints or sets the site titles are looked at on") {
 	seed();
 	CHECK(run({"provider"}) == 0);
-	CHECK(out == "Your provider is AniList.\n");
+	CHECK(out == "anilist\n");
+	CHECK(err.empty());
 	CHECK(run({"provider", "mal"}) == 0);
-	CHECK(has(out, "now MyAnimeList"));
+	CHECK(out.empty());
+	CHECK(err == "Your provider is now MyAnimeList.\n");
 	{
 		catalist::catalogue db("data");
 		REQUIRE(db.loadAll().ok());
 		CHECK(db.getProvider() == catalist::provider::kMyAnimeList);
 	}
+	CHECK(run({"provider"}) == 0);
+	CHECK(out == "mal\n");
 	CHECK(run({"show", "taxi"}) == 0);
 	CHECK(has(out, "\thttps://myanimelist.net/anime/44265\n"));
 	CHECK(run({"show", "taxi"}, "", 100) == 0);
 	CHECK(has(out, "  Page         https://myanimelist.net/anime/44265\n"));
+	CHECK(run({"provider", "myanimelist"}) == 0);
+	CHECK(err == "Nothing changed.\n");
 
 	CHECK(run({"provider", "kitsu"}) == 2);
+	CHECK(err.find("error: unknown provider 'kitsu'; choose anilist or mal\n"
+	               "Usage: catalist provider [anilist|mal]\n") == 0);
+	CHECK(run({"provider", "anilist", "mal"}) == 2);
 	CHECK(run({"provider", "anilist"}) == 0);
 	CHECK(run({"show", "taxi"}) == 0);
 	CHECK(has(out, "\thttps://anilist.co/anime/128547\n"));
+	// A setting is not a step for undo.
+	CHECK(steps().empty());
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli import adds the titles and saves them") {
@@ -1221,9 +1491,12 @@ TEST_CASE_FIXTURE(cliFixture, "cli import adds the titles and saves them") {
 
 	CHECK(run({"import", "lists/anime.xml", "lists/manga.xml"}) == 0);
 	CHECK(out ==
-	      "lists/anime.xml: 2 titles, 2 added, 0 already in the catalogue\n"
-	      "lists/manga.xml: 1 titles, 1 added, 0 already in the catalogue\n");
-	CHECK(err.empty());
+	      "a:1\tSousou no Frieren\tadded\t-\tcompleted\n"
+	      "a:2\tOdd Taxi\tadded\t-\twatching\n"
+	      "m:1\tBerserk\tadded\t-\twatching\n");
+	CHECK(err ==
+	      "lists/anime.xml: 2 titles, 2 added, 0 in your lists already\n"
+	      "lists/manga.xml: 1 title, 1 added, 0 in your lists already\n");
 
 	auto anime = saved(mediaType::kAnime);
 	REQUIRE(anime.size() == 2);
@@ -1237,6 +1510,47 @@ TEST_CASE_FIXTURE(cliFixture, "cli import adds the titles and saves them") {
 	REQUIRE(manga.size() == 1);
 	CHECK(manga[0].title == "Berserk");
 	CHECK(manga[0].progress == 364);
+
+	// All the files of one command are one step for undo.
+	REQUIRE(steps().size() == 1);
+	CHECK(steps()[0].label == "import lists/anime.xml lists/manga.xml");
+	CHECK(steps()[0].changes == 3);
+	CHECK(run({"undo", "-q"}) == 0);
+	CHECK(saved(mediaType::kAnime).empty());
+	CHECK(saved(mediaType::kManga).empty());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli import reads standard input for a FILE of -") {
+	CHECK(run({"import", "-q", "-"}, kAnimeXml) == 0);
+	CHECK(out.empty());
+	CHECK(err == "standard input: 2 titles, 2 added, 0 in your lists already\n");
+	CHECK(saved(mediaType::kAnime).size() == 2);
+	CHECK(run({"import", "-"}, "not an export") == 1);
+	CHECK(err ==
+	      "error: no anime or manga found in standard input (is it a MyAnimeList XML export?)\n");
+	CHECK(run({"import", "-"}, std::string("\x1f\x8b\x08\x00", 4) + "gz") == 1);
+	CHECK(err == "error: standard input is compressed; unpack it first (gunzip)\n");
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli import has the tracker look the new titles up") {
+	seed();
+	put("lists/anime.xml", kAnimeXml);
+	// Both titles are there already: nothing new to look up.
+	CHECK(run({"import", "lists/anime.xml"}) == 0);
+	{
+		catalist::catalogue db("data");
+		REQUIRE(db.loadAll().ok());
+		CHECK(db.getLinkedOn() == testToday());
+	}
+	put("lists/manga.xml",
+	    "<myanimelist><manga><manga_mangadb_id>656</manga_mangadb_id>"
+	    "<manga_title><![CDATA[Vagabond]]></manga_title>"
+	    "<my_status>Plan to Read</my_status></manga></myanimelist>");
+	CHECK(run({"import", "lists/manga.xml"}) == 0);
+	CHECK(out == "m:3\tVagabond\tadded\t-\tplanned\n");
+	catalist::catalogue db("data");
+	REQUIRE(db.loadAll().ok());
+	CHECK_FALSE(db.getLinkedOn());
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli importing again keeps what the user changed") {
@@ -1256,12 +1570,16 @@ TEST_CASE_FIXTURE(cliFixture, "cli importing again keeps what the user changed")
 	}
 
 	CHECK(run({"import", "lists/anime.xml"}) == 0);
-	CHECK(out == "lists/anime.xml: 2 titles, 0 added, 2 already in the catalogue\n");
+	CHECK(out.empty());
+	CHECK(err ==
+	      "lists/anime.xml: 2 titles, 0 added, 2 in your lists already\n"
+	      "Nothing changed.\n");
 	auto anime = saved(mediaType::kAnime);
 	REQUIRE(anime.size() == 2);
 	CHECK(anime[1].score == 9);
 	CHECK(anime[1].progress == 13);
 	CHECK(catalist::formatDate(anime[1].startDate) == "2026-01-02");
+	CHECK(steps().size() == 1);
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli import changes nothing when any file is bad") {
@@ -1291,6 +1609,9 @@ TEST_CASE_FIXTURE(cliFixture, "cli import exits 1 when the catalogue cannot be s
 	catalist::test::makeUnwritable("data/catalist.db");
 	CHECK(run({"import", "lists/anime.xml"}) == 1);
 	CHECK(err.find("error: cannot open data/catalist.db: ") == 0);
+	CHECK(run({"add", "--no-lookup", "Home Video"}) == 1);
+	CHECK(err.find("error: cannot open data/catalist.db: ") == 0);
+	CHECK(out.empty());
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli refuses to work on a catalogue it cannot read") {
@@ -1298,7 +1619,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli refuses to work on a catalogue it cannot read
 	put("lists/anime.xml", kAnimeXml);
 	CHECK(run({"import", "lists/anime.xml"}) == 1);
 	CHECK(err.find("error: data/anime.csv: ") == 0);
+	for (const char* command : {"stats", "provider"})
+		CHECK(run({command}) == 1);
 	CHECK(run({"export", "anime"}) == 1);
+	CHECK(run({"rm", "-f", "taxi"}) == 1);
+	CHECK(run({"add", "--no-lookup", "Home Video"}) == 1);
 	CHECK(out.empty());
 	CHECK(catalist::test::readText("data/anime.csv") == "this,is,not,a,catalogue\n");
 }
@@ -1317,12 +1642,65 @@ TEST_CASE_FIXTURE(cliFixture, "cli export prints what import read") {
 	CHECK(anime[0].progress == 28);
 	CHECK(anime[1].title == "Odd Taxi");
 	CHECK(anime[1].score == 8);
+	// xml is the format when none is named.
+	std::string xml = out;
+	CHECK(run({"export", "--format=xml", "anime"}) == 0);
+	CHECK(out == xml);
 
 	CHECK(run({"export", "manga"}) == 0);
 	auto manga = catalist::malXml::parse(out);
 	REQUIRE(manga.size() == 1);
 	CHECK(manga[0].type == mediaType::kManga);
 	CHECK(manga[0].title == "Berserk");
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli export --format=csv prints the columns of ls, quoted as CSV") {
+	seed();
+	REQUIRE(run({"add", "--no-lookup", "Say \"hi\", twice"}) == 0);
+	CHECK(run({"export", "--format=csv", "anime"}) == 0);
+	CHECK(err.empty());
+	CHECK(out ==
+	      "ref,type,title,status,score,progress,total,volumes,rewatched,started,finished,"
+	      "updated,new\n"
+	      "a:1,anime,Sousou no Frieren,completed,10,28,28,0,0,,,,0\n"
+	      "a:2,anime,Odd Taxi,watching,8,5,13,0,0,2026-10-01,,,8\n"
+	      "a:3,anime,\"Say \"\"hi\"\", twice\",planned,0,0,,0,0,,,2026-10-20,0\n");
+	// The same at a terminal: a file is what it is for.
+	std::string csv = out;
+	CHECK(run({"export", "--format", "csv", "anime"}, "", 100) == 0);
+	CHECK(out == csv);
+	CHECK(run({"export", "--format=csv", "manga"}) == 0);
+	CHECK(std::count(out.begin(), out.end(), '\n') == 3);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli export --format=json prints one object a title") {
+	seed();
+	CHECK(run({"export", "--format=json", "anime"}) == 0);
+	CHECK(std::count(out.begin(), out.end(), '\n') == 2);
+	CHECK(out.find("{\"ref\":\"a:1\",\"type\":\"anime\",\"title\":\"Sousou no Frieren\",") == 0);
+	CHECK(
+	    has(out,
+	        "\n{\"ref\":\"a:2\",\"type\":\"anime\",\"title\":\"Odd Taxi\",\"status\":\"watching\","
+	        "\"score\":8,\"progress\":5,\"total\":13,"));
+	// The lines of `ls --json`.
+	std::string json = out;
+	CHECK(run({"ls", "-a", "--sort=updated", "--json"}) == 0);
+	CHECK(out.size() == json.size());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli export wants a list and a format it knows") {
+	seed();
+	CHECK(run({"export"}) == 2);
+	CHECK(err.find("error: say which list: anime or manga\nUsage: catalist export ") == 0);
+	CHECK(run({"export", "books"}) == 2);
+	CHECK(run({"export", "anime", "manga"}) == 2);
+	CHECK(run({"export", "--format=yaml", "anime"}) == 2);
+	CHECK(err.find("error: unknown format 'yaml'") == 0);
+	CHECK(has(err, "; choose xml, csv or json\nUsage: catalist export "));
+	CHECK(run({"export", "--format=jsno", "anime"}) == 2);
+	CHECK(err.find("error: unknown format 'jsno' (did you mean 'json'?); choose xml, csv or "
+	               "json\n") == 0);
+	CHECK(out.empty());
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli export notes the titles it had to leave out") {
@@ -1336,6 +1714,10 @@ TEST_CASE_FIXTURE(cliFixture, "cli export notes the titles it had to leave out")
 	CHECK(err == "note: 2 titles without a MyAnimeList id were left out.\n");
 	CHECK(catalist::malXml::parse(out).empty());
 	CHECK(out.find("<myanimelist>") != std::string::npos);
+	// The other formats leave nothing out.
+	CHECK(run({"export", "--format=csv", "anime"}) == 0);
+	CHECK(err.empty());
+	CHECK(std::count(out.begin(), out.end(), '\n') == 3);
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli export of an empty catalogue is an empty list") {
@@ -1343,4 +1725,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli export of an empty catalogue is an empty list
 	CHECK(err.empty());
 	CHECK(out.find("<user_export_type>2</user_export_type>") != std::string::npos);
 	CHECK(catalist::malXml::parse(out).empty());
+	CHECK(run({"export", "--format=csv", "manga"}) == 0);
+	CHECK(out ==
+	      "ref,type,title,status,score,progress,total,volumes,rewatched,started,finished,"
+	      "updated,new\n");
+	CHECK(run({"export", "--format=json", "manga"}) == 0);
+	CHECK(out.empty());
+	CHECK_FALSE(std::filesystem::exists("data"));
 }

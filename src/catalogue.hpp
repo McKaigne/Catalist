@@ -9,6 +9,7 @@
 
 #include "date.hpp"
 #include "entry.hpp"
+#include "journal.hpp"
 #include "result.hpp"
 #include "store.hpp"
 
@@ -65,12 +66,43 @@ struct dataDirEnv {
 	std::string home;
 };
 
+// How a save is entered in the undo history.
+struct txNote {
+	// What the step is called there: the command as it was typed.
+	std::string label;
+	// The local date and time.
+	std::string stamp;
+	// Fold the save into the newest step when that one has the same label:
+	// CATALIST_TX names a run of commands that one undo takes back.
+	bool group = false;
+};
+
+// One step of the undo history: what one command (or one group) changed.
+struct txRecord {
+	long long id = 0;
+	std::string stamp;
+	std::string label;
+	bool undone = false;
+	// How many entries it changed.
+	int changes = 0;
+};
+
+// What an undo or a redo did: the steps in the order they were taken, and
+// what became of the entries.
+struct replay {
+	std::vector<txRecord> steps;
+	std::vector<journal::change> changes;
+};
+
 // The anime and manga lists in memory, and the SQLite file that keeps them
 // (`catalist.db` in the data directory). Changes are made in memory and
 // written by saveAll, which writes only the rows that differ from what was
-// last read or written.
+// last read or written. The same file keeps the undo history: the last 100
+// saves that were given a note.
 class catalogue {
 public:
+	static constexpr int kHistoryLength = 100;
+
 	// `oldDir` is where Catalist 0.3 and earlier kept their CSV files; it is
 	// looked in once, when the data directory holds nothing yet.
 	explicit catalogue(std::filesystem::path dataDir, std::filesystem::path oldDir = {});
@@ -99,6 +131,9 @@ public:
 	int fillIds(mediaType type, const std::vector<std::pair<int, int>>& anilistAndMal);
 	bool updateEntry(const entry& changed);
 	bool removeEntry(mediaType type, int id);
+	// Puts a removed entry back under the id it had; false when another
+	// entry has that id by now.
+	bool restoreEntry(const entry& back);
 
 	// Each key has a natural order: new releases, last change, score, progress
 	// and date from high to low, title and status from first to last.
@@ -143,8 +178,25 @@ public:
 	[[nodiscard]] const std::filesystem::path& importedFrom() const { return importedFrom_; }
 
 	// Writes the rows that changed since the last load or save, and the
-	// provider when it changed, as one unit: all of it or nothing.
+	// provider when it changed, as one unit: all of it or nothing. Not
+	// entered in the undo history: for what the web filled in.
 	[[nodiscard]] bool saveAll();
+	// The same, entered in the undo history as one step when anything the
+	// person sets has changed (see journal.hpp). Steps that were undone are
+	// forgotten then: new work ends what could be redone.
+	[[nodiscard]] bool saveAll(const txNote& note);
+
+	// Takes back the newest `count` steps that are not undone, newest first,
+	// or makes the oldest `count` undone steps again, and saves. All of it or
+	// nothing: when an entry is no longer as a step left it, the lists stay
+	// as they are and the result names the step and the entry. `force` takes
+	// the steps back all the same. Fewer steps than `count` is not an error;
+	// the result says which were taken.
+	[[nodiscard]] result<replay> undo(int count, bool force);
+	[[nodiscard]] result<replay> redo(int count, bool force);
+	// The steps of the history, newest first; all of them when `limit` is 0.
+	// Empty until loadAll has found something stored.
+	[[nodiscard]] result<std::vector<txRecord>> history(int limit);
 
 private:
 	std::vector<entry>& getList(mediaType type);
@@ -158,6 +210,11 @@ private:
 	[[nodiscard]] bool readStore();
 	[[nodiscard]] bool writeRows();
 	[[nodiscard]] bool writeSettings();
+	// The rows, and the settings when they changed.
+	[[nodiscard]] bool writeChanged();
+	[[nodiscard]] result<replay> walkHistory(bool redoing, int count, bool force);
+	// Applies one step to the lists in memory; the reason when it cannot.
+	[[nodiscard]] std::string replayStep(const txRecord& step, bool redoing, bool force);
 	// Runs `work` inside the write that beginWrite opened, or one of its
 	// own, and commits it.
 	template <typename writer>

@@ -45,6 +45,10 @@ namespace catalist {
 // for the undo history.
 [[nodiscard]] std::string nowStamp();
 
+// A label no other run of commands has: "<seconds since 1970>-<process
+// id>", for CATALIST_TX.
+[[nodiscard]] std::string newTxLabel();
+
 // The size of one terminal cell in pixels, when the terminal reports it.
 struct cellSize {
 	int width = 0;

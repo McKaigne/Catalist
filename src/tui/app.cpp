@@ -92,8 +92,8 @@ void appShell::applyFindings() {
 	for (const auto& found : ctx_.web.takeLinks())
 		linked += fillIds(ctx_.db, found.type, found.ids);
 	if (linked > 0) {
-		ctx_.save(fmt::format("Found the {} ids of {} titles.", providerName(ctx_.db.getProvider()),
-		                      linked));
+		ctx_.saveQuietly(fmt::format("Found the {} ids of {} titles.",
+		                             providerName(ctx_.db.getProvider()), linked));
 		activeTab().onActivate(ctx_);
 	}
 
@@ -112,19 +112,29 @@ void appShell::applyFindings() {
 			changedTitles.push_back(after.title);
 	}
 	if (changedTitles.size() == 1)
-		ctx_.save(
+		ctx_.saveQuietly(
 		    fmt::format("Updated from AniList: '{}'.", utf8::clip(changedTitles.front(), 36)));
 	else if (changedTitles.size() > 1)
-		ctx_.save(fmt::format("Updated from AniList: {} titles.", changedTitles.size()));
+		ctx_.saveQuietly(fmt::format("Updated from AniList: {} titles.", changedTitles.size()));
 	else
-		ctx_.save(ctx_.status);
+		ctx_.saveQuietly(ctx_.status);
 	activeTab().onActivate(ctx_);
 }
 
+namespace {
+
+std::string saveProblem(const catalogue& db) {
+	return fmt::format("Could not save the catalogue to {}.", db.getDataDir().string());
+}
+
+}  // namespace
+
 void appContext::save(const std::string& done) {
-	status = db.saveAll()
-	             ? done
-	             : fmt::format("Could not save the catalogue to {}.", db.getDataDir().string());
+	status = db.saveAll({utf8::clip(done, 60), nowStamp(), false}) ? done : saveProblem(db);
+}
+
+void appContext::saveQuietly(const std::string& done) {
+	status = db.saveAll() ? done : saveProblem(db);
 }
 
 appShell::appShell(appContext& ctx, std::vector<iTab*> tabs, std::function<void()> quit)
@@ -256,6 +266,7 @@ void runTui(catalogue& db) {
 	    },
 	    kRequestPause, [&screen] { screen.PostEvent(Event::Custom); });
 	appContext ctx{db, today, httpPost, web};
+	ctx.nowStamp = nowStamp;
 	if (auto cell = terminalCellSize()) {
 		ctx.cellWidth = cell->width;
 		ctx.cellHeight = cell->height;

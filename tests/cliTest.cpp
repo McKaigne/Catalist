@@ -63,6 +63,9 @@ struct cliFixture : catalist::test::tempDirFixture {
 		ctx.columns = columns;
 		ctx.color = color;
 		ctx.program = program;
+		ctx.nowStamp = [] { return std::string(kStamp); };
+		ctx.newTxLabel = [] { return std::string("1792531800-4242"); };
+		ctx.txLabel = group;
 		int exitCode = catalist::runCli(args, ctx);
 		out = outStream.str();
 		err = errStream.str();
@@ -108,6 +111,7 @@ struct cliFixture : catalist::test::tempDirFixture {
 		                .progress(5)
 		                .totalUnits(13)
 		                .released(13)
+		                .startDate("2026-10-01")
 		                .checkedAt("2026-10-20"));
 		db.addEntry(makeEntry()
 		                .title("Berserk")
@@ -116,6 +120,7 @@ struct cliFixture : catalist::test::tempDirFixture {
 		                .anilistId(30002)
 		                .status(watchStatus::kWatching)
 		                .progress(364)
+		                .startDate("2019-05-01")
 		                .checkedAt("2026-10-20"));
 		db.addEntry(makeEntry()
 		                .title("Sousou no Frieren")
@@ -129,13 +134,34 @@ struct cliFixture : catalist::test::tempDirFixture {
 		REQUIRE(db.saveSettings());
 	}
 
+	// The steps of the undo history, newest first.
+	std::vector<catalist::txRecord> steps() {
+		catalist::catalogue db("data");
+		REQUIRE(db.loadAll().ok());
+		return db.history(0).value();
+	}
+
+	// A change no command made, as a web check in the tracker makes one.
+	void changeBehindTheHistory(mediaType type, const std::string& title, int progress) {
+		catalist::catalogue db("data");
+		REQUIRE(db.loadAll().ok());
+		auto changed = catalist::test::findTitle(db, type, title);
+		changed.progress = progress;
+		REQUIRE(db.updateEntry(changed));
+		REQUIRE(db.saveAll());
+	}
+
+	// When every change of a test is made.
+	static constexpr const char* kStamp = "2026-10-20 21:30:00";
+
 	catalist::test::fakeWeb web;
 	std::filesystem::path previousDir;
 	// How the next runs are set up: the name the program goes by, colours,
-	// and a standard output whose reader has gone.
+	// a standard output whose reader has gone, and CATALIST_TX.
 	std::string program = "catalist";
 	bool color = false;
 	bool outClosed = false;
+	std::string group;
 	std::string out;
 	std::string err;
 };
@@ -159,6 +185,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 		CHECK(run({flag}) == 0);
 		CHECK(has(out, "Usage: catalist [COMMAND] [ARG...]\n"));
 		CHECK(has(out, "  ls          List your titles\n"));
+		CHECK(has(out, "  +           Count one more episode or chapter\n"));
+		CHECK(has(out, "  undo        Take back what the last command changed\n"));
 		CHECK(has(out, "  help        Show help for a command\n"));
 		CHECK(has(out, "  add         Add a title found on AniList\n"));
 		CHECK(has(out, "  catalist show a:12\n"));
@@ -185,13 +213,27 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(out == fromHelp);
 	CHECK(run({"help", "show"}) == 0);
 	CHECK(has(out, "Usage: catalist show [-am] [--all] [--json] [--header] REF...\n"));
-	// A command that still has its old form.
+	CHECK(run({"help", "+"}) == 0);
+	CHECK(has(out, "Usage: catalist + [-amq] [--all] [-n N] REF...\nAlso:  catalist inc\n"));
+	CHECK(run({"-", "--help"}) == 0);
+	CHECK(has(out, "Usage: catalist - [-amq] [--all] [-n N] REF...\nAlso:  catalist dec\n"));
 	CHECK(run({"help", "set"}) == 0);
-	CHECK(has(out, "Usage: catalist set [anime|manga] <TITLE|ID> <options>"));
+	CHECK(has(out, "Usage: catalist set [-amq] [--all] REF FIELD=VALUE...\n"));
+	CHECK(run({"help", "done"}) == 0);
+	CHECK(has(out, "Usage: catalist done [-amq] [--all] [--score=N] REF...\n"));
+	CHECK(run({"help", "hold"}) == 0);
+	CHECK(has(out, "Usage: catalist hold [-amq] [--all] REF...\n"));
+	CHECK(run({"help", "undo"}) == 0);
+	CHECK(has(out, "Usage: catalist undo [-fq] [-n N]\n"));
+	CHECK(run({"help", "tx"}) == 0);
+	CHECK(has(out, "export CATALIST_TX=$(catalist tx)\n"));
+	// A command that still has its old form.
+	CHECK(run({"help", "rm"}) == 0);
+	CHECK(has(out, "Usage: catalist rm [anime|manga] <TITLE|ID>"));
 
-	CHECK(run({"help", "nope"}) == 2);
+	CHECK(run({"help", "frobnicate"}) == 2);
 	CHECK(err ==
-	      "error: no command 'nope'\n"
+	      "error: no command 'frobnicate'\n"
 	      "Usage: catalist help [COMMAND]\n"
 	      "Run 'catalist help help' for more.\n");
 	CHECK(out.empty());
@@ -249,13 +291,15 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 	      "Usage: catalist [COMMAND] [ARG...]\n"
 	      "Run 'catalist help' to see the commands.\n");
 	CHECK(out.empty());
-	CHECK(run({"sync"}) == 2);
-	CHECK(err.find("error: unknown command 'sync'\n") == 0);
+	CHECK(run({"frobnicate"}) == 2);
+	CHECK(err.find("error: unknown command 'frobnicate'\n") == 0);
 	CHECK(run({"--frobnicate"}) == 2);
 	CHECK(err.find("error: unknown option '--frobnicate'\nUsage: catalist [COMMAND]") == 0);
-	// The names the earlier command line had for ls and show are gone.
-	for (const char* gone : {"list", "info", "version"})
+	// The names the earlier command line had are gone.
+	for (const char* gone : {"list", "info", "version", "next", "edit"})
 		CHECK(run({gone}) == 2);
+	CHECK(run({"udno"}) == 2);
+	CHECK(err.find("error: unknown command 'udno' (did you mean 'undo'?)\n") == 0);
 
 	CHECK(run({"ls", "--jsno"}) == 2);
 	CHECK(err ==
@@ -275,12 +319,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 	CHECK(out.empty());
 
 	// The commands that still have their old form.
-	CHECK(run({"set", "frieren", "--progres", "3"}) == 2);
-	CHECK(err ==
-	      "error: unknown option '--progres' (did you mean '--progress'?)\n"
-	      "Usage: catalist set [anime|manga] <TITLE|ID> <options>\n"
-	      "Run 'catalist help set' for more.\n");
-	CHECK(run({"set", "frieren", "--rating"}) == 2);
+	CHECK(run({"add", "anime", "frieren", "--progres", "3"}) == 2);
+	CHECK(err.find("error: unknown option '--progres' (did you mean '--progress'?)\n"
+	               "Usage: catalist add ") == 0);
+	CHECK(has(err, "Run 'catalist help add' for more.\n"));
+	CHECK(run({"add", "anime", "frieren", "--rating"}) == 2);
 	CHECK(err.find("error: --rating needs a value (N)") == 0);
 	CHECK(run({"import"}) == 2);
 	CHECK(err.find("error: give at least one file") == 0);
@@ -294,8 +337,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli ls prints tab-separated lines into a pipe") {
 	CHECK(run({"ls"}) == 0);
 	// In title order; nothing but the titles, and every field holds something.
 	CHECK(out ==
-	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t-\t-\t-\t0\n"
-	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t-\t-\t-\t8\n"
+	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t2019-05-01\t-\t-\t0\n"
+	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t8\n"
 	      "a:1\tanime\tSousou no Frieren\tcompleted\t10\t28\t28\t0\t0\t-\t-\t-\t0\n"
 	      "m:2\tmanga\tSousou no Frieren\tplanned\t0\t0\t0\t0\t0\t-\t-\t-\t0\n");
 	CHECK(err.empty());
@@ -304,7 +347,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli ls prints tab-separated lines into a pipe") {
 	CHECK(out ==
 	      "ref\ttype\ttitle\tstatus\tscore\tprogress\ttotal\tvolumes\trewatched\tstarted\t"
 	      "finished\tupdated\tnew\n"
-	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t-\t-\t-\t8\n");
+	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t8\n");
 	// Nothing listed: nothing printed, and that is not a failure.
 	CHECK(run({"ls", "nothing like it"}) == 0);
 	CHECK(out.empty());
@@ -376,7 +419,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli ls --json prints one object a line") {
 	CHECK(out ==
 	      "{\"ref\":\"a:2\",\"type\":\"anime\",\"title\":\"Odd Taxi\",\"status\":\"watching\","
 	      "\"score\":8,\"progress\":5,\"total\":13,\"volumes\":0,\"rewatched\":0,"
-	      "\"started\":null,\"finished\":null,\"updated\":null,\"new\":8}\n");
+	      "\"started\":\"2026-10-01\",\"finished\":null,\"updated\":null,\"new\":8}\n");
 	// A total that is not known is null; --header is for the tabbed form.
 	CHECK(run({"ls", "--json", "--header", "berserk"}) == 0);
 	CHECK(out.find("{\"ref\":\"m:1\",\"type\":\"manga\",\"title\":\"Berserk\"") == 0);
@@ -455,21 +498,22 @@ TEST_CASE_FIXTURE(cliFixture, "cli ls draws a table at a terminal") {
 TEST_CASE_FIXTURE(cliFixture, "cli show prints a title's line into a pipe") {
 	seed();
 	CHECK(run({"show", "taxi"}) == 0);
-	CHECK(out ==
-	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t-\t-\t-\t8\t0\t13\t128547\t44265\t"
-	      "https://anilist.co/anime/128547\n");
+	CHECK(
+	    out ==
+	    "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t8\t0\t13\t128547\t44265\t"
+	    "https://anilist.co/anime/128547\n");
 	CHECK(err.empty());
 	CHECK(run({"show", "--header", "m:1"}) == 0);
 	CHECK(out ==
 	      "ref\ttype\ttitle\tstatus\tscore\tprogress\ttotal\tvolumes\trewatched\tstarted\t"
 	      "finished\tupdated\tnew\ttotal_volumes\treleased\tanilist_id\tmal_id\turl\n"
-	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t-\t-\t-\t0\t0\t0\t30002\t2\t"
+	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t2019-05-01\t-\t-\t0\t0\t0\t30002\t2\t"
 	      "https://anilist.co/manga/30002\n");
 	CHECK(run({"show", "--json", "m:1"}) == 0);
 	CHECK(out ==
 	      "{\"ref\":\"m:1\",\"type\":\"manga\",\"title\":\"Berserk\",\"status\":\"watching\","
 	      "\"score\":0,\"progress\":364,\"total\":null,\"volumes\":0,\"rewatched\":0,"
-	      "\"started\":null,\"finished\":null,\"updated\":null,\"new\":0,"
+	      "\"started\":\"2019-05-01\",\"finished\":null,\"updated\":null,\"new\":0,"
 	      "\"total_volumes\":null,\"released\":null,\"anilist_id\":30002,\"mal_id\":2,"
 	      "\"url\":\"https://anilist.co/manga/30002\"}\n");
 }
@@ -516,7 +560,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli show draws a card at a terminal") {
 	      "  Score        8/10\n"
 	      "  Progress     5/13 episodes  (+8 new)\n"
 	      "  Rewatched    0\n"
-	      "  Started      -\n"
+	      "  Started      2026-10-01\n"
 	      "  Finished     -\n"
 	      "  Updated      -\n");
 	CHECK(run({"show", "m:2", "berserk"}, "", 100) == 0);
@@ -584,73 +628,464 @@ TEST_CASE_FIXTURE(cliFixture, "cli asks which title was meant, or lists them int
 	CHECK(err.find("error: 'frieren' matches 2 titles:\n") == 0);
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli set changes a title and says what changed") {
+TEST_CASE_FIXTURE(cliFixture, "cli + counts one more and says what changed") {
 	seed();
-	CHECK(run({"set", "taxi", "-p", "13", "--rating=9"}) == 0);
+	CHECK(run({"+", "taxi"}) == 0);
+	CHECK(out == "a:2\tOdd Taxi\tprogress\t5\t6\n");
+	CHECK(err.empty());
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 6);
+	CHECK(web.posted.empty());
+
+	// At a terminal the line is for reading.
+	CHECK(run({"+", "a:2"}, "", 100) == 0);
+	CHECK(out == "Odd Taxi  6 → 7/13\n");
+	CHECK(run({"inc", "-n", "2", "berserk"}, "", 100) == 0);
+	CHECK(out == "Berserk  364 → 366/?\n");
+	color = true;
+	CHECK(run({"+", "a:2"}, "", 100) == 0);
+	CHECK(out == "\x1b[1mOdd Taxi\x1b[0m  7 → 8/13\n");
+	color = false;
+
+	// The first one starts a title, the last one completes it.
+	CHECK(run({"+", "m:2"}) == 0);
 	CHECK(out ==
-	      "Odd Taxi\n"
-	      "  status    Watching → Completed\n"
-	      "  rating    8 → 9\n"
-	      "  progress  5/13 → 13/13\n");
+	      "m:2\tSousou no Frieren\tprogress\t0\t1\n"
+	      "m:2\tSousou no Frieren\tstatus\tplanned\twatching\n"
+	      "m:2\tSousou no Frieren\tstarted\t-\t2026-10-20\n");
+	CHECK(run({"+", "-n5", "taxi"}, "", 100) == 0);
+	CHECK(out ==
+	      "Odd Taxi  8 → 13/13\n"
+	      "Odd Taxi  status watching → completed\n"
+	      "Odd Taxi  finished - → 2026-10-20\n");
 	auto taxi = savedTitle(mediaType::kAnime, "Odd Taxi");
 	CHECK(taxi.status == watchStatus::kCompleted);
-	CHECK(catalist::formatDate(taxi.finishDate) == "2026-10-20");
-
-	CHECK(run({"edit", "taxi", "--progress", "-3"}) == 0);
-	CHECK(has(out, "progress  13/13 → 10/13"));
-	CHECK(run({"set", "manga", "berserk", "-s", "on-hold", "--volumes", "40"}) == 0);
-	CHECK(has(out, "status    Reading → On-Hold"));
-	CHECK(has(out, "volumes   0 → 40"));
-	CHECK(run({"set", "taxi", "-r", "9"}) == 0);
-	CHECK(has(out, "nothing changed"));
+	CHECK(catalist::formatDate(taxi.updatedAt) == "2026-10-20");
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli set checks its values before touching anything") {
+TEST_CASE_FIXTURE(cliFixture, "cli - counts one less") {
 	seed();
-	CHECK(run({"set", "taxi"}) == 2);
-	CHECK(err.find("error: nothing to change") == 0);
-	CHECK(run({"set", "taxi", "-r", "11"}) == 2);
-	CHECK(err.find("error: --rating '11' is not 0 to 10") == 0);
-	CHECK(run({"set", "taxi", "-s", "bored"}) == 2);
-	CHECK(run({"set", "taxi", "-p", "lots"}) == 2);
-	CHECK(run({"set", "taxi", "-p", "1234567"}) == 2);
+	CHECK(run({"-", "taxi"}) == 0);
+	CHECK(out == "a:2\tOdd Taxi\tprogress\t5\t4\n");
+	CHECK(run({"dec", "-n", "3", "taxi"}) == 0);
+	CHECK(out == "a:2\tOdd Taxi\tprogress\t4\t1\n");
+	// Below the total a completed title is open again.
+	CHECK(run({"-", "a:1"}) == 0);
+	CHECK(has(out, "a:1\tSousou no Frieren\tprogress\t28\t27\n"));
+	CHECK(has(out, "a:1\tSousou no Frieren\tstatus\tcompleted\twatching\n"));
+	// A title named - is not one: the command's own name comes first.
+	CHECK(run({"-", "--", "-n"}) == 1);
+	CHECK(err.find("error: nothing in your lists matches '-n'\n") == 0);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli + takes several titles, from standard input as well") {
+	seed();
+	CHECK(run({"ls", "-q", "-s", "watching"}) == 0);
+	std::string watching = out;
+	CHECK(watching == "m:1\na:2\n");
+	CHECK(run({"+", "-"}, watching) == 0);
+	CHECK(out ==
+	      "m:1\tBerserk\tprogress\t364\t365\n"
+	      "a:2\tOdd Taxi\tprogress\t5\t6\n");
+	CHECK(err.empty());
+	// One step for undo, named as the command was typed.
+	auto history = steps();
+	REQUIRE(history.size() == 1);
+	CHECK(history[0].label == "+ -");
+	CHECK(history[0].stamp == "2026-10-20 21:30:00");
+	CHECK(history[0].changes == 2);
+
+	CHECK(run({"+", "--all", "-q", "frieren", "taxi"}) == 0);
+	CHECK(out.empty());
+	CHECK(err.empty());
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 7);
+	CHECK(savedTitle(mediaType::kManga, "Sousou no Frieren").progress == 1);
+	// The same title named twice is counted once.
+	CHECK(run({"+", "taxi", "a:2"}) == 0);
+	CHECK(out == "a:2\tOdd Taxi\tprogress\t7\t8\n");
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli + changes nothing when one title cannot be found") {
+	seed();
+	CHECK(run({"+", "taxi", "naruto"}) == 1);
+	CHECK(err.find("error: nothing in your lists matches 'naruto'\n") == 0);
+	CHECK(out.empty());
+	CHECK(run({"+", "taxi", "frieren"}) == 1);
+	CHECK(err.find("error: 'frieren' matches 2 titles:\n") == 0);
+	CHECK(run({"+", "frieren"}, "7\n") == 1);
+	CHECK(has(err, "Cancelled.\n"));
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 5);
+	CHECK(steps().empty());
+
+	CHECK(run({"+"}) == 2);
+	CHECK(err.find("error: ") == 0);
+	CHECK(has(err, "Usage: catalist + [-amq] [--all] [-n N] REF...\n"));
+	CHECK(run({"+", "-n", "0", "taxi"}) == 2);
+	CHECK(err.find("error: -n '0' is not a count of one or more\n") == 0);
+	CHECK(run({"+", "-n", "x", "taxi"}) == 2);
+	CHECK(run({"+", "-n"}) == 2);
+	CHECK(run({"+", "--by", "2", "taxi"}) == 2);
 	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 5);
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli refreshes a title from AniList before changing it") {
+TEST_CASE_FIXTURE(cliFixture, "cli says when a command changed nothing, and records no step") {
 	seed();
-	// Berserk has ended since it was last checked (on a fresh day).
-	{
-		catalist::catalogue db("data");
-		REQUIRE(db.loadAll().ok());
-		auto berserk = catalist::test::findTitle(db, mediaType::kManga, "Berserk");
-		berserk.checkedAt.reset();
-		REQUIRE(db.updateEntry(berserk));
-		REQUIRE(db.saveAll());
-	}
-	web.respond(R"({"id":30002,"type":"MANGA"})",
-	            R"({"data":{"Media":{"id":30002,"idMal":2,"status":"FINISHED","chapters":380}}})");
-	CHECK(run({"next", "berserk"}) == 0);
-	CHECK(out == "Berserk\n  progress  364/? → 365/380\n");
-	auto berserk = savedTitle(mediaType::kManga, "Berserk");
-	CHECK(berserk.totalUnits == 380);
-	CHECK(berserk.released == 380);
-	CHECK(catalist::formatDate(berserk.checkedAt) == "2026-10-20");
-
-	// Checked today: not asked again.
-	size_t asked = web.posted.size();
-	CHECK(run({"next", "berserk", "--by", "15"}) == 0);
-	CHECK(out == "Berserk\n  status    Reading → Completed\n  progress  365/380 → 380/380\n");
-	CHECK(web.posted.size() == asked);
+	// Frieren is complete: there is no more to count.
+	CHECK(run({"+", "a:1"}) == 0);
+	CHECK(out.empty());
+	CHECK(err == "Nothing changed.\n");
+	CHECK(run({"set", "taxi", "score=8", "progress=5"}) == 0);
+	CHECK(err == "Nothing changed.\n");
+	CHECK(run({"resume", "taxi"}) == 0);
+	CHECK(err == "Nothing changed.\n");
+	CHECK(run({"done", "a:1"}, "", 100) == 0);
+	CHECK(err == "Nothing changed.\n");
+	CHECK(out.empty());
+	CHECK(steps().empty());
+	// Only the titles that changed are printed.
+	CHECK(run({"+", "--all", "frieren"}) == 0);
+	CHECK(out.find("m:2\t") == 0);
+	CHECK_FALSE(has(out, "a:1\t"));
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli next counts one more, offline too") {
+TEST_CASE_FIXTURE(cliFixture, "cli set changes the fields of a title") {
 	seed();
-	CHECK(run({"next", "128547"}) == 0);
-	CHECK(out == "Odd Taxi\n  progress  5/13 → 6/13\n");
-	CHECK(run({"next", "taxi", "-n", "0"}) == 2);
-	CHECK(run({"next", "taxi", "-n", "x"}) == 2);
+	CHECK(run({"set", "taxi", "score=9", "progress=13"}) == 0);
+	CHECK(out ==
+	      "a:2\tOdd Taxi\tprogress\t5\t13\n"
+	      "a:2\tOdd Taxi\tstatus\twatching\tcompleted\n"
+	      "a:2\tOdd Taxi\tscore\t8\t9\n"
+	      "a:2\tOdd Taxi\tfinished\t-\t2026-10-20\n");
+	CHECK(err.empty());
+	auto taxi = savedTitle(mediaType::kAnime, "Odd Taxi");
+	CHECK(taxi.status == watchStatus::kCompleted);
+	CHECK(taxi.score == 9);
+	CHECK(steps().size() == 1);
+
+	CHECK(run({"set", "a:2", "title=ODDTAXI", "start=2026-09-30", "finish=", "rewatched=1"}, "",
+	          100) == 0);
+	CHECK(out ==
+	      "ODDTAXI  rewatched 0 → 1\n"
+	      "ODDTAXI  started 2026-10-01 → 2026-09-30\n"
+	      "ODDTAXI  finished 2026-10-20 → -\n"
+	      "ODDTAXI  title Odd Taxi → ODDTAXI\n");
+	taxi = savedTitle(mediaType::kAnime, "ODDTAXI");
+	CHECK(catalist::formatDate(taxi.startDate) == "2026-09-30");
+	CHECK_FALSE(taxi.finishDate);
+	CHECK(taxi.status == watchStatus::kCompleted);
+
+	// The total first, so the progress can reach it; a field's name in any
+	// case, and the names the columns of ls have for the dates.
+	CHECK(run({"set", "-m", "berserk", "Progress=380", "total=380", "VOLUMES=42",
+	           "started=2019-04-30", "finished=2026-10-19"}) == 0);
+	auto berserk = savedTitle(mediaType::kManga, "Berserk");
+	CHECK(berserk.totalUnits == 380);
+	CHECK(berserk.progress == 380);
+	CHECK(berserk.volumes == 42);
+	CHECK(berserk.status == watchStatus::kCompleted);
+	CHECK(catalist::formatDate(berserk.startDate) == "2019-04-30");
+	CHECK(catalist::formatDate(berserk.finishDate) == "2026-10-19");
+
+	// The status last, so a status that is given stands.
+	CHECK(run({"set", "a:1", "status=on-hold", "progress=3", "score=0"}) == 0);
+	auto frieren = savedTitle(mediaType::kAnime, "Sousou no Frieren");
+	CHECK(frieren.status == watchStatus::kOnHold);
+	CHECK(frieren.progress == 3);
+	CHECK(frieren.score == 0);
+	// A value may hold an equals sign, and a title spaces.
+	CHECK(run({"set", "-q", "a:1", "title=1 + 1 = 2"}) == 0);
+	CHECK(out.empty());
+	CHECK(savedTitle(mediaType::kAnime, "1 + 1 = 2").id == 1);
+	// Every title of that name.
+	CHECK(run({"set", "--all", "1", "score=7"}) == 0);
+	CHECK(has(out, "a:1\t1 + 1 = 2\tscore\t0\t7\n"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli set checks every value before touching anything") {
+	seed();
+	CHECK(run({"set"}) == 2);
+	CHECK(err.find("error: name a title") == 0);
+	CHECK(run({"set", "taxi"}) == 2);
+	CHECK(err ==
+	      "error: nothing to change: give a FIELD=VALUE such as score=8\n"
+	      "Usage: catalist set [-amq] [--all] REF FIELD=VALUE...\n"
+	      "Run 'catalist help set' for more.\n");
+	CHECK(run({"set", "taxi", "progress=6", "score=11"}) == 2);
+	CHECK(err.find("error: score '11' is not 0 to 10\n") == 0);
+	CHECK(run({"set", "taxi", "progress=6", "status=bored"}) == 2);
+	CHECK(err.find(
+	          "error: status 'bored' is not watching, completed, on-hold, dropped or planned\n") ==
+	      0);
+	CHECK(run({"set", "taxi", "progress=lots"}) == 2);
+	CHECK(err.find("error: progress 'lots' is not a count\n") == 0);
+	CHECK(run({"set", "taxi", "progress=-1"}) == 2);
+	CHECK(run({"set", "taxi", "progress=1234567"}) == 2);
+	CHECK(run({"set", "taxi", "start=yesterday"}) == 2);
+	CHECK(err.find("error: start 'yesterday' is not a date such as 2026-10-20, or empty") == 0);
+	CHECK(run({"set", "taxi", "finish=2026-02-30"}) == 2);
+	CHECK(run({"set", "taxi", "title="}) == 2);
+	CHECK(err.find("error: title '' is not a title\n") == 0);
+	CHECK(run({"set", "taxi", "scor=9"}) == 2);
+	CHECK(err.find("error: unknown field 'scor' (did you mean 'score'?)\n") == 0);
+	CHECK(run({"set", "taxi", "colour=red"}) == 2);
+	CHECK(err.find("error: unknown field 'colour'\n") == 0);
+	CHECK(run({"set", "taxi", "score=9", "nine"}) == 2);
+	CHECK(err.find("error: 'nine' is not FIELD=VALUE") == 0);
+	// The earlier form of the command.
+	CHECK(run({"set", "taxi", "-p", "13"}) == 2);
+	CHECK(out.empty());
+	auto taxi = savedTitle(mediaType::kAnime, "Odd Taxi");
+	CHECK(taxi.progress == 5);
+	CHECK(taxi.score == 8);
+
+	// The title is looked for once the values are known to be good.
+	CHECK(run({"set", "naruto", "score=9"}) == 1);
+	CHECK(err.find("error: nothing in your lists matches 'naruto'\n") == 0);
+	CHECK(run({"set", "frieren", "score=9"}) == 1);
+	CHECK(err.find("error: 'frieren' matches 2 titles:\n") == 0);
+	CHECK(run({"set", "frieren", "score=9"}, "2\n") == 0);
+	CHECK(out == "m:2\tSousou no Frieren\tscore\t0\t9\n");
+	CHECK(steps().size() == 1);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli done, hold, drop, plan and resume set the status") {
+	seed();
+	CHECK(run({"done", "--score=9", "taxi"}) == 0);
+	CHECK(out ==
+	      "a:2\tOdd Taxi\tprogress\t5\t13\n"
+	      "a:2\tOdd Taxi\tstatus\twatching\tcompleted\n"
+	      "a:2\tOdd Taxi\tscore\t8\t9\n"
+	      "a:2\tOdd Taxi\tfinished\t-\t2026-10-20\n");
+	CHECK(err.empty());
+	CHECK(run({"hold", "berserk"}, "", 100) == 0);
+	CHECK(out ==
+	      "Berserk  status watching → on-hold\n"
+	      "Berserk  finished - → 2026-10-20\n");
+	CHECK(savedTitle(mediaType::kManga, "Berserk").status == watchStatus::kOnHold);
+	CHECK(run({"resume", "berserk"}) == 0);
+	CHECK(out == "m:1\tBerserk\tstatus\ton-hold\twatching\n");
+	CHECK(run({"drop", "-q", "m:1"}) == 0);
+	CHECK(out.empty());
+	CHECK(savedTitle(mediaType::kManga, "Berserk").status == watchStatus::kDropped);
+	CHECK(run({"plan", "-"}, "m:1\n\na:2\n") == 0);
+	CHECK(has(out, "m:1\tBerserk\tstatus\tdropped\tplanned\n"));
+	CHECK(has(out, "a:2\tOdd Taxi\tstatus\tcompleted\tplanned\n"));
+	CHECK(steps().size() == 5);
+	CHECK(steps()[0].label == "plan -");
+	CHECK(steps()[0].changes == 2);
+	// A manga of unknown length is done where it stands.
+	CHECK(run({"done", "--score", "0", "--all", "frieren"}) == 0);
+	CHECK(out ==
+	      "a:1\tSousou no Frieren\tscore\t10\t0\n"
+	      "m:2\tSousou no Frieren\tstatus\tplanned\tcompleted\n"
+	      "m:2\tSousou no Frieren\tstarted\t-\t2026-10-20\n"
+	      "m:2\tSousou no Frieren\tfinished\t-\t2026-10-20\n");
+
+	CHECK(run({"done", "--score=11", "taxi"}) == 2);
+	CHECK(err.find("error: --score '11' is not 0 to 10\n") == 0);
+	CHECK(run({"done", "--score=high", "taxi"}) == 2);
+	CHECK(run({"hold", "--score=3", "taxi"}) == 2);
+	CHECK(err.find("error: unknown option '--score'\n") == 0);
+	CHECK(run({"drop"}) == 2);
+	CHECK(run({"drop", "naruto"}) == 1);
+	CHECK(run({"drop", "frieren"}) == 1);
+	CHECK(steps().size() == 6);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli undo takes back the last command, and redo makes it again") {
+	seed();
+	CHECK(run({"undo"}) == 0);
+	CHECK(err == "Nothing to undo.\n");
+	CHECK(out.empty());
+	CHECK(run({"redo"}) == 0);
+	CHECK(err == "Nothing to redo.\n");
+
+	REQUIRE(run({"+", "taxi"}) == 0);
+	REQUIRE(run({"done", "--score=9", "taxi"}) == 0);
+	CHECK(run({"undo"}) == 0);
+	CHECK(err == "Undid 'done --score=9 taxi' (2026-10-20 21:30:00).\n");
+	CHECK(out ==
+	      "a:2\tOdd Taxi\tprogress\t13\t6\n"
+	      "a:2\tOdd Taxi\tstatus\tcompleted\twatching\n"
+	      "a:2\tOdd Taxi\tscore\t9\t8\n"
+	      "a:2\tOdd Taxi\tfinished\t2026-10-20\t-\n");
+	auto taxi = savedTitle(mediaType::kAnime, "Odd Taxi");
+	CHECK(taxi.progress == 6);
+	CHECK(taxi.status == watchStatus::kWatching);
+	CHECK_FALSE(taxi.finishDate);
+
+	CHECK(run({"redo"}, "", 100) == 0);
+	CHECK(err == "Redid 'done --score=9 taxi' (2026-10-20 21:30:00).\n");
+	CHECK(out.find("Odd Taxi  6 → 13/13\nOdd Taxi  status watching → completed\n") == 0);
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").score == 9);
+	CHECK(run({"redo"}) == 0);
+	CHECK(err == "Nothing to redo.\n");
+
+	// Several steps, newest first; what they did between them is printed once.
+	CHECK(run({"undo", "-n", "2"}) == 0);
+	CHECK(err ==
+	      "Undid 'done --score=9 taxi' (2026-10-20 21:30:00).\n"
+	      "Undid '+ taxi' (2026-10-20 21:30:00).\n");
+	CHECK(has(out, "a:2\tOdd Taxi\tprogress\t13\t5\n"));
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 5);
+	CHECK(run({"redo", "-qn9"}) == 0);
+	CHECK(out.empty());
+	CHECK(err.empty());
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 13);
+
+	// A new change ends what could be redone.
+	REQUIRE(run({"undo"}) == 0);
+	REQUIRE(run({"hold", "berserk"}) == 0);
+	CHECK(run({"redo"}) == 0);
+	CHECK(err == "Nothing to redo.\n");
+
+	CHECK(run({"undo", "taxi"}) == 2);
+	CHECK(err.find("error: undo takes no operands\n") == 0);
+	CHECK(run({"undo", "-n", "0"}) == 2);
+	CHECK(run({"redo", "-n", "many"}) == 2);
+	CHECK(run({"redo", "--all"}) == 2);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli undo brings a removed title back under its ref") {
+	seed();
+	REQUIRE(run({"rm", "taxi", "--yes"}) == 0);
+	CHECK(saved(mediaType::kAnime).size() == 1);
+	CHECK(run({"undo"}) == 0);
+	CHECK(err == "Undid 'rm taxi --yes' (2026-10-20 21:30:00).\n");
+	CHECK(out == "a:2\tOdd Taxi\tadded\t-\twatching\n");
+	auto taxi = savedTitle(mediaType::kAnime, "Odd Taxi");
+	CHECK(taxi.id == 2);
+	CHECK(taxi.anilistId == 128547);
+	CHECK(taxi.progress == 5);
+	CHECK(run({"redo"}, "", 100) == 0);
+	CHECK(out == "Odd Taxi  removed\n");
+	CHECK(saved(mediaType::kAnime).size() == 1);
+	CHECK(run({"undo"}, "", 100) == 0);
+	CHECK(out == "Odd Taxi  added as watching\n");
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli undo changes nothing when a title has changed since") {
+	seed();
+	REQUIRE(run({"+", "taxi"}) == 0);
+	REQUIRE(run({"+", "berserk"}) == 0);
+	changeBehindTheHistory(mediaType::kAnime, "Odd Taxi", 9);
+
+	CHECK(run({"undo", "-n", "2"}) == 1);
+	CHECK(err ==
+	      "error: cannot undo '+ taxi' (2026-10-20 21:30:00): Odd Taxi (a:2) has changed since: "
+	      "progress is now 9, not 6\n"
+	      "Nothing was changed. With -f the step is taken all the same, where it still can "
+	      "be.\n");
+	CHECK(out.empty());
+	CHECK(savedTitle(mediaType::kManga, "Berserk").progress == 365);
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 9);
+	CHECK_FALSE(steps()[0].undone);
+
+	CHECK(run({"undo", "-f", "-n", "2"}) == 0);
+	CHECK(has(out, "a:2\tOdd Taxi\tprogress\t9\t5\n"));
+	CHECK(savedTitle(mediaType::kManga, "Berserk").progress == 364);
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 5);
+
+	// The step undone last is the first to be made again.
+	changeBehindTheHistory(mediaType::kAnime, "Odd Taxi", 1);
+	CHECK(run({"redo"}) == 1);
+	CHECK(err.find("error: cannot redo '+ taxi' (2026-10-20 21:30:00): Odd Taxi (a:2) has "
+	               "changed since: progress is now 1, not 5\n") == 0);
+	CHECK(run({"redo", "-f"}) == 0);
 	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 6);
+	CHECK(savedTitle(mediaType::kManga, "Berserk").progress == 364);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli log lists the steps, newest first") {
+	seed();
+	CHECK(run({"log"}) == 0);
+	CHECK(out.empty());
+	CHECK(err.empty());
+	CHECK(run({"log"}, "", 100) == 0);
+	CHECK(out.empty());
+	CHECK(err == "Nothing has been changed yet.\n");
+
+	REQUIRE(run({"+", "--all", "frieren", "taxi"}) == 0);
+	REQUIRE(run({"set", "a:2", "score=9"}) == 0);
+	REQUIRE(run({"hold", "berserk"}) == 0);
+	REQUIRE(run({"undo"}) == 0);
+	CHECK(run({"log"}) == 0);
+	CHECK(out ==
+	      "3\t2026-10-20 21:30:00\tundone\t1\thold berserk\n"
+	      "2\t2026-10-20 21:30:00\tdone\t1\tset a:2 score=9\n"
+	      "1\t2026-10-20 21:30:00\tdone\t2\t+ --all frieren taxi\n");
+	CHECK(err.empty());
+	CHECK(run({"log", "--header", "-n", "1"}) == 0);
+	CHECK(out ==
+	      "tx\tstamp\tstate\tchanges\tlabel\n"
+	      "3\t2026-10-20 21:30:00\tundone\t1\thold berserk\n");
+	CHECK(run({"log", "--json", "-n2"}) == 0);
+	CHECK(out ==
+	      "{\"tx\":3,\"stamp\":\"2026-10-20 21:30:00\",\"state\":\"undone\",\"changes\":1,"
+	      "\"label\":\"hold berserk\"}\n"
+	      "{\"tx\":2,\"stamp\":\"2026-10-20 21:30:00\",\"state\":\"done\",\"changes\":1,"
+	      "\"label\":\"set a:2 score=9\"}\n");
+	CHECK(run({"log"}, "", 100) == 0);
+	CHECK(out ==
+	      "TX  WHEN                 STATE   CHANGES  COMMAND\n"
+	      " 3  2026-10-20 21:30:00  undone        1  hold berserk\n"
+	      " 2  2026-10-20 21:30:00  done          1  set a:2 score=9\n"
+	      " 1  2026-10-20 21:30:00  done          2  + --all frieren taxi\n");
+
+	// A long command is cut to 60 characters, never inside a character.
+	REQUIRE(run({"set", "a:2", "title=" + std::string(40, 'x') + "葬送のフリーレン"}) == 0);
+	CHECK(steps()[0].label == "set a:2 title=" + std::string(40, 'x') + "葬送のフリー");
+
+	CHECK(run({"log", "taxi"}) == 2);
+	CHECK(run({"log", "-n", "0"}) == 2);
+	// Nothing is stored yet: nothing to list, and nothing is created.
+	std::filesystem::remove_all("data");
+	CHECK(run({"log"}) == 0);
+	CHECK(out.empty());
+	CHECK_FALSE(std::filesystem::exists("data"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli tx prints a label, and commands run under one undo as one") {
+	seed();
+	CHECK(run({"tx"}) == 0);
+	CHECK(out == "1792531800-4242\n");
+	CHECK(err.empty());
+	CHECK(run({"tx", "now"}) == 2);
+
+	REQUIRE(run({"+", "taxi"}) == 0);
+	group = "1792531800-4242";
+	REQUIRE(run({"+", "taxi"}) == 0);
+	REQUIRE(run({"+", "-"}, "a:2\nm:1\n") == 0);
+	REQUIRE(run({"done", "m:2"}) == 0);
+	REQUIRE(run({"rm", "manga", "berserk", "--yes"}) == 0);
+	group.clear();
+
+	auto history = steps();
+	REQUIRE(history.size() == 2);
+	CHECK(history[0].label == "1792531800-4242");
+	CHECK(history[0].changes == 3);
+	CHECK(history[1].label == "+ taxi");
+
+	CHECK(run({"undo"}) == 0);
+	CHECK(err == "Undid '1792531800-4242' (2026-10-20 21:30:00).\n");
+	CHECK(has(out, "a:2\tOdd Taxi\tprogress\t8\t6\n"));
+	CHECK(has(out, "m:1\tBerserk\tadded\t-\twatching\n"));
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 6);
+	CHECK(savedTitle(mediaType::kManga, "Berserk").progress == 364);
+	CHECK(savedTitle(mediaType::kManga, "Sousou no Frieren").status == watchStatus::kPlanToWatch);
+	CHECK(run({"redo"}) == 0);
+	CHECK(saved(mediaType::kManga).size() == 1);
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 8);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli stops quietly when nobody reads what a change printed") {
+	seed();
+	outClosed = true;
+	CHECK(run({"+", "--all", "frieren", "taxi"}) == 0);
+	CHECK(err.empty());
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 6);
+	CHECK(run({"undo"}) == 0);
+	CHECK(run({"log"}) == 0);
+	CHECK(run({"tx"}) == 0);
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli rm asks first, and wants --yes in a pipe") {
@@ -688,7 +1123,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli add finds the title on AniList and adds it") 
 	CHECK(run({"add", "anime", "dandadan"}) == 1);
 	CHECK(err ==
 	      "error: Dandadan is already in your anime list (Watching)\n"
-	      "Change it with: catalist set 171018 ...\n");
+	      "Change it with: catalist set a:3 ...\n");
 	// By id too.
 	CHECK(run({"add", "anime", "171018"}) == 1);
 	CHECK(has(err, "already in your anime list"));
@@ -778,32 +1213,6 @@ TEST_CASE_FIXTURE(cliFixture, "cli provider decides which ids are shown and acce
 	CHECK(run({"provider", "anilist"}) == 0);
 	CHECK(run({"show", "taxi"}) == 0);
 	CHECK(has(out, "\thttps://anilist.co/anime/128547\n"));
-}
-
-TEST_CASE_FIXTURE(cliFixture, "cli looks up missing ids once a day") {
-	put("lists/anime.xml", kAnimeXml);
-	REQUIRE(run({"import", "lists/anime.xml"}) == 0);
-	// AniList knows Frieren but not (in this test) Odd Taxi.
-	web.respond(R"("ids":[52991,44265])",
-	            R"({"data":{"Page":{"media":[{"id":154587,"idMal":52991}]}}})");
-	// A command that still has its old form looks them up; the answer "n"
-	// keeps the title.
-	CHECK(run({"rm", "taxi"}, "n\n") == 1);
-	CHECK(savedTitle(mediaType::kAnime, "Sousou no Frieren").anilistId == 154587);
-	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").anilistId == 0);
-	CHECK(web.posted.size() == 1);
-	{
-		catalist::catalogue db("data");
-		REQUIRE(db.loadAll().ok());
-		CHECK(db.getLinkedOn() == testToday());
-	}
-	// Odd Taxi still lacks its id, but it was asked about today.
-	CHECK(run({"rm", "taxi"}, "n\n") == 1);
-	CHECK(web.posted.size() == 1);
-	// A new import asks again on the next command.
-	REQUIRE(run({"import", "lists/anime.xml"}) == 0);
-	CHECK(run({"rm", "taxi"}, "n\n") == 1);
-	CHECK(web.posted.size() == 2);
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli import adds the titles and saves them") {

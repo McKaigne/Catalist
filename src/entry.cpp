@@ -304,6 +304,30 @@ entry setCount(entry target, countField field, int value, const isoDate& today) 
 	return target;
 }
 
+entry setTitle(entry target, const std::string& title, const isoDate& today) {
+	if (title == target.title)
+		return target;
+	target.title = title;
+	target.updatedAt = today;
+	return target;
+}
+
+entry setStartDate(entry target, std::optional<isoDate> day, const isoDate& today) {
+	if (day == target.startDate)
+		return target;
+	target.startDate = day;
+	target.updatedAt = today;
+	return target;
+}
+
+entry setFinishDate(entry target, std::optional<isoDate> day, const isoDate& today) {
+	if (day == target.finishDate)
+		return target;
+	target.finishDate = day;
+	target.updatedAt = today;
+	return target;
+}
+
 entry mergeImported(entry existing, const entry& incoming) {
 	if (incoming.totalUnits > 0)
 		existing.totalUnits = incoming.totalUnits;

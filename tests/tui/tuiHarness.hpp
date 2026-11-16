@@ -12,7 +12,7 @@
 namespace catalist::test {
 
 // A complete appContext for tab tests: the catalogue in a temporary
-// directory, the fixed test date, a web that is offline until told
+// directory, the fixed test date and time, a web that is offline until told
 // otherwise, and an updater over it that does not pause and turns images
 // into "SIXEL[...]" text.
 struct tuiHarness : tempDirFixture {

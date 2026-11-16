@@ -10,9 +10,9 @@
 #include <ostream>
 
 #include "malXml.hpp"
+#include "refs.hpp"
 #include "system.hpp"
 #include "text.hpp"
-#include "updater.hpp"
 #include "version.hpp"
 
 namespace catalist {
@@ -172,15 +172,6 @@ std::string unitName(mediaType type, int count = 2) {
 	if (type == mediaType::kAnime)
 		return count == 1 ? "episode" : "episodes";
 	return count == 1 ? "chapter" : "chapters";
-}
-
-std::string progressLabel(const entry& e) {
-	return fmt::format("{}/{}", e.progress,
-	                   e.totalUnits > 0 ? std::to_string(e.totalUnits) : std::string("?"));
-}
-
-std::string ratingLabel(int score) {
-	return score > 0 ? std::to_string(score) : "-";
 }
 
 // The title's id on the provider, or "-" when it has none there.
@@ -348,37 +339,8 @@ bool load(cliContext& ctx) {
 	return loaded.ok();
 }
 
-// Once a day, before ids are shown or read, asks AniList for the ids titles
-// lack (all of them, after an import from MyAnimeList XML). Offline, the
-// titles keep "-" until the next day's try.
-void linkIfDue(cliContext& ctx) {
-	isoDate today = ctx.today();
-	if (ctx.db.getLinkedOn() == today)
-		return;
-	auto missing = findMissingIds(ctx.db);
-	size_t asking = 0;
-	for (const auto& each : missing)
-		asking += each.ids.size();
-	if (asking > 0 and ctx.interactive)
-		ctx.err << paint(ctx, fmt::format("Looking up the ids of {} titles on AniList...", asking),
-		                 kDim)
-		        << "\n";
-	int filled = 0;
-	for (const auto& each : missing) {
-		auto found = anilist::linkIds(ctx.post, each.type, each.known, each.ids);
-		if (not found.ok())
-			break;
-		filled += fillIds(ctx.db, each.type, found.value());
-	}
-	ctx.db.setLinkedOn(today);
-	// Neither file is essential here; a failed save only means another try.
-	if (filled > 0)
-		(void)ctx.db.saveAll();
-	(void)ctx.db.saveSettings();
-}
-
 bool save(cliContext& ctx) {
-	if (ctx.db.saveAll())
+	if (ctx.db.saveAll(undoNote(ctx)))
 		return true;
 	fail(ctx, fmt::format("could not save the catalogue to {}", ctx.db.getDataDir().string()));
 	return false;
@@ -394,11 +356,6 @@ const std::vector<option> kEditOptions = {
     {"volumes", 0, "N", "volumes read (manga)"},
     {"rewatched", 0, "N", "times rewatched or reread"},
 };
-
-bool hasEdits(const commandLine& line) {
-	return std::any_of(kEditOptions.begin(), kEditOptions.end(),
-	                   [&line](const option& each) { return line.has(each.name); });
-}
 
 // Applies the edit options in a fixed order (the total first, so progress
 // can reach it; the status before progress, so a given progress stands).
@@ -449,44 +406,9 @@ result<entry> applyEdits(entry target, const commandLine& line, const isoDate& t
 	return result<entry>::success(std::move(target));
 }
 
-// Asks AniList about a title not checked today before it changes, so a total
-// that became known meanwhile counts. Offline, the change goes ahead as is.
-entry refreshed(cliContext& ctx, entry target) {
-	isoDate today = ctx.today();
-	if (target.checkedAt == today or (target.anilistId <= 0 and target.malId <= 0))
-		return target;
-	auto found = anilist::lookUp(ctx.post, anilist::refOf(target));
-	return found.ok() ? applyWebFacts(target, found.value().facts, today) : target;
-}
-
-// The title, then each field that changed: "  progress  5/28 → 6/28".
-void printChanges(cliContext& ctx, const entry& before, const entry& after) {
-	ctx.out << paint(ctx, after.title, kBold) << "\n";
-	std::vector<std::pair<std::string, std::pair<std::string, std::string>>> rows = {
-	    {"status",
-	     {statusToString(before.status, before.type), statusToString(after.status, after.type)}},
-	    {"rating", {ratingLabel(before.score), ratingLabel(after.score)}},
-	    {"progress", {progressLabel(before), progressLabel(after)}},
-	    {"volumes", {std::to_string(before.volumes), std::to_string(after.volumes)}},
-	    {"rewatched", {std::to_string(before.rewatched), std::to_string(after.rewatched)}},
-	};
-	bool any = false;
-	for (const auto& [name, values] : rows) {
-		if (values.first == values.second)
-			continue;
-		any = true;
-		ctx.out << fmt::format("  {:<10}{} → {}\n", name, values.first,
-		                       paint(ctx, values.second, kBold));
-	}
-	if (not any)
-		ctx.out << paint(ctx, "  nothing changed", kDim) << "\n";
-}
-
 // ---- Commands ----
 
 int runAdd(const commandLine& line, cliContext& ctx);
-int runSet(const commandLine& line, cliContext& ctx);
-int runNext(const commandLine& line, cliContext& ctx);
 int runRemove(const commandLine& line, cliContext& ctx);
 int runSearch(const commandLine& line, cliContext& ctx);
 int runProvider(const commandLine& line, cliContext& ctx);
@@ -509,21 +431,6 @@ const std::vector<oldCommand>& oldCommands() {
 	     "your provider. New titles are planned unless --status says otherwise.\n",
 	     withEdits({{"yes", 'y', "", "take the best match without asking"}}),
 	     runAdd},
-	    {"set",
-	     {"edit"},
-	     "set [anime|manga] <TITLE|ID> <options>",
-	     "Change a title's status, rating or progress",
-	     "Progress and status follow the same rules as in the tracker: reaching\n"
-	     "the total completes a title, and starting one sets its start date.\n",
-	     withEdits({}),
-	     runSet},
-	    {"next",
-	     {},
-	     "next [anime|manga] <TITLE|ID> [options]",
-	     "Count one more episode or chapter",
-	     "",
-	     {{"by", 'n', "N", "count N instead of one"}},
-	     runNext},
 	    {"rm",
 	     {"remove", "delete"},
 	     "rm [anime|manga] <TITLE|ID> [options]",
@@ -691,8 +598,7 @@ int runAdd(const commandLine& line, cliContext& ctx) {
 	if (auto existing = ctx.db.findByIds(*type, facts.anilistId, facts.malId)) {
 		fail(ctx, fmt::format("{} is already in your {} list ({})", existing->title, typeKey(*type),
 		                      statusToString(existing->status, existing->type)));
-		ctx.err << fmt::format("Change it with: catalist set {} ...\n",
-		                       idOn(*existing, site) > 0 ? idLabel(*existing, site) : asked);
+		ctx.err << fmt::format("Change it with: {} set {} ...\n", ctx.program, refs::of(*existing));
 		return 1;
 	}
 
@@ -711,60 +617,6 @@ int runAdd(const commandLine& line, cliContext& ctx) {
 	return 0;
 }
 
-int runSet(const commandLine& line, cliContext& ctx) {
-	const oldCommand& cmd = commandNamed("set");
-	std::vector<std::string> words = line.words;
-	auto type = takeType(words);
-	if (words.empty())
-		return usageError(ctx, cmd, "name a title");
-	if (not hasEdits(line))
-		return usageError(ctx, cmd, "nothing to change; give an option such as --progress +1");
-	auto checked = applyEdits(entry{}, line, ctx.today());
-	if (not checked.ok())
-		return usageError(ctx, cmd, checked.errorMessage());
-	if (not load(ctx))
-		return 1;
-	linkIfDue(ctx);
-	auto found = findOne(ctx, type, words);
-	if (not found)
-		return 1;
-
-	entry after = applyEdits(refreshed(ctx, *found), line, ctx.today()).value();
-	ctx.db.updateEntry(after);
-	if (not save(ctx))
-		return 1;
-	printChanges(ctx, *found, after);
-	return 0;
-}
-
-int runNext(const commandLine& line, cliContext& ctx) {
-	const oldCommand& cmd = commandNamed("next");
-	std::vector<std::string> words = line.words;
-	auto type = takeType(words);
-	if (words.empty())
-		return usageError(ctx, cmd, "name a title");
-	int by = 1;
-	if (line.has("by")) {
-		auto count = parseCount(line.get("by"));
-		if (not count or *count == 0)
-			return usageError(ctx, cmd, fmt::format("--by '{}' is not a count", line.get("by")));
-		by = *count;
-	}
-	if (not load(ctx))
-		return 1;
-	linkIfDue(ctx);
-	auto found = findOne(ctx, type, words);
-	if (not found)
-		return 1;
-
-	entry after = stepProgress(refreshed(ctx, *found), by, ctx.today());
-	ctx.db.updateEntry(after);
-	if (not save(ctx))
-		return 1;
-	printChanges(ctx, *found, after);
-	return 0;
-}
-
 int runRemove(const commandLine& line, cliContext& ctx) {
 	std::vector<std::string> words = line.words;
 	auto type = takeType(words);
@@ -772,7 +624,6 @@ int runRemove(const commandLine& line, cliContext& ctx) {
 		return usageError(ctx, commandNamed("rm"), "name a title");
 	if (not load(ctx))
 		return 1;
-	linkIfDue(ctx);
 	auto found = findOne(ctx, type, words);
 	if (not found)
 		return 1;
@@ -808,7 +659,6 @@ int runSearch(const commandLine& line, cliContext& ctx) {
 		return usageError(ctx, cmd, "give words to search for");
 	if (not load(ctx))
 		return 1;
-	linkIfDue(ctx);
 	auto found = anilist::search(ctx.post, *type, joined(words));
 	if (not found.ok())
 		return fail(ctx, "could not reach AniList; check the connection and try again");

@@ -80,6 +80,7 @@ add_library(catalistLib STATIC
   src/cliLegacy.cpp
   src/date.cpp
   src/entry.cpp
+  src/journal.cpp
   src/json.cpp
   src/malXml.cpp
   src/output.cpp
@@ -134,6 +135,7 @@ add_executable(catalistTests
   tests/cliTest.cpp
   tests/dateTest.cpp
   tests/entryTest.cpp
+  tests/journalTest.cpp
   tests/jsonTest.cpp
   tests/malXmlTest.cpp
   tests/outputTest.cpp

@@ -31,9 +31,14 @@ struct appContext {
 	// One terminal cell in pixels, for sizing covers.
 	int cellWidth = 10;
 	int cellHeight = 20;
+	// The local date and time, for the undo history.
+	std::function<std::string()> nowStamp = [] { return std::string(); };
 
-	// Writes the catalogue after a change, then shows `done`, or the failure.
+	// Writes the catalogue after something the person did, then shows `done`,
+	// or the failure. Each call is one step for `catalist undo`, named `done`.
 	void save(const std::string& done);
+	// The same for what the web filled in, which is no step of the history.
+	void saveQuietly(const std::string& done);
 };
 
 }  // namespace catalist

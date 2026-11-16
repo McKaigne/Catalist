@@ -33,7 +33,11 @@ public:
 };
 
 struct seededHarness : catalist::test::tuiHarness {
-	seededHarness() { catalist::test::seedSampleLibrary(db); }
+	// Stored already, as the library the tracker opens is.
+	seededHarness() {
+		catalist::test::seedSampleLibrary(db);
+		REQUIRE(db.saveAll());
+	}
 };
 
 struct shellFixture : seededHarness {
@@ -154,6 +158,18 @@ TEST_CASE_FIXTURE(shellFixture, "tui shell fills in a finished manga's chapters 
 	CHECK(catalist::test::storedRows(dataDir(), catalist::mediaType::kManga)
 	          .find("Berserk,Reading,10,365,380,42,42,0,2019-05-01,,2026-10-20,"
 	                "380,2026-10-20,30002") != std::string::npos);
+
+	// The chapter read is a step of the undo history; what the web filled in
+	// is none, and stays when the step is taken back.
+	auto history = db.history(0);
+	REQUIRE(history.ok());
+	REQUIRE(history.value().size() == 1);
+	CHECK(history.value()[0].changes == 1);
+	REQUIRE(db.undo(1, false).ok());
+	berserk = catalist::test::findTitle(db, catalist::mediaType::kManga, "Berserk");
+	CHECK(berserk.progress == 364);
+	CHECK(berserk.totalUnits == 380);
+	CHECK(berserk.released == 380);
 }
 
 TEST_CASE_FIXTURE(shellFixture,

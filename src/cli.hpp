@@ -34,6 +34,11 @@ struct cliContext {
 	std::string txLabel{};
 	// The name the program was run by (`catalist` or `cl`), for its messages.
 	std::string program = "catalist";
+	// A label for CATALIST_TX that no other run of commands has.
+	std::function<std::string()> newTxLabel = [] { return std::string(); };
+	// The command line as it was typed; runCli sets it. It names the undo
+	// step of what the command changes.
+	std::string typed{};
 };
 
 // What a command's operands are, so the shell can complete them.
@@ -63,6 +68,11 @@ struct command {
 [[nodiscard]] std::string usageLine(const command& shown);
 // The option every command takes besides its own.
 [[nodiscard]] const args::option& helpOption();
+
+// How a save of this run is entered in the undo history: under CATALIST_TX
+// when that is set, so the commands of a group undo as one, else under the
+// command as typed, cut to 60 characters.
+[[nodiscard]] txNote undoNote(const cliContext& ctx);
 
 // One line for standard error when loadAll has just imported the CSV files
 // of an earlier version; empty when it has not.

@@ -17,7 +17,8 @@ enum class provider { kAniList, kMyAnimeList };
 enum class watchStatus { kWatching, kCompleted, kOnHold, kDropped, kPlanToWatch };
 
 struct entry {
-	int id = 0;  // local, never shown
+	// Numbers the title within its list: the 12 of the ref a:12.
+	int id = 0;
 	// The title on each site; 0 while not known. AniList knows both, so a
 	// lookup fills in whichever is missing.
 	int anilistId = 0;
@@ -110,6 +111,14 @@ enum class countField { kProgress, kTotalUnits, kVolumes, kRewatched };
 // stepProgress; a total below the progress lowers the progress to it; volumes
 // stay within a known volume total.
 [[nodiscard]] entry setCount(entry target, countField field, int value, const isoDate& today);
+
+// Renames the entry.
+[[nodiscard]] entry setTitle(entry target, const std::string& title, const isoDate& today);
+
+// Sets the day the entry was started or finished, or clears it. The status
+// is left as it is: these correct a date, they do not start or finish.
+[[nodiscard]] entry setStartDate(entry target, std::optional<isoDate> day, const isoDate& today);
+[[nodiscard]] entry setFinishDate(entry target, std::optional<isoDate> day, const isoDate& today);
 
 // Folds an imported row into an entry the user already has. Totals and the
 // ids are refreshed, but the user's own score, progress and dates

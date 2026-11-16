@@ -326,3 +326,33 @@ TEST_CASE("applyWebFacts fills in an id the entry lacked, never replaces one") {
 	CHECK(filled.anilistId == 30002);
 	CHECK(filled.malId == 2);
 }
+
+TEST_CASE("setTitle and the date setters stamp the entry only when they change it") {
+	using catalist::test::requireDate;
+	auto today = catalist::test::testToday();
+	catalist::entry before = catalist::test::makeEntry()
+	                             .title("Odd Taxi")
+	                             .status(watchStatus::kWatching)
+	                             .startDate("2026-10-01")
+	                             .updatedAt("2026-10-02");
+
+	auto renamed = catalist::setTitle(before, "ODDTAXI", today);
+	CHECK(renamed.title == "ODDTAXI");
+	CHECK(renamed.updatedAt == today);
+	CHECK(catalist::setTitle(before, "Odd Taxi", today).updatedAt == before.updatedAt);
+
+	auto started = catalist::setStartDate(before, requireDate("2026-09-30"), today);
+	CHECK(started.startDate == requireDate("2026-09-30"));
+	CHECK(started.updatedAt == today);
+	CHECK(catalist::setStartDate(before, before.startDate, today).updatedAt == before.updatedAt);
+	auto cleared = catalist::setStartDate(before, std::nullopt, today);
+	CHECK_FALSE(cleared.startDate);
+	CHECK(cleared.updatedAt == today);
+
+	// A date corrects the record; the status is the person's to set.
+	auto finished = catalist::setFinishDate(before, requireDate("2026-10-19"), today);
+	CHECK(finished.finishDate == requireDate("2026-10-19"));
+	CHECK(finished.status == watchStatus::kWatching);
+	CHECK(finished.updatedAt == today);
+	CHECK(catalist::setFinishDate(before, std::nullopt, today).updatedAt == before.updatedAt);
+}

@@ -204,6 +204,11 @@ std::string nowStamp() {
 	                   local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min, local.tm_sec);
 }
 
+std::string newTxLabel() {
+	auto seconds = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	return fmt::format("{}-{}", static_cast<long long>(seconds), static_cast<long long>(getpid()));
+}
+
 std::optional<cellSize> terminalCellSize() {
 	winsize window{};
 	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) != 0 or window.ws_col == 0 or

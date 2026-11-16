@@ -27,7 +27,9 @@ struct catalogFixture : catalist::test::tuiHarness {
 	// Most tests were written against the rating order, so the fixture
 	// switches to it; the default order has tests of its own.
 	catalogFixture() : tab(mediaType::kAnime) {
+		// Stored already, as the library the tracker opens is.
 		catalist::test::seedSampleLibrary(db);
+		REQUIRE(db.saveAll());
 		tab.onActivate(ctx);
 		press(tab, Event::Character('r'));
 		ctx.status = "Ready.";
@@ -42,6 +44,12 @@ struct catalogFixture : catalist::test::tuiHarness {
 		return titles;
 	}
 	std::string savedAnime() { return catalist::test::storedRows(dataDir(), mediaType::kAnime); }
+	// The steps `catalist undo` can take back, newest first.
+	std::vector<catalist::txRecord> steps() {
+		auto history = db.history(0);
+		REQUIRE(history.ok());
+		return history.value();
+	}
 	catalogTab tab;
 };
 
@@ -191,6 +199,32 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog plus and minus step the selected 
 	CHECK(anime(kOddTaxi).updatedAt->toString() == "2026-10-20");
 }
 
+TEST_CASE_FIXTURE(catalogFixture, "tui catalog enters each change in the undo history") {
+	CHECK(steps().empty());
+	type(tab, "j");
+	REQUIRE(press(tab, Event::Character('+')));
+	auto history = steps();
+	REQUIRE(history.size() == 1);
+	CHECK(history[0].label == "Progress: 6/13");
+	CHECK(history[0].stamp == "2026-10-20 21:30:00");
+	CHECK(history[0].changes == 1);
+	REQUIRE(press(tab, Event::Character('R')));
+	CHECK(steps().size() == 2);
+
+	// What `catalist undo` does.
+	REQUIRE(db.undo(1, false).ok());
+	CHECK(anime(kOddTaxi).score == 8);
+	CHECK(anime(kOddTaxi).progress == 6);
+
+	// A removal is a step as well, and comes back whole.
+	type(tab, "k");
+	REQUIRE(press(tab, Event::Character('d')));
+	REQUIRE(press(tab, Event::Character('y')));
+	CHECK(steps()[0].label == "Deleted 'Sousou no Frieren'.");
+	REQUIRE(db.undo(1, false).ok());
+	CHECK(anime(kFrieren).progress == 28);
+}
+
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog S cycles status and R raises the rating") {
 	type(tab, "j");
 	REQUIRE(press(tab, Event::Character('R')));
@@ -222,6 +256,7 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog plus on a finished title changes 
 	CHECK(catalist::formatDate(frieren.startDate) == "2023-09-29");
 	CHECK(catalist::formatDate(frieren.finishDate) == "2024-03-22");
 	CHECK(catalist::formatDate(frieren.updatedAt) == "2026-10-17");
+	CHECK(steps().empty());
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog details take a typed progress") {
@@ -366,10 +401,17 @@ TEST_CASE_FIXTURE(catalogFixture, "tui catalog delete asks first and saves") {
 	CHECK_FALSE(tab.capturesInput());
 }
 
-TEST_CASE_FIXTURE(catalogFixture, "tui catalog reports a failed save") {
-	catalist::test::makeUnwritable(dataDir() / "catalist.db");
-	REQUIRE(press(tab, Event::Character('+')));
-	CHECK(ctx.status == "Could not save the catalogue to " + dataDir().string() + ".");
+TEST_CASE("tui catalog reports a failed save") {
+	// A library that was never stored, and cannot be now.
+	catalist::test::tuiHarness harness;
+	catalist::test::seedSampleLibrary(harness.db);
+	catalist::test::makeUnwritable(harness.dataDir() / "catalist.db");
+	catalogTab tab(mediaType::kAnime);
+	tab.onActivate(harness.ctx);
+	harness.type(tab, "j");
+	REQUIRE(harness.press(tab, Event::Character('+')));
+	CHECK(harness.ctx.status ==
+	      "Could not save the catalogue to " + harness.dataDir().string() + ".");
 }
 
 TEST_CASE_FIXTURE(catalogFixture, "tui catalog sidebar filters by status") {

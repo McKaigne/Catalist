@@ -675,6 +675,360 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue reports a failed write and a file i
 	CHECK(catalist::test::readText(tempDir() / "other/catalist.db") == "this is not a database");
 }
 
+namespace {
+
+catalist::txNote noteOf(const std::string& label, bool group = false) {
+	return {label, "2026-10-20 21:30:00", group};
+}
+
+// Frieren (a:1, completed) and Odd Taxi (a:2, 5 of 13) and Berserk (m:1),
+// saved without a step in the history.
+void seedForUndo(catalogue& db) {
+	db.addEntry(makeEntry().title("Sousou no Frieren").malId(52991).anilistId(154587).score(10));
+	db.addEntry(
+	    makeEntry().title("Odd Taxi").malId(44265).anilistId(128547).progress(5).totalUnits(13));
+	db.addEntry(makeEntry().title("Berserk").type(mediaType::kManga).malId(2).progress(364));
+	REQUIRE(db.saveAll());
+}
+
+// Sets the progress of an anime and saves it as one step.
+void watch(catalogue& db, int id, int progress, const catalist::txNote& note) {
+	auto title = *db.getById(mediaType::kAnime, id);
+	title.progress = progress;
+	REQUIRE(db.updateEntry(title));
+	REQUIRE(db.saveAll(note));
+}
+
+int progressOf(const catalogue& db, int id) {
+	return db.getById(mediaType::kAnime, id)->progress;
+}
+
+}  // namespace
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue enters a save with a note in the undo history") {
+	catalogue db(tempDir() / "data");
+	CHECK(db.history(0).value().empty());
+	seedForUndo(db);
+	CHECK(db.history(0).value().empty());
+
+	watch(db, 2, 6, noteOf("+ taxi"));
+	auto berserk = *db.getById(mediaType::kManga, 1);
+	berserk.score = 10;
+	REQUIRE(db.updateEntry(berserk));
+	watch(db, 1, 3, noteOf("set a:1 progress=3"));
+
+	auto steps = db.history(0).value();
+	REQUIRE(steps.size() == 2);
+	// Newest first.
+	CHECK(steps[0].id == 2);
+	CHECK(steps[0].label == "set a:1 progress=3");
+	CHECK(steps[0].stamp == "2026-10-20 21:30:00");
+	CHECK(steps[0].changes == 2);
+	CHECK_FALSE(steps[0].undone);
+	CHECK(steps[1].label == "+ taxi");
+	CHECK(steps[1].changes == 1);
+	CHECK(db.history(1).value().size() == 1);
+	CHECK(db.history(1).value()[0].id == 2);
+
+	// Nothing the person sets has changed: no step.
+	REQUIRE(db.saveAll(noteOf("nothing")));
+	auto taxi = *db.getById(mediaType::kAnime, 2);
+	taxi.released = 13;
+	taxi.checkedAt = catalist::test::requireDate("2026-10-20");
+	REQUIRE(db.updateEntry(taxi));
+	REQUIRE(db.saveAll(noteOf("web")));
+	CHECK(db.history(0).value().size() == 2);
+
+	// The history is in the file: another program reads the same.
+	catalogue other(tempDir() / "data");
+	REQUIRE(other.loadAll().value());
+	CHECK(other.getById(mediaType::kAnime, 2)->released == 13);
+	CHECK(other.history(0).value().size() == 2);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture,
+                  "catalogue undo takes back the newest step, redo makes it again") {
+	catalogue db(tempDir() / "data");
+	seedForUndo(db);
+	watch(db, 2, 6, noteOf("first"));
+	watch(db, 2, 7, noteOf("second"));
+
+	auto undone = db.undo(1, false);
+	REQUIRE(undone.ok());
+	REQUIRE(undone.value().steps.size() == 1);
+	CHECK(undone.value().steps[0].label == "second");
+	REQUIRE(undone.value().changes.size() == 1);
+	CHECK(undone.value().changes[0].before->progress == 7);
+	CHECK(undone.value().changes[0].after->progress == 6);
+	CHECK(progressOf(db, 2) == 6);
+	auto steps = db.history(0).value();
+	CHECK(steps[0].undone);
+	CHECK_FALSE(steps[1].undone);
+	{
+		catalogue saved(tempDir() / "data");
+		REQUIRE(saved.loadAll().value());
+		CHECK(progressOf(saved, 2) == 6);
+	}
+
+	REQUIRE(db.undo(1, false).ok());
+	CHECK(progressOf(db, 2) == 5);
+	auto nothing = db.undo(1, false);
+	REQUIRE(nothing.ok());
+	CHECK(nothing.value().steps.empty());
+	CHECK(nothing.value().changes.empty());
+
+	// The step undone last is made again first.
+	auto redone = db.redo(1, false);
+	REQUIRE(redone.ok());
+	REQUIRE(redone.value().steps.size() == 1);
+	CHECK(redone.value().steps[0].label == "first");
+	CHECK(progressOf(db, 2) == 6);
+	REQUIRE(db.redo(5, false).ok());
+	CHECK(progressOf(db, 2) == 7);
+	CHECK(db.redo(1, false).value().steps.empty());
+	steps = db.history(0).value();
+	for (const auto& step : steps)
+		CHECK_FALSE(step.undone);
+
+	// Several at once, newest first; more than there are is all of them.
+	auto both = db.undo(9, false);
+	REQUIRE(both.ok());
+	REQUIRE(both.value().steps.size() == 2);
+	CHECK(both.value().steps[0].label == "second");
+	CHECK(both.value().steps[1].label == "first");
+	REQUIRE(both.value().changes.size() == 1);
+	CHECK(both.value().changes[0].before->progress == 7);
+	CHECK(both.value().changes[0].after->progress == 5);
+	catalogue saved(tempDir() / "data");
+	REQUIRE(saved.loadAll().value());
+	CHECK(progressOf(saved, 2) == 5);
+	CHECK(saved.redo(2, false).value().steps.size() == 2);
+	CHECK(progressOf(saved, 2) == 7);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo keeps what the web filled in since") {
+	catalogue db(tempDir() / "data");
+	seedForUndo(db);
+	watch(db, 2, 6, noteOf("+ taxi"));
+	auto taxi = *db.getById(mediaType::kAnime, 2);
+	taxi.released = 13;
+	taxi.score = 9;
+	REQUIRE(db.updateEntry(taxi));
+	REQUIRE(db.saveAll());
+
+	REQUIRE(db.undo(1, false).ok());
+	taxi = *db.getById(mediaType::kAnime, 2);
+	CHECK(taxi.progress == 5);
+	CHECK(taxi.released == 13);
+	CHECK(taxi.score == 9);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo changes nothing when a title has changed since") {
+	catalogue db(tempDir() / "data");
+	seedForUndo(db);
+	watch(db, 2, 6, noteOf("older"));
+	watch(db, 1, 4, noteOf("newer"));
+	// Changed outside the history, as a web check changes a total.
+	auto taxi = *db.getById(mediaType::kAnime, 2);
+	taxi.progress = 9;
+	REQUIRE(db.updateEntry(taxi));
+	REQUIRE(db.saveAll());
+
+	// The newer step could be taken back, the older one not: neither is.
+	auto refused = db.undo(2, false);
+	REQUIRE_FALSE(refused.ok());
+	CHECK(refused.errorMessage() ==
+	      "cannot undo 'older' (2026-10-20 21:30:00): Odd Taxi (a:2) has changed since: "
+	      "progress is now 9, not 6");
+	CHECK(progressOf(db, 1) == 4);
+	CHECK(progressOf(db, 2) == 9);
+	auto steps = db.history(0).value();
+	for (const auto& step : steps)
+		CHECK_FALSE(step.undone);
+	{
+		catalogue saved(tempDir() / "data");
+		REQUIRE(saved.loadAll().value());
+		CHECK(progressOf(saved, 1) == 4);
+		CHECK(progressOf(saved, 2) == 9);
+	}
+
+	auto forced = db.undo(2, true);
+	REQUIRE(forced.ok());
+	CHECK(forced.value().steps.size() == 2);
+	CHECK(progressOf(db, 1) == 0);
+	CHECK(progressOf(db, 2) == 5);
+
+	// Redo checks the same way.
+	taxi = *db.getById(mediaType::kAnime, 2);
+	taxi.progress = 1;
+	REQUIRE(db.updateEntry(taxi));
+	REQUIRE(db.saveAll());
+	auto again = db.redo(1, false);
+	REQUIRE_FALSE(again.ok());
+	CHECK(again.errorMessage() ==
+	      "cannot redo 'older' (2026-10-20 21:30:00): Odd Taxi (a:2) has changed since: "
+	      "progress is now 1, not 5");
+	CHECK(progressOf(db, 2) == 1);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo brings a removed title back under its ref") {
+	catalogue db(tempDir() / "data");
+	seedForUndo(db);
+	db.addEntry(makeEntry().title("Mushishi"));
+	REQUIRE(db.saveAll());
+	auto taxi = *db.getById(mediaType::kAnime, 2);
+	REQUIRE(db.removeEntry(mediaType::kAnime, 2));
+	REQUIRE(db.saveAll(noteOf("rm taxi")));
+
+	// In its place: the lists are kept in the order of their ids.
+	CHECK_FALSE(db.restoreEntry(*db.getById(mediaType::kAnime, 3)));
+	REQUIRE(db.undo(1, false).ok());
+	auto anime = db.getEntries(mediaType::kAnime);
+	REQUIRE(anime.size() == 3);
+	CHECK(anime[1].id == 2);
+	CHECK(csvCodec::encodeEntry(anime[1]) == csvCodec::encodeEntry(taxi));
+	CHECK(anime[2].title == "Mushishi");
+	{
+		catalogue saved(tempDir() / "data");
+		REQUIRE(saved.loadAll().value());
+		CHECK(saved.getById(mediaType::kAnime, 2)->title == "Odd Taxi");
+	}
+	// Redo removes it again; undo of an addition removes what was added.
+	REQUIRE(db.redo(1, false).ok());
+	CHECK_FALSE(db.getById(mediaType::kAnime, 2));
+	int added = db.addEntry(makeEntry().title("Dandadan").anilistId(171018));
+	REQUIRE(db.saveAll(noteOf("add dandadan")));
+	REQUIRE(db.undo(1, false).ok());
+	CHECK_FALSE(db.getById(mediaType::kAnime, added));
+	REQUIRE(db.redo(1, false).ok());
+	CHECK(db.getById(mediaType::kAnime, added)->title == "Dandadan");
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue undo cannot bring a title back to a ref in use") {
+	catalogue db(tempDir() / "data");
+	seedForUndo(db);
+	REQUIRE(db.removeEntry(mediaType::kAnime, 2));
+	REQUIRE(db.saveAll(noteOf("rm taxi")));
+	// The highest id was freed, and the next title added got it.
+	CHECK(db.addEntry(makeEntry().title("Mushishi")) == 2);
+	REQUIRE(db.saveAll());
+
+	for (bool force : {false, true}) {
+		auto refused = db.undo(1, force);
+		REQUIRE_FALSE(refused.ok());
+		CHECK(refused.errorMessage() ==
+		      "cannot undo 'rm taxi' (2026-10-20 21:30:00): Odd Taxi (a:2) cannot come back: "
+		      "its ref is now that of Mushishi");
+	}
+	CHECK(db.getById(mediaType::kAnime, 2)->title == "Mushishi");
+	CHECK_FALSE(db.history(0).value()[0].undone);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue forgets what was undone when new work is saved") {
+	catalogue db(tempDir() / "data");
+	seedForUndo(db);
+	watch(db, 2, 6, noteOf("first"));
+	watch(db, 2, 7, noteOf("second"));
+	REQUIRE(db.undo(1, false).ok());
+	// A save outside the history leaves what can be redone.
+	auto frieren = *db.getById(mediaType::kAnime, 1);
+	frieren.released = 28;
+	REQUIRE(db.updateEntry(frieren));
+	REQUIRE(db.saveAll());
+	CHECK(db.history(0).value().size() == 2);
+
+	watch(db, 1, 3, noteOf("third"));
+	auto steps = db.history(0).value();
+	REQUIRE(steps.size() == 2);
+	CHECK(steps[0].label == "third");
+	CHECK(steps[1].label == "first");
+	CHECK(db.redo(1, false).value().steps.empty());
+	CHECK(progressOf(db, 2) == 6);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps the last 100 steps") {
+	catalogue db(tempDir() / "data");
+	seedForUndo(db);
+	for (int i = 1; i <= catalogue::kHistoryLength + 5; ++i)
+		watch(db, 1, i, noteOf(std::to_string(i)));
+	auto steps = db.history(0).value();
+	REQUIRE(steps.size() == static_cast<size_t>(catalogue::kHistoryLength));
+	CHECK(steps.front().label == "105");
+	CHECK(steps.back().label == "6");
+	CHECK(steps.back().changes == 1);
+	auto all = db.undo(1000, false);
+	REQUIRE(all.ok());
+	CHECK(all.value().steps.size() == static_cast<size_t>(catalogue::kHistoryLength));
+	CHECK(progressOf(db, 1) == 5);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue folds the saves of one group into one step") {
+	auto dir = tempDir() / "data";
+	{
+		catalogue db(dir);
+		seedForUndo(db);
+		watch(db, 2, 6, noteOf("before the group"));
+	}
+	// Each command of a group is a program run of its own.
+	auto group = noteOf("1792531800-4242", true);
+	for (int progress : {7, 8}) {
+		catalogue db(dir);
+		REQUIRE(db.loadAll().value());
+		watch(db, 2, progress, group);
+	}
+	{
+		catalogue db(dir);
+		REQUIRE(db.loadAll().value());
+		watch(db, 1, 1, group);
+		REQUIRE(db.removeEntry(mediaType::kManga, 1));
+		REQUIRE(db.saveAll(group));
+	}
+	catalogue db(dir);
+	REQUIRE(db.loadAll().value());
+	auto steps = db.history(0).value();
+	REQUIRE(steps.size() == 2);
+	CHECK(steps[0].label == "1792531800-4242");
+	CHECK(steps[0].changes == 3);
+	CHECK(steps[1].label == "before the group");
+
+	// One undo takes the group back, and no more than the group.
+	auto undone = db.undo(1, false);
+	REQUIRE(undone.ok());
+	CHECK(undone.value().steps.size() == 1);
+	CHECK(undone.value().changes.size() == 3);
+	CHECK(progressOf(db, 2) == 6);
+	CHECK(progressOf(db, 1) == 0);
+	CHECK(db.getById(mediaType::kManga, 1)->title == "Berserk");
+	REQUIRE(db.redo(1, false).ok());
+	CHECK(progressOf(db, 2) == 8);
+	CHECK_FALSE(db.getById(mediaType::kManga, 1));
+
+	// Another label, or no group, starts a step of its own.
+	watch(db, 2, 9, noteOf("1792531900-4343", true));
+	watch(db, 2, 10, noteOf("1792531900-4343"));
+	watch(db, 2, 11, noteOf("1792531900-4343", true));
+	steps = db.history(0).value();
+	REQUIRE(steps.size() == 4);
+	CHECK(steps[0].changes == 1);
+	REQUIRE(db.undo(1, false).ok());
+	CHECK(progressOf(db, 2) == 9);
+}
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue drops a group that has put everything back") {
+	catalogue db(tempDir() / "data");
+	seedForUndo(db);
+	auto group = noteOf("1792531800-4242", true);
+	watch(db, 2, 6, group);
+	watch(db, 1, 1, group);
+	watch(db, 2, 5, group);
+	auto steps = db.history(0).value();
+	REQUIRE(steps.size() == 1);
+	CHECK(steps[0].changes == 1);
+	watch(db, 1, 0, group);
+	CHECK(db.history(0).value().empty());
+	CHECK(db.undo(1, false).value().steps.empty());
+}
+
 TEST_CASE("catalogue data dir: CATALIST_DATA_DIR, then XDG_DATA_HOME, then ~/.local/share") {
 	using dirs = catalist::dataDirEnv;
 	auto dataDir = [](const dirs& env) { return catalogue::getDefaultDataDir(env); };

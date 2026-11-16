@@ -60,10 +60,7 @@ struct cliFixture : catalist::test::tempDirFixture {
 		ctx.interactive = not input.empty();
 		ctx.columns = columns;
 		ctx.color = color;
-		ctx.program = program;
 		ctx.nowStamp = [] { return std::string(kStamp); };
-		ctx.newTxLabel = [] { return std::string("1792531800-4242"); };
-		ctx.txLabel = group;
 		ctx.accountsFile = "state/accounts";
 		ctx.net.ids = ids;
 		ctx.net.now = [this] { return clock; };
@@ -170,12 +167,10 @@ struct cliFixture : catalist::test::tempDirFixture {
 
 	catalist::test::fakeWeb web;
 	std::filesystem::path previousDir;
-	// How the next runs are set up: the name the program goes by, colours,
-	// a standard output whose reader has gone, and CATALIST_TX.
-	std::string program = "catalist";
+	// How the next runs are set up: colours, and a standard output whose
+	// reader has gone.
 	bool color = false;
 	bool outClosed = false;
-	std::string group;
 	// The ids the sites gave this Catalist, and the time, in seconds.
 	catalist::web::appIds ids;
 	long long clock = 1792531800;

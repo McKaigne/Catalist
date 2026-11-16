@@ -22,10 +22,8 @@ int main(int argc, char* argv[]) {
 		const char* value = std::getenv(name);
 		return std::string(value ? value : "");
 	};
-	catalist::dataDirEnv dirs{env("CATALIST_DATA_DIR"), env("XDG_DATA_HOME"),
-	                          env("XDG_CONFIG_HOME"), env("HOME")};
-	catalist::catalogue db(catalist::catalogue::getDefaultDataDir(dirs),
-	                       catalist::catalogue::getOldDataDir(dirs));
+	catalist::dataDirEnv dirs{env("CATALIST_DATA_DIR"), env("XDG_DATA_HOME"), env("HOME")};
+	catalist::catalogue db(catalist::catalogue::getDefaultDataDir(dirs));
 
 	// A second apart, as the sites ask of programs that send many requests.
 	catalist::web::link net{catalist::httpFetch,
@@ -59,10 +57,5 @@ int main(int argc, char* argv[]) {
 	if (shellColumns and *shellColumns >= 20)
 		ctx.tableWidth = *shellColumns;
 	ctx.nowStamp = catalist::nowStamp;
-	ctx.txLabel = env("CATALIST_TX");
-	ctx.newTxLabel = catalist::newTxLabel;
-	// `cl` is the same program under a shorter name.
-	std::string name = std::filesystem::path(argv[0]).filename().string();
-	ctx.program = name.empty() ? "catalist" : name;
 	return catalist::runCli({argv + 1, argv + argc}, ctx);
 }

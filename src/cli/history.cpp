@@ -81,13 +81,6 @@ int runLog(const command& self, const args::parsed& line, cliContext& ctx) {
 	return 0;
 }
 
-int runTx(const command& self, const args::parsed& line, cliContext& ctx) {
-	if (not line.operands.empty())
-		return usageError(ctx, self, "tx takes no operands");
-	ctx.out << ctx.newTxLabel() << "\n";
-	return 0;
-}
-
 command replayCommand(const std::string& name, const std::string& summary,
                       const std::string& details) {
 	return {name,
@@ -107,8 +100,7 @@ std::vector<command> historyCommands() {
 	return {
 	    replayCommand("undo", "Take back what the last command changed",
 	                  "Takes back the newest step of 'log' that is not undone: what one\n"
-	                  "command changed, or a group of commands run under one CATALIST_TX (see\n"
-	                  "'help tx'). A removed title comes back under its old ref. When a\n"
+	                  "command changed. A removed title comes back under its old ref. When a\n"
 	                  "title is no longer as the step left it, nothing is taken back and the\n"
 	                  "title is named; -f takes the step back all the same.\n"),
 	    replayCommand("redo", "Make again what undo took back",
@@ -124,22 +116,6 @@ std::vector<command> historyCommands() {
 	      {0, "header", "", "name the columns on the first line of a pipe"}},
 	     "",
 	     runLog},
-	    {"tx",
-	     {},
-	     "Print a label that groups commands for undo",
-	     "Commands run with the same CATALIST_TX in their environment are one step\n"
-	     "for undo. In sh, bash or zsh:\n"
-	     "  export CATALIST_TX=$(catalist tx)\n"
-	     "  catalist ls -q -s watching | catalist + -\n"
-	     "  catalist done a:12\n"
-	     "  unset CATALIST_TX\n"
-	     "In fish:\n"
-	     "  set -lx CATALIST_TX (catalist tx)\n"
-	     "  ...\n"
-	     "  set -e CATALIST_TX\n",
-	     {},
-	     "",
-	     runTx},
 	};
 }
 

@@ -31,7 +31,6 @@ enum class sortKey {
 struct dataDirEnv {
 	std::string catalistDataDir;
 	std::string xdgDataHome;
-	std::string xdgConfigHome;
 	std::string home;
 };
 
@@ -41,9 +40,6 @@ struct txNote {
 	std::string label;
 	// The local date and time.
 	std::string stamp;
-	// Fold the save into the newest step when that one has the same label:
-	// CATALIST_TX names a run of commands that one undo takes back.
-	bool group = false;
 };
 
 // A title a site is still to be told of: what the lists now hold of it, or,
@@ -56,7 +52,7 @@ struct pending {
 	int siteId = 0;
 };
 
-// One step of the undo history: what one command (or one group) changed.
+// One step of the undo history: what one command changed.
 struct txRecord {
 	long long id = 0;
 	std::string stamp;
@@ -82,9 +78,7 @@ class catalogue {
 public:
 	static constexpr int kHistoryLength = 100;
 
-	// `oldDir` is where Catalist 0.3 and earlier kept their CSV files; it is
-	// looked in once, when the data directory holds nothing yet.
-	explicit catalogue(std::filesystem::path dataDir, std::filesystem::path oldDir = {});
+	explicit catalogue(std::filesystem::path dataDir);
 
 	// Adds a title under a fresh id and returns it. A title that shares its
 	// AniList, MyAnimeList or Kitsu id with a stored one is merged into that entry
@@ -126,10 +120,6 @@ public:
 	// CATALIST_DATA_DIR; else $XDG_DATA_HOME/catalist when that is an
 	// absolute path; else ~/.local/share/catalist.
 	[[nodiscard]] static std::filesystem::path getDefaultDataDir(const dataDirEnv& env);
-	// Where Catalist 0.3 and earlier kept the lists: $XDG_CONFIG_HOME/catalist
-	// or ~/.config/catalist. Empty when CATALIST_DATA_DIR is set, which names
-	// the one directory to use.
-	[[nodiscard]] static std::filesystem::path getOldDataDir(const dataDirEnv& env);
 	[[nodiscard]] std::filesystem::path getDataDir() const;
 	[[nodiscard]] std::filesystem::path getStorePath() const;
 
@@ -142,15 +132,9 @@ public:
 	// Reads the lists and the provider. The value says whether there was
 	// anything stored; with nothing stored, nothing is created until the
 	// first save. Fails, naming the file, when it cannot be read.
-	//
-	// The first time (no `catalist.db` yet), the CSV files of Catalist 0.3
-	// and earlier are imported, from the data directory or else from the
-	// old one; they are never changed. importedFrom then names the
-	// directory they were read from.
 	[[nodiscard]] result<bool> loadAll();
-	[[nodiscard]] const std::filesystem::path& importedFrom() const { return importedFrom_; }
-	// Reads the lists as loadAll does, but only looks: nothing is created or
-	// imported, no write is waited for, and the file is closed again. False
+	// Reads the lists as loadAll does, but only looks: nothing is created, no
+	// write is waited for, and the file is closed again. False
 	// when there is no file or it cannot be read just now. For the shell's
 	// completion, which must never get in the way.
 	[[nodiscard]] bool peek();
@@ -193,8 +177,6 @@ private:
 
 	[[nodiscard]] result<bool> openStore();
 	[[nodiscard]] result<bool> setUpStore();
-	[[nodiscard]] std::filesystem::path importSource() const;
-	[[nodiscard]] result<bool> importOldFiles(const std::filesystem::path& from);
 	[[nodiscard]] bool readStore();
 	[[nodiscard]] bool writeRows();
 	[[nodiscard]] bool writeSiteIds();
@@ -211,8 +193,6 @@ private:
 	void rememberSaved();
 
 	std::filesystem::path dataDir_;
-	std::filesystem::path oldDir_;
-	std::filesystem::path importedFrom_;
 	std::vector<entry> animeEntries_;
 	std::vector<entry> mangaEntries_;
 	provider provider_ = provider::kAniList;

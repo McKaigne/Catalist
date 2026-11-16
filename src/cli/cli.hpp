@@ -45,12 +45,6 @@ struct cliContext {
 	int tableWidth = 80;
 	// The local date and time, stamped on what a command changes.
 	std::function<std::string()> nowStamp = [] { return std::string(); };
-	// CATALIST_TX: commands run with the same label share one undo step.
-	std::string txLabel{};
-	// The name the program was run by (`catalist` or `cl`), for its messages.
-	std::string program = "catalist";
-	// A label for CATALIST_TX that no other run of commands has.
-	std::function<std::string()> newTxLabel = [] { return std::string(); };
 	// The command line as it was typed; runCli sets it. It names the undo
 	// step of what the command changes.
 	std::string typed{};

@@ -72,8 +72,6 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(has(out, "Usage: catalist hold [-amq] [--all] REF...\n"));
 	CHECK(run({"help", "undo"}) == 0);
 	CHECK(has(out, "Usage: catalist undo [-fq] [-n N]\n"));
-	CHECK(run({"help", "tx"}) == 0);
-	CHECK(has(out, "export CATALIST_TX=$(catalist tx)\n"));
 	CHECK(run({"help", "add"}) == 0);
 	CHECK(has(out,
 	          "Usage: catalist add [-amq] [--from=SITE] [--pick=N] [--status=STATUS] "
@@ -107,44 +105,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(run({"help", "ls", "show"}) == 2);
 }
 
-TEST_CASE_FIXTURE(cliFixture, "cli names itself as it was run") {
-	program = "cl";
-	CHECK(run({"help"}) == 0);
-	CHECK(has(out, "Usage: cl [OPTION...] COMMAND [ARG...]\n"));
-	CHECK(has(out, "  cl show a:12\n"));
-	CHECK(has(out, "Run 'cl help COMMAND'"));
-	CHECK_FALSE(has(out, "catalist "));
-	CHECK(run({"help", "ls"}) == 0);
-	CHECK(has(out, "Usage: cl ls [-amrq]"));
-	CHECK(run({"lst"}) == 2);
-	CHECK(err ==
-	      "error: unknown command 'lst' (did you mean 'ls'?)\n"
-	      "Usage: cl [OPTION...] COMMAND [ARG...]\n"
-	      "Run 'cl help' to see the commands.\n");
-	CHECK(run({"ls", "-x"}) == 2);
-	CHECK(err ==
-	      "error: unknown option '-x'\n"
-	      "Usage: cl ls [-amrq] [-s STATUS] [--sort=KEY] [--unlinked=SITE] [--json] [--header] "
-	      "[QUERY...]\n"
-	      "Run 'cl help ls' for more.\n");
-	CHECK(run({"show", "naruto"}) == 1);
-	CHECK(has(err, "See what is there with: cl ls\n"));
-}
-
-TEST_CASE_FIXTURE(cliFixture, "cli says once that it imported the lists of an earlier version") {
-	put("data/anime.csv", catalist::test::readText(catalist::test::fixturePath("csv/crlf.csv")));
-	CHECK(run({"ls"}) == 0);
-	CHECK(has(out, "\tOdd Taxi\t"));
-	CHECK(err ==
-	      "note: imported the lists in data into data/catalist.db; the old files are left as "
-	      "they were.\n");
-	CHECK(run({"ls"}) == 0);
-	CHECK(has(out, "\tOdd Taxi\t"));
-	CHECK(err.empty());
-}
-
 TEST_CASE_FIXTURE(cliFixture, "cli help and version work with a broken catalogue") {
-	put("data/anime.csv", "this,is,not,a,catalogue\n");
+	put("data/catalist.db", "this is not a catalogue\n");
 	CHECK(run({"--version"}) == 0);
 	CHECK(run({"--help"}) == 0);
 	CHECK(run({"set", "--help"}) == 0);
@@ -317,21 +279,21 @@ TEST_CASE_FIXTURE(cliFixture, "cli stops quietly when nobody reads what a change
 	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 6);
 	CHECK(run({"undo"}) == 0);
 	CHECK(run({"log"}) == 0);
-	CHECK(run({"tx"}) == 0);
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli refuses to work on a catalogue it cannot read") {
-	put("data/anime.csv", "this,is,not,a,catalogue\n");
+	put("data/catalist.db", "this is not a catalogue\n");
 	put("lists/anime.xml", kAnimeXml);
 	CHECK(run({"import", "lists/anime.xml"}) == 1);
-	CHECK(err.find("error: data/anime.csv: ") == 0);
+	CHECK(err.find("error: ") == 0);
+	CHECK(has(err, "data/catalist.db"));
 	for (const char* command : {"stats", "provider"})
 		CHECK(run({command}) == 1);
 	CHECK(run({"export", "anime"}) == 1);
 	CHECK(run({"rm", "-f", "taxi"}) == 1);
 	CHECK(run({"add", "--no-lookup", "Home Video"}) == 1);
 	CHECK(out.empty());
-	CHECK(catalist::test::readText("data/anime.csv") == "this,is,not,a,catalogue\n");
+	CHECK(catalist::test::readText("data/catalist.db") == "this is not a catalogue\n");
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli alone at a terminal lists what is being watched") {
@@ -346,12 +308,11 @@ TEST_CASE_FIXTURE(cliFixture, "cli alone at a terminal lists what is being watch
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli without a command says how to give one, with exit code 2") {
-	program = "cl";
 	CHECK(run({}) == 2);
 	CHECK(out.empty());
 	CHECK(err ==
-	      "error: no command given\nUsage: cl [OPTION...] COMMAND [ARG...]\n"
-	      "Run 'cl help' to see the commands.\n");
+	      "error: no command given\nUsage: catalist [OPTION...] COMMAND [ARG...]\n"
+	      "Run 'catalist help' to see the commands.\n");
 	CHECK_FALSE(std::filesystem::exists("data"));
 	// Options alone are no command either.
 	CHECK(run({"--color=never"}) == 2);

@@ -197,7 +197,7 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 			return 0;
 		}
 		ctx.out << matchTable(ctx, *type, matches, mine);
-		ctx.err << fmt::format("Add one with: {} add{}{} --pick=N QUERY\n", ctx.program,
+		ctx.err << fmt::format("Add one with: catalist add{}{} --pick=N QUERY\n",
 		                       *type == mediaType::kManga ? " -m" : "",
 		                       line.has("from") ? " --from=" + line.get("from") : "");
 		return 0;
@@ -355,8 +355,7 @@ std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, medi
 	auto found = site.search(type, query);
 	if (not found.ok()) {
 		fail(ctx, webError(found.errorMessage()));
-		ctx.err << fmt::format("To add a title without {}: {} add --no-lookup TITLE\n", name,
-		                       ctx.program);
+		ctx.err << fmt::format("To add a title without {}: catalist add --no-lookup TITLE\n", name);
 		return std::nullopt;
 	}
 	const auto& matches = found.value();

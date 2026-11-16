@@ -88,8 +88,8 @@ int runLogin(const command& self, const args::parsed& line, cliContext& ctx) {
 		return fail(ctx, fmt::format("could not save the login to {}", ctx.accountsFile.string()));
 	ctx.err << fmt::format(
 	    "Logged in to {} as {}. Each change to a linked title is now sent there;\n"
-	    "send your lists there now with: {} sync --all\n",
-	    providerName(*site), login.value().user, ctx.program);
+	    "send your lists there now with: catalist sync --all\n",
+	    providerName(*site), login.value().user);
 	return 0;
 }
 
@@ -118,8 +118,7 @@ int runAccounts(const command& self, const args::parsed& line, cliContext& ctx) 
 	};
 	if (not line.has("json") and ctx.columns > 0) {
 		if (logins.empty()) {
-			ctx.err << fmt::format("You are not logged in anywhere. Log in with: {} login SITE\n",
-			                       ctx.program);
+			ctx.err << "You are not logged in anywhere. Log in with: catalist login SITE\n";
 			return 0;
 		}
 		std::vector<std::vector<output::styled>> rows;

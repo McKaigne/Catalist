@@ -172,11 +172,6 @@ std::string nowStamp() {
 	                   local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min, local.tm_sec);
 }
 
-std::string newTxLabel() {
-	auto seconds = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-	return fmt::format("{}-{}", static_cast<long long>(seconds), static_cast<long long>(getpid()));
-}
-
 bool isInteractive() {
 	return isatty(STDIN_FILENO) and isatty(STDOUT_FILENO);
 }

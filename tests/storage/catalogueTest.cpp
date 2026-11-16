@@ -33,12 +33,6 @@ std::vector<std::string> titlesSortedBy(const catalogue& db, sortKey key, bool r
 
 using titleList = std::vector<std::string>;
 
-// Puts a CSV fixture where an earlier Catalist would have left the list.
-void putFixture(const std::filesystem::path& dir, mediaType type, const std::string& name) {
-	catalist::test::writeText(dir / csvCodec::catalogFileName(type),
-	                          catalist::test::readText(catalist::test::fixturePath("csv/" + name)));
-}
-
 }  // namespace
 
 TEST_CASE_FIXTURE(tempDirFixture, "catalogue round trip keeps quotes, commas and dates") {
@@ -85,9 +79,15 @@ TEST_CASE_FIXTURE(tempDirFixture,
 }
 
 TEST_CASE_FIXTURE(tempDirFixture,
-                  "catalogue continues numbering after the ids in the imported file") {
-	catalist::test::writeText(tempDir() / "data/anime.csv",
-	                          "40,0,0,anime,Loaded,Watching,0,0,0,0,0,0,,,,\n");
+                  "catalogue continues numbering after the ids in the stored file") {
+	{
+		catalogue first(tempDir() / "data");
+		first.addEntry(makeEntry().title("Loaded"));
+		REQUIRE(first.saveAll());
+		catalist::store::database raw;
+		REQUIRE(raw.open(first.getStorePath()));
+		REQUIRE(raw.run("UPDATE entry SET id = 40"));
+	}
 	catalogue db(tempDir() / "data");
 	REQUIRE(db.loadAll().value());
 	CHECK(db.getById(mediaType::kAnime, 40)->title == "Loaded");
@@ -225,23 +225,6 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue statistics count, average and estim
 	CHECK(empty.daysSpent(mediaType::kAnime) == 0.0);
 }
 
-TEST_CASE_FIXTURE(tempDirFixture,
-                  "catalogue refuses a CSV file in an old layout and names the file") {
-	for (const char* oldRow : {"52991,52991,Sousou no Frieren,Completed,10,28,28\n",
-	                           "52991,52991,154587,Sousou no Frieren,Completed,10,28,28,0,0,1,"
-	                           "2023-09-29,2024-03-22,Masterpiece.,2026-10-17,1\n"}) {
-		catalist::test::writeText(tempDir() / "data/anime.csv", oldRow);
-		catalogue db(tempDir() / "data");
-		auto loaded = db.loadAll();
-		REQUIRE_FALSE(loaded.ok());
-		CHECK(loaded.errorMessage().find((tempDir() / "data/anime.csv").string() +
-		                                 ": row 1 has a column layout") == 0);
-		CHECK(db.getEntries(mediaType::kAnime).empty());
-		CHECK(db.importedFrom().empty());
-		CHECK(catalist::test::readText(tempDir() / "data/anime.csv") == oldRow);
-	}
-}
-
 TEST_CASE_FIXTURE(tempDirFixture, "catalogue loadAll says whether anything was stored") {
 	catalogue db(tempDir() / "data");
 	auto loaded = db.loadAll();
@@ -255,122 +238,6 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue loadAll says whether anything was s
 	CHECK(db.loadAll().value());
 	catalogue again(tempDir() / "data");
 	CHECK(again.loadAll().value());
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "catalogue imports the CSV files of an earlier version once") {
-	auto dir = tempDir() / "data";
-	putFixture(dir, mediaType::kManga, "current.csv");
-	putFixture(dir, mediaType::kAnime, "crlf.csv");
-	catalist::test::writeText(dir / "settings",
-	                          "theme = dark\nprovider = kitsu\n  provider =  mal \n"
-	                          "linked = 2026-10-19\n");
-	std::string mangaCsv = catalist::test::readText(dir / "manga.csv");
-	{
-		catalogue db(dir);
-		REQUIRE(db.loadAll().value());
-		CHECK(db.importedFrom() == dir);
-		CHECK(db.getEntries(mediaType::kManga).size() == 1);
-		CHECK(db.getEntries(mediaType::kAnime).size() == 1);
-		// Unknown keys and values in the settings file are ignored.
-		CHECK(db.getProvider() == catalist::provider::kMyAnimeList);
-		CHECK(std::filesystem::exists(dir / "catalist.db"));
-	}
-	// The old files stay as they were, and are not looked at again.
-	CHECK(catalist::test::readText(dir / "manga.csv") == mangaCsv);
-	CHECK(catalist::test::readText(dir / "settings").find("theme = dark") == 0);
-	putFixture(dir, mediaType::kAnime, "multiline.csv");
-	catalogue later(dir);
-	REQUIRE(later.loadAll().value());
-	CHECK(later.importedFrom().empty());
-	REQUIRE(later.getEntries(mediaType::kAnime).size() == 1);
-	CHECK(later.getEntries(mediaType::kAnime)[0].title == "Odd Taxi");
-}
-
-TEST_CASE_FIXTURE(tempDirFixture,
-                  "catalogue imports from the old directory when the new one has no lists") {
-	auto oldDir = tempDir() / "config" / "catalist";
-	putFixture(oldDir, mediaType::kManga, "current.csv");
-	{
-		catalogue db(tempDir() / "share" / "catalist", oldDir);
-		REQUIRE(db.loadAll().value());
-		CHECK(db.importedFrom() == oldDir);
-		REQUIRE(db.getEntries(mediaType::kManga).size() == 1);
-		CHECK(db.getEntries(mediaType::kManga)[0].title == "Berserk");
-	}
-	CHECK(std::filesystem::exists(tempDir() / "share" / "catalist" / "catalist.db"));
-	// Nothing is written into, moved out of or removed from the old one.
-	CHECK(std::filesystem::exists(oldDir / "manga.csv"));
-	CHECK_FALSE(std::filesystem::exists(oldDir / "catalist.db"));
-
-	// Lists already in the data directory win over the old directory.
-	auto both = tempDir() / "both";
-	putFixture(both, mediaType::kAnime, "crlf.csv");
-	catalogue preferred(both, oldDir);
-	REQUIRE(preferred.loadAll().value());
-	CHECK(preferred.importedFrom() == both);
-	CHECK(preferred.getEntries(mediaType::kManga).empty());
-
-	// Without an old directory (CATALIST_DATA_DIR is set), nothing is imported.
-	catalogue alone(tempDir() / "alone");
-	CHECK_FALSE(alone.loadAll().value());
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "catalogue imports the current CSV layout") {
-	putFixture(tempDir(), mediaType::kManga, "current.csv");
-	catalogue db(tempDir());
-	REQUIRE(db.loadAll().value());
-	const auto& entries = db.getEntries(mediaType::kManga);
-	REQUIRE(entries.size() == 1);
-	const auto& loaded = entries[0];
-	CHECK(loaded.type == mediaType::kManga);
-	CHECK(loaded.title == "Berserk");
-	CHECK(loaded.status == watchStatus::kWatching);
-	CHECK(loaded.progress == 364);
-	CHECK(loaded.volumes == 42);
-	CHECK(loaded.rewatched == 1);
-	CHECK(catalist::formatDate(loaded.startDate) == "2019-05-01");
-	CHECK(catalist::formatDate(loaded.finishDate) == "");
-	CHECK(catalist::formatDate(loaded.updatedAt) == "2026-10-17");
-	CHECK(loaded.malId == 2);
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "catalogue imports a file written by Catalist 0.3") {
-	putFixture(tempDir(), mediaType::kManga, "v03.csv");
-	catalogue db(tempDir());
-	REQUIRE(db.loadAll().value());
-	const auto& entries = db.getEntries(mediaType::kManga);
-	REQUIRE(entries.size() == 1);
-	CHECK(entries[0].id == 2);
-	CHECK(entries[0].malId == 2);
-	CHECK(entries[0].anilistId == 30002);
-	CHECK(entries[0].title == "Berserk");
-	CHECK(entries[0].progress == 364);
-	CHECK(entries[0].volumes == 42);
-	CHECK(catalist::formatDate(entries[0].startDate) == "2019-05-01");
-	CHECK(catalist::formatDate(entries[0].updatedAt) == "2026-10-17");
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "catalogue imports crlf line endings") {
-	putFixture(tempDir(), mediaType::kAnime, "crlf.csv");
-	catalogue db(tempDir());
-	REQUIRE(db.loadAll().value());
-	const auto& entries = db.getEntries(mediaType::kAnime);
-	REQUIRE(entries.size() == 1);
-	CHECK(entries[0].title == "Odd Taxi");
-	CHECK(catalist::formatDate(entries[0].updatedAt) == "2026-10-17");
-	CHECK(entries[0].malId == 44265);
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "catalogue imports quoted fields that span lines") {
-	putFixture(tempDir(), mediaType::kAnime, "multiline.csv");
-	catalogue db(tempDir());
-	REQUIRE(db.loadAll().value());
-	const auto& entries = db.getEntries(mediaType::kAnime);
-	REQUIRE(entries.size() == 2);
-	CHECK(entries[0].title == "Ghost, \"in\" the Shell");
-	CHECK(entries[0].status == watchStatus::kDropped);
-	CHECK(catalist::formatDate(entries[0].updatedAt) == "2026-10-18");
-	CHECK(entries[1].title == "Next");
 }
 
 TEST_CASE_FIXTURE(tempDirFixture,
@@ -526,13 +393,6 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue peek reads the lists and leaves not
 	CHECK_FALSE(nothing.peek());
 	CHECK_FALSE(std::filesystem::exists(dir));
 
-	// The lists of an earlier version are not imported by a look.
-	catalist::test::writeText(dir / "anime.csv", "1,0,anime,Old,Watching,0,0,0,0,0,0,,,\n");
-	catalogue old(dir);
-	CHECK_FALSE(old.peek());
-	CHECK_FALSE(std::filesystem::exists(dir / "catalist.db"));
-	std::filesystem::remove(dir / "anime.csv");
-
 	{
 		catalogue db(dir);
 		db.addEntry(makeEntry().title("Odd Taxi"));
@@ -571,8 +431,8 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue reports a failed write and a file i
 
 namespace {
 
-catalist::txNote noteOf(const std::string& label, bool group = false) {
-	return {label, "2026-10-20 21:30:00", group};
+catalist::txNote noteOf(const std::string& label) {
+	return {label, "2026-10-20 21:30:00"};
 }
 
 // Frieren (a:1, completed) and Odd Taxi (a:2, 5 of 13) and Berserk (m:1),
@@ -856,95 +716,19 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps the last 100 steps") {
 	CHECK(progressOf(db, 1) == 5);
 }
 
-TEST_CASE_FIXTURE(tempDirFixture, "catalogue folds the saves of one group into one step") {
-	auto dir = tempDir() / "data";
-	{
-		catalogue db(dir);
-		seedForUndo(db);
-		watch(db, 2, 6, noteOf("before the group"));
-	}
-	// Each command of a group is a program run of its own.
-	auto group = noteOf("1792531800-4242", true);
-	for (int progress : {7, 8}) {
-		catalogue db(dir);
-		REQUIRE(db.loadAll().value());
-		watch(db, 2, progress, group);
-	}
-	{
-		catalogue db(dir);
-		REQUIRE(db.loadAll().value());
-		watch(db, 1, 1, group);
-		REQUIRE(db.removeEntry(mediaType::kManga, 1));
-		REQUIRE(db.saveAll(group));
-	}
-	catalogue db(dir);
-	REQUIRE(db.loadAll().value());
-	auto steps = db.history(0).value();
-	REQUIRE(steps.size() == 2);
-	CHECK(steps[0].label == "1792531800-4242");
-	CHECK(steps[0].changes == 3);
-	CHECK(steps[1].label == "before the group");
-
-	// One undo takes the group back, and no more than the group.
-	auto undone = db.undo(1, false);
-	REQUIRE(undone.ok());
-	CHECK(undone.value().steps.size() == 1);
-	CHECK(undone.value().changes.size() == 3);
-	CHECK(progressOf(db, 2) == 6);
-	CHECK(progressOf(db, 1) == 0);
-	CHECK(db.getById(mediaType::kManga, 1)->title == "Berserk");
-	REQUIRE(db.redo(1, false).ok());
-	CHECK(progressOf(db, 2) == 8);
-	CHECK_FALSE(db.getById(mediaType::kManga, 1));
-
-	// Another label, or no group, starts a step of its own.
-	watch(db, 2, 9, noteOf("1792531900-4343", true));
-	watch(db, 2, 10, noteOf("1792531900-4343"));
-	watch(db, 2, 11, noteOf("1792531900-4343", true));
-	steps = db.history(0).value();
-	REQUIRE(steps.size() == 4);
-	CHECK(steps[0].changes == 1);
-	REQUIRE(db.undo(1, false).ok());
-	CHECK(progressOf(db, 2) == 9);
-}
-
-TEST_CASE_FIXTURE(tempDirFixture, "catalogue drops a group that has put everything back") {
-	catalogue db(tempDir() / "data");
-	seedForUndo(db);
-	auto group = noteOf("1792531800-4242", true);
-	watch(db, 2, 6, group);
-	watch(db, 1, 1, group);
-	watch(db, 2, 5, group);
-	auto steps = db.history(0).value();
-	REQUIRE(steps.size() == 1);
-	CHECK(steps[0].changes == 1);
-	watch(db, 1, 0, group);
-	CHECK(db.history(0).value().empty());
-	CHECK(db.undo(1, false).value().steps.empty());
-}
-
 TEST_CASE("catalogue data dir: CATALIST_DATA_DIR, then XDG_DATA_HOME, then ~/.local/share") {
 	using dirs = catalist::dataDirEnv;
 	auto dataDir = [](const dirs& env) { return catalogue::getDefaultDataDir(env); };
-	CHECK(dataDir(dirs{"/custom", "/xdg/data", "/xdg/config", "/home/me"}) == "/custom");
-	CHECK(dataDir(dirs{"", "/xdg/data", "/xdg/config", "/home/me"}) == "/xdg/data/catalist");
-	CHECK(dataDir(dirs{"", "", "/xdg/config", "/home/me"}) == "/home/me/.local/share/catalist");
+	CHECK(dataDir(dirs{"/custom", "/xdg/data", "/home/me"}) == "/custom");
+	CHECK(dataDir(dirs{"", "/xdg/data", "/home/me"}) == "/xdg/data/catalist");
+	CHECK(dataDir(dirs{"", "", "/home/me"}) == "/home/me/.local/share/catalist");
 	// A relative XDG_DATA_HOME is not valid, and is ignored.
-	CHECK(dataDir(dirs{"", "relative/data", "", "/home/me"}) == "/home/me/.local/share/catalist");
+	CHECK(dataDir(dirs{"", "relative/data", "/home/me"}) == "/home/me/.local/share/catalist");
 	CHECK(dataDir(dirs{}) == "catalist-data");
 
 	catalogue db("/data");
 	CHECK(db.getDataDir() == "/data");
 	CHECK(db.getStorePath() == "/data/catalist.db");
-}
-
-TEST_CASE("catalogue old data dir is the config directory, unless CATALIST_DATA_DIR is set") {
-	using dirs = catalist::dataDirEnv;
-	auto oldDir = [](const dirs& env) { return catalogue::getOldDataDir(env); };
-	CHECK(oldDir(dirs{"", "/xdg/data", "/xdg/config", "/home/me"}) == "/xdg/config/catalist");
-	CHECK(oldDir(dirs{"", "", "", "/home/me"}) == "/home/me/.config/catalist");
-	CHECK(oldDir(dirs{"/custom", "", "/xdg/config", "/home/me"}).empty());
-	CHECK(oldDir(dirs{}).empty());
 }
 
 TEST_CASE_FIXTURE(tempDirFixture,

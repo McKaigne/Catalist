@@ -62,13 +62,6 @@ std::string nameOf(const entry& named) {
 	                   named.id);
 }
 
-// Whether the change leaves the entry as it found it.
-bool isEmpty(const change& made) {
-	if (not made.before or not made.after)
-		return not made.before and not made.after;
-	return sameFields(*made.before, *made.after);
-}
-
 using outcome = result<std::optional<entry>>;
 
 // The entry comes back: its id and its site ids must be free.
@@ -113,23 +106,6 @@ std::vector<change> diff(const std::vector<entry>& saved, const std::vector<entr
 		if (not findById(current, was.id))
 			changes.push_back({was.type, was.id, was, std::nullopt});
 	return changes;
-}
-
-std::vector<change> merge(std::vector<change> older, const std::vector<change>& newer) {
-	for (const auto& next : newer) {
-		auto last = std::find_if(older.rbegin(), older.rend(), [&next](const change& each) {
-			return each.type == next.type and each.id == next.id;
-		});
-		// An id that was freed and given to a new title names two entries:
-		// the removal and the addition stay two changes.
-		bool another = last != older.rend() and not last->after and not next.before;
-		if (last == older.rend() or another)
-			older.push_back(next);
-		else
-			last->after = next.after;
-	}
-	older.erase(std::remove_if(older.begin(), older.end(), isEmpty), older.end());
-	return older;
 }
 
 std::vector<fieldChange> changedFields(const change& made) {

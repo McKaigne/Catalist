@@ -83,32 +83,32 @@ sudo cmake --install build
 ```
 
 The build also writes the manual page and the completions for zsh and
-fish, and `cmake --install` puts them where `man` and the shells look,
-with `cl`, a short name for `catalist`. When `dash`, `bash`, `zsh` or
-`fish` is installed, `ctest` also runs the command line from that shell.
+fish, and `cmake --install` puts them where `man` and the shells look.
+When `dash`, `bash` or `zsh` is installed, `ctest` also runs the command
+line from that shell.
 
 ---
 
 ## Usage
 
-`cl` is `catalist` under a shorter name.
-
 ```sh
-cl ls                              # every title, as a table
-cl ls -s watching frieren          # one status, titles holding "frieren"
-cl + frieren                       # one more episode or chapter
-cl + -n 3 a:12                     # three more
-cl set a:12 score=9 status=completed
-cl done --score=8 taxi             # completed, with a score
-cl add --pick=1 dandadan           # search AniList, take the first match
-cl add --no-lookup "Some OVA"      # add by hand, offline
-cl rm -f a:12                      # remove without asking
-cl undo                            # take the last command back
-cl redo                            # and make it again
-cl search -m berserk               # look without adding
-cl stats                           # the numbers of both lists
-cl help set                        # what a command takes
+catalist ls                           # every title, as a table
+catalist ls -s watching frieren       # one status, titles holding "frieren"
+catalist + frieren                    # one more episode or chapter
+catalist + -n 3 a:12                  # three more
+catalist set a:12 score=9 status=completed
+catalist done --score=8 taxi          # completed, with a score
+catalist add --pick=1 dandadan        # search AniList, take the first match
+catalist add --no-lookup "Some OVA"   # add by hand, offline
+catalist rm -f a:12                   # remove without asking
+catalist undo                         # take the last command back
+catalist redo                         # and make it again
+catalist search -m berserk            # look without adding
+catalist stats                        # the numbers of both lists
+catalist help set                     # what a command takes
 ```
+
+A shorter name is a shell alias away: `alias cl=catalist`.
 
 - **Refs:** every title has a ref, the first column of `ls`: `a:12` is an
   anime, `m:3` a manga. A command takes refs or any part of a title, in
@@ -119,8 +119,8 @@ cl help set                        # what a command takes
   the same ref.
 - **Options** follow POSIX: they come before the operands, group
   (`-amq`), take their value joined or apart (`-n3`, `-n 3`,
-  `--sort=title`), and `--` ends them. Every command has `--help`, `cl
-  help` lists them, and a mistyped command or option gets a suggestion.
+  `--sort=title`), and `--` ends them. Every command has `--help`,
+  `catalist help` lists them, and a mistyped command or option gets a suggestion.
 - **Output:** a table at a terminal (in colour, unless `NO_COLOR` is set);
   into a pipe, one line a title with a tab between the fields, for `cut`,
   `awk`, `sort` and `read`; `--json` prints one JSON object a line, and
@@ -142,48 +142,26 @@ A lone `-` in place of the refs reads them from standard input, one a
 line, so the refs `ls -q` prints can feed any command that changes titles:
 
 ```sh
-cl ls -q -s watching | cl + -           # one more of everything watched
-cl ls -q -s planned | head -n 3 | cl rm -f -
-cl ls | awk -F '\t' '$5 >= 9 { print $3 }'   # titles scored 9 or 10
+catalist ls -q -s watching | catalist + -     # one more of everything watched
+catalist ls -q -s planned | head -n 3 | catalist rm -f -
+catalist ls | awk -F '\t' '$5 >= 9 { print $3 }'   # titles scored 9 or 10
 ```
 
 ### Undo and redo
 
-Every command that changes the lists is one step: `cl undo` takes the
-last one back, `cl redo` makes it again, and `cl log` lists the last 100.
-A step is taken back only when its titles are still as it left them;
-otherwise the title is named and nothing changes, and `-f` takes it back
-all the same. A new change after an undo ends what can be redone.
-
-Commands run with the same `CATALIST_TX` are one step, so one `cl undo`
-reverts a whole loop. In sh, bash or zsh:
-
-```sh
-export CATALIST_TX=$(cl tx)
-for ref in a:3 a:7 m:2; do
-	cl + "$ref"
-done
-unset CATALIST_TX
-cl undo        # all three at once
-```
-
-In fish:
-
-```fish
-set -lx CATALIST_TX (cl tx)
-for ref in a:3 a:7 m:2
-    cl + $ref
-end
-set -e CATALIST_TX
-cl undo
-```
+Every command that changes the lists is one step: `catalist undo` takes
+the last one back (`undo -n 3` the last three), `catalist redo` makes it
+again, and `catalist log` lists the last 100. A step is taken back only
+when its titles are still as it left them; otherwise the title is named
+and nothing changes, and `-f` takes it back all the same. A new change
+after an undo ends what can be redone.
 
 ### Completion
 
 The completions for zsh and fish know the commands, their options and
 values, and your titles: by ref, with the title beside it, or by any part
-of a title. `cmake --install` and the Nix package put them in place for
-`catalist` and `cl`. To set them up by hand:
+of a title. `cmake --install` and the Nix package put them in place. To
+set them up by hand:
 
 ```sh
 catalist completion zsh > ~/.zfunc/_catalist     # ~/.zfunc in $fpath, before compinit
@@ -195,6 +173,7 @@ catalist completion fish > ~/.config/fish/completions/catalist.fish
 ```bash
 catalist import --user Abel --from kitsu     # a user's public lists on a site
 catalist import animelist.xml mangalist.xml   # MyAnimeList XML exports
+catalist import ~/.config/catalist/anime.csv ~/.config/catalist/manga.csv   # from 0.3.0
 catalist export anime > anime.xml             # MyAnimeList XML on stdout
 catalist export manga > manga.xml
 catalist export --format=csv anime > anime.csv   # for a spreadsheet
@@ -231,12 +210,10 @@ them), and `import` reads the JSON back whole: it is the backup.
   one SQLite transaction, so a crash never leaves half a change, and two
   programs working on the lists at once wait for each other. A save that
   fails is reported with exit code 1.
-- **Coming from 0.3.0 or earlier:** when there is no `catalist.db` yet,
-  Catalist reads `anime.csv`, `manga.csv` and `settings` from
-  `~/.config/catalist` (or `$XDG_CONFIG_HOME/catalist`, or the directory
-  in `CATALIST_DATA_DIR`) into a new one, once, says so on stderr, and
-  leaves the old files as they were. Files written by Catalist 0.2.1 to
-  0.3.0 load, AniList ids included.
+- **Coming from 0.3.0 or earlier:** `catalist import
+  ~/.config/catalist/anime.csv ~/.config/catalist/manga.csv` reads the old
+  lists in, AniList ids included, and leaves the files as they were;
+  `catalist provider` sets the provider again.
 - For a spreadsheet, `catalist export --format=csv`.
 
 The provider is the only setting.

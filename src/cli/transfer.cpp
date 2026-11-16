@@ -1,12 +1,14 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <cctype>
 #include <istream>
 #include <iterator>
 #include <ostream>
 #include <sstream>
 
 #include "cli/common.hpp"
+#include "storage/csvCodec.hpp"
 #include "storage/malXml.hpp"
 #include "system.hpp"
 #include "web/json.hpp"
@@ -72,8 +74,9 @@ result<std::vector<entry>> readJsonLines(const std::string& content, const std::
 	return outcome::success(std::move(found));
 }
 
-// The titles of one MyAnimeList XML export, or of Catalist's own JSON
-// Lines, `-` being standard input. Fails with what is wrong with the file.
+// The titles of one MyAnimeList XML export, of Catalist's own JSON Lines,
+// or of an anime.csv or manga.csv of Catalist 0.3.0 and earlier, `-` being
+// standard input. Fails with what is wrong with the file.
 result<std::vector<entry>> readExport(cliContext& ctx, const std::string& file) {
 	using outcome = result<std::vector<entry>>;
 	bool piped = file == "-";
@@ -91,6 +94,15 @@ result<std::vector<entry>> readExport(cliContext& ctx, const std::string& file) 
 	auto first = content->find_first_not_of(" \t\r\n");
 	if (first != std::string::npos and (*content)[first] == '{')
 		return readJsonLines(*content, name);
+	// The lists of Catalist 0.3.0 and earlier: a "#id,..." line, then a row
+	// a title.
+	if (first != std::string::npos and
+	    ((*content)[first] == '#' or std::isdigit(static_cast<unsigned char>((*content)[first])))) {
+		auto rows = csvCodec::decodeEntries(*content);
+		if (not rows.ok())
+			return outcome::failure(fmt::format("{}: {}", name, rows.errorMessage()));
+		return rows;
+	}
 	auto found = malXml::parse(*content);
 	if (found.empty())
 		return outcome::failure(
@@ -234,9 +246,10 @@ std::vector<command> transferCommands() {
 	    {"import",
 	     {},
 	     "Add titles from MyAnimeList XML files, or a user's lists on a site",
-	     std::string("A FILE is a MyAnimeList XML export, or what 'export --format=json'\n"
-	                 "wrote; - is standard input. MyAnimeList gzips its exports: unpack them\n"
-	                 "first (gunzip).\n\n"
+	     std::string("A FILE is a MyAnimeList XML export, what 'export --format=json'\n"
+	                 "wrote, or the anime.csv or manga.csv of Catalist 0.3.0 and earlier\n"
+	                 "(in ~/.config/catalist); - is standard input. MyAnimeList gzips its\n"
+	                 "exports: unpack them first (gunzip).\n\n"
 	                 "With --user, NAME's public lists are read from your provider, or the\n"
 	                 "site --from names, both of them unless -a or -m keeps to one: moving\n"
 	                 "in from AniList, MyAnimeList or Kitsu.\n\n"

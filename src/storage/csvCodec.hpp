@@ -10,12 +10,11 @@
 #include "core/entry.hpp"
 #include "core/result.hpp"
 
-// RFC 4180 encoding and decoding of catalogue rows: the files Catalist 0.3
-// and earlier kept the lists in, which are still read once, and the form a
-// title takes in the undo history. Pure text in, records out.
+// RFC 4180 encoding and decoding of catalogue rows: the form a title takes
+// in the undo history (Catalist-TUI's too), and the files Catalist 0.3.0
+// and earlier kept the lists in, which `import` reads. Pure text in,
+// records out.
 namespace catalist::csvCodec {
-
-[[nodiscard]] std::string catalogFileName(mediaType type);
 
 [[nodiscard]] std::string escapeField(const std::string& field);
 
@@ -26,18 +25,19 @@ namespace catalist::csvCodec {
 
 [[nodiscard]] std::optional<isoDate> decodeDate(const std::string& field);
 
-// The 17 columns of encodeEntries (or their first 14 or 16, written before
-// the web checks and AniList ids), or the 16 that Catalist 0.2.1 to 0.3.0
-// wrote (their notes are dropped). Columns after them are
-// ignored; a row without the type column where either layout has it is in an
-// older layout and is not read.
-[[nodiscard]] std::optional<entry> decodeEntry(const std::vector<std::string>& fields,
-                                               mediaType type);
-// Fails on the first row decodeEntry cannot read, so a file is never loaded
-// half-read.
-[[nodiscard]] result<std::vector<entry>> decodeEntries(std::string_view text, mediaType type);
-[[nodiscard]] std::string encodeEntries(const std::vector<entry>& entries);
-// One row of encodeEntries, without the line end.
+// The 17 or 18 fields of encodeEntry (or their first 14 or 16, written
+// before the web checks and AniList ids), or the 16 that Catalist 0.2.1 to
+// 0.3.0 wrote (their notes are dropped). Columns after them are ignored; a
+// row without the type column where either layout has it is in an older
+// layout and is not read. The type is the row's own.
+[[nodiscard]] std::optional<entry> decodeEntry(const std::vector<std::string>& fields);
+// A whole file of rows, as Catalist 0.3.0 and earlier wrote anime.csv and
+// manga.csv. Fails on the first row decodeEntry cannot read, so a file is
+// never read half.
+[[nodiscard]] result<std::vector<entry>> decodeEntries(std::string_view text);
+// id, mal_id, type, title, status, score, progress, total_units, volumes,
+// total_volumes, rewatched, start_date, finish_date, updated_at, released,
+// checked_at, anilist_id and, when there is one, the Kitsu id; no line end.
 [[nodiscard]] std::string encodeEntry(const entry& row);
 
 }  // namespace catalist::csvCodec

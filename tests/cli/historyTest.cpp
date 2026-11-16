@@ -162,36 +162,3 @@ TEST_CASE_FIXTURE(cliFixture, "cli log lists the steps, newest first") {
 	CHECK(out.empty());
 	CHECK_FALSE(std::filesystem::exists("data"));
 }
-
-TEST_CASE_FIXTURE(cliFixture, "cli tx prints a label, and commands run under one undo as one") {
-	seed();
-	CHECK(run({"tx"}) == 0);
-	CHECK(out == "1792531800-4242\n");
-	CHECK(err.empty());
-	CHECK(run({"tx", "now"}) == 2);
-
-	REQUIRE(run({"+", "taxi"}) == 0);
-	group = "1792531800-4242";
-	REQUIRE(run({"+", "taxi"}) == 0);
-	REQUIRE(run({"+", "-"}, "a:2\nm:1\n") == 0);
-	REQUIRE(run({"done", "m:2"}) == 0);
-	REQUIRE(run({"rm", "-fm", "berserk"}) == 0);
-	group.clear();
-
-	auto history = steps();
-	REQUIRE(history.size() == 2);
-	CHECK(history[0].label == "1792531800-4242");
-	CHECK(history[0].changes == 3);
-	CHECK(history[1].label == "+ taxi");
-
-	CHECK(run({"undo"}) == 0);
-	CHECK(err == "Undid '1792531800-4242' (2026-10-20 21:30:00).\n");
-	CHECK(has(out, "a:2\tOdd Taxi\tprogress\t8\t6\n"));
-	CHECK(has(out, "m:1\tBerserk\tadded\t-\twatching\n"));
-	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 6);
-	CHECK(savedTitle(mediaType::kManga, "Berserk").progress == 364);
-	CHECK(savedTitle(mediaType::kManga, "Sousou no Frieren").status == watchStatus::kPlanToWatch);
-	CHECK(run({"redo"}) == 0);
-	CHECK(saved(mediaType::kManga).size() == 1);
-	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 8);
-}

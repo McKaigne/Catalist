@@ -117,13 +117,6 @@ add_executable(catalist src/main.cpp)
 target_link_libraries(catalist PRIVATE catalistLib)
 target_compile_options(catalist PRIVATE ${CATALIST_WARNING_FLAGS})
 
-# `cl` is catalist under a shorter name: a link next to the program, which
-# then calls itself `cl` in its messages.
-add_custom_command(TARGET catalist POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E create_symlink catalist "$<TARGET_FILE_DIR:catalist>/cl"
-  VERBATIM
-)
-
 # The program writes its manual page and its completion scripts from its
 # own table of commands (see cmake/shellSupport.cmake).
 set(CATALIST_SHARE_DIR "${CMAKE_CURRENT_BINARY_DIR}/share")
@@ -131,9 +124,6 @@ set(CATALIST_SHELL_FILES
   "${CATALIST_SHARE_DIR}/man/man1/catalist.1"
   "${CATALIST_SHARE_DIR}/zsh/_catalist"
   "${CATALIST_SHARE_DIR}/fish/catalist.fish"
-  "${CATALIST_SHARE_DIR}/fish/cl.fish"
-  "${CATALIST_SHARE_DIR}/bash/catalist"
-  "${CATALIST_SHARE_DIR}/bash/cl"
 )
 add_custom_command(
   OUTPUT ${CATALIST_SHELL_FILES}
@@ -165,15 +155,12 @@ set(CATALIST_FISH_COMPLETIONS_DIR "${fishDir}" CACHE PATH
   "Where the fish completions are installed")
 
 install(TARGETS catalist DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES "$<TARGET_FILE_DIR:catalist>/cl" DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES "${CATALIST_SHARE_DIR}/man/man1/catalist.1"
   DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 install(FILES "${CATALIST_SHARE_DIR}/zsh/_catalist"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/zsh/site-functions)
-install(FILES "${CATALIST_SHARE_DIR}/fish/catalist.fish" "${CATALIST_SHARE_DIR}/fish/cl.fish"
+install(FILES "${CATALIST_SHARE_DIR}/fish/catalist.fish"
   DESTINATION ${CATALIST_FISH_COMPLETIONS_DIR})
-install(FILES "${CATALIST_SHARE_DIR}/bash/catalist" "${CATALIST_SHARE_DIR}/bash/cl"
-  DESTINATION ${CMAKE_INSTALL_DATADIR}/bash-completion/completions)
 
 enable_testing()
 
@@ -228,9 +215,6 @@ add_executable(catalistTests
   tests/systemTest.cpp
 )
 target_include_directories(catalistTests PRIVATE tests)
-target_compile_definitions(catalistTests PRIVATE
-  CATALIST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
-)
 target_link_libraries(catalistTests PRIVATE doctest::doctest catalistLib)
 target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 
@@ -249,22 +233,12 @@ endif()
 if(CATALIST_BASH)
   add_test(NAME smoke.bash
     COMMAND "${CATALIST_BASH}" --posix "${smokeScript}" $<TARGET_FILE:catalist>)
-  add_test(NAME completion.bash COMMAND "${CATALIST_BASH}" -n "${CATALIST_SHARE_DIR}/bash/catalist")
-  # The script completes like a person typing, against a stub program.
-  add_test(NAME completion.bash.words
-    COMMAND "${CATALIST_BASH}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke/completion.bash"
-      "${CATALIST_SHARE_DIR}/bash/catalist" $<TARGET_FILE:catalist>)
-  set_tests_properties(completion.bash.words PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 if(CATALIST_ZSH)
   add_test(NAME smoke.zsh COMMAND "${CATALIST_ZSH}" -f "${smokeScript}" $<TARGET_FILE:catalist>)
   add_test(NAME completion.zsh COMMAND "${CATALIST_ZSH}" -n "${CATALIST_SHARE_DIR}/zsh/_catalist")
 endif()
 if(CATALIST_FISH)
-  add_test(NAME smoke.fish
-    COMMAND "${CATALIST_FISH}" --no-config "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke/smoke.fish"
-      $<TARGET_FILE:catalist>)
   add_test(NAME completion.fish
-    COMMAND "${CATALIST_FISH}" --no-config -n "${CATALIST_SHARE_DIR}/fish/catalist.fish"
-      "${CATALIST_SHARE_DIR}/fish/cl.fish")
+    COMMAND "${CATALIST_FISH}" --no-config -n "${CATALIST_SHARE_DIR}/fish/catalist.fish")
 endif()

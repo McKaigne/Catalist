@@ -47,11 +47,11 @@ std::string optionLabel(const args::option& shown) {
 }
 
 void printCommandHelp(cliContext& ctx, const command& cmd) {
-	ctx.out << fmt::format("{}.\n\nUsage: {} {}\n", cmd.summary, ctx.program, usageLine(cmd));
+	ctx.out << fmt::format("{}.\n\nUsage: catalist {}\n", cmd.summary, usageLine(cmd));
 	if (not cmd.aliases.empty()) {
 		std::string also;
 		for (const auto& alias : cmd.aliases)
-			also += fmt::format("{}{} {}", also.empty() ? "" : ", ", ctx.program, alias);
+			also += fmt::format("{}catalist {}", also.empty() ? "" : ", ", alias);
 		ctx.out << fmt::format("Also:  {}\n", also);
 	}
 	if (not cmd.details.empty())
@@ -68,11 +68,10 @@ void printCommandHelp(cliContext& ctx, const command& cmd) {
 }
 
 void printHelp(cliContext& ctx) {
-	const std::string& program = ctx.program;
 	ctx.out << fmt::format(
 	    "Catalist {} - track anime and manga from the terminal.\n\n"
-	    "Usage: {} [OPTION...] COMMAND [ARG...]\n\nCommands:\n",
-	    kVersionString, program);
+	    "Usage: catalist [OPTION...] COMMAND [ARG...]\n\nCommands:\n",
+	    kVersionString);
 	for (const auto& each : commands())
 		if (not each.hidden)
 			ctx.out << fmt::format("  {:<12}{}\n", each.name, each.summary);
@@ -80,16 +79,16 @@ void printHelp(cliContext& ctx) {
 	for (const auto& each : globalOptions())
 		ctx.out << fmt::format("  {:<18}{}\n", optionLabel(each), each.help);
 	ctx.out << fmt::format(
-	    "\nName a title by its ref, the first column of '{0} ls' (a:12 is an anime,\n"
+	    "\nName a title by its ref, the first column of 'catalist ls' (a:12 is an anime,\n"
 	    "m:3 a manga), or by part of its title:\n"
-	    "  {0} show a:12\n"
-	    "  {0} + frieren\n"
-	    "  {0} set a:12 score=9\n"
-	    "  {0} undo\n"
-	    "\nOptions come before the titles. Run '{0} help COMMAND' for the options of\n"
-	    "a command. '{0}' alone lists what you are watching or reading, new\n"
-	    "episodes and chapters first. Your lists are kept in\n{1}.\n",
-	    program, ctx.db.getDataDir().string());
+	    "  catalist show a:12\n"
+	    "  catalist + frieren\n"
+	    "  catalist set a:12 score=9\n"
+	    "  catalist undo\n"
+	    "\nOptions come before the titles. Run 'catalist help COMMAND' for the options of\n"
+	    "a command. 'catalist' alone lists what you are watching or reading, new\n"
+	    "episodes and chapters first. Your lists are kept in\n{}.\n",
+	    ctx.db.getDataDir().string());
 }
 
 int runHelp(const command& self, const args::parsed& line, cliContext& ctx) {
@@ -111,8 +110,9 @@ int runHelp(const command& self, const args::parsed& line, cliContext& ctx) {
 // A command line wrong before its command: no command, or one not known.
 int commandError(cliContext& ctx, const std::string& what) {
 	ctx.err << fmt::format(
-	    "error: {}\nUsage: {} [OPTION...] COMMAND [ARG...]\nRun '{} help' to see the commands.\n",
-	    what, ctx.program, ctx.program);
+	    "error: {}\nUsage: catalist [OPTION...] COMMAND [ARG...]\nRun 'catalist help' to see the "
+	    "commands.\n",
+	    what);
 	return 2;
 }
 

@@ -33,12 +33,6 @@ struct change {
 [[nodiscard]] std::vector<change> diff(const std::vector<entry>& saved,
                                        const std::vector<entry>& current);
 
-// `older` followed by `newer` as one set of changes: an entry in both keeps
-// its first `before` and its last `after`, and an entry that ends as it
-// began is left out.
-[[nodiscard]] std::vector<change> merge(std::vector<change> older,
-                                        const std::vector<change>& newer);
-
 // One field of a change as text, the way a command reports it.
 struct fieldChange {
 	std::string field;

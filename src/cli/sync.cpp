@@ -117,9 +117,9 @@ void noteWaiting(cliContext& ctx, const sendReport& report) {
 	if (report.left == 0 or ctx.offline)
 		return;
 	ctx.err << fmt::format(
-	    "note: {} to be sent to the sites; '{} sync' sends {}.\n",
+	    "note: {} to be sent to the sites; 'catalist sync' sends {}.\n",
 	    report.left == 1 ? "1 change waits" : fmt::format("{} changes wait", report.left),
-	    ctx.program, report.left == 1 ? "it" : "them");
+	    report.left == 1 ? "it" : "them");
 }
 
 void tellSites(cliContext& ctx, const std::vector<journal::change>& changes) {
@@ -178,8 +178,7 @@ int runSync(const command& self, const args::parsed& line, cliContext& ctx) {
 	}
 	auto logins = readAccounts(ctx);
 	if (logins.empty()) {
-		ctx.err << fmt::format("You are not logged in to any site. Log in with: {} login SITE\n",
-		                       ctx.program);
+		ctx.err << "You are not logged in to any site. Log in with: catalist login SITE\n";
 		return waiting.empty() ? 0 : 1;
 	}
 	if (line.has("all")) {

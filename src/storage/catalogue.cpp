@@ -4,19 +4,15 @@
 
 #include <algorithm>
 #include <cstdlib>
-#include <sstream>
 #include <utility>
 
 #include "core/entry.hpp"
-#include "system.hpp"
 
 namespace catalist {
 
 namespace {
 
 const char* kStoreFile = "catalist.db";
-// What Catalist 0.3 and earlier kept beside its two CSV files.
-const char* kSettingsFile = "settings";
 const char* kProviderKey = "provider";
 
 // PRAGMA user_version of a store this code set up; 0 is a new, empty file.
@@ -151,8 +147,8 @@ const char* kOutboxTable =
 
 // ---- The undo history ----
 
-std::optional<entry> decodeRow(const std::string& row, mediaType type) {
-	return row.empty() ? std::nullopt : csvCodec::decodeEntry(csvCodec::splitFields(row), type);
+std::optional<entry> decodeRow(const std::string& row) {
+	return row.empty() ? std::nullopt : csvCodec::decodeEntry(csvCodec::splitFields(row));
 }
 
 std::string encodeRow(const std::optional<entry>& row) {
@@ -167,8 +163,8 @@ std::optional<std::vector<journal::change>> readChanges(const store::database& d
 	rows.bind(tx);
 	while (rows.step()) {
 		mediaType type = rows.textAt(0) == "manga" ? mediaType::kManga : mediaType::kAnime;
-		changes.push_back({type, static_cast<int>(rows.intAt(1)), decodeRow(rows.textAt(2), type),
-		                   decodeRow(rows.textAt(3), type)});
+		changes.push_back({type, static_cast<int>(rows.intAt(1)), decodeRow(rows.textAt(2)),
+		                   decodeRow(rows.textAt(3))});
 	}
 	return rows.ok() ? std::optional(changes) : std::nullopt;
 }
@@ -201,36 +197,13 @@ std::optional<std::vector<txRecord>> readSteps(const store::database& db, const 
 	return rows.ok() ? std::optional(steps) : std::nullopt;
 }
 
-// The newest step when it has that label, else 0.
-long long newestStepLabelled(const store::database& db, const std::string& label) {
-	auto newest = db.prepare("SELECT id, label FROM tx ORDER BY id DESC LIMIT 1");
-	return newest.step() and newest.textAt(1) == label ? newest.intAt(0) : 0;
-}
-
-bool runWith(const store::database& db, const std::string& sql, long long tx) {
-	auto statement = db.prepare(sql);
-	return statement.bind(tx).run();
-}
-
-// Enters the changes as a step, or folds them into the newest one when the
-// note says so and that one has its label.
+// Enters the changes as a step, forgetting the oldest beyond the last 100.
 bool writeJournal(store::database& db, const txNote& note,
                   const std::vector<journal::change>& changes) {
 	// New work ends what could be redone.
 	if (not db.run("DELETE FROM change WHERE tx IN (SELECT id FROM tx WHERE undone = 1);"
 	               "DELETE FROM tx WHERE undone = 1;"))
 		return false;
-
-	long long step = note.group ? newestStepLabelled(db, note.label) : 0;
-	if (step > 0) {
-		auto earlier = readChanges(db, step);
-		if (not earlier or not runWith(db, "DELETE FROM change WHERE tx = ?", step))
-			return false;
-		auto all = journal::merge(*earlier, changes);
-		// A group that has put everything back is no step at all.
-		return all.empty() ? runWith(db, "DELETE FROM tx WHERE id = ?", step)
-		                   : writeChanges(db, step, all);
-	}
 	auto insert = db.prepare("INSERT INTO tx (stamp, label) VALUES (?, ?)");
 	if (not insert.bind(note.stamp).bind(note.label).run() or
 	    not writeChanges(db, db.lastInsertId(), changes))
@@ -245,31 +218,6 @@ const entry* findById(const std::vector<entry>& list, int id) {
 	auto found =
 	    std::find_if(list.begin(), list.end(), [id](const entry& e) { return e.id == id; });
 	return found == list.end() ? nullptr : &*found;
-}
-
-bool hasOldFiles(const std::filesystem::path& dir) {
-	std::error_code ignored;
-	return std::filesystem::is_regular_file(dir / "anime.csv", ignored) or
-	       std::filesystem::is_regular_file(dir / "manga.csv", ignored) or
-	       std::filesystem::is_regular_file(dir / kSettingsFile, ignored);
-}
-
-std::vector<std::pair<std::string, std::string>> readOldSettings(
-    const std::filesystem::path& file) {
-	auto trim = [](std::string text) {
-		text.erase(0, text.find_first_not_of(" \t"));
-		text.erase(text.find_last_not_of(" \t\r") + 1);
-		return text;
-	};
-	std::vector<std::pair<std::string, std::string>> settings;
-	std::istringstream lines(readFile(file).value_or(""));
-	std::string line;
-	while (std::getline(lines, line)) {
-		auto equals = line.find('=');
-		if (equals != std::string::npos)
-			settings.emplace_back(trim(line.substr(0, equals)), trim(line.substr(equals + 1)));
-	}
-	return settings;
 }
 
 // A local id only numbers a title, so two titles are the same only when a
@@ -342,18 +290,7 @@ std::filesystem::path catalogue::getDefaultDataDir(const dataDirEnv& env) {
 	return "catalist-data";
 }
 
-std::filesystem::path catalogue::getOldDataDir(const dataDirEnv& env) {
-	if (not env.catalistDataDir.empty())
-		return {};
-	if (not env.xdgConfigHome.empty())
-		return std::filesystem::path(env.xdgConfigHome) / "catalist";
-	if (not env.home.empty())
-		return std::filesystem::path(env.home) / ".config" / "catalist";
-	return {};
-}
-
-catalogue::catalogue(std::filesystem::path dataDir, std::filesystem::path oldDir)
-    : dataDir_(std::move(dataDir)), oldDir_(std::move(oldDir)) {}
+catalogue::catalogue(std::filesystem::path dataDir) : dataDir_(std::move(dataDir)) {}
 
 std::filesystem::path catalogue::getDataDir() const {
 	return dataDir_;
@@ -554,9 +491,8 @@ result<bool> catalogue::openStore() {
 	return ready;
 }
 
-// A new file gets its tables and, once, the lists of the CSV files that came
-// before it. All of that is one transaction, so two programs starting at
-// the same moment cannot both import.
+// A new file gets its tables, in one transaction: two programs starting at
+// the same moment cannot both set it up.
 result<bool> catalogue::setUpStore() {
 	if (storeVersion(db_) == kStoreVersion)
 		return result<bool>::success(true);
@@ -575,60 +511,9 @@ result<bool> catalogue::setUpStore() {
 	if (not db_.run(kSchema))
 		return result<bool>::failure(
 		    fmt::format("cannot set up {}: {}", getStorePath().string(), db_.lastError()));
-	auto from = importSource();
-	if (not from.empty()) {
-		auto imported = importOldFiles(from);
-		if (not imported.ok())
-			return imported;
-	}
 	if (not setup.commit())
 		return result<bool>::failure(
 		    fmt::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
-	importedFrom_ = from;
-	return result<bool>::success(true);
-}
-
-// The directory whose CSV files are imported into a new store: the data
-// directory when it has any, else the old one; empty when neither has.
-std::filesystem::path catalogue::importSource() const {
-	if (hasOldFiles(dataDir_))
-		return dataDir_;
-	if (not oldDir_.empty() and hasOldFiles(oldDir_))
-		return oldDir_;
-	return {};
-}
-
-result<bool> catalogue::importOldFiles(const std::filesystem::path& from) {
-	std::vector<entry> rows;
-	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
-		auto file = from / csvCodec::catalogFileName(type);
-		auto content = readFile(file);
-		if (not content)
-			continue;
-		auto decoded = csvCodec::decodeEntries(*content, type);
-		if (not decoded.ok())
-			return result<bool>::failure(
-			    fmt::format("{}: {}. Open and save it once with Catalist 0.3.0 to "
-			                "convert it.",
-			                file.string(), decoded.errorMessage()));
-		rows.insert(rows.end(), decoded.value().begin(), decoded.value().end());
-	}
-	auto insert = db_.prepare(kInsertEntry);
-	for (const auto& row : rows) {
-		if (not bindEntry(insert, row).run())
-			return result<bool>::failure(
-			    fmt::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
-	}
-
-	// The settings file: `key = value` lines. Only the provider is kept;
-	// other keys and values are ignored.
-	auto set = db_.prepare(kInsertSetting);
-	for (const auto& [key, value] : readOldSettings(from / kSettingsFile)) {
-		bool known = key == kProviderKey and parseProvider(value);
-		if (known and not set.bind(key).bind(value).run())
-			return result<bool>::failure(
-			    fmt::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
-	}
 	return result<bool>::success(true);
 }
 
@@ -649,7 +534,7 @@ result<bool> catalogue::beginWrite() {
 result<bool> catalogue::loadAll() {
 	std::error_code ignored;
 	bool stored = db_.isOpen() or std::filesystem::exists(getStorePath(), ignored);
-	if (not stored and importSource().empty())
+	if (not stored)
 		return result<bool>::success(false);
 	auto opened = openStore();
 	if (not opened.ok())

@@ -158,8 +158,8 @@ std::string zshCommand(const command& of) {
 	return text + " && ret=0\n\t\t;;\n";
 }
 
-// The helpers ask the program by the name it was typed under, so `cl` and a
-// program outside PATH complete from their own lists.
+// The helpers ask the program by the name it was typed under, so a program
+// outside PATH completes from its own lists.
 const char* const kZshHelpers = R"zsh(_catalist_ask() {
 	_call_program catalist $_catalist_program __complete $1 2>/dev/null
 }
@@ -334,172 +334,6 @@ std::string fishCommand(const std::vector<command>& table, const command& of) {
 	return text;
 }
 
-// ---- bash ----
-
-// What the per-command code calls. `cur` and `operands` are the locals of
-// _catalist_complete, which bash shows to the functions it calls.
-const char* const kBashHelpers = R"bash(# Asks the program, by the name it was typed under.
-_catalist_ask() {
-	"${COMP_WORDS[0]}" __complete "$1" 2>/dev/null
-}
-
-# Offers the words that start with what is typed.
-_catalist_offer() {
-	local IFS=$' \t\n'
-	COMPREPLY+=($(compgen -W "$1" -- "$cur"))
-}
-
-# The same for what is typed after the = of --name=VALUE or FIELD=VALUE.
-_catalist_offer_value() {
-	local IFS=$' \t\n'
-	COMPREPLY+=($(compgen -P "${cur%%=*}=" -W "$1" -- "${cur#*=}"))
-}
-
-# The titles that start with what is typed, in capitals or not; the spaces
-# of a title are offered escaped.
-_catalist_titles() {
-	local line title IFS=$'\n'
-	for line in $(_catalist_ask titles); do
-		title=${line%%$'\t'*}
-		[[ ${title,,} == "${cur,,}"* ]] && COMPREPLY+=("$(printf '%q' "$title")")
-	done
-}
-
-# The refs, then the titles.
-_catalist_named() {
-	local line ref IFS=$'\n'
-	for line in $(_catalist_ask refs); do
-		ref=${line%%$'\t'*}
-		[[ $ref == "$cur"* ]] && COMPREPLY+=("$ref")
-	done
-	_catalist_titles
-}
-
-# FIELD=VALUE: the fields, and after status= the statuses.
-_catalist_fields() {
-	if [[ $cur == status=* ]]; then
-		_catalist_offer_value "$(_catalist_ask statuses)"
-	else
-		_catalist_offer "$(_catalist_ask fields)"
-	fi
-}
-
-_catalist_files() {
-	local IFS=$'\n'
-	compopt -o filenames 2>/dev/null
-	COMPREPLY+=($(compgen -f -- "$cur"))
-}
-)bash";
-
-const char* const kBashMain = R"bash(_catalist() {
-	# The words as typed, apart only at spaces: bash's own COMP_WORDS are
-	# also apart at : and =, which refs and FIELD=VALUE hold.
-	local line=${COMP_LINE:0:COMP_POINT} words
-	read -ra words <<<"$line"
-	[[ $line == *[[:space:]] ]] && words+=("")
-	local cword=$((${#words[@]} - 1))
-	local cur=${words[cword]} prev=${words[cword - 1]}
-	COMPREPLY=()
-	_catalist_complete
-	# bash replaces only its own last piece of the word: hand it back that.
-	local piece=${COMP_WORDS[COMP_CWORD]} broken= i
-	[[ $cur == *?"$piece" ]] && broken=${cur%"$piece"}
-	for i in "${!COMPREPLY[@]}"; do
-		COMPREPLY[i]=${COMPREPLY[i]#"$broken"}
-	done
-	# A --name= or FIELD= waits for its value.
-	if [[ ${#COMPREPLY[@]} -eq 1 && ${COMPREPLY[0]} == *= ]]; then
-		compopt -o nospace 2>/dev/null
-	fi
-}
-
-complete -F _catalist catalist cl
-)bash";
-
-std::string bashQuoted(const std::string& text) {
-	return fmt::format("'{}'", replaced(text, "'", "'\\''"));
-}
-
-// What the options complete to, at `in`: a value after an option that takes
-// one apart ("-s ", "--sort "), a value after "--sort=", and the options
-// themselves after a "-".
-std::string bashOptionCases(const std::vector<args::option>& options, const std::string& in) {
-	std::string after;
-	std::string inside;
-	std::vector<std::string> spellings;
-	for (const auto& each : options) {
-		std::vector<std::string> apart;
-		if (each.letter)
-			apart.push_back(fmt::format("-{}", each.letter));
-		if (not each.name.empty())
-			apart.push_back("--" + each.name);
-		for (const auto& form : apart)
-			spellings.push_back(form + (each.value.empty() or form.size() == 2 ? "" : "="));
-		if (each.value.empty())
-			continue;
-		std::string values = bashQuoted(joined(each.choices, " "));
-		after += fmt::format("{0}\t{1})\n{0}\t\t{2}\n{0}\t\treturn ;;\n", in, joined(apart, "|"),
-		                     each.choices.empty() ? ":" : "_catalist_offer " + values);
-		if (not each.name.empty())
-			inside += fmt::format("{0}\t--{1}=*)\n{0}\t\t{2}\n{0}\t\treturn ;;\n", in, each.name,
-			                      each.choices.empty() ? ":" : "_catalist_offer_value " + values);
-	}
-	std::string text;
-	if (not after.empty())
-		text += fmt::format("{0}case $prev in\n{1}{0}esac\n", in, after);
-	return text + fmt::format(
-	                  "{0}case $cur in\n{1}{0}\t-*)\n{0}\t\t_catalist_offer {2}\n"
-	                  "{0}\t\treturn ;;\n{0}esac\n",
-	                  in, inside, bashQuoted(joined(spellings, " ")));
-}
-
-// Every name of the commands shown.
-std::vector<std::string> allNames(const std::vector<command>& table) {
-	std::vector<std::string> names;
-	for (const command* each : shownOf(table))
-		for (const auto& name : namesOf(*each))
-			names.push_back(name);
-	return names;
-}
-
-std::string bashOperands(const std::vector<command>& table, const command& of,
-                         const std::string& in) {
-	auto first = [&in](const std::string& what) {
-		return fmt::format("{0}if ((operands == 0)); then\n{0}\t{1}\n{0}fi\n", in, what);
-	};
-	switch (of.completes) {
-		case operandKind::kNone:
-		case operandKind::kText:
-			return "";
-		case operandKind::kRefs:
-			return in + "_catalist_named\n";
-		case operandKind::kRefThenFields:
-			return fmt::format(
-			    "{0}if ((operands == 0)); then\n{0}\t_catalist_named\n{0}else\n"
-			    "{0}\t_catalist_fields\n{0}fi\n",
-			    in);
-		case operandKind::kTitle:
-			return first("_catalist_titles");
-		case operandKind::kFiles:
-			return in + "_catalist_files\n";
-		case operandKind::kWords:
-			return first("_catalist_offer " + bashQuoted(joined(of.words, " ")));
-		case operandKind::kCommands:
-			return first("_catalist_offer " + bashQuoted(joined(allNames(table), " ")));
-	}
-	return "";
-}
-
-std::string bashCommand(const std::vector<command>& table, const command& of) {
-	std::vector<std::string> names;
-	for (const auto& name : namesOf(of))
-		names.push_back(bashQuoted(name));
-	std::vector<args::option> options = of.options;
-	options.push_back(helpOption());
-	return fmt::format("\t{})\n{}{}\t\t;;\n", joined(names, "|"), bashOptionCases(options, "\t\t"),
-	                   bashOperands(table, of, "\t\t"));
-}
-
 // ---- The manual page ----
 
 // Text as roff prints it: a backslash and a hyphen-minus are written out,
@@ -599,7 +433,7 @@ std::string roffCommand(const command& of) {
 
 std::string zsh(const std::vector<command>& table) {
 	std::string text =
-	    "#compdef catalist cl\n\n"
+	    "#compdef catalist\n\n"
 	    "# Completion for catalist in zsh. `catalist completion zsh` writes it from\n"
 	    "# the program's table of commands: change that, not this file.\n\n";
 	text += kZshHelpers;
@@ -641,7 +475,7 @@ std::string zsh(const std::vector<command>& table) {
 	    "if [[ $funcstack[1] == _catalist ]]; then\n"
 	    "\t_catalist \"$@\"\n"
 	    "else\n"
-	    "\tcompdef _catalist catalist cl\n"
+	    "\tcompdef _catalist catalist\n"
 	    "fi\n";
 	return text;
 }
@@ -661,41 +495,6 @@ std::string fish(const std::vector<command>& table) {
 	for (const command* each : shownOf(table))
 		text += "\n" + fishCommand(table, *each);
 	return text;
-}
-
-std::string bash(const std::vector<command>& table) {
-	std::string text =
-	    "# Completion for catalist and cl in bash. `catalist completion bash` writes\n"
-	    "# it from the program's table of commands: change that, not this file.\n\n";
-	text += kBashHelpers;
-	text +=
-	    "\n_catalist_complete() {\n"
-	    "\t# The command: the first word after the program's own options.\n"
-	    "\tlocal at=1\n"
-	    "\twhile ((at < cword)); do\n"
-	    "\t\tcase ${words[at]} in\n";
-	if (not globalsApart().empty())
-		text += fmt::format("\t\t\t{}) ((at += 2)) ;;\n", joined(globalsApart(), "|"));
-	text +=
-	    "\t\t\t-?*) ((at++)) ;;\n"
-	    "\t\t\t*) break ;;\n"
-	    "\t\tesac\n"
-	    "\tdone\n"
-	    "\tif ((at >= cword)); then\n";
-	text += bashOptionCases(globalOptions(), "\t\t");
-	text += fmt::format("\t\t_catalist_offer {}\n\t\treturn\n\tfi\n\n",
-	                    bashQuoted(joined(allNames(table), " ")));
-	text +=
-	    "\t# Its operands so far, and what is typed now.\n"
-	    "\tlocal command=${words[at]} operands=0 i\n"
-	    "\tfor ((i = at + 1; i < cword; i++)); do\n"
-	    "\t\t[[ ${words[i]} == -?* ]] || ((operands++))\n"
-	    "\tdone\n"
-	    "\tcase $command in\n";
-	for (const command* each : shownOf(table))
-		text += bashCommand(table, *each);
-	text += "\tesac\n}\n\n";
-	return text + kBashMain;
 }
 
 std::string manual(const std::vector<command>& table) {

@@ -2,18 +2,11 @@
 
 #include <fmt/format.h>
 
-#include <algorithm>
-#include <cstdlib>
 #include <sstream>
 
 namespace catalist::csvCodec {
 
 namespace {
-
-const char* kCatalogHeader =
-    "#id,mal_id,type,title,status,score,progress,total_units,volumes,"
-    "total_volumes,rewatched,start_date,finish_date,updated_at,released,"
-    "checked_at,anilist_id\n";
 
 // The last three columns came later; rows without them are still read.
 constexpr size_t kCatalogFields = 14;
@@ -35,6 +28,10 @@ int intOrZero(const std::string& field) {
 
 bool isTypeColumn(const std::string& field) {
 	return field == "anime" or field == "manga";
+}
+
+mediaType typeOf(const std::string& field) {
+	return field == "manga" ? mediaType::kManga : mediaType::kAnime;
 }
 
 bool togglesQuoteState(const std::string& line, bool insideQuotes) {
@@ -73,10 +70,6 @@ watchStatus decodeStatus(const std::string& field) {
 }
 
 }  // namespace
-
-std::string catalogFileName(mediaType type) {
-	return type == mediaType::kAnime ? "anime.csv" : "manga.csv";
-}
 
 std::string escapeField(const std::string& field) {
 	bool needsQuotes = field.find_first_of(",\"\n\r") != std::string::npos;
@@ -141,7 +134,7 @@ std::optional<isoDate> decodeDate(const std::string& field) {
 	return isoDate::parse(field);
 }
 
-std::optional<entry> decodeEntry(const std::vector<std::string>& fields, mediaType type) {
+std::optional<entry> decodeEntry(const std::vector<std::string>& fields) {
 	bool current = fields.size() >= kCatalogFields and isTypeColumn(fields[2]);
 	bool old = fields.size() >= kOldCatalogFields and isTypeColumn(fields[3]);
 	auto id = current or old ? parseInt(fields[0]) : std::nullopt;
@@ -152,7 +145,7 @@ std::optional<entry> decodeEntry(const std::vector<std::string>& fields, mediaTy
 	size_t shift = old ? 1 : 0;
 	auto field = [&](size_t index) -> const std::string& { return fields[index + shift]; };
 	entry decoded;
-	decoded.type = type;
+	decoded.type = typeOf(field(2));
 	decoded.id = *id;
 	decoded.malId = intOrZero(fields[1]);
 	// The AniList id: third in the old layout, last in the current one.
@@ -182,10 +175,10 @@ std::optional<entry> decodeEntry(const std::vector<std::string>& fields, mediaTy
 	return decoded;
 }
 
-result<std::vector<entry>> decodeEntries(std::string_view text, mediaType type) {
+result<std::vector<entry>> decodeEntries(std::string_view text) {
 	std::vector<entry> entries;
 	for (const auto& record : splitRecords(text)) {
-		auto decoded = decodeEntry(splitFields(record), type);
+		auto decoded = decodeEntry(splitFields(record));
 		if (not decoded)
 			return result<std::vector<entry>>::failure(fmt::format(
 			    "row {} has a column layout this version cannot read", entries.size() + 1));
@@ -201,13 +194,6 @@ std::string encodeEntry(const entry& e) {
 	    e.totalUnits, e.volumes, e.totalVolumes, e.rewatched, formatDate(e.startDate),
 	    formatDate(e.finishDate), formatDate(e.updatedAt), e.released, formatDate(e.checkedAt),
 	    e.anilistId, e.kitsuId > 0 ? fmt::format(",{}", e.kitsuId) : "");
-}
-
-std::string encodeEntries(const std::vector<entry>& entries) {
-	std::string text = kCatalogHeader;
-	for (const auto& e : entries)
-		text += encodeEntry(e) + "\n";
-	return text;
 }
 
 }  // namespace catalist::csvCodec

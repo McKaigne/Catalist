@@ -38,10 +38,6 @@ namespace catalist {
 // for the undo history.
 [[nodiscard]] std::string nowStamp();
 
-// A label no other run of commands has: "<seconds since 1970>-<process
-// id>", for CATALIST_TX.
-[[nodiscard]] std::string newTxLabel();
-
 // Whether standard input and output are both a terminal (someone can be
 // asked a question), and the width of standard output's terminal in columns
 // (0 when it is not one).

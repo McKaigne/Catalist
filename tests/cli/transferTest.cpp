@@ -66,6 +66,35 @@ TEST_CASE_FIXTURE(cliFixture, "cli import reads standard input for a FILE of -")
 	CHECK(err == "error: standard input is compressed; unpack it first (gunzip)\n");
 }
 
+TEST_CASE_FIXTURE(cliFixture, "cli import reads the CSV files of Catalist 0.3.0") {
+	// As 0.3.0 wrote them: the AniList id third, notes, and its sync columns.
+	put("old/anime.csv",
+	    "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,"
+	    "total_volumes,rewatched,start_date,finish_date,notes,updated_at,dirty,external_ids,"
+	    "queue_pos,synced\r\n"
+	    "1,52991,154587,anime,Sousou no Frieren,Completed,10,28,28,0,0,0,2023-09-29,"
+	    "2024-03-22,\"Best, \"\"ever\"\"\",2026-10-17,0,,0,\r\n");
+	put("old/manga.csv",
+	    "#id,mal_id,type,title,status,score,progress,total_units,volumes,total_volumes,"
+	    "rewatched,start_date,finish_date,updated_at,released,checked_at,anilist_id\n"
+	    "2,2,manga,Berserk,Reading,0,364,0,42,0,1,2019-05-01,,2026-10-17,0,,30002\n");
+	CHECK(run({"import", "old/anime.csv", "old/manga.csv"}) == 0);
+	CHECK(err ==
+	      "old/anime.csv: 1 title, 1 added, 0 in your lists already\n"
+	      "old/manga.csv: 1 title, 1 added, 0 in your lists already\n");
+	auto frieren = savedTitle(mediaType::kAnime, "Sousou no Frieren");
+	CHECK(frieren.anilistId == 154587);
+	CHECK(frieren.score == 10);
+	CHECK(catalist::formatDate(frieren.finishDate) == "2024-03-22");
+	auto berserk = savedTitle(mediaType::kManga, "Berserk");
+	CHECK(berserk.volumes == 42);
+	CHECK(berserk.anilistId == 30002);
+
+	put("old/bad.csv", "#id,mal_id\n52991,52991,Sousou no Frieren,Completed\n");
+	CHECK(run({"import", "old/bad.csv"}) == 1);
+	CHECK(err == "error: old/bad.csv: row 1 has a column layout this version cannot read\n");
+}
+
 TEST_CASE_FIXTURE(cliFixture, "cli import adds only the titles not tracked yet") {
 	seed();
 	put("lists/anime.xml", kAnimeXml);

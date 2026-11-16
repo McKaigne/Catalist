@@ -1,6 +1,5 @@
 #!/bin/sh
-# The command line as a script uses it, from a POSIX shell. CI runs it under
-# dash, bash --posix and zsh -f:
+# The command line as a script uses it, from a POSIX shell:
 #
 #   sh tests/smoke/smoke.sh build/catalist
 #
@@ -25,7 +24,6 @@ CATALIST_DATA_DIR=$work/data
 PATH=$here/stub:$PATH
 NO_COLOR=1
 export CATALIST_DATA_DIR PATH NO_COLOR
-unset CATALIST_TX
 
 failures=0
 
@@ -77,19 +75,14 @@ catalist redo -q
 expect "redo: Odd Taxi" "$(field a:2 6)" 1
 expect "redo: Dandadan" "$(field a:3 6)" 1
 
-# Commands run under one CATALIST_TX are one step for undo.
-CATALIST_TX=$(catalist tx)
-export CATALIST_TX
-for ref in a:2 a:3; do
-	catalist + -q "$ref"
-done
+# undo -n takes back several commands.
+catalist + -q a:2 a:3
 catalist done -q a:1
-unset CATALIST_TX
-expect "CATALIST_TX: before undo" "$(field a:2 6) $(field a:1 4)" "2 completed"
-catalist undo -q
-expect "CATALIST_TX: one undo, Odd Taxi" "$(field a:2 6)" 1
-expect "CATALIST_TX: one undo, Dandadan" "$(field a:3 6)" 1
-expect "CATALIST_TX: one undo, Fullmetal" "$(field a:1 4)" planned
+expect "undo -n: before" "$(field a:2 6) $(field a:1 4)" "2 completed"
+catalist undo -q -n 2
+expect "undo -n 2: Odd Taxi" "$(field a:2 6)" 1
+expect "undo -n 2: Dandadan" "$(field a:3 6)" 1
+expect "undo -n 2: Fullmetal" "$(field a:1 4)" planned
 
 # rm -f asks nobody; undo brings the title back under its ref.
 catalist rm -f -q Dandadan

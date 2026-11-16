@@ -115,8 +115,4 @@ std::string storedRows(const std::filesystem::path& dataDir, mediaType type) {
 	return rows;
 }
 
-std::filesystem::path fixturePath(const std::string& relativePath) {
-	return std::filesystem::path(CATALIST_FIXTURE_DIR) / relativePath;
-}
-
 }  // namespace catalist::test

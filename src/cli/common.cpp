@@ -18,24 +18,10 @@ namespace {
 
 using output::paint;
 
-// One line for standard error when loadAll has just imported the CSV files
-// of an earlier version; empty when it has not.
-std::string importNote(const catalogue& db) {
-	if (db.importedFrom().empty())
-		return "";
-	return fmt::format(
-	    "note: imported the lists in {} into {}; the old files are left as "
-	    "they were.\n",
-	    db.importedFrom().string(), db.getStorePath().string());
-}
-
-// How a save of this run is entered in the undo history: under CATALIST_TX
-// when that is set, so the commands of a group undo as one, else under the
-// command as typed, cut to 60 characters.
+// How a save of this run is entered in the undo history: under the command
+// as typed, cut to 60 characters.
 txNote undoNote(const cliContext& ctx) {
-	if (not ctx.txLabel.empty())
-		return {ctx.txLabel, ctx.nowStamp(), true};
-	return {utf8::clip(ctx.typed, 60), ctx.nowStamp(), false};
+	return {utf8::clip(ctx.typed, 60), ctx.nowStamp()};
 }
 
 void sayNoMatch(cliContext& ctx, const std::string& ref, const naming& how) {
@@ -47,7 +33,7 @@ void sayNoMatch(cliContext& ctx, const std::string& ref, const naming& how) {
 	                           : fmt::format("nothing in {} matches '{}'{}", where, ref, hint));
 	if (ref.size() > 1 and ref[0] == '-')
 		ctx.err << "Options go before the first operand.\n";
-	ctx.err << fmt::format("See what is there with: {} ls\n", ctx.program);
+	ctx.err << "See what is there with: catalist ls\n";
 }
 
 // The titles one REF names: one, or all it matches with --all. Nothing,
@@ -105,8 +91,8 @@ int fail(cliContext& ctx, const std::string& message) {
 }
 
 int usageError(cliContext& ctx, const command& cmd, const std::string& message) {
-	ctx.err << fmt::format("error: {}\nUsage: {} {}\nRun '{} help {}' for more.\n", message,
-	                       ctx.program, usageLine(cmd), ctx.program, cmd.name);
+	ctx.err << fmt::format("error: {}\nUsage: catalist {}\nRun 'catalist help {}' for more.\n",
+	                       message, usageLine(cmd), cmd.name);
 	return 2;
 }
 
@@ -302,7 +288,6 @@ bool load(cliContext& ctx) {
 	auto loaded = ctx.db.loadAll();
 	if (not loaded.ok())
 		fail(ctx, loaded.errorMessage());
-	ctx.err << importNote(ctx.db);
 	return loaded.ok();
 }
 

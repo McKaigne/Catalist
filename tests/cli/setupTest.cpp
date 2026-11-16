@@ -49,23 +49,21 @@ TEST_CASE_FIXTURE(cliFixture, "cli provider prints or sets the site titles are l
 
 TEST_CASE_FIXTURE(cliFixture, "cli completion prints the script of the shell named") {
 	CHECK(run({"completion", "zsh"}) == 0);
-	CHECK(out.rfind("#compdef catalist cl\n", 0) == 0);
+	CHECK(out.rfind("#compdef catalist\n", 0) == 0);
 	CHECK(has(out, "'1:command:_catalist_commands'"));
 	CHECK(err.empty());
 	CHECK(run({"completion", "fish"}) == 0);
 	CHECK(has(out, "complete -c catalist -f\n"));
 	CHECK(has(out, "-a 'ls' -d 'List your titles'\n"));
-	CHECK(run({"completion", "bash"}) == 0);
-	CHECK(has(out, "\ncomplete -F _catalist catalist cl\n"));
 	// The scripts are the program's own: they make no lists.
 	CHECK_FALSE(std::filesystem::exists("data"));
 
 	for (std::vector<std::string> wrong : {std::vector<std::string>{"completion"},
-	                                       {"completion", "tcsh"},
+	                                       {"completion", "bash"},
 	                                       {"completion", "zsh", "fish"}}) {
 		CHECK(run(wrong) == 2);
 		CHECK(out.empty());
-		CHECK(has(err, "error: say which shell: zsh, fish or bash\n"));
+		CHECK(has(err, "error: say which shell: zsh or fish\n"));
 	}
 }
 
@@ -121,7 +119,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli __man fills in the version and the commands")
 	CHECK(out.rfind(std::string(".TH CATALIST 1 \"\" \"v") + catalist::kVersionString +
 	                    "\"\n.SH COMMANDS\n.TP\n\\fBls\\fR ",
 	                0) == 0);
-	CHECK(has(out, "\n.TP\n\\fBcompletion\\fR \\fBzsh\\fR|\\fBfish\\fR|\\fBbash\\fR\n"));
+	CHECK(has(out, "\n.TP\n\\fBcompletion\\fR \\fBzsh\\fR|\\fBfish\\fR\n"));
 	CHECK(out.rfind("\n.SH FILES\n") + 11 == out.size());
 	CHECK_FALSE(has(out, "__complete"));
 	CHECK(err.empty());

@@ -86,64 +86,6 @@ TEST_CASE("journal diff leaves out what only the web fills in") {
 		CHECK(journal::diff({taxi()}, {changed}).size() == 1);
 }
 
-TEST_CASE("journal merge keeps the first before and the last after") {
-	journal::change first{mediaType::kAnime, 2, taxi(), withProgress(taxi(), 6)};
-	journal::change second{mediaType::kAnime, 2, withProgress(taxi(), 6), withProgress(taxi(), 7)};
-	journal::change other{mediaType::kManga, 2, std::nullopt,
-	                      makeEntry().id(2).type(mediaType::kManga).title("Berserk")};
-
-	auto merged = journal::merge({first}, {second, other});
-	REQUIRE(merged.size() == 2);
-	CHECK(merged[0].before->progress == 5);
-	CHECK(merged[0].after->progress == 7);
-	// The same id in the other list is another entry.
-	CHECK(merged[1].type == mediaType::kManga);
-	CHECK(merged[1].after->title == "Berserk");
-}
-
-TEST_CASE("journal merge drops an entry that ends as it began") {
-	journal::change up{mediaType::kAnime, 2, taxi(), withProgress(taxi(), 6)};
-	entry back = taxi();
-	back.updatedAt = requireDate("2026-10-20");
-	journal::change down{mediaType::kAnime, 2, withProgress(taxi(), 6), back};
-	CHECK(journal::merge({up}, {down}).empty());
-
-	// Added, then removed again.
-	journal::change added{mediaType::kAnime, 3, std::nullopt, makeEntry().id(3).title("Dandadan")};
-	journal::change removed{mediaType::kAnime, 3, makeEntry().id(3).title("Dandadan"),
-	                        std::nullopt};
-	CHECK(journal::merge({added}, {removed}).empty());
-	// Added, then changed: still an addition, of the entry as it is now.
-	entry rated = makeEntry().id(3).title("Dandadan").score(9);
-	journal::change changed{mediaType::kAnime, 3, makeEntry().id(3).title("Dandadan"), rated};
-	auto merged = journal::merge({added}, {changed});
-	REQUIRE(merged.size() == 1);
-	CHECK_FALSE(merged[0].before);
-	CHECK(merged[0].after->score == 9);
-}
-
-TEST_CASE("journal merge keeps a removal and a new title under the freed id apart") {
-	entry old = makeEntry().id(3).title("Dandadan");
-	entry fresh = makeEntry().id(3).title("Mushishi");
-	journal::change removed{mediaType::kAnime, 3, old, std::nullopt};
-	journal::change added{mediaType::kAnime, 3, std::nullopt, fresh};
-
-	auto merged = journal::merge({removed}, {added});
-	REQUIRE(merged.size() == 2);
-	CHECK(merged[0].before->title == "Dandadan");
-	CHECK_FALSE(merged[0].after);
-	CHECK_FALSE(merged[1].before);
-	CHECK(merged[1].after->title == "Mushishi");
-
-	// What comes later belongs to the new title.
-	entry rated = fresh;
-	rated.score = 7;
-	merged = journal::merge(merged, {{mediaType::kAnime, 3, fresh, rated}});
-	REQUIRE(merged.size() == 2);
-	CHECK_FALSE(merged[0].after);
-	CHECK(merged[1].after->score == 7);
-}
-
 TEST_CASE("journal changedFields names each field with its old and new value") {
 	entry after = taxi();
 	after.progress = 13;

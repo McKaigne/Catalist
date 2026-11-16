@@ -16,16 +16,11 @@
 namespace catalist::completion {
 
 // The completion function for zsh: the file `_catalist` of a directory in
-// $fpath. Its first line names the programs it serves, catalist and cl.
+// $fpath.
 [[nodiscard]] std::string zsh(const std::vector<command>& table);
 
 // The completions for fish: the file `catalist.fish`.
 [[nodiscard]] std::string fish(const std::vector<command>& table);
-
-// The completion function for bash, for catalist and cl: the file
-// `catalist` of bash-completion's completions directory, or one to source.
-// It needs nothing from bash-completion itself.
-[[nodiscard]] std::string bash(const std::vector<command>& table);
 
 // The COMMANDS section of the manual page, in roff: each command with its
 // usage line, what it does and its options.

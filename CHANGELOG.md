@@ -41,17 +41,14 @@ Catalist-TUI, which keeps its lists in the same file.
   quotes; a REF that matches nothing names the title it probably meant.
 - `ls -s watching,on-hold`, `set start=today`, `add --score N --progress N`.
 - `--color=auto|always|never` and `-t/--table` before the command (also
-  `CLICOLOR_FORCE` and `COLUMNS`), and bash completion for `catalist` and
-  `cl`.
+  `CLICOLOR_FORCE` and `COLUMNS`).
 - Undo and redo. Every command that changes the lists is one step for
   `catalist undo`; `catalist redo` makes it again, `catalist log` lists the
-  last 100 steps. Commands run with the same `CATALIST_TX` (from
-  `catalist tx`) are one step. A title changed since is not overwritten
-  unless `-f` is given.
-- `cl`, a link to `catalist` installed beside it, and completions for zsh
-  (`_catalist`) and fish (`catalist.fish`, `cl.fish`), installed by CMake
-  and Nix, that complete commands, options, values and your titles by ref
-  or by name. The manual page lists every command.
+  last 100 steps, and `undo -n N` takes back several. A title changed
+  since is not overwritten unless `-f` is given.
+- Completions for zsh (`_catalist`) and fish (`catalist.fish`), installed
+  by CMake and Nix, that complete commands, options, values and your
+  titles by ref or by name. The manual page lists every command.
 - Jikan, which some networks cannot reach at all, is gone; entries carry
   the AniList and the MyAnimeList id, read from 0.3's files too.
 - A provider, AniList (default), MyAnimeList or Kitsu: the default site of
@@ -64,7 +61,7 @@ Catalist-TUI, which keeps its lists in the same file.
 - The command line is redesigned for daily tracking, scripts and pipes:
   `ls`, `show`, `stats`, `+` (`inc`), `-` (`dec`), `set`, `done`, `hold`,
   `drop`, `plan`, `resume`, `rm`, `add`, `search`, `import`, `export`,
-  `undo`, `redo`, `log`, `tx`, `provider`, `completion` and `help`, all from
+  `undo`, `redo`, `log`, `provider`, `completion` and `help`, all from
   one table of commands that also writes the help, the manual page and the
   completions.
   - Titles are named by a ref, the first column of `ls` (`a:12`, `m:3`), or
@@ -86,14 +83,16 @@ Catalist-TUI, which keeps its lists in the same file.
 - The lists, the provider and the undo history are kept in one SQLite file,
   `catalist.db`, in `~/.local/share/catalist` (or `$XDG_DATA_HOME/catalist`,
   or `CATALIST_DATA_DIR`), instead of `anime.csv`, `manga.csv` and
-  `settings` in `~/.config/catalist`. Those files are read into the new one
-  the first time, with a note on stderr, and left as they were. Each change
-  is one transaction, and two programs at once wait for each other. SQLite
+  `settings` in `~/.config/catalist`. Move in with `catalist import
+  ~/.config/catalist/anime.csv ~/.config/catalist/manga.csv`, which leaves
+  them as they were (choose the provider again with `catalist provider`).
+  Each change is one transaction, and two programs at once wait for each other. SQLite
   is a new build dependency (downloaded by CMake when the system has none).
 - `catalist` with no command, into a pipe, prints its usage and exits
   with 2.
-- `catalist import` takes MyAnimeList XML files or Catalist's JSON (`-`
-  for standard input), reads them all before adding anything, reports per file how many
+- `catalist import` takes MyAnimeList XML files, Catalist's JSON or the
+  CSV files of 0.3.0 (`-` for standard input), reads them all before adding
+  anything, reports per file how many
   titles were added, and is one step for undo.
 - New titles are numbered from 1 in each list; an imported title merges
   with a tracked one only when they share an AniList, MyAnimeList or Kitsu
@@ -130,9 +129,9 @@ Catalist-TUI, which keeps its lists in the same file.
 - The Kitsu ids of 0.3's files (Kitsu ids are kept again, and filled in
   by `refresh`, `add` and `import`), and stored `queue_pos` values.
 - Reading the 7-column and 16-column CSV layouts of development builds
-  before 0.2.1; such a file fails to load with a message naming it (open and
-  save it once with Catalist 0.3.0 to convert it). Files from 0.2.1 to 0.3.0
-  load, `0000-00-00` dates included.
+  before 0.2.1; `import` names such a file and reads nothing of it (open
+  and save it once with Catalist 0.3.0 to convert it). Files from 0.2.1 to
+  0.3.0 are read, `0000-00-00` dates included.
 
 ## [0.3.0] - 2026-11-10
 

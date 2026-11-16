@@ -44,9 +44,6 @@
             postInstall = ''
               wrapProgram $out/bin/catalist \
                 --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.curl ]}
-              # CMake installs `cl` as a link to catalist; the link must
-              # reach the wrapper, which passes on the name it was run by.
-              ln -sf catalist $out/bin/cl
             '';
 
             meta = {

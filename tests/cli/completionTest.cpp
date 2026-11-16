@@ -66,9 +66,9 @@ std::vector<command> sampleTable() {
 
 }  // namespace
 
-TEST_CASE("completion zsh serves catalist and cl, from the table") {
+TEST_CASE("completion zsh serves catalist, from the table") {
 	std::string script = completion::zsh(sampleTable());
-	CHECK(script.rfind("#compdef catalist cl\n", 0) == 0);
+	CHECK(script.rfind("#compdef catalist\n", 0) == 0);
 	CHECK(has(script, "\t\t'ls:List your titles'\n"));
 	CHECK(has(script, "\t\t'set:Set the person'\\''s fields'\n"));
 	CHECK_FALSE(has(script, "__secret"));
@@ -88,7 +88,7 @@ TEST_CASE("completion zsh serves catalist and cl, from the table") {
 	CHECK(has(script, "'1:command:_catalist_commands'"));
 	// What only the lists know is asked of the program it completes.
 	CHECK(has(script, "$_catalist_program __complete $1 2>/dev/null"));
-	CHECK(has(script, "\tcompdef _catalist catalist cl\n"));
+	CHECK(has(script, "\tcompdef _catalist catalist\n"));
 }
 
 TEST_CASE("completion fish completes the commands, their options and the lists") {
@@ -132,32 +132,6 @@ TEST_CASE("completion scripts know the program's own options, before the command
 	// The command is the first word after them; --color may have its value
 	// apart.
 	CHECK(has(fish, "if contains -- $words[1] --color\n"));
-}
-
-TEST_CASE("completion bash completes the commands, their options and the lists") {
-	std::string script = completion::bash(sampleTable());
-	CHECK(has(script, "\ncomplete -F _catalist catalist cl\n"));
-	CHECK_FALSE(has(script, "__secret"));
-	// The commands by all their names, quoted; then each one's options.
-	CHECK(has(script, "\t\t_catalist_offer 'ls + inc set import completion help'\n"));
-	CHECK(has(script, "\t'+'|'inc')\n"));
-	CHECK(
-	    has(script, "\t\t\t-s)\n\t\t\t\t_catalist_offer 'watching on-hold'\n\t\t\t\treturn ;;\n"));
-	CHECK(has(script, "\t\t\t--sort)\n\t\t\t\t_catalist_offer 'new title'\n"));
-	CHECK(has(script, "\t\t\t--sort=*)\n\t\t\t\t_catalist_offer_value 'new title'\n"));
-	CHECK(has(script, "\t\t\t-n)\n\t\t\t\t:\n\t\t\t\treturn ;;\n"));
-	CHECK(has(script, "_catalist_offer '-s --sort= -q -h --help'\n"));
-	// The program's own options, and a value of theirs apart.
-	CHECK(has(script, "_catalist_offer '--color= -t --table --offline -V --version -h --help'\n"));
-	CHECK(has(script, "\t\t\t--color) ((at += 2)) ;;\n"));
-	// The operands, by kind.
-	CHECK(has(script, "\t'ls')\n"));
-	CHECK(has(script, "\t\tif ((operands == 0)); then\n\t\t\t_catalist_titles\n\t\tfi\n"));
-	CHECK(has(script, "\t\t\t_catalist_named\n\t\telse\n\t\t\t_catalist_fields\n"));
-	CHECK(has(script, "\t\t_catalist_files\n"));
-	CHECK(has(script, "\t\t\t_catalist_offer 'zsh fish'\n"));
-	// What only the lists know is asked of the program it completes.
-	CHECK(has(script, "\"${COMP_WORDS[0]}\" __complete \"$1\" 2>/dev/null"));
 }
 
 TEST_CASE("completion manual sets each command in roff") {

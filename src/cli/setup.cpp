@@ -47,10 +47,8 @@ int runCompletion(const command& self, const args::parsed& line, cliContext& ctx
 		ctx.out << completion::zsh(commands());
 	else if (shell == "fish")
 		ctx.out << completion::fish(commands());
-	else if (shell == "bash")
-		ctx.out << completion::bash(commands());
 	else
-		return usageError(ctx, self, "say which shell: zsh, fish or bash");
+		return usageError(ctx, self, "say which shell: zsh or fish");
 	return 0;
 }
 
@@ -116,16 +114,14 @@ std::vector<command> setupCommands() {
 	     "them. To set one up by hand:\n"
 	     "  catalist completion zsh > ~/.zfunc/_catalist\n"
 	     "  catalist completion fish > ~/.config/fish/completions/catalist.fish\n"
-	     "  catalist completion bash > ~/.local/share/bash-completion/completions/catalist\n"
-	     "For zsh the directory must be in $fpath before compinit runs. Without\n"
-	     "bash-completion, source the bash script from ~/.bashrc. The scripts\n"
-	     "complete the commands and their options, and your titles by ref or by\n"
-	     "their name (in bash, its start; in zsh and fish, any part of it).\n",
+	     "For zsh the directory must be in $fpath before compinit runs. The\n"
+	     "scripts complete the commands and their options, and your titles by\n"
+	     "ref or by any part of their name.\n",
 	     {},
-	     "zsh|fish|bash",
+	     "zsh|fish",
 	     runCompletion,
 	     operandKind::kWords,
-	     {"zsh", "fish", "bash"}},
+	     {"zsh", "fish"}},
 	    {"__complete",
 	     {},
 	     "Print the words the completion scripts ask for",

@@ -148,8 +148,6 @@ private:
 // read.
 [[nodiscard]] std::string storedRows(const std::filesystem::path& dataDir, mediaType type);
 
-std::filesystem::path fixturePath(const std::string& relativePath);
-
 }  // namespace catalist::test
 
 #endif  // CATALIST_TESTS_SUPPORT_TEST_SUPPORT_HPP_

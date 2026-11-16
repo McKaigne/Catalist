@@ -7,21 +7,24 @@ layer uses only the layers above it in this table, and `system`.
 | Folder | Module | Holds |
 | :--- | :--- | :--- |
 | `core/` | `date`, `result` | `isoDate`; `result<T>`, a value or an error message |
+| | `account.hpp` | a login on a site: user, token, renewal, expiry |
 | | `entry` | one anime or manga title, its statuses and the rules that change it (progress, status, score, counts, dates, import merge) |
 | | `text` | UTF-8 helpers: glyphs, terminal width, clipping, lower case |
 | `storage/` | `store` | a small RAII wrapper over SQLite (`database`, `statement`, `transaction`), the only code that includes `sqlite3.h` |
-| | `catalogue` | the two lists in memory, kept in `catalist.db`; the import of the old CSV files; undo and redo |
+| | `catalogue` | the two lists in memory, kept in `catalist.db` with the Kitsu ids beside them; the import of the old CSV files; undo and redo; the outbox of what the sites are still to be told |
+| | `accounts` | the logins file: its place, and its lines in and out |
 | | `csvCodec` | the CSV form of a title: the files of 0.3.0 and earlier, and the rows of the undo history |
 | | `journal` | pure functions over the undo history: what changed between two lists, merging steps, taking one back |
 | | `malXml` | the MyAnimeList XML format lists are imported and exported in |
-| `web/` | `http`, `tracker`, `sites`, `anilist`, `mal`, `kitsu`, `json` | the sites: one request type, the `iTracker` interface every site implements (title search, a title's details: ids, totals, how much is out), the adapters of AniList, MyAnimeList and Kitsu, and the factory that picks one |
-| | `sync.hpp` | `iListSync`, where a future account sync with the provider plugs in (no implementation yet) |
+| `web/` | `http`, `json` | one request type, form and URL encoding; the JSON the sites answer in |
+| | `tracker` | `iTracker`, the one interface every site implements (ADR-018): search, look titles up, log in, read a user's list, push a title, remove one |
+| | `anilist`, `mal`, `kitsu`, `sites` | the adapters of AniList, MyAnimeList and Kitsu, and `makeTracker`, which picks one |
 | `cli/` | `args`, `refs`, `output` | the POSIX option parser; refs (`a:12`) and title matching; tables, tab-separated lines and JSON Lines |
 | | `cli` | `cliContext`, the `command` row, the table put together, dispatch and help |
 | | `common` | what the commands share (naming titles, loading, saving and reporting a change), and one function per group of commands |
-| | `listing`, `tracking`, `online`, `transfer`, `history`, `setup` | the commands, by group: their handlers and their rows of the table (ADR-017) |
-| | `completion` | the zsh and fish completions and the manual page's COMMANDS, written from the command table |
-| `src/` | `system` | everything that touches the outside world: reading files, `runProgram` (curl), the clock, the terminal |
+| | `listing`, `tracking`, `online`, `accounts`, `sync`, `transfer`, `history`, `setup` | the commands, by group: their handlers and their rows of the table (ADR-017) |
+| | `completion` | the zsh, fish and bash completions and the manual page's COMMANDS, written from the command table |
+| `src/` | `system` | everything that touches the outside world: reading and writing files, `runProgram` and `httpFetch` (curl), the clock, the terminal, random text |
 
 `main.cpp` reads the environment, builds the catalogue on the data
 directory and the `cliContext`, and runs the command line. Tests mirror the
@@ -81,7 +84,7 @@ built program from the shells, and `tests/support/` holds the fixtures.
 
 ## ADR-008: Naming and Formatting
 - **Names:** types, functions, variables and files are camelCase;
-  interfaces are `i` + PascalCase (`iListSync`); private members end in
+  interfaces are `i` + PascalCase (`iTracker`); private members end in
   `_`; constants and enumerators are `kPascalCase` (`mediaType::kAnime`,
   `output::kBold`). Namespaces stay lower case and macros
   SCREAMING_SNAKE_CASE. Names are descriptive (`widthPx`, `changedTitles`).
@@ -146,7 +149,9 @@ built program from the shells, and `tests/support/` holds the fixtures.
   and service, request pacing, backups and a job thread: most of the code,
   for a feature a local tracker does not need.
 
-## ADR-013: Local First, One-Way Import
+## ADR-013: Local First, One-Way Import (partly superseded)
+- **Superseded** where it says the network is only for `add` and `search`,
+  and that lists only come in by file: see ADR-018.
 - **Decision:** The catalogue is `catalist.db` and nothing else (ADR-016).
   Lists
   come in with `catalist import` (MyAnimeList XML; AniList lists after
@@ -162,7 +167,9 @@ built program from the shells, and `tests/support/` holds the fixtures.
   is removed. Two titles are the same only when they share an AniList or a
   MyAnimeList id.
 
-## ADR-014: AniList Only; a Provider, Ready for Sync
+## ADR-014: AniList Only; a Provider, Ready for Sync (superseded)
+- **Superseded** by ADR-018: AniList, MyAnimeList and Kitsu are equal
+  sites behind `iTracker`; `iListSync` and `sync.hpp` are gone.
 - **Context:** Jikan (MyAnimeList's unofficial API) could not be reached
   from some networks, and many users have moved to AniList. AniList's
   public API needs no account and also returns every title's MyAnimeList
@@ -198,8 +205,11 @@ built program from the shells, and `tests/support/` holds the fixtures.
   JSON Lines, `--header` for the column names, `-q` for only the refs or
   nothing. A failed write to `stdout`, as when `head` has gone, ends the
   command quietly with 0.
-- **Network:** only `add` and `search` call AniList, synchronously. `add`
-  fails offline unless `--no-lookup`.
+- **Network:** synchronous, through the site's `iTracker` (ADR-018): `add`,
+  `search`, `refresh`, `import --user`, `login`, `sync`, and, logged in,
+  the push after a saved change. A site is asked before the write lock is
+  taken. `add` fails offline unless `--no-lookup`; a push that fails waits
+  in the outbox, never failing the command that saved the change.
 - **Mutating commands:** take the write lock (`beginWrite`), load, resolve
   every operand before changing anything, apply the entry rules
   (`setStatus`, `setScore`, `stepProgress`, `setCount`),
@@ -252,14 +262,15 @@ built program from the shells, and `tests/support/` holds the fixtures.
 - **Decision:** this program is the command line only. FTXUI, libsixel, the
   updater thread, covers, the daily id look-ups and the interface's entry
   rules (status cycle, one star more) are gone; `text` measures glyph
-  widths with its own table instead of FTXUI's. `catalist` alone is a
-  usage error.
+  widths with its own table instead of FTXUI's. `catalist` alone at a
+  terminal lists what is being watched; into a pipe it is a usage error.
 - **One database, two programs:** `catalist.db` keeps the schema of
   ADR-016, so Catalist-TUI can work on the same file. This program writes
   only the `provider` setting and leaves other keys (Catalist-TUI's
-  `linked`) as they are. Totals and released counts change only when a
-  title is added, imported or set by hand here, or when Catalist-TUI
-  checks it.
+  `linked`) as they are. Totals and released counts change when a title
+  is added, imported, refreshed (`refresh`) or set by hand here, or when
+  Catalist-TUI checks it. What this program adds to the file goes in
+  tables of its own (ADR-019).
 - **Layout:** `src/` has a folder per layer (`core`, `storage`, `web`,
   `cli`) and `system` beside `main.cpp`; see the module map. The commands
   are grouped in files (`listing`, `tracking`, `online`, `transfer`,
@@ -267,3 +278,64 @@ built program from the shells, and `tests/support/` holds the fixtures.
   sharing `cli/common`; `cli.cpp` collects the groups into the table in
   help order and runs it. A new command goes in the file of its group, or
   a new group file listed in `common.hpp` and `commands()`.
+
+## ADR-018: Sites as Equal Trackers, Told One Way
+- **Context:** AniList, MyAnimeList and Kitsu were each reached a different
+  way: AniList for search and look-ups, MyAnimeList by file only, Kitsu
+  not at all. The owner wanted all three to work the same, and pointed at
+  Mihon, which supports eight trackers with little code.
+- **Why Mihon's way is small:** tracking is one way (the app tells the
+  tracker, never merges back), each title is linked to each tracker by
+  its id there, every tracker does the same few jobs behind one
+  interface, and the app ships the ids the trackers gave it.
+- **Decision:** `web::iTracker` is that interface, and `anilist`, `mal` and
+  `kitsu` each implement all of it: `search`, `lookUp`/`lookUpMany`
+  (AniList answers fifty titles a request; the others go one a second
+  through the base class), `startLogin`/`finishLogin`/`current` (each
+  site's own OAuth flow behind two calls), `pull` (a user's public list,
+  for a one-time move-in with `import --user`) and `push`/`remove`.
+  `makeTracker` picks one; no command names a site in its code.
+- **One way:** the lists are the truth. Logged in to a site, each saved
+  change to a field the sites keep (status, score, progress, volumes,
+  rewatches, dates) is pushed to every site where the title is linked
+  (`saveAndReport`, undo and redo call `tellSites`). The site's entry is
+  overwritten; nothing is read back or merged, so there is nothing to
+  reconcile. `rm` leaves the sites alone unless `--remote` is given.
+- **Linking:** a title is linked to a site when it has that site's id.
+  `add`, `refresh` and `import` keep every id a site gives (AniList gives
+  MyAnimeList's; Kitsu's mappings give both others'), so linking is mostly
+  automatic; `link`/`unlink` set one by hand. Ids are no step for undo.
+- **The provider** is only the default site of `search`, `add`, `refresh`
+  and `import --user`, and of `show`'s page link; `--from SITE` overrides it.
+- **Known differences** stay behind the interface: only AniList says how
+  much of a running show has aired; MyAnimeList answers nothing without
+  the program's client id; the score scales differ (AniList's `scoreRaw`
+  out of 100, MyAnimeList's 0–10, Kitsu's `ratingTwenty`) and each adapter
+  converts from Catalist's 0–10.
+- **App ids** are built in (`cmake -DCATALIST_MAL_CLIENT_ID=...` and the
+  like, into `version.hpp`) and the same names in the environment override
+  them. They are not settings: the provider stays the only one (ADR-011).
+
+## ADR-019: New Data in Tables of Its Own, Logins Outside the Database
+- **Context:** Catalist-TUI shares `catalist.db`. It opens only
+  `user_version` 1 and writes `entry` with a positional 17-value INSERT,
+  so a new `entry` column, or a new version, would break it.
+- **Decision:** what this program adds goes in tables the TUI does not
+  know, made with `CREATE TABLE IF NOT EXISTS` on write:
+  - `entry_id` holds the Kitsu ids, with the MyAnimeList and AniList ids
+    the title had when written: the TUI gives a removed title's ref to the
+    next one, and a row whose ids no longer match is not read as that
+    other title's. It is rewritten with the lists, in their transaction.
+  - `outbox` holds the titles the sites are still to be told of (offline,
+    a site down, `--offline`, more than ten at once); `sync` sends them.
+  The rows of the undo history may have an 18th CSV field, `kitsu_id`,
+  which the TUI's reader ignores. `user_version` stays 1.
+- **Logins** are kept in `$XDG_STATE_HOME/catalist/accounts` (or
+  `~/.local/state/catalist`; with `CATALIST_DATA_DIR`, in that
+  directory), mode 600, written beside and renamed into place. Never in
+  `catalist.db`: the lists can be copied and shared, the logins not.
+  Passwords (Kitsu's) are exchanged for a token and never kept.
+- **Verified** against Catalist-TUI 2f589e3 on one file: it opens, edits and
+  saves it, keeps the Kitsu ids and the outbox, and each program undoes
+  the other's steps. Changes made in the TUI are not queued for the sites;
+  `sync --all` sends them.

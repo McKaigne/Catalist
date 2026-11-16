@@ -14,7 +14,9 @@ your computer, from the shell, in scripts and in pipes.
 .B cl
 is the same program under a shorter name.
 .PP
-Only \fBadd\fR, \fBsearch\fR and \fBrefresh\fR go online, through curl,
+Only \fBadd\fR, \fBsearch\fR, \fBrefresh\fR, \fBimport \-\-user\fR,
+\fBlogin\fR and \fBsync\fR go online (and, logged in, the changes sent
+to the sites; see below), through curl,
 to the public API of your provider (AniList, MyAnimeList or Kitsu; see
 \fBprovider\fR) or of the site \fB\-\-from\fR names. A title's total, and
 how many of its episodes are out, are what the site said when it was added

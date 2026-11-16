@@ -9,11 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 Catalist is now a small, local-first tracker for the command line: one
 SQLite file, commands made for daily tracking, scripts and pipes with undo
-and redo, and the network only to add and search for titles. The
-full-screen terminal interface is now a separate program, Catalist-TUI,
-which keeps its lists in the same file.
+and redo, and AniList, MyAnimeList and Kitsu as equal sites to find titles
+on and, logged in, to tell what changes, one way, as Mihon tells its
+trackers. The full-screen terminal interface is now a separate program,
+Catalist-TUI, which keeps its lists in the same file.
 
 ### Added
+- Tracking, as Mihon does it: `catalist login anilist|mal|kitsu` (each
+  site's own way in; tokens kept apart from the lists, mode 600, passwords
+  never), `logout` and `accounts`. Logged in, each change to a title's
+  status, score, progress, volumes, rewatches or dates is sent to every
+  such site where the title is linked; the lists are the truth, and
+  nothing is read back. What could not be sent waits for `catalist sync`
+  (`--all` sends every linked title, `--forget` drops what waits);
+  `--offline` and `CATALIST_OFFLINE` keep everything for it. `link`,
+  `unlink` and `ls --unlinked SITE` manage which titles a site hears of;
+  `rm --remote` takes titles off the sites as well.
+- MyAnimeList and Kitsu beside AniList, behind one interface: `search`,
+  `add`, `refresh` and `import --user` ask your provider, or the site
+  `--from` names. Entries keep their Kitsu id too. MyAnimeList's API needs
+  the client id it gave Catalist (`-DCATALIST_MAL_CLIENT_ID`, or the same
+  name in the environment); logging in to AniList and Kitsu wants theirs.
+- `catalist refresh [REF...]`: asks a site for totals and how much is out
+  (the `new` column) of the titles you follow, fifty a request on AniList.
+- `catalist import --user NAME`: a user's public lists on a site, moved in
+  the way a file is.
+- `catalist export --format=json` is a full backup, every id included, and
+  `import` reads it back.
+- `catalist` alone at a terminal lists what you are watching, new episodes
+  first; `ls`, `search` and `add` take a title of several words without
+  quotes; a REF that matches nothing names the title it probably meant.
+- `ls -s watching,on-hold`, `set start=today`, `add --score N --progress N`.
+- `--color=auto|always|never` and `-t/--table` before the command (also
+  `CLICOLOR_FORCE` and `COLUMNS`), and bash completion for `catalist` and
+  `cl`.
 - Undo and redo. Every command that changes the lists is one step for
   `catalist undo`; `catalist redo` makes it again, `catalist log` lists the
   last 100 steps. Commands run with the same `CATALIST_TX` (from
@@ -23,13 +52,11 @@ which keeps its lists in the same file.
   (`_catalist`) and fish (`catalist.fish`, `cl.fish`), installed by CMake
   and Nix, that complete commands, options, values and your titles by ref
   or by name. The manual page lists every command.
-- AniList is the one web source (search, totals, aired episodes), replacing
-  Jikan, which some networks cannot reach at all. Entries carry both the
-  AniList and the MyAnimeList id, read from 0.3's files too.
-- A provider, AniList (default) or MyAnimeList: `show` links to a title's
-  page there, and it is where an account sync will plug in (`iListSync`,
-  declared, not yet implemented). `catalist provider anilist|mal` chooses
-  it.
+- Jikan, which some networks cannot reach at all, is gone; entries carry
+  the AniList and the MyAnimeList id, read from 0.3's files too.
+- A provider, AniList (default), MyAnimeList or Kitsu: the default site of
+  `search`, `add`, `refresh` and `import --user`, and the page `show` links
+  to. `catalist provider anilist|mal|kitsu` chooses it.
 - Commands that change the tracking of titles: `+` and `-`, `set`, and
   `done`, `hold`, `drop`, `plan` and `resume`.
 
@@ -49,11 +76,13 @@ which keeps its lists in the same file.
     `--json` for JSON Lines and `--header` for column names. Messages and
     prompts on stderr; exit codes 0, 1 and 2; a pipe closed early, as by
     `head`, ends the command quietly. `-q` prints nothing at all.
-  - Only `add` and `search` go online; `add --no-lookup` adds a title by
-    hand, offline.
+  - Only `add`, `search`, `refresh`, `import --user`, `login`, `sync` and
+    the changes sent to the sites you are logged in to go online; `add
+    --no-lookup` adds a title by hand, offline.
 - `catalist export anime|manga` prints MyAnimeList XML, which the import
-  pages of MyAnimeList and AniList read; `--format=csv` and `--format=json`
-  print every title with the columns of `ls`.
+  pages of MyAnimeList, AniList and Kitsu read; `--format=csv` and
+  `--format=json` print every title with the columns of `show`, both lists
+  when none is named.
 - The lists, the provider and the undo history are kept in one SQLite file,
   `catalist.db`, in `~/.local/share/catalist` (or `$XDG_DATA_HOME/catalist`,
   or `CATALIST_DATA_DIR`), instead of `anime.csv`, `manga.csv` and
@@ -61,12 +90,14 @@ which keeps its lists in the same file.
   the first time, with a note on stderr, and left as they were. Each change
   is one transaction, and two programs at once wait for each other. SQLite
   is a new build dependency (downloaded by CMake when the system has none).
-- `catalist` with no command prints its usage and exits with 2.
-- `catalist import` takes only MyAnimeList XML files (`-` for standard
-  input), reads them all before adding anything, reports per file how many
+- `catalist` with no command, into a pipe, prints its usage and exits
+  with 2.
+- `catalist import` takes MyAnimeList XML files or Catalist's JSON (`-`
+  for standard input), reads them all before adding anything, reports per file how many
   titles were added, and is one step for undo.
 - New titles are numbered from 1 in each list; an imported title merges
-  with a tracked one only when they share an AniList or MyAnimeList id.
+  with a tracked one only when they share an AniList, MyAnimeList or Kitsu
+  id.
 - Internal: the sources are in folders by layer (`core`, `storage`, `web`,
   `cli`), the commands in one file per group, the tests in matching
   folders; fmt builds the strings (a new build dependency); see
@@ -87,15 +118,17 @@ which keeps its lists in the same file.
   totals current); FTXUI and libsixel are no longer needed. It lives on as
   Catalist-TUI.
 - Notes: they are not read from the old CSV files, and no longer exported.
-- Accounts, logins and sync with MyAnimeList and AniList, with `sync.csv`,
-  the backups and the activity history (`history.csv`).
+- The two-way sync of 0.3 with MyAnimeList and AniList, with `sync.csv`,
+  the backups and the activity history (`history.csv`); tracking is now
+  one way (see Added), and old logins must be made again.
 - The Settings tab, `settings.json`, `catalist config`, themes, the command
   palette and the welcome message: the defaults are fixed.
 - The CLI commands `count` and `random`, and `--tab`.
 - `catalist.kdl` and its parser; an existing file is ignored, as are the
   old `settings.json`, `history.csv`, `sync.csv`, `catalist.log`,
   `mal_auth.json`, `anilist_auth.json` and `backups/`, which can be deleted.
-- Kitsu links and stored Kitsu ids, and stored `queue_pos` values.
+- The Kitsu ids of 0.3's files (Kitsu ids are kept again, and filled in
+  by `refresh`, `add` and `import`), and stored `queue_pos` values.
 - Reading the 7-column and 16-column CSV layouts of development builds
   before 0.2.1; such a file fails to load with a message naming it (open and
   save it once with Catalist 0.3.0 to convert it). Files from 0.2.1 to 0.3.0

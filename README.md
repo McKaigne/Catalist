@@ -127,7 +127,9 @@ cl help set                        # what a command takes
   `--header` names the columns. Messages and questions go to stderr. Exit
   codes: 0 done, 1 failed, 2 wrong command line (also `catalist` with no
   command).
-- **Network:** only `add`, `search` and `refresh` go online. `add` fails
+- **Network:** only `add`, `search`, `refresh`, `import --user`, `login`
+  and `sync` go online, and, logged in, the change a command saves is sent
+  to the sites (see Tracking). `add` fails
   when the site cannot be reached, unless `--no-lookup` adds the title as
   written. A title's total, and how many episodes are out (which the `new`
   column counts from), are what the site said when it was added, until

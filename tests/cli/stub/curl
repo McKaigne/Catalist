@@ -1,0 +1,24 @@
+#!/bin/sh
+# Stands in for curl in the smoke tests, so they never go online. It knows
+# AniList's answers about one title, Fullmetal Alchemist: a search for
+# "fullmetal" finds two anime, and the look-up of id 121 finds the older.
+# Anything else fails as curl -f does when a server says no.
+
+body=
+for argument in "$@"; do
+	if [ "$argument" = "@-" ]; then
+		body=$(cat)
+	fi
+done
+
+case "$body" in
+*'"search":"fullmetal","type":"ANIME"'*)
+	printf '%s\n' '{"data":{"Page":{"media":[{"id":5114,"idMal":5114,"title":{"romaji":"Fullmetal Alchemist: Brotherhood"},"episodes":64,"startDate":{"year":2009}},{"id":121,"idMal":121,"title":{"romaji":"Fullmetal Alchemist"},"episodes":51,"startDate":{"year":2003}}]}}}'
+	;;
+*'{"id":121,"type":"ANIME"'*)
+	printf '%s\n' '{"data":{"Media":{"id":121,"idMal":121,"title":{"romaji":"Fullmetal Alchemist"},"episodes":51,"status":"FINISHED"}}}'
+	;;
+*)
+	exit 22
+	;;
+esac

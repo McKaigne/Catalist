@@ -255,6 +255,10 @@ const char* kInsertEntry =
     "INSERT OR REPLACE INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 const char* kInsertSetting = "INSERT OR REPLACE INTO setting VALUES (?, ?)";
 
+// How long peek waits for another program's write: not long enough to be
+// felt at the prompt.
+constexpr int kPeekWaitMs = 100;
+
 int storeVersion(const store::database& db) {
 	auto version = db.prepare("PRAGMA user_version");
 	return version.step() ? static_cast<int>(version.intAt(0)) : 0;
@@ -801,6 +805,17 @@ result<bool> catalogue::loadAll() {
 		return result<bool>::failure(
 		    fmt::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
 	return result<bool>::success(true);
+}
+
+bool catalogue::peek() {
+	std::error_code ignored;
+	if (db_.isOpen() or not std::filesystem::exists(getStorePath(), ignored))
+		return false;
+	if (not db_.open(getStorePath(), store::openMode::kReadOnly, kPeekWaitMs))
+		return false;
+	bool read = storeVersion(db_) == kStoreVersion and readStore();
+	db_.close();
+	return read;
 }
 
 bool catalogue::readStore() {

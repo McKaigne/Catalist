@@ -755,6 +755,9 @@ TEST_CASE_FIXTURE(cliFixture, "cli says when a command changed nothing, and reco
 	CHECK(run({"done", "a:1"}, "", 100) == 0);
 	CHECK(err == "Nothing changed.\n");
 	CHECK(out.empty());
+	// -q prints nothing, not even that.
+	CHECK(run({"+", "-q", "a:1"}) == 0);
+	CHECK(err.empty());
 	CHECK(steps().empty());
 	// Only the titles that changed are printed.
 	CHECK(run({"+", "--all", "frieren"}) == 0);
@@ -1521,10 +1524,14 @@ TEST_CASE_FIXTURE(cliFixture, "cli import adds the titles and saves them") {
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli import reads standard input for a FILE of -") {
-	CHECK(run({"import", "-q", "-"}, kAnimeXml) == 0);
-	CHECK(out.empty());
+	CHECK(run({"import", "-"}, kAnimeXml) == 0);
+	CHECK(has(out, "\tOdd Taxi\tadded\t-\twatching\n"));
 	CHECK(err == "standard input: 2 titles, 2 added, 0 in your lists already\n");
 	CHECK(saved(mediaType::kAnime).size() == 2);
+	// -q prints nothing, not even that.
+	CHECK(run({"import", "-q", "-"}, kAnimeXml) == 0);
+	CHECK(out.empty());
+	CHECK(err.empty());
 	CHECK(run({"import", "-"}, "not an export") == 1);
 	CHECK(err ==
 	      "error: no anime or manga found in standard input (is it a MyAnimeList XML export?)\n");
@@ -1732,4 +1739,104 @@ TEST_CASE_FIXTURE(cliFixture, "cli export of an empty catalogue is an empty list
 	CHECK(run({"export", "--format=json", "manga"}) == 0);
 	CHECK(out.empty());
 	CHECK_FALSE(std::filesystem::exists("data"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli completion prints the script of the shell named") {
+	CHECK(run({"completion", "zsh"}) == 0);
+	CHECK(out.rfind("#compdef catalist cl\n", 0) == 0);
+	CHECK(has(out, "'1:command:_catalist_commands'"));
+	CHECK(err.empty());
+	CHECK(run({"completion", "fish"}) == 0);
+	CHECK(has(out, "complete -c catalist -f\n"));
+	CHECK(has(out, "-a 'ls' -d 'List your titles'\n"));
+	// The scripts are the program's own: they make no lists.
+	CHECK_FALSE(std::filesystem::exists("data"));
+
+	for (std::vector<std::string> wrong : {std::vector<std::string>{"completion"},
+	                                       {"completion", "bash"},
+	                                       {"completion", "zsh", "fish"}}) {
+		CHECK(run(wrong) == 2);
+		CHECK(out.empty());
+		CHECK(has(err, "error: say which shell: zsh or fish\n"));
+	}
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli __complete prints the refs and titles for the scripts") {
+	seed();
+	CHECK(run({"__complete", "refs"}) == 0);
+	CHECK(out == "a:1\tSousou no Frieren\na:2\tOdd Taxi\nm:1\tBerserk\nm:2\tSousou no Frieren\n");
+	CHECK(err.empty());
+	CHECK(run({"__complete", "titles"}) == 0);
+	CHECK(out == "Sousou no Frieren\ta:1\nOdd Taxi\ta:2\nBerserk\tm:1\nSousou no Frieren\tm:2\n");
+	CHECK(run({"__complete", "statuses"}) == 0);
+	CHECK(out == "watching\ncompleted\non-hold\ndropped\nplanned\n");
+	CHECK(run({"__complete", "fields"}) == 0);
+	CHECK(out.rfind("total=\nprogress=\nstatus=\nscore=\n", 0) == 0);
+	CHECK(has(out, "start=\nfinish=\n"));
+	// It is not one of the commands the person is shown.
+	CHECK(run({"help"}) == 0);
+	CHECK_FALSE(has(out, "__complete"));
+	CHECK_FALSE(has(out, "__man"));
+	CHECK(run({"completion", "zsh"}) == 0);
+	CHECK_FALSE(has(out, "__complete)"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli __complete says nothing and exits 0 whatever goes wrong") {
+	// No lists yet: nothing is made, and the old files are not imported.
+	put("data/anime.csv", "id,mal_id,type,title\n1,52991,anime,Sousou no Frieren\n");
+	for (const char* what : {"refs", "titles"}) {
+		CHECK(run({"__complete", what}) == 0);
+		CHECK(out.empty());
+		CHECK(err.empty());
+	}
+	CHECK_FALSE(std::filesystem::exists("data/catalist.db"));
+	// Lists it cannot read.
+	put("data/catalist.db", "not a database");
+	CHECK(run({"__complete", "refs"}) == 0);
+	CHECK(out.empty());
+	CHECK(err.empty());
+	// A word, an option or an operand it does not know.
+	for (std::vector<std::string> wrong : {std::vector<std::string>{"__complete"},
+	                                       {"__complete", "nope"},
+	                                       {"__complete", "--nope"},
+	                                       {"__complete", "-x", "refs"}}) {
+		CHECK(run(wrong) == 0);
+		CHECK(out.empty());
+		CHECK(err.empty());
+	}
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli __man fills in the version and the commands") {
+	CHECK(run({"__man"},
+	          ".TH CATALIST 1 \"\" \"v@PROJECT_VERSION@\"\n.SH COMMANDS\n@COMMANDS@\n"
+	          ".SH FILES\n") == 0);
+	CHECK(out.rfind(std::string(".TH CATALIST 1 \"\" \"v") + catalist::kVersionString +
+	                    "\"\n.SH COMMANDS\n.TP\n\\fBls\\fR ",
+	                0) == 0);
+	CHECK(has(out, "\n.TP\n\\fBcompletion\\fR \\fBzsh\\fR|\\fBfish\\fR\n"));
+	CHECK(out.rfind("\n.SH FILES\n") + 11 == out.size());
+	CHECK_FALSE(has(out, "__complete"));
+	CHECK(err.empty());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli takes every value the scripts offer") {
+	seed();
+	for (const char* key : {"new", "updated", "score", "progress", "date", "status", "title"}) {
+		CAPTURE(key);
+		CHECK(run({"ls", std::string("--sort=") + key}) == 0);
+	}
+	for (const char* status : {"watching", "completed", "on-hold", "dropped", "planned"}) {
+		CAPTURE(status);
+		CHECK(run({"ls", "-s", status}) == 0);
+	}
+	for (const char* format : {"xml", "csv", "json"}) {
+		CAPTURE(format);
+		CHECK(run({"export", std::string("--format=") + format, "anime"}) == 0);
+	}
+}
+
+TEST_CASE("cli noTerminalNote says how to use the program without a terminal") {
+	CHECK(catalist::noTerminalNote("cl") ==
+	      "error: the tracker needs a terminal; give a command to work without one\n"
+	      "Usage: cl [COMMAND] [ARG...]\nRun 'cl help' to see the commands.\n");
 }

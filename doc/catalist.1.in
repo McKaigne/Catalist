@@ -1,93 +1,60 @@
 .TH CATALIST 1 "November 2026" "v@PROJECT_VERSION@" "User Commands"
 .SH NAME
-catalist \- local-first anime and manga tracker for the terminal
+catalist, cl \- local-first anime and manga tracker for the terminal
 .SH SYNOPSIS
 .B catalist
 .br
 .B catalist
-\fICOMMAND\fR [\fIARGS\fR...] [\fIOPTIONS\fR]
+\fICOMMAND\fR [\fIOPTION\fR...] [\fIARG\fR...]
+.br
+.B cl
+\fICOMMAND\fR [\fIOPTION\fR...] [\fIARG\fR...]
 .SH DESCRIPTION
 .B catalist
-tracks the anime you watch and the manga you read in two CSV files on your
-computer. Run without arguments, it opens the terminal interface; with a
-command, it works on the lists from the shell. It asks AniList's public API
-to look up a title to add, to refresh a title's episode or chapter count
-after it changes (and once a day for the titles being watched or read), to
-find the ids titles lack, and to fetch covers, which it draws with sixel
-graphics through img2sixel.
+tracks the anime you watch and the manga you read in one SQLite file on
+your computer. Run without arguments at a terminal, it opens the tracker;
+with a command, it works on the lists from the shell, in scripts and in
+pipes.
+.B cl
+is the same program under a shorter name.
 .PP
-A \fITITLE\fR is named by its id on the provider or by words from its name,
-in any case; \fBanime\fR or \fBmanga\fR in front looks in one list only.
-When several titles match, a terminal is asked which one; otherwise they are
-listed and the command fails. At a terminal, lists are tables; piped, they
-are tab-separated lines. Every command takes \fB-h\fR, \fB--help\fR.
+Only \fBadd\fR and \fBsearch\fR go online from the command line, to
+AniList's public API. The tracker also asks AniList to keep the episode and
+chapter counts current, to find the ids titles lack, and for covers, which
+it draws with sixel graphics through img2sixel.
+.PP
+A \fIREF\fR names a title: its ref, the first column of \fBls\fR
+(\fBa:12\fR is an anime, \fBm:3\fR a manga), or part of its title, in
+capitals or not. A title that is exactly the words given wins; otherwise
+several matches are an error, unless \fB\-\-all\fR takes them all. A lone
+\fB\-\fR reads the refs from standard input, one a line, so
+\fBcatalist ls \-q\fR can feed another command. The ref of a removed title
+can be given to the next title added.
+.PP
+Options come before the operands, may be grouped (\fB\-amq\fR), and take
+their value joined or apart (\fB\-n3\fR, \fB\-n 3\fR,
+\fB\-\-sort=title\fR); \fB\-\-\fR ends them. Every command takes
+\fB\-h\fR and \fB\-\-help\fR.
+.PP
+At a terminal, lists are tables. Into a pipe or a file, each title is one
+line of fields with a tab between them, and \fB\-\-json\fR prints one JSON
+object a line. Messages, questions and errors go to standard error.
+.PP
+Each command that changes the lists is one step for \fBundo\fR; commands
+run with the same \fBCATALIST_TX\fR are one step together (see \fBtx\fR).
+\fBredo\fR makes again what \fBundo\fR took back, until the next change.
+The last 100 steps are kept.
 .SH COMMANDS
-.TP
-.BR ls " [" \fIanime\fR | \fImanga\fR "] [" \fIWORDS\fR ...]
-List titles, new releases first. \fB-s\fR, \fB--status\fR \fISTATUS\fR;
-\fB--sort\fR \fBnew\fR|\fBupdated\fR|\fBrating\fR|\fBstatus\fR|\fBtitle\fR|\fBprogress\fR|\fBdate\fR;
-\fB--reverse\fR; \fB-n\fR, \fB--limit\fR \fIN\fR. Piped, each line is: type,
-id, title, status, rating, progress, total, new.
-.TP
-.BR show " " \fITITLE\fR
-Show one title in full.
-.TP
-.BR add " " \fIanime\fR | \fImanga\fR " " \fITITLE\fR | \fIID\fR
-Search AniList and add the match picked (\fB-y\fR, \fB--yes\fR takes the
-first), or add by the provider's id. Takes the options of \fBset\fR.
-.TP
-.BR set " " \fITITLE\fR " " \fIOPTIONS\fR
-Change a title: \fB-s\fR, \fB--status\fR \fISTATUS\fR (watching, completed,
-on-hold, dropped, planned); \fB-r\fR, \fB--rating\fR \fIN\fR (0 to 10);
-\fB-p\fR, \fB--progress\fR \fIN\fR, \fI+N\fR or \fI-N\fR; \fB-t\fR,
-\fB--total\fR \fIN\fR; \fB--volumes\fR \fIN\fR; \fB--rewatched\fR \fIN\fR.
-Prints what changed. Also \fBedit\fR.
-.TP
-.BR next " " \fITITLE\fR
-One more episode or chapter (\fB-n\fR, \fB--by\fR \fIN\fR for more).
-.TP
-.BR rm " " \fITITLE\fR
-Remove a title, after asking (\fB-y\fR, \fB--yes\fR skips the question,
-and is needed when nobody can be asked). Also \fBremove\fR, \fBdelete\fR.
-.TP
-.BR search " " \fIanime\fR | \fImanga\fR " " \fIWORDS\fR ...
-Search AniList and show the matches, marking those already tracked.
-.TP
-.BR provider " [" \fIanilist\fR | \fImal\fR ]
-Show or choose the provider, the site whose ids are shown and accepted.
-.TP
-.BR import " " \fIFILE.xml\fR...
-Add the titles of MyAnimeList XML exports. A title already in the catalogue
-keeps its score, progress and dates. All files are read before
-anything is added, so a bad file changes nothing.
-.TP
-.BR export " " \fIanime\fR | \fImanga\fR
-Print that list as MyAnimeList XML, which the import pages of MyAnimeList
-and AniList read. Titles without a MyAnimeList id are left out and counted
-on standard error.
-.TP
-.BR help " [" \fICOMMAND\fR "], " -h ", " --help
-Print the commands, or one command's options.
-.TP
-.BR -V ", " --version
-Print the version.
-.SH TABS
-.TP
-.B 1 Anime, 2 Manga
-Left, the filters by status and by rating from 10 to 0 with their counts,
-and a stats card (days spent, mean score, episodes or chapters, rewatches,
-volumes for manga, a bar of the statuses); in the middle, the sortable list
-with a New column of released episodes or chapters not yet seen; right, the
-cover, then the details and tracking cards.
-.SH KEYS
+@COMMANDS@
+.SH TRACKER KEYS
 .TP
 .B 1 2 Tab
-Switch tab.
+Switch between the anime and the manga tab.
 .TP
 .B j k g G h l
 Move, jump, and change pane.
 .TP
-.B + - P S R
+.B + \- P S R
 Progress, next status, one star more.
 .TP
 .B e Enter
@@ -106,24 +73,47 @@ Filter by title, add a title, delete (asks first).
 Quit. Changes are saved as they are made.
 .SH FILES
 .TP
-.I ~/.config/catalist/anime.csv, manga.csv
-The catalogue.
+.I ~/.local/share/catalist/catalist.db
+The lists, the provider and the steps \fBundo\fR and \fBredo\fR can take,
+in one SQLite file.
 .TP
-.I ~/.config/catalist/settings
-The provider, and the day missing ids were last looked up.
+.I ~/.config/catalist/anime.csv, manga.csv, settings
+The files of Catalist 0.3.0 and earlier. When there is no
+\fIcatalist.db\fR yet, they are read into a new one, once, and left as they
+were.
 .SH ENVIRONMENT
 .TP
 .B CATALIST_DATA_DIR
-Use this directory instead of ~/.config/catalist.
+Keep the lists in this directory. The old files are then looked for in
+it, too.
+.TP
+.B XDG_DATA_HOME
+When set to an absolute path, the lists are kept in
+\fI$XDG_DATA_HOME/catalist\fR.
 .TP
 .B XDG_CONFIG_HOME
-When set, the catalogue is kept in $XDG_CONFIG_HOME/catalist.
+Where the old files of Catalist 0.3.0 and earlier are looked for:
+\fI$XDG_CONFIG_HOME/catalist\fR.
+.TP
+.B CATALIST_TX
+A label from \fBcatalist tx\fR. Commands run with the same label make one
+step for \fBundo\fR.
 .TP
 .B NO_COLOR
 When set, output has no colours.
 .SH EXIT STATUS
-0 on success, 1 when the work failed (a file could not be read or saved, no
-title matched, AniList could not be reached), 2 when the command line is
-wrong.
+0 on success, 1 when the work failed (no title matched, a file could not
+be read, the lists could not be saved, AniList could not be reached), 2
+when the command line is wrong. A pipe closed early, as by \fBhead\fR, is
+not a failure.
+.SH EXAMPLES
+.nf
+catalist add \-\-pick 1 frieren
+catalist + frieren
+catalist ls \-q \-s watching | catalist + \-
+catalist set a:12 score=9 status=completed
+catalist undo
+catalist export \-\-format=csv anime > anime.csv
+.fi
 .SH AUTHORS
 McKaigne <https://github.com/McKaigne/Catalist>

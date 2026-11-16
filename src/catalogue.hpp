@@ -176,6 +176,11 @@ public:
 	// directory they were read from.
 	[[nodiscard]] result<bool> loadAll();
 	[[nodiscard]] const std::filesystem::path& importedFrom() const { return importedFrom_; }
+	// Reads the lists as loadAll does, but only looks: nothing is created or
+	// imported, no write is waited for, and the file is closed again. False
+	// when there is no file or it cannot be read just now. For the shell's
+	// completion, which must never get in the way.
+	[[nodiscard]] bool peek();
 
 	// Writes the rows that changed since the last load or save, and the
 	// provider when it changed, as one unit: all of it or nothing. Not

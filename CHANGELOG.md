@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Catalist is now a small, local-first tracker: two CSV files, two tabs, and
+Catalist is now a small, local-first tracker: one SQLite file, two tabs, a
+command line for daily tracking, scripts and pipes with undo and redo, and
 the network only to add titles, keep them current and show their covers.
 
 ### Added
@@ -16,18 +17,36 @@ the network only to add titles, keep them current and show their covers.
 - A provider, AniList (default) or MyAnimeList: its ids are the ones shown
   and accepted, its name replaces the mode pill at the bottom left, and it is
   where an account sync will plug in (`iListSync`, declared, not yet
-  implemented). Kept in a `settings` file.
-- A command line that works as a list manager: `ls`, `show`, `add`, `set`
-  (`edit`), `next`, `rm`, `search` and `provider`, beside `import` and
-  `export`. Titles are named by the provider's id or by words from the
-  title; several matches are offered to choose from at a terminal and listed
-  (never guessed) in a script. Short and long options, `--help` on every
-  command, suggestions for typos, tables in colour at a terminal (`NO_COLOR`
-  respected), tab-separated lines when piped, prompts on stderr.
+  implemented). `catalist provider anilist|mal` chooses it.
+- A command line for daily tracking, scripts and pipes: `ls`, `show`, `+`
+  (`inc`), `-` (`dec`), `set`, `done`, `hold`, `drop`, `plan`, `resume`,
+  `add`, `rm`, `search`, `stats`, `import`, `export`, `undo`, `redo`, `log`,
+  `tx`, `provider`, `completion` and `help`, all from one table of commands
+  that also writes the help, the manual page and the completions.
+  - Titles are named by a ref, the first column of `ls` (`a:12`, `m:3`), or
+    by part of the title; `--all` takes every match, and a lone `-` reads
+    refs from standard input, so `catalist ls -q | catalist + -` works.
+  - POSIX options (grouped, `-n3`, `--name=value`, `--`), `--help` on every
+    command, suggestions for typos. A table in colour at a terminal
+    (`NO_COLOR` respected); into a pipe, one tab-separated line a title,
+    `--json` for JSON Lines and `--header` for column names. Messages and
+    prompts on stderr; exit codes 0, 1 and 2; a pipe closed early, as by
+    `head`, ends the command quietly.
+  - Only `add` and `search` go online; `add --no-lookup` adds a title by
+    hand, offline. `catalist` with no command and no terminal prints its
+    usage and exits with 2 instead of opening the tracker.
+- Undo and redo. Every command that changes the lists, and every change
+  made in the tracker, is one step for `catalist undo`; `catalist redo`
+  makes it again, `catalist log` lists the last 100 steps. Commands run
+  with the same `CATALIST_TX` (from `catalist tx`) are one step. A title
+  changed since is not overwritten unless `-f` is given.
+- `cl`, a link to `catalist` installed beside it, and completions for zsh
+  (`_catalist`) and fish (`catalist.fish`, `cl.fish`) that complete
+  commands, options, values and your titles by ref or by name.
 - Missing ids are looked up once a day in batches of fifty, so titles
   imported from MyAnimeList XML get their AniList ids.
-- Entries carry both ids: an `anilist_id` CSV column, read back from 0.3's
-  files too, and filled in from AniList on any lookup.
+- Entries carry both ids, read from 0.3's files too, and filled in from
+  AniList on any lookup.
 - A cover card at the top right of the Anime and Manga tabs, shaped like a
   cover and drawn with sixel graphics through img2sixel (libsixel), fetched
   once the selection rests and kept in memory. The card says why when there
@@ -36,7 +55,7 @@ the network only to add titles, keep them current and show their covers.
   details, and on a narrow or short terminal the table drops its least
   needed columns, the bottom bar its last hints and the right column its
   details card.
-- Titles stay current from MyAnimeList: after any change to a title's
+- Titles stay current from AniList: after any change to a title's
   status, rating or progress, and once a day for titles being watched or on
   hold, Catalist looks it up in the background and takes its episode or
   chapter total (a finished series no longer shows `?`) and how many are out.
@@ -44,11 +63,12 @@ the network only to add titles, keep them current and show their covers.
   episodes or chapters out but not yet seen. New releases are the default
   order.
 - `a` in the Anime and Manga tabs adds a title: type it, look it up on
-  MyAnimeList through Jikan, and pick a match. The last row adds the title
+  AniList, and pick a match. The last row adds the title
   by hand, which also works offline. A title already tracked is selected
   instead of added twice.
 - `catalist export anime|manga` prints MyAnimeList XML, which the import
-  pages of MyAnimeList and AniList read.
+  pages of MyAnimeList and AniList read; `--format=csv` and `--format=json`
+  print every title with the columns of `ls`.
 - (Replaced by the provider pill.) The bottom-left pill showed the keyboard mode: `NOR`, `SCH` (search), `EDT`
   (typing a number), `ADD` or `DEL` (confirm delete).
 - The details card can set the episode or chapter total (for titles added
@@ -62,13 +82,19 @@ the network only to add titles, keep them current and show their covers.
   date from high to low, title and status from A to Z (rating, progress and
   date used to start from the low end). The date column sorts by the date it
   shows.
+- The lists, the provider and the undo history are kept in one SQLite file,
+  `catalist.db`, in `~/.local/share/catalist` (or `$XDG_DATA_HOME/catalist`,
+  or `CATALIST_DATA_DIR`), instead of `anime.csv`, `manga.csv` and
+  `settings` in `~/.config/catalist`. Those files are read into the new one
+  the first time, with a note on stderr, and left as they were. Each change
+  is one transaction, and two programs at once wait for each other. SQLite
+  is a new build dependency (downloaded by CMake when the system has none).
 - Every change is saved at once; a failed save is shown in the status line.
-- `catalist import` takes only MyAnimeList XML files, reads them all before
-  adding anything, and reports per file how many titles were added.
+- `catalist import` takes only MyAnimeList XML files (`-` for standard
+  input), reads them all before adding anything, reports per file how many
+  titles were added, and is one step for undo.
 - New titles are numbered from 1 in each list; an imported title merges
   with a tracked one only when they share a MyAnimeList id.
-- `anime.csv` and `manga.csv` have 16 columns (the last two record the web
-  checks); files from 0.2.1 to 0.3.0 still load.
 - The theme is always Catppuccin Mocha.
 - Internal: the code lives in one flat `src/` folder of small modules, with
   one interface (`iTab`); see docs/ARCHITECTURE.md for the module map.
@@ -91,18 +117,16 @@ the network only to add titles, keep them current and show their covers.
   rewatches, volumes and a status bar) are in a stats card at the bottom
   left of the Anime and Manga tabs, whose filter rows already count each
   status and rating.
-- Notes, and the stored AniList ids, which only sync used; both are dropped
-  from the CSV files on the next save, and notes are no longer exported.
+- Notes: they are not read from the old CSV files, and no longer exported.
 - Accounts, logins and sync with MyAnimeList and AniList, with `sync.csv`,
   the backups and the activity history (`history.csv`).
 - The Settings tab, `settings.json`, `catalist config`, themes, the command
   palette and the welcome message: the defaults are fixed.
 - The Queue, Search, Library, History and Help tabs.
-- The CLI commands other than `import` and `export`: `ls`, `count`, `show`,
-  `add`, `set`, `rm`, `stats`, `search`, `random`, `completion`, the CSV and
-  JSON exports, and `--tab`.
-- Undo and redo, visual (batch) selection, multiple sidebar filters, mouse
-  support, opening a title in the browser and copying it, and the log file.
+- The CLI commands `count` and `random`, and `--tab`.
+- The tracker's undo and redo keys (undo and redo are commands now), visual
+  (batch) selection, multiple sidebar filters, mouse support, opening a
+  title in the browser and copying it, and the log file.
 - `catalist.kdl` and its parser; an existing file is ignored, as are the
   old `settings.json`, `history.csv`, `sync.csv`, `catalist.log`,
   `mal_auth.json`, `anilist_auth.json` and `backups/`, which can be deleted.

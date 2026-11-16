@@ -657,6 +657,38 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue beginWrite holds the catalogue unti
 	CHECK(after.getEntries(mediaType::kAnime)[0].title == "Kept");
 }
 
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue peek reads the lists and leaves nothing behind") {
+	auto dir = tempDir() / "data";
+	// Nothing stored: not even the directory is made.
+	catalogue nothing(dir);
+	CHECK_FALSE(nothing.peek());
+	CHECK_FALSE(std::filesystem::exists(dir));
+
+	// The lists of an earlier version are not imported by a look.
+	catalist::test::writeText(dir / "anime.csv", "1,0,anime,Old,Watching,0,0,0,0,0,0,,,\n");
+	catalogue old(dir);
+	CHECK_FALSE(old.peek());
+	CHECK_FALSE(std::filesystem::exists(dir / "catalist.db"));
+	std::filesystem::remove(dir / "anime.csv");
+
+	{
+		catalogue db(dir);
+		db.addEntry(makeEntry().title("Odd Taxi"));
+		REQUIRE(db.saveAll());
+	}
+	catalogue db(dir);
+	REQUIRE(db.peek());
+	REQUIRE(db.getEntries(mediaType::kAnime).size() == 1);
+	CHECK(db.getEntries(mediaType::kAnime)[0].title == "Odd Taxi");
+	// The file was closed again: another program writes without waiting.
+	catalogue writer(dir);
+	CHECK(writer.beginWrite().ok());
+
+	catalist::test::writeText(tempDir() / "other/catalist.db", "this is not a database");
+	catalogue broken(tempDir() / "other");
+	CHECK_FALSE(broken.peek());
+}
+
 TEST_CASE_FIXTURE(tempDirFixture, "catalogue reports a failed write and a file it cannot open") {
 	catalogue db(tempDir() / "data");
 	catalist::test::makeUnwritable(tempDir() / "data/catalist.db");

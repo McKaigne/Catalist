@@ -3,22 +3,27 @@
 A small, local-first anime and manga tracker for the terminal, written in
 **C++17** with **FTXUI**.
 
-Your lists live on your computer in two plain CSV files. Catalist goes
-online only to look up a title to add, to refresh what is known about a
-title (how many episodes or chapters it has and how many are out) and to
-show its cover, all through [AniList](https://anilist.co)'s public API,
-which needs no account. AniList also knows every title's MyAnimeList id, so
-each entry carries both, and Catalist works the same for AniList and
-MyAnimeList users. Everything works offline too. Lists move in and out as
-MyAnimeList XML, which both sites read.
+Your lists live on your computer in one SQLite file. Catalist goes online
+only to look up a title to add, to refresh what is known about a title
+(how many episodes or chapters it has and how many are out) and to show its
+cover, all through [AniList](https://anilist.co)'s public API, which needs
+no account. AniList also knows every title's MyAnimeList id, so each entry
+carries both, and Catalist works the same for AniList and MyAnimeList
+users. Everything works offline too. Lists move in and out as MyAnimeList
+XML, which both sites read.
+
+There are two ways in: the tracker, a full-screen interface for the
+terminal, and a command line made for daily tracking, scripts and pipes,
+where every change can be undone and redone.
 
 ## Provider
 
 Your **provider** is the site you use: AniList (the default) or
 MyAnimeList. Its ids are the ones Catalist shows and accepts, and its name
-sits in the pill at the bottom left. Only one is chosen at a time. It is
-kept in a `settings` file next to the lists, and is where syncing with
-your account will plug in later (not done yet: lists are local only).
+sits in the pill at the bottom left. Only one is chosen at a time
+(`catalist provider mal` to switch). It is kept with the lists, and is where
+syncing with your account will plug in later (not done yet: lists are
+local only).
 
 ---
 
@@ -34,17 +39,25 @@ nix run
 
 ### CMake
 
-You need a C++17 compiler, CMake 3.20 or later, Ninja or Make; FTXUI,
-doctest and fmt are used from the system or downloaded by CMake. At run time,
-`curl` reaches AniList and `img2sixel` (from libsixel) draws covers;
-without them Catalist works offline and without covers.
+You need a C++17 compiler, CMake 3.20 or later, Ninja or Make, and SQLite 3
+(`libsqlite3-dev` on Debian and Ubuntu, `sqlite` elsewhere; without it
+CMake downloads its source). FTXUI, doctest and fmt are used from the
+system or downloaded by CMake. At run time, `curl` reaches AniList and
+`img2sixel` (from libsixel) draws covers; without them Catalist works
+offline and without covers.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 ./build/catalist
 ctest --test-dir build --output-on-failure
+sudo cmake --install build
 ```
+
+The build also writes the manual page and the completions for zsh and
+fish, and `cmake --install` puts them where `man` and the shells look,
+with `cl`, a short name for `catalist`. When `dash`, `bash`, `zsh` or
+`fish` is installed, `ctest` also runs the command line from that shell.
 
 ---
 
@@ -66,8 +79,9 @@ that could not be fetched is tried again after a few seconds.
 
 ## Staying current
 
-Whenever you change a title's status, rating or progress, Catalist asks
-AniList about it (once a run), filling in whichever id it lacked: a series that has ended gets its final
+Whenever you change a title's status, rating or progress in the tracker,
+Catalist asks AniList about it (once a run), filling in whichever id it
+lacked: a series that has ended gets its final
 episode or chapter count instead of `?`. Once a day, titles you are watching
 or reading (or have on hold) are checked in the background, one request
 every two seconds. The **New** column shows episodes or chapters that are
@@ -91,7 +105,7 @@ right now.
 | `e` / `Enter` | Details card: `j`/`k` pick a field (status, rating, progress, total, volumes for manga, rewatches), `h`/`l` change it by one, `e`/`Enter` types a number |
 | `n` `u` `c` `t` `s` `r` `p` | Sort by new releases (the default), last updated, date, title, status, rating or progress (again to reverse) |
 | `/` | Filter by title |
-| `a` | Add a title: type it, `Enter` looks it up on MyAnimeList, pick a match. The last row adds it by hand, which also works offline |
+| `a` | Add a title: type it, `Enter` looks it up on AniList, pick a match. The last row adds it by hand, which also works offline |
 | `d` | Delete (asks first) |
 | `q` | Quit |
 
@@ -99,38 +113,101 @@ Every change is saved the moment you make it.
 
 ## Command line
 
-Everything the tracker does to a list also works from the shell:
+Run with a command, `catalist` works on the lists from the shell. `cl` is
+the same program under a shorter name.
 
-```bash
-catalist ls                                 # everything, new releases first
-catalist ls manga --status reading          # one list, one status
-catalist ls anime frieren                   # titles with these words
-catalist add anime dandadan                 # search AniList, pick, add
-catalist add anime 171018 -s watching -p 3  # by id, with a status and progress
-catalist next frieren                       # one more episode or chapter
-catalist next frieren -n 3                  # three more
-catalist set 154587 -s completed -r 9       # change status, rating, progress...
-catalist set berserk -p +12                 # progress forward (or -3 back)
-catalist show taxi                          # one title in full
-catalist rm "odd taxi"                      # asks first (or --yes)
-catalist search manga berserk               # look without adding
-catalist provider mal                       # show MyAnimeList ids instead
+```sh
+cl ls                              # every title, as a table
+cl ls -s watching frieren          # one status, titles holding "frieren"
+cl + frieren                       # one more episode or chapter
+cl + -n 3 a:12                     # three more
+cl set a:12 score=9 status=completed
+cl done --score=8 taxi             # completed, with a score
+cl add --pick=1 dandadan           # search AniList, take the first match
+cl add --no-lookup "Some OVA"      # add by hand, offline
+cl rm -f a:12                      # remove without asking
+cl undo                            # take the last command back
+cl redo                            # and make it again
+cl search -m berserk               # look without adding
+cl stats                           # the numbers of both lists
 ```
 
-- **Naming a title:** by its id on your provider, or by words from its
-  title (any case, in any order). Put `anime` or `manga` first to look in
-  one list only. When several titles match, you are asked which one; in a
-  script, the matches are listed and the command fails, so it never guesses.
-- **Options** come in short and long forms (`-p 3`, `--progress 3`,
-  `--progress=3`). Every command has `--help`, `catalist help` lists them,
-  and a mistyped command or option gets a suggestion.
+- **Refs:** every title has a ref, the first column of `ls`: `a:12` is an
+  anime, `m:3` a manga. A command takes refs or any part of a title, in
+  capitals or not; a title that is exactly the words given wins, and
+  otherwise several matches are an error unless `--all` takes them all.
+  `-a` and `-m` look in one list only. Refs are local and short: after
+  `rm` of the title with the highest number, the next title added can get
+  the same ref.
+- **Options** follow POSIX: they come before the operands, group
+  (`-amq`), take their value joined or apart (`-n3`, `-n 3`,
+  `--sort=title`), and `--` ends them. Every command has `--help`, `cl
+  help` lists them, and a mistyped command or option gets a suggestion.
 - **Output:** a table at a terminal (in colour, unless `NO_COLOR` is set);
-  tab-separated lines when piped, for `cut`, `awk` or `sort`. Messages and
-  questions go to stderr. Exit codes: 0 done, 1 failed, 2 wrong command line.
-- **Staying current:** before a change, a title not checked today is looked
-  up, so `catalist next` on a finished series gets its final count. Once a
-  day the ids titles lack are looked up in batches of fifty (all of them,
-  the first time after an import from MyAnimeList).
+  into a pipe, one line a title with a tab between the fields, for `cut`,
+  `awk`, `sort` and `read`; `--json` prints one JSON object a line, and
+  `--header` names the columns. Messages and questions go to stderr. Exit
+  codes: 0 done, 1 failed, 2 wrong command line.
+- **Network:** only `add` and `search` go online. `add` fails when AniList
+  cannot be reached, unless `--no-lookup` adds the title as written. The
+  tracker keeps the totals current.
+- **No terminal:** `catalist` alone opens the tracker; with no terminal
+  (in a pipe, a script or cron) it prints its usage and exits with 2.
+
+### Pipes
+
+A lone `-` in place of the refs reads them from standard input, one a
+line, so the refs `ls -q` prints can feed any command that changes titles:
+
+```sh
+cl ls -q -s watching | cl + -           # one more of everything watched
+cl ls -q -s planned | head -n 3 | cl rm -f -
+cl ls | awk -F '\t' '$5 >= 9 { print $3 }'   # titles scored 9 or 10
+```
+
+### Undo and redo
+
+Every command that changes the lists is one step: `cl undo` takes the
+last one back, `cl redo` makes it again, and `cl log` lists the last 100.
+A step is taken back only when its titles are still as it left them;
+otherwise the title is named and nothing changes, and `-f` takes it back
+all the same. A new change after an undo ends what can be redone. Changes
+made in the tracker are steps too.
+
+Commands run with the same `CATALIST_TX` are one step, so one `cl undo`
+reverts a whole loop. In sh, bash or zsh:
+
+```sh
+export CATALIST_TX=$(cl tx)
+for ref in a:3 a:7 m:2; do
+	cl + "$ref"
+done
+unset CATALIST_TX
+cl undo        # all three at once
+```
+
+In fish:
+
+```fish
+set -lx CATALIST_TX (cl tx)
+for ref in a:3 a:7 m:2
+    cl + $ref
+end
+set -e CATALIST_TX
+cl undo
+```
+
+### Completion
+
+The completions for zsh and fish know the commands, their options and
+values, and your titles: by ref, with the title beside it, or by any part
+of a title. `cmake --install` and the Nix package put them in place for
+`catalist` and `cl`. To set them up by hand:
+
+```sh
+catalist completion zsh > ~/.zfunc/_catalist     # ~/.zfunc in $fpath, before compinit
+catalist completion fish > ~/.config/fish/completions/catalist.fish
+```
 
 ## Importing and exporting
 
@@ -138,6 +215,8 @@ catalist provider mal                       # show MyAnimeList ids instead
 catalist import animelist.xml mangalist.xml   # MyAnimeList XML exports
 catalist export anime > anime.xml             # MyAnimeList XML on stdout
 catalist export manga > manga.xml
+catalist export --format=csv anime > anime.csv   # for a spreadsheet
+catalist export --format=json manga | jq .title  # one object a line
 ```
 
 - **MyAnimeList:** export your lists from MyAnimeList's export page, unpack
@@ -150,31 +229,32 @@ catalist export manga > manga.xml
 
 Importing never overwrites what you track: a title already in the catalogue
 (the same AniList or MyAnimeList id) keeps your score, progress and dates,
-and only its totals are refreshed. Importing the same file twice adds nothing. Titles
-without a MyAnimeList id are left out of an export, with a note on stderr.
+and only its totals are refreshed. Importing the same file twice adds
+nothing, and an import is one step for undo. Titles without a MyAnimeList
+id are left out of an XML export, with a note on stderr; the CSV and JSON
+exports have every title, with the columns of `ls`.
 
 ---
 
 ## Data
 
-- `~/.config/catalist/anime.csv` and `manga.csv` (or `$XDG_CONFIG_HOME/catalist`,
-  or the directory in `CATALIST_DATA_DIR`). RFC 4180 CSV with 17 columns:
-  `id, mal_id, type, title, status, score, progress, total_units, volumes,
-  total_volumes, rewatched, start_date, finish_date, updated_at, released,
-  checked_at, anilist_id` (the last three from the web checks; `id` is
-  local and never shown).
-  They open in any spreadsheet.
-- Every save writes a temporary file and renames it over the old one, so a
-  crash never leaves half a file. A save that fails is reported (the bottom
-  bar in the TUI, exit code 1 in the CLI).
-- Files written by Catalist 0.2.1 to 0.3.0 load as they are, AniList ids
-  included; their notes and other extra columns are dropped on the next
-  save.
-- `settings` holds one line, `provider = anilist` or
-  `provider = myanimelist`, and is only written when you change it.
+- `~/.local/share/catalist/catalist.db` (or `$XDG_DATA_HOME/catalist`, or
+  the directory in `CATALIST_DATA_DIR`): one SQLite file with both lists,
+  the provider and the steps `undo` and `redo` can take. Each change is
+  one SQLite transaction, so a crash never leaves half a change, and two
+  programs working on the lists at once wait for each other. A save that
+  fails is reported (the bottom bar in the tracker, exit code 1 on the
+  command line).
+- **Coming from 0.3.0 or earlier:** when there is no `catalist.db` yet,
+  Catalist reads `anime.csv`, `manga.csv` and `settings` from
+  `~/.config/catalist` (or `$XDG_CONFIG_HOME/catalist`, or the directory
+  in `CATALIST_DATA_DIR`) into a new one, once, says so on stderr, and
+  leaves the old files as they were. Files written by Catalist 0.2.1 to
+  0.3.0 load, AniList ids included.
+- For a spreadsheet, `catalist export --format=csv`.
 
 The provider is the only setting. The theme is Catppuccin Mocha and the
-list starts with new releases.
+tracker's list starts with new releases.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.

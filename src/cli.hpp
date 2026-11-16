@@ -41,8 +41,11 @@ struct cliContext {
 	std::string typed{};
 };
 
-// What a command's operands are, so the shell can complete them.
-enum class operandKind { kNone, kRefs, kQuery, kFiles, kWords, kCommands };
+// What a command's operands are, so the shell can complete them: nothing,
+// titles of the lists by ref or by name, one such title and then FIELD=VALUE
+// words, a part of a title, text nothing is known about, files, one of the
+// command's `words`, or a command.
+enum class operandKind { kNone, kRefs, kRefThenFields, kTitle, kText, kFiles, kWords, kCommands };
 
 // One command of the command line. The table of them (see commands) is what
 // the parser, the help, the manual page and the completion scripts all read.
@@ -73,6 +76,10 @@ struct command {
 // when that is set, so the commands of a group undo as one, else under the
 // command as typed, cut to 60 characters.
 [[nodiscard]] txNote undoNote(const cliContext& ctx);
+
+// What `catalist` alone says, on standard error, where there is no terminal
+// to open the tracker on.
+[[nodiscard]] std::string noTerminalNote(const std::string& program);
 
 // One line for standard error when loadAll has just imported the CSV files
 // of an earlier version; empty when it has not.

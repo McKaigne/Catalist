@@ -10,6 +10,7 @@
 #include <optional>
 #include <ostream>
 
+#include "completion.hpp"
 #include "journal.hpp"
 #include "malXml.hpp"
 #include "output.hpp"
@@ -312,7 +313,8 @@ int saveAndReport(cliContext& ctx, const args::parsed& line,
 		return not journal::changedFields(made).empty();
 	});
 	if (not any) {
-		ctx.err << "Nothing changed.\n";
+		if (not line.has("q"))
+			ctx.err << "Nothing changed.\n";
 		return 0;
 	}
 	if (not ctx.db.saveAll(undoNote(ctx)))
@@ -582,6 +584,13 @@ const std::map<std::string, sortKey> kSortKeys = {
     {"new", sortKey::kNew},       {"updated", sortKey::kUpdated}, {"score", sortKey::kScore},
     {"status", sortKey::kStatus}, {"title", sortKey::kTitle},     {"progress", sortKey::kProgress},
     {"date", sortKey::kDate}};
+
+std::vector<std::string> sortWords() {
+	std::vector<std::string> words;
+	for (const auto& [word, key] : kSortKeys)
+		words.push_back(word);
+	return words;
+}
 
 int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (line.operands.size() > 1)
@@ -1029,6 +1038,15 @@ const std::vector<watchStatus> kStatuses = {watchStatus::kWatching, watchStatus:
                                             watchStatus::kOnHold, watchStatus::kDropped,
                                             watchStatus::kPlanToWatch};
 
+// The words a status is written with: watching, completed, on-hold, dropped
+// and planned.
+std::vector<std::string> statusWords() {
+	std::vector<std::string> words;
+	for (watchStatus status : kStatuses)
+		words.push_back(statusKey(status));
+	return words;
+}
+
 std::vector<output::cell> statsCells(const catalogue& db, mediaType type) {
 	std::vector<output::cell> cells = {
 	    output::text(typeKey(type)),
@@ -1139,9 +1157,10 @@ int runImport(const command& self, const args::parsed& line, cliContext& ctx) {
 			ctx.db.addEntry(title);
 			added += ctx.db.getEntries(title.type).size() - before;
 		}
-		ctx.err << fmt::format("{}: {}, {} added, {} in your lists already\n",
-		                       line.operands[i] == "-" ? "standard input" : line.operands[i],
-		                       titles(lists[i].size()), added, lists[i].size() - added);
+		if (not line.has("q"))
+			ctx.err << fmt::format("{}: {}, {} added, {} in your lists already\n",
+			                       line.operands[i] == "-" ? "standard input" : line.operands[i],
+			                       titles(lists[i].size()), added, lists[i].size() - added);
 	}
 	auto changes = journal::diff(animeBefore, ctx.db.getEntries(mediaType::kAnime));
 	auto manga = journal::diff(mangaBefore, ctx.db.getEntries(mediaType::kManga));
@@ -1304,6 +1323,55 @@ int runTx(const command& self, const args::parsed& line, cliContext& ctx) {
 	return 0;
 }
 
+int runCompletion(const command& self, const args::parsed& line, cliContext& ctx) {
+	std::string shell = line.operands.size() == 1 ? line.operands[0] : "";
+	if (shell == "zsh")
+		ctx.out << completion::zsh(commands());
+	else if (shell == "fish")
+		ctx.out << completion::fish(commands());
+	else
+		return usageError(ctx, self, "say which shell: zsh or fish");
+	return 0;
+}
+
+// What the completion scripts ask for while the person types, one word a
+// line; a ref has its title after a tab, and a title its ref. It must never
+// get in the way: it only looks at the lists, and when anything is wrong (no
+// lists yet, a file it cannot read, a word it does not know) it prints
+// nothing and still exits with 0.
+int runComplete(const command&, const args::parsed& line, cliContext& ctx) {
+	std::string what = line.operands.empty() ? "" : line.operands[0];
+	if (what == "statuses")
+		for (const auto& word : statusWords())
+			ctx.out << word << "\n";
+	if (what == "fields")
+		for (const auto& name : settableNames())
+			ctx.out << name << "=\n";
+	if ((what != "refs" and what != "titles") or not ctx.db.peek())
+		return 0;
+	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
+		for (const auto& e : ctx.db.getEntries(type))
+			ctx.out << (what == "refs" ? output::tsvLine({refs::of(e), e.title})
+			                           : output::tsvLine({e.title, refs::of(e)}));
+	}
+	return 0;
+}
+
+// The build's own command: the manual page is doc/catalist.1.in with the
+// version and the commands of the table put in.
+int runManual(const command&, const args::parsed&, cliContext& ctx) {
+	std::string page{std::istreambuf_iterator<char>(ctx.in), std::istreambuf_iterator<char>()};
+	const std::map<std::string, std::string> filled = {
+	    {"@PROJECT_VERSION@", kVersionString}, {"@COMMANDS@\n", completion::manual(commands())}};
+	for (const auto& [mark, text] : filled) {
+		auto at = page.find(mark);
+		if (at != std::string::npos)
+			page.replace(at, mark.size(), text);
+	}
+	ctx.out << page;
+	return 0;
+}
+
 int runHelp(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (line.operands.empty()) {
 		printHelp(ctx);
@@ -1402,15 +1470,16 @@ const std::vector<command>& commands() {
 	         kRowFormat,
 	     {{'a', "", "", "list anime only"},
 	      {'m', "", "", "list manga only"},
-	      {'s', "", "STATUS", "only watching, completed, on-hold, dropped or planned"},
-	      {0, "sort", "KEY", "new, updated, score, progress, date, status or title"},
+	      {'s', "", "STATUS", "only watching, completed, on-hold, dropped or planned",
+	       statusWords()},
+	      {0, "sort", "KEY", "new, updated, score, progress, date, status or title", sortWords()},
 	      {'r', "", "", "reverse the order"},
 	      {'q', "", "", "print the refs and nothing else"},
 	      {0, "json", "", "print one JSON object a line"},
 	      {0, "header", "", "name the columns on the first line of a pipe"}},
 	     "[QUERY]",
 	     runList,
-	     operandKind::kQuery},
+	     operandKind::kTitle},
 	    {"show",
 	     {},
 	     "Show titles in full",
@@ -1440,7 +1509,7 @@ const std::vector<command>& commands() {
 	     withRefOptions({kQuiet}),
 	     "REF FIELD=VALUE...",
 	     runSet,
-	     operandKind::kRefs},
+	     operandKind::kRefThenFields},
 	    statusCommand("done", "Mark titles completed",
 	                  "Sets the finish date, and the progress to the total when it is known.\n"),
 	    statusCommand("hold", "Put titles on hold", ""),
@@ -1463,11 +1532,13 @@ const std::vector<command>& commands() {
 	     {{'a', "", "", "add an anime (the default)"},
 	      {'m', "", "", "add a manga"},
 	      {0, "pick", "N", "take the Nth match without asking"},
-	      {0, "status", "STATUS", "watching, completed, on-hold, dropped or planned"},
+	      {0, "status", "STATUS", "watching, completed, on-hold, dropped or planned",
+	       statusWords()},
 	      {0, "no-lookup", "", "add TITLE as written, without asking AniList"},
 	      kQuiet},
 	     "TITLE",
-	     runAdd},
+	     runAdd,
+	     operandKind::kText},
 	    {"rm",
 	     {},
 	     "Remove titles",
@@ -1494,7 +1565,7 @@ const std::vector<command>& commands() {
 	      {0, "header", "", "name the columns on the first line of a pipe"}},
 	     "QUERY",
 	     runSearch,
-	     operandKind::kQuery},
+	     operandKind::kText},
 	    {"stats",
 	     {},
 	     "Show the numbers of your lists",
@@ -1531,7 +1602,7 @@ const std::vector<command>& commands() {
 	     "with a note. csv is a line of column names and a line a title, and json\n"
 	     "one object a line; both have every title and the columns of 'ls'. In the\n"
 	     "CSV a date that is not set and a total that is not known are empty.\n",
-	     {{0, "format", "FORMAT", "xml (the default), csv or json"}},
+	     {{0, "format", "FORMAT", "xml (the default), csv or json", {"xml", "csv", "json"}}},
 	     "anime|manga",
 	     runExport,
 	     operandKind::kWords,
@@ -1584,6 +1655,21 @@ const std::vector<command>& commands() {
 	     runProvider,
 	     operandKind::kWords,
 	     {"anilist", "mal"}},
+	    {"completion",
+	     {},
+	     "Print the completion script of a shell",
+	     "An installed Catalist has put both scripts where the shells look for\n"
+	     "them. To set one up by hand:\n"
+	     "  catalist completion zsh > ~/.zfunc/_catalist\n"
+	     "  catalist completion fish > ~/.config/fish/completions/catalist.fish\n"
+	     "For zsh the directory must be in $fpath before compinit runs. The\n"
+	     "scripts complete the commands and their options, and your titles by\n"
+	     "ref or by any part of their name.\n",
+	     {},
+	     "zsh|fish",
+	     runCompletion,
+	     operandKind::kWords,
+	     {"zsh", "fish"}},
 	    {"help",
 	     {},
 	     "Show help for a command",
@@ -1592,6 +1678,26 @@ const std::vector<command>& commands() {
 	     "[COMMAND]",
 	     runHelp,
 	     operandKind::kCommands},
+	    {"__complete",
+	     {},
+	     "Print the words the completion scripts ask for",
+	     "",
+	     {},
+	     "refs|titles|statuses|fields",
+	     runComplete,
+	     operandKind::kNone,
+	     {},
+	     true},
+	    {"__man",
+	     {},
+	     "Fill in the manual page read from standard input",
+	     "",
+	     {},
+	     "",
+	     runManual,
+	     operandKind::kNone,
+	     {},
+	     true},
 	};
 	return all;
 }
@@ -1616,6 +1722,13 @@ std::string usageLine(const command& shown) {
 	}
 	return fmt::format("{}{}{}{}", shown.name, flags.empty() ? "" : fmt::format(" [-{}]", flags),
 	                   valued, shown.operands.empty() ? "" : fmt::format(" {}", shown.operands));
+}
+
+std::string noTerminalNote(const std::string& program) {
+	return fmt::format(
+	    "error: the tracker needs a terminal; give a command to work without one\n"
+	    "Usage: {0} [COMMAND] [ARG...]\nRun '{0} help' to see the commands.\n",
+	    program);
 }
 
 std::string importNote(const catalogue& db) {
@@ -1652,8 +1765,9 @@ int runCli(const std::vector<std::string>& args, cliContext& ctx) {
 	std::vector<args::option> options = cmd->options;
 	options.push_back(helpOption());
 	auto line = args::parse({args.begin() + 1, args.end()}, options);
+	// The scripts' own commands say nothing, whatever they are given.
 	if (not line.ok())
-		return usageError(ctx, *cmd, line.errorMessage());
+		return cmd->hidden ? 0 : usageError(ctx, *cmd, line.errorMessage());
 	if (line.value().has("help")) {
 		printCommandHelp(ctx, *cmd);
 		return 0;

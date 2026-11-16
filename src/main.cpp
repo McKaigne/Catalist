@@ -23,6 +23,10 @@ int main(int argc, char* argv[]) {
 	                          env("XDG_CONFIG_HOME"), env("HOME")};
 	catalist::catalogue db(catalist::catalogue::getDefaultDataDir(dirs),
 	                       catalist::catalogue::getOldDataDir(dirs));
+	// `cl` is the same program under a shorter name.
+	std::string name = std::filesystem::path(argv[0]).filename().string();
+	if (name.empty())
+		name = "catalist";
 	if (argc > 1) {
 		catalist::cliContext ctx{db,        std::cin,        std::cout,
 		                         std::cerr, catalist::today, catalist::httpPost};
@@ -34,10 +38,15 @@ int main(int argc, char* argv[]) {
 		ctx.nowStamp = catalist::nowStamp;
 		ctx.txLabel = env("CATALIST_TX");
 		ctx.newTxLabel = catalist::newTxLabel;
-		// `cl` is the same program under a shorter name.
-		std::string name = std::filesystem::path(argv[0]).filename().string();
-		ctx.program = name.empty() ? "catalist" : name;
+		ctx.program = name;
 		return catalist::runCli({argv + 1, argv + argc}, ctx);
+	}
+
+	// The tracker draws on a terminal and reads its keys from one. In a
+	// pipe or a script, a command was meant.
+	if (not catalist::isInteractive()) {
+		std::cerr << catalist::noTerminalNote(name);
+		return 2;
 	}
 
 	auto loaded = db.loadAll();

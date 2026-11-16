@@ -309,7 +309,7 @@ bool catalogTab::onBrowseKey(const Event& event, appContext& ctx) {
 		step_ = step::kAddTyping;
 		addTitle_.value.clear();
 		addResults_.clear();
-		ctx.status = "Add: type a title to look up on MyAnimeList.";
+		ctx.status = "Add: type a title to look up on AniList.";
 		return true;
 	}
 	if (keys::isCharacter(event, 'd') and selectedEntry()) {

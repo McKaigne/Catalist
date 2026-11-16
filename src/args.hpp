@@ -23,6 +23,9 @@ struct option {
 	std::string name;
 	std::string value;
 	std::string help;
+	// The values there are to choose from, when they are only a few: the
+	// shell completes them. The command checks what it is given.
+	std::vector<std::string> choices{};
 };
 
 // How the option is written: "--sort", or "-n" when it has no long name.

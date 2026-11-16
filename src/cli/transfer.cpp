@@ -82,14 +82,25 @@ int runExport(const command& self, const args::parsed& line, cliContext& ctx) {
 		                              didYouMean(format, kFormats)));
 	bool named = line.operands.size() == 1 and std::find(self.words.begin(), self.words.end(),
 	                                                     line.operands[0]) != self.words.end();
-	if (not named)
-		return usageError(ctx, self, "say which list: anime or manga");
-	mediaType type = line.operands[0] == "anime" ? mediaType::kAnime : mediaType::kManga;
+	// The XML is one list a file, as the import pages take it; csv and json
+	// hold both lists when none is named.
+	bool both = line.operands.empty() and format != "xml";
+	if (not named and not both)
+		return usageError(ctx, self,
+		                  format == "xml" ? "say which list: anime or manga (XML is one a file)"
+		                                  : "say which list: anime, manga, or none for both");
 	if (not load(ctx))
 		return 1;
 
-	const auto& list = ctx.db.getEntries(type);
+	std::vector<entry> list;
+	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
+		if (both or line.operands[0] == typeKey(type)) {
+			const auto& more = ctx.db.getEntries(type);
+			list.insert(list.end(), more.begin(), more.end());
+		}
+	}
 	if (format == "xml") {
+		mediaType type = line.operands[0] == "anime" ? mediaType::kAnime : mediaType::kManga;
 		auto written = malXml::write(list, type);
 		ctx.out << written.xml;
 		if (written.skipped > 0)
@@ -133,10 +144,11 @@ std::vector<command> transferCommands() {
 	     "The XML is what MyAnimeList and AniList read on their import pages, and\n"
 	     "what 'import' reads; titles without a MyAnimeList id are left out of it,\n"
 	     "with a note. csv is a line of column names and a line a title, and json\n"
-	     "one object a line; both have every title and the columns of 'ls'. In the\n"
-	     "CSV a date that is not set and a total that is not known are empty.\n",
+	     "one object a line; both have every title and the columns of 'ls', and\n"
+	     "hold both lists when none is named. In the CSV a date that is not set\n"
+	     "and a total that is not known are empty.\n",
 	     {{0, "format", "FORMAT", "xml (the default), csv or json", {"xml", "csv", "json"}}},
-	     "anime|manga",
+	     "[anime|manga]",
 	     runExport,
 	     operandKind::kWords,
 	     {"anime", "manga"}},

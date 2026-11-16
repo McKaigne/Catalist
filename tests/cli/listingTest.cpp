@@ -58,6 +58,15 @@ TEST_CASE_FIXTURE(cliFixture, "cli ls keeps to a list, a status or a part of the
 	CHECK(run({"ls", "-q", "--", "-s"}) == 0);
 	CHECK(out.empty());
 
+	// Several statuses, with commas.
+	CHECK(run({"ls", "-q", "-s", "completed,planned"}) == 0);
+	CHECK(out == "a:1\nm:2\n");
+	CHECK(run({"ls", "-q", "-a", "-s", "watching,on-hold"}) == 0);
+	CHECK(out == "a:2\n");
+	CHECK(run({"ls", "-s", "watching,bored"}) == 2);
+	CHECK(err.find("error: unknown status 'bored'\n") == 0);
+	CHECK(run({"ls", "-s", ""}) == 2);
+	CHECK(err.find("error: -s needs a status\n") == 0);
 	CHECK(run({"ls", "-s", "bored"}) == 2);
 	CHECK(err.find("error: unknown status 'bored'\n") == 0);
 	// The words of a query need no quotes.

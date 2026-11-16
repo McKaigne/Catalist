@@ -121,6 +121,20 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 			    ctx, self,
 			    fmt::format("--pick '{}' is not the number of a match", line.get("pick")));
 	}
+	std::optional<int> score;
+	if (line.has("score")) {
+		score = args::parseCount(line.get("score"));
+		if (not score or *score > 10)
+			return usageError(ctx, self,
+			                  fmt::format("--score '{}' is not 0 to 10", line.get("score")));
+	}
+	std::optional<int> progress;
+	if (line.has("progress")) {
+		progress = args::parseCount(line.get("progress"));
+		if (not progress)
+			return usageError(ctx, self,
+			                  fmt::format("--progress '{}' is not a count", line.get("progress")));
+	}
 	bool byHand = line.has("no-lookup");
 	if (byHand and pick)
 		return usageError(ctx, self,
@@ -143,7 +157,14 @@ int runAdd(const command& self, const args::parsed& line, cliContext& ctx) {
 			return fail(ctx, found.errorMessage());
 		added = found.value();
 	}
-	added = setStatus(added, *status, today);
+	// In the order `set` takes them: the progress starts the title, or
+	// completes it at the total, and a status that is given stands.
+	if (progress)
+		added = setCount(added, countField::kProgress, *progress, today);
+	if (line.has("status") or not progress)
+		added = setStatus(added, *status, today);
+	if (score)
+		added = setScore(added, *score, today);
 
 	if (not loadForWrite(ctx))
 		return 1;
@@ -252,8 +273,9 @@ std::vector<command> onlineCommands() {
 	                 "match: the only one, the one you choose when there are several, or the\n"
 	                 "one --pick names by its number in that list ('search' prints the same\n"
 	                 "list). Where nobody can be asked, several matches without --pick are an\n"
-	                 "error. A new title is planned unless --status says otherwise. A title\n"
-	                 "that is in your list already is left as it is.\n\n"
+	                 "error. A new title is planned, or watching once it has a --progress,\n"
+	                 "unless --status says otherwise. A title that is in your list already\n"
+	                 "is left as it is.\n\n"
 	                 "With --no-lookup AniList is not asked: TITLE is added as it is written,\n"
 	                 "without ids or totals ('set' can give it a total).\n\n") +
 	         kChangeFormat,
@@ -262,6 +284,8 @@ std::vector<command> onlineCommands() {
 	      {0, "pick", "N", "take the Nth match without asking"},
 	      {0, "status", "STATUS", "watching, completed, on-hold, dropped or planned",
 	       statusWords()},
+	      {0, "score", "N", "give it a score as well, 0 to 10"},
+	      {0, "progress", "N", "the episodes or chapters done already"},
 	      {0, "no-lookup", "", "add TITLE as written, without asking AniList"},
 	      kQuiet},
 	     "TITLE...",

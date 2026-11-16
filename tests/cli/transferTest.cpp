@@ -202,10 +202,24 @@ TEST_CASE_FIXTURE(cliFixture, "cli export --format=json prints one object a titl
 	CHECK(out.size() == json.size());
 }
 
+TEST_CASE_FIXTURE(cliFixture, "cli export --format=csv or json without a list holds both") {
+	seed();
+	CHECK(run({"export", "--format=json"}) == 0);
+	CHECK(std::count(out.begin(), out.end(), '\n') == 4);
+	CHECK(out.find("{\"ref\":\"a:1\",") == 0);
+	CHECK(has(out, "\n{\"ref\":\"m:1\",\"type\":\"manga\",\"title\":\"Berserk\","));
+	CHECK(run({"export", "--format=csv"}) == 0);
+	// The column names, then the four titles.
+	CHECK(std::count(out.begin(), out.end(), '\n') == 5);
+}
+
 TEST_CASE_FIXTURE(cliFixture, "cli export wants a list and a format it knows") {
 	seed();
 	CHECK(run({"export"}) == 2);
-	CHECK(err.find("error: say which list: anime or manga\nUsage: catalist export ") == 0);
+	CHECK(err.find("error: say which list: anime or manga (XML is one a file)\n"
+	               "Usage: catalist export ") == 0);
+	CHECK(run({"export", "--format=csv", "anime", "manga"}) == 2);
+	CHECK(err.find("error: say which list: anime, manga, or none for both\n") == 0);
 	CHECK(run({"export", "books"}) == 2);
 	CHECK(run({"export", "anime", "manga"}) == 2);
 	CHECK(run({"export", "--format=yaml", "anime"}) == 2);

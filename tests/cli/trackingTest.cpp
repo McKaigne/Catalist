@@ -181,7 +181,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli set checks every value before touching anythi
 	CHECK(run({"set", "taxi", "progress=-1"}) == 2);
 	CHECK(run({"set", "taxi", "progress=1234567"}) == 2);
 	CHECK(run({"set", "taxi", "start=yesterday"}) == 2);
-	CHECK(err.find("error: start 'yesterday' is not a date such as 2026-10-20, or empty") == 0);
+	CHECK(err.find("error: start 'yesterday' is not a date such as 2026-10-20, today, or empty") ==
+	      0);
 	CHECK(run({"set", "taxi", "finish=2026-02-30"}) == 2);
 	CHECK(run({"set", "taxi", "title="}) == 2);
 	CHECK(err.find("error: title '' is not a title\n") == 0);
@@ -305,4 +306,12 @@ TEST_CASE_FIXTURE(cliFixture, "cli rm removes nothing when a REF is wrong") {
 	CHECK(run({"rm"}) == 2);
 	CHECK(run({"rm", "-f"}) == 2);
 	CHECK(out.empty());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli set takes today for a date") {
+	seed();
+	CHECK(run({"set", "a:1", "start=today", "finish=today"}) == 0);
+	auto frieren = savedTitle(mediaType::kAnime, "Sousou no Frieren");
+	CHECK(catalist::formatDate(frieren.startDate) == "2026-10-20");
+	CHECK(catalist::formatDate(frieren.finishDate) == "2026-10-20");
 }

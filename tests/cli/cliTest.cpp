@@ -39,7 +39,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	               "[QUERY...]\n") == 0);
 	CHECK(has(out, "ref type title status score progress total volumes rewatched\n"));
 	CHECK(has(out, "\nOptions:\n  -a                list anime only\n"));
-	CHECK(has(out, "  -s STATUS         only watching, completed, on-hold, dropped or planned\n"));
+	CHECK(has(out,
+	          "  -s STATUS         only watching, completed, on-hold, dropped, planned, or a,b\n"));
 	CHECK(has(out, "      --sort=KEY    new, updated, score, progress, date, status or title\n"));
 	CHECK(out.rfind("  -h, --help        show this help\n") + 35 == out.size());
 	CHECK(err.empty());
@@ -68,8 +69,9 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(run({"help", "tx"}) == 0);
 	CHECK(has(out, "export CATALIST_TX=$(catalist tx)\n"));
 	CHECK(run({"help", "add"}) == 0);
-	CHECK(has(out,
-	          "Usage: catalist add [-amq] [--pick=N] [--status=STATUS] [--no-lookup] TITLE...\n"));
+	CHECK(has(
+	    out,
+	    "Usage: catalist add [-amq] [--pick=N] [--status=STATUS] [--score=N] [--progress=N] [--no-lookup] TITLE...\n"));
 	// The helps line up past the longest option.
 	CHECK(has(out, "      --status=STATUS  watching, completed, on-hold, dropped or planned\n"));
 	CHECK(has(out, "      --no-lookup      add TITLE as written, without asking AniList\n"));
@@ -84,7 +86,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(run({"help", "import"}) == 0);
 	CHECK(has(out, "Usage: catalist import [-q] FILE...\n"));
 	CHECK(run({"help", "export"}) == 0);
-	CHECK(has(out, "Usage: catalist export [--format=FORMAT] anime|manga\n"));
+	CHECK(has(out, "Usage: catalist export [--format=FORMAT] [anime|manga]\n"));
 	CHECK(run({"help", "provider"}) == 0);
 	CHECK(has(out, "Usage: catalist provider [anilist|mal]\n"));
 

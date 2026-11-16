@@ -1,7 +1,9 @@
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <map>
 #include <ostream>
+#include <sstream>
 
 #include "cli/common.hpp"
 #include "cli/refs.hpp"
@@ -66,12 +68,17 @@ int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 	auto query = readText(self, line, ctx);
 	if (not query)
 		return 2;
-	std::optional<watchStatus> status;
-	if (line.has("s")) {
-		status = parseStatus(line.get("s"));
+	// -s watching,on-hold: any of them; no -s, all of them.
+	std::vector<watchStatus> statuses;
+	std::istringstream given(line.get("s"));
+	for (std::string word; std::getline(given, word, ',');) {
+		auto status = parseStatus(word);
 		if (not status)
-			return usageError(ctx, self, fmt::format("unknown status '{}'", line.get("s")));
+			return usageError(ctx, self, fmt::format("unknown status '{}'", word));
+		statuses.push_back(*status);
 	}
+	if (line.has("s") and statuses.empty())
+		return usageError(ctx, self, "-s needs a status");
 	sortKey key = sortKey::kTitle;
 	if (line.has("sort")) {
 		auto found = kSortKeys.find(line.get("sort"));
@@ -88,7 +95,9 @@ int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 		if (only and *only != type)
 			continue;
 		for (const auto& e : ctx.db.getEntries(type))
-			if ((not status or e.status == *status) and refs::titleHolds(e, *query))
+			if ((statuses.empty() or
+			     std::find(statuses.begin(), statuses.end(), e.status) != statuses.end()) and
+			    refs::titleHolds(e, *query))
 				shown.push_back(e);
 	}
 	catalogue::sortEntries(shown, key, line.has("r"));
@@ -255,11 +264,12 @@ std::vector<command> listingCommands() {
 	     {},
 	     "List your titles",
 	     std::string("Lists both lists in title order. QUERY keeps the titles that hold its\n"
-	                 "words, in capitals or not; they need no quotes.\n\n") +
+	                 "words, in capitals or not; they need no quotes. -s takes several\n"
+	                 "statuses with commas between them: -s watching,on-hold.\n\n") +
 	         kRowFormat,
 	     {{'a', "", "", "list anime only"},
 	      {'m', "", "", "list manga only"},
-	      {'s', "", "STATUS", "only watching, completed, on-hold, dropped or planned",
+	      {'s', "", "STATUS", "only watching, completed, on-hold, dropped, planned, or a,b",
 	       statusWords()},
 	      {0, "sort", "KEY", "new, updated, score, progress, date, status or title", sortWords()},
 	      {'r', "", "", "reverse the order"},

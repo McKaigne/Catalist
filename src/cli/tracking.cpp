@@ -27,10 +27,10 @@ std::optional<entry> withCount(const entry& target, countField field, const std:
 	return count ? std::optional(setCount(target, field, *count, today)) : std::nullopt;
 }
 
-// An empty value clears the date.
+// An empty value clears the date; `today` is today's.
 std::optional<entry> withDate(const entry& target, bool start, const std::string& value,
                               const isoDate& today) {
-	auto day = isoDate::parse(value);
+	auto day = value == "today" ? std::optional(today) : isoDate::parse(value);
 	if (not day and not value.empty())
 		return std::nullopt;
 	return start ? setStartDate(target, day, today) : setFinishDate(target, day, today);
@@ -75,9 +75,9 @@ const std::vector<settable>& settables() {
 	     [](entry e, text value, day today) {
 		     return value.empty() ? std::nullopt : std::optional(setTitle(e, value, today));
 	     }},
-	    {"start", "started", "a date such as 2026-10-20, or empty to clear it",
+	    {"start", "started", "a date such as 2026-10-20, today, or empty to clear it",
 	     [](entry e, text value, day today) { return withDate(e, true, value, today); }},
-	    {"finish", "finished", "a date such as 2026-10-20, or empty to clear it",
+	    {"finish", "finished", "a date such as 2026-10-20, today, or empty to clear it",
 	     [](entry e, text value, day today) { return withDate(e, false, value, today); }},
 	};
 	return all;
@@ -263,11 +263,12 @@ std::vector<command> trackingCommands() {
 	    {"set",
 	     {},
 	     "Set fields of a title",
-	     std::string("The fields: title, status, score (0 clears it), progress, total,\n"
-	                 "volumes, rewatched, start and finish (dates such as 2026-10-20; an\n"
-	                 "empty value, as in finish=, clears one). Reaching the total completes a\n"
-	                 "title, as + does. All values are checked before anything changes.\n\n"
-	                 "The REF is a ref such as a:12, or part of a title.\n\n") +
+	     std::string(
+	         "The fields: title, status, score (0 clears it), progress, total,\n"
+	         "volumes, rewatched, start and finish (dates such as 2026-10-20, or\n"
+	         "today; an empty value, as in finish=, clears one). Reaching the total completes a\n"
+	         "title, as + does. All values are checked before anything changes.\n\n"
+	         "The REF is a ref such as a:12, or part of a title.\n\n") +
 	         kChangeFormat,
 	     withRefOptions({kQuiet}),
 	     "REF FIELD=VALUE...",

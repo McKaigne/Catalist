@@ -250,3 +250,26 @@ TEST_CASE_FIXTURE(cliFixture, "cli add takes a title of several words without qu
 	CHECK(out == "a:3\tHome Video\tadded\t-\tplanned\n");
 	CHECK(steps()[0].label == "add --no-lookup Home Video");
 }
+
+TEST_CASE_FIXTURE(cliFixture, "cli add takes a score and the progress made already") {
+	seed();
+	// A progress starts the title.
+	CHECK(run({"add", "-q", "--no-lookup", "--progress=3", "--score=7", "Home Video"}) == 0);
+	auto added = savedTitle(mediaType::kAnime, "Home Video");
+	CHECK(added.status == watchStatus::kWatching);
+	CHECK(added.progress == 3);
+	CHECK(added.score == 7);
+	CHECK(catalist::formatDate(added.startDate) == "2026-10-20");
+	// A status that is given stands.
+	CHECK(run({"add", "-q", "--no-lookup", "--progress=2", "--status=on-hold", "Ping Pong"}) == 0);
+	auto held = savedTitle(mediaType::kAnime, "Ping Pong");
+	CHECK(held.status == watchStatus::kOnHold);
+	CHECK(held.progress == 2);
+	// One step for undo, as any add.
+	CHECK(steps().size() == 2);
+
+	CHECK(run({"add", "--no-lookup", "--score=11", "x"}) == 2);
+	CHECK(err.find("error: --score '11' is not 0 to 10\n") == 0);
+	CHECK(run({"add", "--no-lookup", "--progress=lots", "x"}) == 2);
+	CHECK(err.find("error: --progress 'lots' is not a count\n") == 0);
+}

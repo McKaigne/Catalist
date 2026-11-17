@@ -30,7 +30,7 @@ layer uses only the layers above it in this table, and `system`.
 | | `cli` | `CliContext`, the `Command` row, the table put together, dispatch and help |
 | | `common` | what the commands share (naming titles, statuses, loading, saving and reporting a change), and one function per group of commands |
 | | `listing`, `tracking`, `online`, `accounts`, `sync`, `track`, `transfer`, `history`, `setup` | the commands, by group: their handlers and their rows of the table |
-| | `completion` | the zsh and fish completions and the manual page's COMMANDS, written from the command table |
+| | `completion` | the zsh and fish completions, the manual page's COMMANDS and README.md's command list, written from the command table |
 | `src/` | `system` | everything that touches the outside world: files, `RunProgram` and `HttpFetch` (curl), the clock, the terminal, random text |
 
 `main.cpp` reads the environment, builds the catalogue on the data
@@ -228,9 +228,11 @@ drive. Most hold up. Three carry a real cost and say so:
 - **One table:** each command is a row (name, aliases, summary, details,
   options with their values and choices, operands and their kind, handler,
   hidden). The row drives `help`, `--help`, typo suggestions, the usage
-  lines, the manual page (`__man`) and the zsh and fish completions. The
-  build runs the program to write the page and the scripts, so they cannot
-  fall behind it.
+  lines, the manual page (`__man`), README.md's command list (`__readme`)
+  and the zsh and fish completions. The build runs the program to write
+  the page and the scripts, so they cannot fall behind it. The README is
+  in the sources, which a build does not write: the `readme` target
+  rewrites its list, and the `readme` test fails while it is behind.
 - **POSIX options:** grouped short options, `-n3`, `--name=value` and
   `--name value`, `--`, and a lone `-`; options come before operands.
 - **Refs:** a title is named by `a:12` / `m:3` or by part of its title; an

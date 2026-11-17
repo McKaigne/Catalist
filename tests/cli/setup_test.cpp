@@ -82,6 +82,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli __complete prints the refs and titles for the
 	CHECK(Run({"help"}) == 0);
 	CHECK_FALSE(Has(out, "__complete"));
 	CHECK_FALSE(Has(out, "__man"));
+	CHECK_FALSE(Has(out, "__readme"));
 	CHECK(Run({"completion", "zsh"}) == 0);
 	CHECK_FALSE(Has(out, "__complete)"));
 }
@@ -114,6 +115,15 @@ TEST_CASE_FIXTURE(CliFixture, "cli __man prints the commands for the manual page
 	CHECK(Run({"__man"}) == 0);
 	CHECK(out.rfind(".TP\n\\fBls\\fR ", 0) == 0);
 	CHECK(Has(out, "\n.TP\n\\fBcompletion\\fR \\fBzsh\\fR|\\fBfish\\fR\n"));
+	CHECK_FALSE(Has(out, "__complete"));
+	CHECK(err.empty());
+}
+
+TEST_CASE_FIXTURE(CliFixture, "cli __readme prints the commands for the README") {
+	CHECK(Run({"__readme"}) == 0);
+	CHECK(out.rfind("- `catalist ls ", 0) == 0);
+	CHECK(
+	    Has(out, "\n- `catalist completion zsh|fish`: Print the completion script of a shell.\n"));
 	CHECK_FALSE(Has(out, "__complete"));
 	CHECK(err.empty());
 }

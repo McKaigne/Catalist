@@ -64,6 +64,10 @@ ctest --test-dir build --output-on-failure
 ./build/catalist ls
 ```
 
+The list under Commands below is written by the program from its table of
+commands: after changing a command, `cmake --build build --target readme`
+writes it again, and the `readme` test fails until it does.
+
 In that shell `CATALIST_DATA_DIR` is `build/dev-data`, so what you try out
 never touches your own lists in `~/.local/share/catalist`.
 
@@ -260,6 +264,55 @@ catalist completion zsh > ~/.zfunc/_catalist     # ~/.zfunc in $fpath, before co
 catalist completion fish > ~/.config/fish/completions/catalist.fish
 ```
 
+## Commands
+
+Every command, as `catalist help COMMAND` and `man catalist` explain it
+in full:
+
+<!-- commands: written by `cmake --build build --target readme`; do not edit -->
+
+- `catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--linked=SITE] [--unlinked=SITE] [--json] [--header] [QUERY...]`: List your titles.
+- `catalist show [-am] [--all] [--json] [--header] REF...`: Show titles in full.
+- `catalist stats [-am] [--json] [--header]`: Show the numbers of your lists.
+- `catalist + [-amq] [--all] [-n N] REF...`: Count one more episode or chapter. Also `inc`.
+- `catalist - [-amq] [--all] [-n N] REF...`: Count one less episode or chapter. Also `dec`.
+- `catalist set [-amq] [--all] REF FIELD=VALUE...`: Set fields of a title.
+- `catalist done [-amq] [--all] [--score=N] REF...`: Mark titles completed.
+- `catalist hold [-amq] [--all] REF...`: Put titles on hold.
+- `catalist drop [-amq] [--all] REF...`: Mark titles dropped.
+- `catalist plan [-amq] [--all] REF...`: Mark titles planned.
+- `catalist resume [-amq] [--all] REF...`: Take titles up again.
+- `catalist rewatch [-amq] [--all] REF...`: Watch or read titles again.
+- `catalist rm [-amfq] [--all] [--remote] REF...`: Remove titles.
+- `catalist add [-amq] [--from=SITE] [--pick=N] [--status=STATUS] [--score=N] [--progress=N] [--no-lookup] TITLE...`: Add a title found on AniList, MyAnimeList or Kitsu.
+- `catalist search [-am] [--from=SITE] [--json] [--header] QUERY...`: Search a site without adding anything.
+- `catalist refresh [-amq] [--all] [--from=SITE] [REF...]`: Ask a site what is out of the titles you follow.
+- `catalist login anilist|mal|kitsu`: Log in to a site.
+- `catalist logout anilist|mal|kitsu`: Forget the login of a site.
+- `catalist accounts [--json] [--header]`: List the sites you are logged in to.
+- `catalist sync [-q] [--all] [--forget] [--list] [--json] [--header]`: Tell the sites what they have not heard of yet.
+- `catalist link [-amq] [--query=TEXT] REF anilist|mal|kitsu [ID]`: Link a title to its entry on a site.
+- `catalist unlink [-amq] [--remote] REF anilist|mal|kitsu`: Stop telling a site of a title.
+- `catalist track [-amq] [--private=SITE] [--public=SITE] [--pull=SITE] [--json] [--header] REF`: Show a title on each site, or hide it or take it from one.
+- `catalist import [-amq] [--user=NAME] [--from=SITE] [FILE...]`: Add titles from MyAnimeList XML files, or a user's lists on a site.
+- `catalist export [--format=FORMAT] [anime|manga]`: Print a list as MyAnimeList XML, CSV or JSON.
+- `catalist undo [-fq] [-n N]`: Take back what the last command changed.
+- `catalist redo [-fq] [-n N]`: Make again what undo took back.
+- `catalist log [-n N] [--json] [--header]`: List what can be undone.
+- `catalist provider [anilist|mal|kitsu]`: Show or choose your provider.
+- `catalist completion zsh|fish`: Print the completion script of a shell.
+- `catalist help [COMMAND]`: Show help for a command.
+
+Options, before the command:
+
+- `--color=WHEN`: colours: auto (at a terminal), always or never
+- `-t, --table`: draw tables into a pipe as well ($COLUMNS wide)
+- `--offline`: keep what the sites are to be told until 'sync'
+- `-V, --version`: print the version
+- `-h, --help`: show the commands
+
+<!-- end of commands -->
+
 ## Provider
 
 Your **provider** is the site you use: AniList (the default), MyAnimeList
@@ -389,7 +442,7 @@ src/cli/          the command line: parser, refs, output, completion, and the co
                   (listing, tracking, online, accounts, sync, track, transfer, history, setup)
 tests/            unit tests, one folder per source folder; tests/smoke runs the program from the shells
 docs/             the design decisions and the manual page's template
-cmake/            the build step that writes the manual page and the completions
+cmake/            the build steps that write the manual page, the completions and README's commands
 ```
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and

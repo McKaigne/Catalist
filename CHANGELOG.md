@@ -65,7 +65,9 @@ Catalist-TUI, which keeps its lists in the same file.
   since is not overwritten unless `-f` is given.
 - Completions for zsh (`_catalist`) and fish (`catalist.fish`), installed
   by CMake and Nix, that complete commands, options, values and your
-  titles by ref or by name. The manual page lists every command.
+  titles by ref or by name. The manual page lists every command, and so
+  does the README: `cmake --build build --target readme` writes its list
+  from the table of commands, and the `readme` test fails when it is behind.
 - Jikan, which some networks cannot reach at all, is gone; entries carry
   the AniList and the MyAnimeList id, read from 0.3's files too.
 - A provider, AniList (default), MyAnimeList or Kitsu: the default site of

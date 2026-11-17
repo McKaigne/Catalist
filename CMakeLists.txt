@@ -108,6 +108,20 @@ add_custom_command(
 )
 add_custom_target(catalistShellSupport ALL DEPENDS ${CATALIST_SHELL_FILES})
 
+# README.md's command list, from the same table: `cmake --build build
+# --target readme` writes it, and the `readme` test fails when it is behind.
+set(CATALIST_README_ARGS
+  "-DPROGRAM=$<TARGET_FILE:catalist>"
+  "-DREADME=${CMAKE_CURRENT_SOURCE_DIR}/README.md"
+)
+add_custom_target(readme
+  COMMAND ${CMAKE_COMMAND} ${CATALIST_README_ARGS} -DMODE=write
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/readme.cmake"
+  DEPENDS catalist
+  COMMENT "Writing the command list of README.md"
+  VERBATIM
+)
+
 install(TARGETS catalist DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES "${CATALIST_SHARE_DIR}/man/man1/catalist.1"
   DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
@@ -170,9 +184,12 @@ target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 doctest_discover_tests(catalistTests)
 
 # The command line from a POSIX shell, as scripts use it; a stub curl
-# stands in for the sites. The completion scripts must parse.
+# stands in for the sites. README.md must list the commands the program
+# has, and the completion scripts must parse.
 add_test(NAME smoke COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke/smoke.sh"
   $<TARGET_FILE:catalist>)
+add_test(NAME readme COMMAND ${CMAKE_COMMAND} ${CATALIST_README_ARGS} -DMODE=check
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/readme.cmake")
 find_program(CATALIST_ZSH zsh)
 find_program(CATALIST_FISH fish)
 if(CATALIST_ZSH)

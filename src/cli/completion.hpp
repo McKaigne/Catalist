@@ -6,9 +6,9 @@
 
 #include "cli/cli.hpp"
 
-// What the shells and the manual page are told about the command line. All
-// of it is written from the command table, so none of it can fall behind
-// the program. Pure: a table in, text out.
+// What the shells, the manual page and the README are told about the
+// command line. All of it is written from the command table, so none of it
+// can fall behind the program. Pure: a table in, text out.
 //
 // The scripts know the commands and their options by heart. What only the
 // lists can tell (the refs and the titles) they ask the program for as the
@@ -25,6 +25,10 @@ namespace catalist::completion {
 // The COMMANDS section of the manual page, in roff: each command with its
 // usage line, what it does and its options.
 [[nodiscard]] std::string Manual(const std::vector<Command>& table);
+
+// The command list of README.md, in Markdown: each command's usage line
+// and what it does, then the program's own options.
+[[nodiscard]] std::string Readme(const std::vector<Command>& table);
 
 }  // namespace catalist::completion
 

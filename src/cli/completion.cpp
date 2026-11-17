@@ -428,6 +428,31 @@ std::string RoffCommand(const Command& of) {
 	return text + ".RE\n";
 }
 
+// ---- The README ----
+
+// Text as Markdown prints it: the characters that would start a code span,
+// emphasis, a link or HTML are written out.
+std::string MarkdownText(const std::string& text) {
+	std::string safe;
+	for (char c : text) {
+		if (std::string("\\`*_[]<").find(c) != std::string::npos)
+			safe += '\\';
+		safe += c;
+	}
+	return safe;
+}
+
+std::string MarkdownCommand(const Command& of) {
+	std::string text = std::format("- `catalist {}`: {}.", UsageLine(of), MarkdownText(of.summary));
+	if (not of.aliases.empty()) {
+		std::vector<std::string> also;
+		for (const auto& alias : of.aliases)
+			also.push_back(std::format("`{}`", alias));
+		text += std::format(" Also {}.", Joined(also, ", "));
+	}
+	return text + "\n";
+}
+
 }  // namespace
 
 std::string Zsh(const std::vector<Command>& table) {
@@ -500,6 +525,16 @@ std::string Manual(const std::vector<Command>& table) {
 	std::string text;
 	for (const Command* each : ShownOf(table))
 		text += RoffCommand(*each);
+	return text;
+}
+
+std::string Readme(const std::vector<Command>& table) {
+	std::string text;
+	for (const Command* each : ShownOf(table))
+		text += MarkdownCommand(*each);
+	text += "\nOptions, before the command:\n\n";
+	for (const auto& option : GlobalOptions())
+		text += std::format("- `{}`: {}\n", OptionSyntax(option), MarkdownText(option.help));
 	return text;
 }
 

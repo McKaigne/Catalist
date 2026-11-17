@@ -19,7 +19,7 @@ constexpr int kStoreVersion = 1;
 
 // `entry` holds both lists. `tx` and `change` are the undo history: one
 // row per command that changed something, and under it each entry before
-// and after, as csvCodec rows (empty: the entry did not exist).
+// and after, as csv_codec rows (empty: the entry did not exist).
 const char* kSchema =
     "CREATE TABLE entry ("
     " type TEXT NOT NULL, id INTEGER NOT NULL, mal_id INTEGER NOT NULL,"
@@ -62,139 +62,139 @@ const char* kSiteIdTable =
 // felt at the prompt.
 constexpr int kPeekWaitMs = 100;
 
-int storeVersion(const store::database& db) {
-	auto version = db.prepare("PRAGMA user_version");
-	return version.step() ? static_cast<int>(version.intAt(0)) : 0;
+int StoreVersion(const store::Database& db) {
+	auto version = db.Prepare("PRAGMA user_version");
+	return version.Step() ? static_cast<int>(version.IntAt(0)) : 0;
 }
 
-void bindDate(store::statement& into, const std::optional<isoDate>& date) {
+void BindDate(store::Statement& into, const std::optional<IsoDate>& date) {
 	if (date)
-		into.bind(date->toString());
+		into.Bind(date->ToString());
 	else
-		into.bindNull();
+		into.BindNull();
 }
 
 // In the order of kSelectEntries.
-store::statement& bindEntry(store::statement& into, const entry& row) {
-	into.bind(typeKey(row.type)).bind(row.id).bind(row.malId).bind(row.title);
-	into.bind(statusKey(row.status)).bind(row.score).bind(row.progress).bind(row.totalUnits);
-	into.bind(row.volumes).bind(row.totalVolumes).bind(row.rewatched);
-	bindDate(into, row.startDate);
-	bindDate(into, row.finishDate);
-	bindDate(into, row.updatedAt);
-	into.bind(row.released);
-	bindDate(into, row.checkedAt);
-	return into.bind(row.anilistId);
+store::Statement& BindEntry(store::Statement& into, const Entry& row) {
+	into.Bind(TypeKey(row.type)).Bind(row.id).Bind(row.mal_id).Bind(row.title);
+	into.Bind(StatusKey(row.status)).Bind(row.score).Bind(row.progress).Bind(row.total_units);
+	into.Bind(row.volumes).Bind(row.total_volumes).Bind(row.rewatched);
+	BindDate(into, row.start_date);
+	BindDate(into, row.finish_date);
+	BindDate(into, row.updated_at);
+	into.Bind(row.released);
+	BindDate(into, row.checked_at);
+	return into.Bind(row.anilist_id);
 }
 
-entry readEntry(const store::statement& from) {
-	auto number = [&from](int column) { return static_cast<int>(from.intAt(column)); };
-	entry row;
-	row.type = from.textAt(0) == "manga" ? mediaType::kManga : mediaType::kAnime;
+Entry ReadEntry(const store::Statement& from) {
+	auto number = [&from](int column) { return static_cast<int>(from.IntAt(column)); };
+	Entry row;
+	row.type = from.TextAt(0) == "manga" ? MediaType::kManga : MediaType::kAnime;
 	row.id = number(1);
-	row.malId = number(2);
-	row.title = from.textAt(3);
-	row.status = parseStatus(from.textAt(4)).value_or(watchStatus::kPlanToWatch);
+	row.mal_id = number(2);
+	row.title = from.TextAt(3);
+	row.status = ParseStatus(from.TextAt(4)).value_or(WatchStatus::kPlanToWatch);
 	row.score = number(5);
 	row.progress = number(6);
-	row.totalUnits = number(7);
+	row.total_units = number(7);
 	row.volumes = number(8);
-	row.totalVolumes = number(9);
+	row.total_volumes = number(9);
 	row.rewatched = number(10);
-	row.startDate = isoDate::parse(from.textAt(11));
-	row.finishDate = isoDate::parse(from.textAt(12));
-	row.updatedAt = isoDate::parse(from.textAt(13));
+	row.start_date = IsoDate::Parse(from.TextAt(11));
+	row.finish_date = IsoDate::Parse(from.TextAt(12));
+	row.updated_at = IsoDate::Parse(from.TextAt(13));
 	row.released = number(14);
-	row.checkedAt = isoDate::parse(from.textAt(15));
-	row.anilistId = number(16);
+	row.checked_at = IsoDate::Parse(from.TextAt(15));
+	row.anilist_id = number(16);
 	return row;
 }
 
-bool hasTable(const store::database& db, const std::string& name) {
-	auto found = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?");
-	return found.bind(name).step();
+bool HasTable(const store::Database& db, const std::string& name) {
+	auto found = db.Prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?");
+	return found.Bind(name).Step();
 }
 
 // Gives each entry its Kitsu id from entry_id, where the row is still the
 // entry's own.
-bool readSiteIds(const store::database& db, std::vector<entry>& anime, std::vector<entry>& manga) {
+bool ReadSiteIds(const store::Database& db, std::vector<Entry>& anime, std::vector<Entry>& manga) {
 	// A file no Catalist with Kitsu has written to yet.
-	if (not hasTable(db, "entry_id"))
+	if (not HasTable(db, "entry_id"))
 		return true;
-	auto rows = db.prepare(
+	auto rows = db.Prepare(
 	    "SELECT type, id, site_id, mal_id, anilist_id FROM entry_id WHERE site = 'kitsu'");
-	while (rows.step()) {
-		auto& list = rows.textAt(0) == "manga" ? manga : anime;
-		int id = static_cast<int>(rows.intAt(1));
+	while (rows.Step()) {
+		auto& list = rows.TextAt(0) == "manga" ? manga : anime;
+		int id = static_cast<int>(rows.IntAt(1));
 		auto found =
-		    std::find_if(list.begin(), list.end(), [id](const entry& e) { return e.id == id; });
-		bool same = found != list.end() and found->malId == rows.intAt(3) and
-		            found->anilistId == rows.intAt(4);
+		    std::find_if(list.begin(), list.end(), [id](const Entry& e) { return e.id == id; });
+		bool same = found != list.end() and found->mal_id == rows.IntAt(3) and
+		            found->anilist_id == rows.IntAt(4);
 		if (same)
-			found->kitsuId = static_cast<int>(rows.intAt(2));
+			found->kitsu_id = static_cast<int>(rows.IntAt(2));
 	}
-	return rows.ok();
+	return rows.Ok();
 }
 
 // Titles the sites are still to be told of: kept beside the lists, so a
 // change made offline is sent the next time a site can be reached.
 // `fields` (what to send), `attempts` and `next_try` came later: an outbox
-// made before them gets them added (addOutboxColumns).
+// made before them gets them added (AddOutboxColumns).
 const char* kOutboxTable =
     "CREATE TABLE IF NOT EXISTS outbox ("
     " seq INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT NOT NULL, type TEXT NOT NULL,"
     " id INTEGER NOT NULL, removed INTEGER NOT NULL, site_id INTEGER NOT NULL,"
     " fields INTEGER NOT NULL DEFAULT 127, attempts INTEGER NOT NULL DEFAULT 0,"
     " next_try INTEGER NOT NULL DEFAULT 0, UNIQUE (site, type, id, removed))";
-static_assert(siteField::kAll == 127, "the outbox's default fields are every field");
+static_assert(site_field::kAll == 127, "the outbox's default fields are every field");
 
-bool hasColumn(const store::database& db, const std::string& table, const std::string& column) {
-	auto found = db.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?");
-	return found.bind(table).bind(column).step();
+bool HasColumn(const store::Database& db, const std::string& table, const std::string& column) {
+	auto found = db.Prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?");
+	return found.Bind(table).Bind(column).Step();
 }
 
 // The outbox as this program reads it, made or brought up to date.
-bool addOutboxColumns(store::database& db) {
-	if (not db.run(kOutboxTable))
+bool AddOutboxColumns(store::Database& db) {
+	if (not db.Run(kOutboxTable))
 		return false;
-	for (const char* column : {"fields INTEGER NOT NULL DEFAULT 127",
-	                           "attempts INTEGER NOT NULL DEFAULT 0",
-	                           "next_try INTEGER NOT NULL DEFAULT 0"}) {
+	for (const char* column :
+	     {"fields INTEGER NOT NULL DEFAULT 127", "attempts INTEGER NOT NULL DEFAULT 0",
+	      "next_try INTEGER NOT NULL DEFAULT 0"}) {
 		std::string name(column, std::string_view(column).find(' '));
-		if (not hasColumn(db, "outbox", name) and
-		    not db.run(std::format("ALTER TABLE outbox ADD COLUMN {}", column)))
+		if (not HasColumn(db, "outbox", name) and
+		    not db.Run(std::format("ALTER TABLE outbox ADD COLUMN {}", column)))
 			return false;
 	}
 	return true;
 }
 
-const entry* findById(const std::vector<entry>& list, int id) {
+const Entry* FindById(const std::vector<Entry>& list, int id) {
 	auto found =
-	    std::find_if(list.begin(), list.end(), [id](const entry& e) { return e.id == id; });
+	    std::find_if(list.begin(), list.end(), [id](const Entry& e) { return e.id == id; });
 	return found == list.end() ? nullptr : &*found;
 }
 
 // A local id only numbers a title, so two titles are the same only when a
 // site's id says so.
-bool sameTitle(const entry& existing, const entry& incoming) {
-	return (incoming.anilistId > 0 and existing.anilistId == incoming.anilistId) or
-	       (incoming.malId > 0 and existing.malId == incoming.malId) or
-	       (incoming.kitsuId > 0 and existing.kitsuId == incoming.kitsuId);
+bool SameTitle(const Entry& existing, const Entry& incoming) {
+	return (incoming.anilist_id > 0 and existing.anilist_id == incoming.anilist_id) or
+	       (incoming.mal_id > 0 and existing.mal_id == incoming.mal_id) or
+	       (incoming.kitsu_id > 0 and existing.kitsu_id == incoming.kitsu_id);
 }
 
-int nextId(const std::vector<entry>& list) {
+int NextId(const std::vector<Entry>& list) {
 	auto highest = std::max_element(list.begin(), list.end(),
-	                                [](const entry& a, const entry& b) { return a.id < b.id; });
+	                                [](const Entry& a, const Entry& b) { return a.id < b.id; });
 	return highest == list.end() ? 1 : highest->id + 1;
 }
 
 }  // namespace
 
-std::filesystem::path dataDirFor(const dataDirEnv& env) {
-	if (not env.catalistDataDir.empty())
-		return env.catalistDataDir;
+std::filesystem::path DataDirFor(const DataDirEnv& env) {
+	if (not env.catalist_data_dir.empty())
+		return env.catalist_data_dir;
 	// The XDG specification: a relative path there is invalid and ignored.
-	std::filesystem::path xdg = env.xdgDataHome;
+	std::filesystem::path xdg = env.xdg_data_home;
 	if (xdg.is_absolute())
 		return xdg / "catalist";
 	if (not env.home.empty())
@@ -202,155 +202,166 @@ std::filesystem::path dataDirFor(const dataDirEnv& env) {
 	return "catalist-data";
 }
 
-catalogue::catalogue(std::filesystem::path dataDir) : dataDir_(std::move(dataDir)) {}
+Catalogue::Catalogue(std::filesystem::path data_dir) : dataDir_(std::move(data_dir)) {}
 
-std::filesystem::path catalogue::getDataDir() const {
+std::filesystem::path Catalogue::data_dir() const {
 	return dataDir_;
 }
 
-std::filesystem::path catalogue::getStorePath() const {
+std::filesystem::path Catalogue::StorePath() const {
 	return dataDir_ / kStoreFile;
 }
 
-std::vector<entry>& catalogue::getList(mediaType type) {
-	return type == mediaType::kAnime ? animeEntries_ : mangaEntries_;
+std::vector<Entry>& Catalogue::GetList(MediaType type) {
+	return type == MediaType::kAnime ? animeEntries_ : mangaEntries_;
 }
 
-const std::vector<entry>& catalogue::getList(mediaType type) const {
-	return type == mediaType::kAnime ? animeEntries_ : mangaEntries_;
+const std::vector<Entry>& Catalogue::GetList(MediaType type) const {
+	return type == MediaType::kAnime ? animeEntries_ : mangaEntries_;
 }
 
-const std::vector<entry>& catalogue::getSaved(mediaType type) const {
-	return type == mediaType::kAnime ? savedAnime_ : savedManga_;
+const std::vector<Entry>& Catalogue::GetSaved(MediaType type) const {
+	return type == MediaType::kAnime ? savedAnime_ : savedManga_;
 }
 
-int catalogue::addEntry(entry added) {
-	auto& list = getList(added.type);
+int Catalogue::AddEntry(Entry added) {
+	auto& list = GetList(added.type);
 	for (auto& existing : list) {
-		if (not sameTitle(existing, added))
+		if (not SameTitle(existing, added))
 			continue;
-		existing = mergeImported(existing, added);
+		existing = MergeImported(existing, added);
 		return existing.id;
 	}
-	added.id = nextId(list);
+	added.id = NextId(list);
 	list.push_back(std::move(added));
 	return list.back().id;
 }
 
-const std::vector<entry>& catalogue::getEntries(mediaType type) const {
-	return getList(type);
+const std::vector<Entry>& Catalogue::GetEntries(MediaType type) const {
+	return GetList(type);
 }
 
-std::optional<entry> catalogue::getById(mediaType type, int id) const {
-	const auto& list = getList(type);
+std::optional<Entry> Catalogue::GetById(MediaType type, int id) const {
+	const auto& list = GetList(type);
 	auto found =
-	    std::find_if(list.begin(), list.end(), [id](const entry& e) { return e.id == id; });
-	return found == list.end() ? std::nullopt : std::optional<entry>(*found);
+	    std::find_if(list.begin(), list.end(), [id](const Entry& e) { return e.id == id; });
+	return found == list.end() ? std::nullopt : std::optional<Entry>(*found);
 }
 
-std::optional<entry> catalogue::findByIds(mediaType type, int anilistId, int malId,
-                                          int kitsuId) const {
-	entry wanted;
-	wanted.anilistId = anilistId;
-	wanted.malId = malId;
-	wanted.kitsuId = kitsuId;
-	const auto& list = getList(type);
+std::optional<Entry> Catalogue::FindByIds(MediaType type, int anilist_id, int mal_id,
+                                          int kitsu_id) const {
+	Entry wanted;
+	wanted.anilist_id = anilist_id;
+	wanted.mal_id = mal_id;
+	wanted.kitsu_id = kitsu_id;
+	const auto& list = GetList(type);
 	auto found = std::find_if(list.begin(), list.end(),
-	                          [&wanted](const entry& e) { return sameTitle(e, wanted); });
-	return found == list.end() ? std::nullopt : std::optional<entry>(*found);
+	                          [&wanted](const Entry& e) { return SameTitle(e, wanted); });
+	return found == list.end() ? std::nullopt : std::optional<Entry>(*found);
 }
 
-bool catalogue::updateEntry(const entry& changed) {
-	auto& list = getList(changed.type);
+bool Catalogue::UpdateEntry(const Entry& changed) {
+	auto& list = GetList(changed.type);
 	auto found = std::find_if(list.begin(), list.end(),
-	                          [&changed](const entry& e) { return e.id == changed.id; });
+	                          [&changed](const Entry& e) { return e.id == changed.id; });
 	if (found == list.end())
 		return false;
 	*found = changed;
 	return true;
 }
 
-bool catalogue::removeEntry(mediaType type, int id) {
-	auto& list = getList(type);
+bool Catalogue::RemoveEntry(MediaType type, int id) {
+	auto& list = GetList(type);
 	auto found =
-	    std::find_if(list.begin(), list.end(), [id](const entry& e) { return e.id == id; });
+	    std::find_if(list.begin(), list.end(), [id](const Entry& e) { return e.id == id; });
 	if (found == list.end())
 		return false;
 	list.erase(found);
 	return true;
 }
 
-bool catalogue::restoreEntry(const entry& back) {
-	auto& list = getList(back.type);
-	if (findById(list, back.id))
+bool Catalogue::RestoreEntry(const Entry& back) {
+	auto& list = GetList(back.type);
+	if (FindById(list, back.id))
 		return false;
 	// In its place by id, the order the lists are read in.
 	auto after =
-	    std::find_if(list.begin(), list.end(), [&back](const entry& e) { return e.id > back.id; });
+	    std::find_if(list.begin(), list.end(), [&back](const Entry& e) { return e.id > back.id; });
 	list.insert(after, back);
 	return true;
 }
 
-provider catalogue::getProvider() const {
+Provider Catalogue::provider() const {
 	return provider_;
 }
 
-void catalogue::setProvider(provider site) {
+void Catalogue::set_provider(Provider site) {
 	provider_ = site;
 }
 
 // What the sites are still to be told.
 
-std::vector<pending> catalogue::outbox() {
-	std::vector<pending> waiting;
+std::vector<Pending> Catalogue::Outbox() {
+	std::vector<Pending> waiting;
 	// No lists yet: nothing waits, and nothing is made to say so.
 	std::error_code ignored;
-	if (not db_.isOpen() and not std::filesystem::exists(getStorePath(), ignored))
+	if (not db_.IsOpen() and not std::filesystem::exists(StorePath(), ignored))
 		return waiting;
-	if (not openStore().has_value() or not hasTable(db_, "outbox"))
+	if (not OpenStore().has_value() or not HasTable(db_, "outbox"))
 		return waiting;
 	// An outbox no write of this version has brought up to date yet.
-	bool current = hasColumn(db_, "outbox", "next_try");
-	auto rows = db_.prepare(
+	bool current = HasColumn(db_, "outbox", "next_try");
+	auto rows = db_.Prepare(
 	    current ? "SELECT site, type, id, removed, site_id, fields, attempts, next_try FROM outbox"
 	              " ORDER BY seq"
 	            : "SELECT site, type, id, removed, site_id, 127, 0, 0 FROM outbox ORDER BY seq");
-	while (rows.step()) {
-		auto site = parseProvider(rows.textAt(0));
+	while (rows.Step()) {
+		auto site = ParseProvider(rows.TextAt(0));
 		if (not site)
 			continue;
-		waiting.push_back({*site, rows.textAt(1) == "manga" ? mediaType::kManga : mediaType::kAnime,
-		                   static_cast<int>(rows.intAt(2)), rows.intAt(3) != 0,
-		                   static_cast<int>(rows.intAt(4)), static_cast<unsigned>(rows.intAt(5)),
-		                   static_cast<int>(rows.intAt(6)), rows.intAt(7)});
+		waiting.push_back({*site, rows.TextAt(1) == "manga" ? MediaType::kManga : MediaType::kAnime,
+		                   static_cast<int>(rows.IntAt(2)), rows.IntAt(3) != 0,
+		                   static_cast<int>(rows.IntAt(4)), static_cast<unsigned>(rows.IntAt(5)),
+		                   static_cast<int>(rows.IntAt(6)), rows.IntAt(7)});
 	}
 	return waiting;
 }
 
-bool catalogue::queue(const std::vector<pending>& more) {
-	return commit([this, &more] {
-		if (not addOutboxColumns(db_))
+bool Catalogue::Queue(const std::vector<Pending>& more) {
+	return Commit([this, &more] {
+		if (not AddOutboxColumns(db_))
 			return false;
-		auto known = db_.prepare(
+		auto known = db_.Prepare(
 		    "SELECT fields FROM outbox WHERE site = ? AND type = ? AND id = ? AND removed = ?");
-		auto update = db_.prepare(
+		auto update = db_.Prepare(
 		    "UPDATE outbox SET fields = ?, site_id = ?, attempts = 0, next_try = 0"
 		    " WHERE site = ? AND type = ? AND id = ? AND removed = ?");
-		auto insert = db_.prepare(
+		auto insert = db_.Prepare(
 		    "INSERT INTO outbox (site, type, id, removed, site_id, fields) VALUES (?, ?, ?, ?, ?, ?)");
 		for (const auto& each : more) {
-			std::string site = providerKey(each.site);
-			std::string type = typeKey(each.type);
+			std::string site = ProviderKey(each.site);
+			std::string type = TypeKey(each.type);
 			int removed = each.removed ? 1 : 0;
-			known.bind(site).bind(type).bind(each.id).bind(removed);
-			bool waiting = known.step();
-			unsigned fields = waiting ? mergeFields(static_cast<unsigned>(known.intAt(0)), each.fields)
-			                          : each.fields;
-			known.reset();
-			bool done = waiting ? update.bind(static_cast<long long>(fields)).bind(each.siteId)
-			                          .bind(site).bind(type).bind(each.id).bind(removed).run()
-			                    : insert.bind(site).bind(type).bind(each.id).bind(removed)
-			                          .bind(each.siteId).bind(static_cast<long long>(fields)).run();
+			known.Bind(site).Bind(type).Bind(each.id).Bind(removed);
+			bool waiting = known.Step();
+			unsigned fields = waiting
+			                      ? MergeFields(static_cast<unsigned>(known.IntAt(0)), each.fields)
+			                      : each.fields;
+			known.Reset();
+			bool done = waiting ? update.Bind(static_cast<long long>(fields))
+			                          .Bind(each.site_id)
+			                          .Bind(site)
+			                          .Bind(type)
+			                          .Bind(each.id)
+			                          .Bind(removed)
+			                          .Run()
+			                    : insert.Bind(site)
+			                          .Bind(type)
+			                          .Bind(each.id)
+			                          .Bind(removed)
+			                          .Bind(each.site_id)
+			                          .Bind(static_cast<long long>(fields))
+			                          .Run();
 			if (not done)
 				return false;
 		}
@@ -358,24 +369,27 @@ bool catalogue::queue(const std::vector<pending>& more) {
 	});
 }
 
-bool catalogue::deferred(const pending& waiting, int attempts, long long nextTry) {
-	return commit([this, &waiting, attempts, nextTry] {
-		if (not addOutboxColumns(db_))
+bool Catalogue::Deferred(const Pending& waiting, int attempts, long long next_try) {
+	return Commit([this, &waiting, attempts, next_try] {
+		if (not AddOutboxColumns(db_))
 			return false;
-		auto later = db_.prepare(
+		auto later = db_.Prepare(
 		    "UPDATE outbox SET attempts = ?, next_try = ?"
 		    " WHERE site = ? AND type = ? AND id = ? AND removed = ?");
-		later.bind(attempts).bind(nextTry).bind(providerKey(waiting.site)).bind(typeKey(waiting.type));
-		return later.bind(waiting.id).bind(waiting.removed ? 1 : 0).run();
+		later.Bind(attempts)
+		    .Bind(next_try)
+		    .Bind(ProviderKey(waiting.site))
+		    .Bind(TypeKey(waiting.type));
+		return later.Bind(waiting.id).Bind(waiting.removed ? 1 : 0).Run();
 	});
 }
 
-bool catalogue::sent(const pending& done) {
-	return commit([this, &done] {
-		auto remove = db_.prepare(
+bool Catalogue::Sent(const Pending& done) {
+	return Commit([this, &done] {
+		auto remove = db_.Prepare(
 		    "DELETE FROM outbox WHERE site = ? AND type = ? AND id = ? AND removed = ?");
-		remove.bind(providerKey(done.site)).bind(typeKey(done.type)).bind(done.id);
-		return remove.bind(done.removed ? 1 : 0).run();
+		remove.Bind(ProviderKey(done.site)).Bind(TypeKey(done.type)).Bind(done.id);
+		return remove.Bind(done.removed ? 1 : 0).Run();
 	});
 }
 
@@ -392,137 +406,137 @@ const char* kTrackOptionTable =
 
 }  // namespace
 
-std::optional<bool> catalogue::hiddenOn(provider site, mediaType type, int id, int siteId) {
+std::optional<bool> Catalogue::HiddenOn(Provider site, MediaType type, int id, int site_id) {
 	std::error_code ignored;
-	if (not db_.isOpen() and not std::filesystem::exists(getStorePath(), ignored))
+	if (not db_.IsOpen() and not std::filesystem::exists(StorePath(), ignored))
 		return std::nullopt;
-	if (not openStore().has_value() or not hasTable(db_, "track_option"))
+	if (not OpenStore().has_value() or not HasTable(db_, "track_option"))
 		return std::nullopt;
-	auto row = db_.prepare(
+	auto row = db_.Prepare(
 	    "SELECT hidden FROM track_option WHERE site = ? AND type = ? AND id = ? AND site_id = ?");
-	row.bind(providerKey(site)).bind(typeKey(type)).bind(id).bind(siteId);
-	return row.step() ? std::optional<bool>(row.intAt(0) != 0) : std::nullopt;
+	row.Bind(ProviderKey(site)).Bind(TypeKey(type)).Bind(id).Bind(site_id);
+	return row.Step() ? std::optional<bool>(row.IntAt(0) != 0) : std::nullopt;
 }
 
-bool catalogue::setHidden(provider site, mediaType type, int id, int siteId, bool hidden) {
-	return commit([&] {
-		if (not db_.run(kTrackOptionTable))
+bool Catalogue::SetHidden(Provider site, MediaType type, int id, int site_id, bool hidden) {
+	return Commit([&] {
+		if (not db_.Run(kTrackOptionTable))
 			return false;
-		auto set = db_.prepare("INSERT OR REPLACE INTO track_option VALUES (?, ?, ?, ?, ?)");
-		set.bind(providerKey(site)).bind(typeKey(type)).bind(id).bind(siteId);
-		return set.bind(hidden ? 1 : 0).run();
+		auto set = db_.Prepare("INSERT OR REPLACE INTO track_option VALUES (?, ?, ?, ?, ?)");
+		set.Bind(ProviderKey(site)).Bind(TypeKey(type)).Bind(id).Bind(site_id);
+		return set.Bind(hidden ? 1 : 0).Run();
 	});
 }
 
 // Opening and setting up the store.
 
-done catalogue::openStore() {
-	if (db_.isOpen())
-		return done{};
+Done Catalogue::OpenStore() {
+	if (db_.IsOpen())
+		return Done{};
 	std::error_code ignored;
 	std::filesystem::create_directories(dataDir_, ignored);
-	if (not db_.open(getStorePath()))
+	if (not db_.Open(StorePath()))
 		return std::unexpected(
-		    std::format("cannot open {}: {}", getStorePath().string(), db_.lastError()));
-	auto ready = setUpStore();
+		    std::format("cannot open {}: {}", StorePath().string(), db_.LastError()));
+	auto ready = SetUpStore();
 	if (not ready.has_value())
-		db_.close();
+		db_.Close();
 	return ready;
 }
 
 // A new file gets its tables, in one transaction: two programs starting at
 // the same moment cannot both set it up.
-done catalogue::setUpStore() {
-	if (storeVersion(db_) == kStoreVersion)
-		return done{};
+Done Catalogue::SetUpStore() {
+	if (StoreVersion(db_) == kStoreVersion)
+		return Done{};
 
-	store::transaction setup(db_);
-	if (not setup.active())
+	store::Transaction setup(db_);
+	if (not setup.Active())
 		return std::unexpected(
-		    std::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
-	int version = storeVersion(db_);
+		    std::format("cannot write to {}: {}", StorePath().string(), db_.LastError()));
+	int version = StoreVersion(db_);
 	if (version == kStoreVersion)
-		return done{};
+		return Done{};
 	if (version != 0)
 		return std::unexpected(
-		    std::format("{} was written by a newer Catalist", getStorePath().string()));
+		    std::format("{} was written by a newer Catalist", StorePath().string()));
 
-	if (not db_.run(kSchema))
+	if (not db_.Run(kSchema))
 		return std::unexpected(
-		    std::format("cannot set up {}: {}", getStorePath().string(), db_.lastError()));
-	if (not setup.commit())
+		    std::format("cannot set up {}: {}", StorePath().string(), db_.LastError()));
+	if (not setup.Commit())
 		return std::unexpected(
-		    std::format("cannot write to {}: {}", getStorePath().string(), db_.lastError()));
-	return done{};
+		    std::format("cannot write to {}: {}", StorePath().string(), db_.LastError()));
+	return Done{};
 }
 
-done catalogue::beginWrite() {
-	auto opened = openStore();
+Done Catalogue::BeginWrite() {
+	auto opened = OpenStore();
 	if (not opened.has_value())
 		return opened;
 	write_.emplace(db_);
-	if (write_->active())
-		return done{};
+	if (write_->Active())
+		return Done{};
 	write_.reset();
-	return std::unexpected(std::format("{} is in use by another program ({})",
-	                                   getStorePath().string(), db_.lastError()));
+	return std::unexpected(
+	    std::format("{} is in use by another program ({})", StorePath().string(), db_.LastError()));
 }
 
 // Reading.
 
-result<bool> catalogue::loadAll() {
+Result<bool> Catalogue::LoadAll() {
 	std::error_code ignored;
-	bool stored = db_.isOpen() or std::filesystem::exists(getStorePath(), ignored);
+	bool stored = db_.IsOpen() or std::filesystem::exists(StorePath(), ignored);
 	if (not stored)
 		return false;
-	auto opened = openStore();
+	auto opened = OpenStore();
 	if (not opened)
 		return std::unexpected(opened.error());
-	if (not readStore())
+	if (not ReadStore())
 		return std::unexpected(
-		    std::format("cannot read {}: {}", getStorePath().string(), db_.lastError()));
+		    std::format("cannot read {}: {}", StorePath().string(), db_.LastError()));
 	return true;
 }
 
-bool catalogue::peek() {
+bool Catalogue::Peek() {
 	std::error_code ignored;
-	if (db_.isOpen() or not std::filesystem::exists(getStorePath(), ignored))
+	if (db_.IsOpen() or not std::filesystem::exists(StorePath(), ignored))
 		return false;
-	if (not db_.open(getStorePath(), store::openMode::kReadOnly, kPeekWaitMs))
+	if (not db_.Open(StorePath(), store::OpenMode::kReadOnly, kPeekWaitMs))
 		return false;
-	bool read = storeVersion(db_) == kStoreVersion and readStore();
-	db_.close();
+	bool read = StoreVersion(db_) == kStoreVersion and ReadStore();
+	db_.Close();
 	return read;
 }
 
-bool catalogue::readStore() {
-	std::vector<entry> anime;
-	std::vector<entry> manga;
-	auto rows = db_.prepare(kSelectEntries);
-	while (rows.step()) {
-		entry row = readEntry(rows);
-		(row.type == mediaType::kAnime ? anime : manga).push_back(std::move(row));
+bool Catalogue::ReadStore() {
+	std::vector<Entry> anime;
+	std::vector<Entry> manga;
+	auto rows = db_.Prepare(kSelectEntries);
+	while (rows.Step()) {
+		Entry row = ReadEntry(rows);
+		(row.type == MediaType::kAnime ? anime : manga).push_back(std::move(row));
 	}
-	provider site = provider::kAniList;
+	Provider site = Provider::kAniList;
 	// Other keys (Catalist-TUI's `linked`) are another program's and are
 	// left as they are.
-	auto settings = db_.prepare("SELECT key, value FROM setting");
-	while (settings.step()) {
-		if (settings.textAt(0) == kProviderKey)
-			site = parseProvider(settings.textAt(1)).value_or(site);
+	auto settings = db_.Prepare("SELECT key, value FROM setting");
+	while (settings.Step()) {
+		if (settings.TextAt(0) == kProviderKey)
+			site = ParseProvider(settings.TextAt(1)).value_or(site);
 	}
 	// An error ends a statement the way its last row does.
-	if (not rows.ok() or not settings.ok() or not readSiteIds(db_, anime, manga))
+	if (not rows.Ok() or not settings.Ok() or not ReadSiteIds(db_, anime, manga))
 		return false;
 
 	animeEntries_ = std::move(anime);
 	mangaEntries_ = std::move(manga);
 	provider_ = site;
-	rememberSaved();
+	RememberSaved();
 	return true;
 }
 
-void catalogue::rememberSaved() {
+void Catalogue::RememberSaved() {
 	savedAnime_ = animeEntries_;
 	savedManga_ = mangaEntries_;
 	savedProvider_ = provider_;
@@ -530,79 +544,79 @@ void catalogue::rememberSaved() {
 
 // Writing.
 
-bool catalogue::commit(const std::function<bool()>& work) {
-	if (not openStore().has_value())
+bool Catalogue::Commit(const std::function<bool()>& work) {
+	if (not OpenStore().has_value())
 		return false;
 	if (not write_)
 		write_.emplace(db_);
-	bool done = write_->active() and work() and write_->commit();
+	bool done = write_->Active() and work() and write_->Commit();
 	// A write that did not get that far is rolled back here.
 	write_.reset();
 	return done;
 }
 
-bool catalogue::writeRows() {
-	auto insert = db_.prepare(kInsertEntry);
-	auto remove = db_.prepare("DELETE FROM entry WHERE type = ? AND id = ?");
-	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
-		const auto& now = getList(type);
-		const auto& before = getSaved(type);
+bool Catalogue::WriteRows() {
+	auto insert = db_.Prepare(kInsertEntry);
+	auto remove = db_.Prepare("DELETE FROM entry WHERE type = ? AND id = ?");
+	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
+		const auto& now = GetList(type);
+		const auto& before = GetSaved(type);
 		for (const auto& row : now) {
-			const entry* was = findById(before, row.id);
+			const Entry* was = FindById(before, row.id);
 			bool same = was and *was == row;
-			if (not same and not bindEntry(insert, row).run())
+			if (not same and not BindEntry(insert, row).Run())
 				return false;
 		}
 		for (const auto& row : before) {
-			bool gone = findById(now, row.id) == nullptr;
-			if (gone and not remove.bind(typeKey(type)).bind(row.id).run())
+			bool gone = FindById(now, row.id) == nullptr;
+			if (gone and not remove.Bind(TypeKey(type)).Bind(row.id).Run())
 				return false;
 		}
 	}
-	return writeSiteIds();
+	return WriteSiteIds();
 }
 
 // The Kitsu ids, written anew: the rows of titles that are gone go too.
-bool catalogue::writeSiteIds() {
-	if (not db_.run(kSiteIdTable) or not db_.run("DELETE FROM entry_id WHERE site = 'kitsu'"))
+bool Catalogue::WriteSiteIds() {
+	if (not db_.Run(kSiteIdTable) or not db_.Run("DELETE FROM entry_id WHERE site = 'kitsu'"))
 		return false;
-	auto insert = db_.prepare("INSERT INTO entry_id VALUES (?, ?, 'kitsu', ?, ?, ?)");
-	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
-		for (const auto& row : getList(type)) {
-			if (row.kitsuId <= 0)
+	auto insert = db_.Prepare("INSERT INTO entry_id VALUES (?, ?, 'kitsu', ?, ?, ?)");
+	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
+		for (const auto& row : GetList(type)) {
+			if (row.kitsu_id <= 0)
 				continue;
-			insert.bind(typeKey(type)).bind(row.id).bind(row.kitsuId);
-			if (not insert.bind(row.malId).bind(row.anilistId).run())
+			insert.Bind(TypeKey(type)).Bind(row.id).Bind(row.kitsu_id);
+			if (not insert.Bind(row.mal_id).Bind(row.anilist_id).Run())
 				return false;
 		}
 	}
 	return true;
 }
 
-bool catalogue::writeSettings() {
-	auto set = db_.prepare(kInsertSetting);
+bool Catalogue::WriteSettings() {
+	auto set = db_.Prepare(kInsertSetting);
 	// MyAnimeList as Catalist 0.3 wrote it; Catalist-TUI reads "kitsu" as
 	// AniList, its default.
-	std::string site = provider_ == provider::kMyAnimeList ? "myanimelist" : providerKey(provider_);
-	return set.bind(std::string(kProviderKey)).bind(site).run();
+	std::string site = provider_ == Provider::kMyAnimeList ? "myanimelist" : ProviderKey(provider_);
+	return set.Bind(std::string(kProviderKey)).Bind(site).Run();
 }
 
-bool catalogue::saveSettings() {
-	if (not commit([this] { return writeSettings(); }))
+bool Catalogue::SaveSettings() {
+	if (not Commit([this] { return WriteSettings(); }))
 		return false;
 	savedProvider_ = provider_;
 	return true;
 }
 
-bool catalogue::writeChanged() {
-	bool settingsChanged = provider_ != savedProvider_;
-	return writeRows() and (not settingsChanged or writeSettings());
+bool Catalogue::WriteChanged() {
+	bool settings_changed = provider_ != savedProvider_;
+	return WriteRows() and (not settings_changed or WriteSettings());
 }
 
-bool catalogue::saveAll() {
-	bool done = commit([this] { return writeChanged(); });
+bool Catalogue::SaveAll() {
+	bool done = Commit([this] { return WriteChanged(); });
 	if (done)
-		rememberSaved();
+		RememberSaved();
 	return done;
 }
 

@@ -9,7 +9,7 @@
 namespace catalist::web {
 
 // The adapter of a site: AniList, MyAnimeList or Kitsu, all one interface.
-[[nodiscard]] std::unique_ptr<iTracker> makeTracker(provider site, const link& net);
+[[nodiscard]] std::unique_ptr<Tracker> MakeTracker(Provider site, const Link& net);
 
 }  // namespace catalist::web
 

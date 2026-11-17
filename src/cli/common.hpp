@@ -23,49 +23,49 @@ namespace catalist::cli {
 
 // "error: <message>" on standard error; returns 1, the exit code of a
 // failure.
-int fail(cliContext& ctx, const std::string& message);
+int Fail(CliContext& ctx, const std::string& message);
 // The message, the command's usage line and where to read more; returns 2,
 // the exit code of a wrong command line.
-int usageError(cliContext& ctx, const command& cmd, const std::string& message);
+int UsageError(CliContext& ctx, const Command& cmd, const std::string& message);
 // " (did you mean 'ls'?)", or "" when nothing known is close.
-[[nodiscard]] std::string didYouMean(const std::string& typed,
+[[nodiscard]] std::string DidYouMean(const std::string& typed,
                                      const std::vector<std::string>& known);
-int saveFailed(cliContext& ctx);
+int SaveFailed(CliContext& ctx);
 
 // ---- A title as text ----
 
 // The columns of a title, in the order every tab-separated line and JSON
 // object has them. A new column goes at the end: scripts count on the order.
 extern const std::vector<std::string> kColumns;
-[[nodiscard]] std::vector<output::cell> cellsOf(const entry& e);
+[[nodiscard]] std::vector<output::Cell> CellsOf(const Entry& e);
 // Everything about a title: the columns of kColumns, then those of
 // kFullColumns (total_volumes, released, anilist_id, mal_id, url on `site`,
 // kitsu_id), as show and the exports print it.
 extern const std::vector<std::string> kFullColumns;
-[[nodiscard]] std::vector<std::string> allColumns();
-[[nodiscard]] std::vector<output::cell> fullCellsOf(const entry& e, provider site);
+[[nodiscard]] std::vector<std::string> AllColumns();
+[[nodiscard]] std::vector<output::Cell> FullCellsOf(const Entry& e, Provider site);
 // The terminal's colour for each status.
-[[nodiscard]] const char* statusColor(watchStatus status);
+[[nodiscard]] const char* StatusColor(WatchStatus status);
 // "episodes", "chapter".
-[[nodiscard]] std::string unitName(mediaType type, int count = 2);
+[[nodiscard]] std::string UnitName(MediaType type, int count = 2);
 // "1 title", "3 titles".
-[[nodiscard]] std::string titles(size_t count);
+[[nodiscard]] std::string Titles(size_t count);
 // "5/28", or "5/?" while the total is not known.
-[[nodiscard]] std::string outOf(int done, int total);
+[[nodiscard]] std::string OutOf(int done, int total);
 // Rows as JSON Lines, or as tab-separated lines (the column names first
 // when `header`). A write that fails, because the reader has gone, ends it.
-void writeRows(cliContext& ctx, const std::vector<std::string>& names,
-               const std::vector<std::vector<output::cell>>& rows, bool json, bool header);
+void WriteRows(CliContext& ctx, const std::vector<std::string>& names,
+               const std::vector<std::vector<output::Cell>>& rows, bool json, bool header);
 
 // The statuses in the order they are listed, and the words they are
 // written with: watching, completed, on-hold, dropped, planned and
 // rewatching.
-extern const std::vector<watchStatus> kStatuses;
-[[nodiscard]] std::vector<std::string> statusWords();
-// A status as the command line takes it: one of statusWords(), "reading"
+extern const std::vector<WatchStatus> kStatuses;
+[[nodiscard]] std::vector<std::string> StatusWords();
+// A status as the command line takes it: one of StatusWords(), "reading"
 // for watching or "rereading" for rewatching, in capitals or not. Nothing for any other word:
 // the command line guesses nothing (import reads the sites' spellings).
-[[nodiscard]] std::optional<watchStatus> statusNamed(const std::string& word);
+[[nodiscard]] std::optional<WatchStatus> StatusNamed(const std::string& word);
 
 // ---- Naming titles ----
 
@@ -74,201 +74,201 @@ extern const std::vector<watchStatus> kStatuses;
 // words needs no quotes. Empty without operands. Nothing, after the usage
 // error (exit code 2), on a later word that looks like an option: options
 // come before the text.
-[[nodiscard]] std::optional<std::string> readText(const command& cmd, const args::parsed& line,
-                                                  cliContext& ctx);
+[[nodiscard]] std::optional<std::string> ReadText(const Command& cmd, const args::Parsed& line,
+                                                  CliContext& ctx);
 
 // -a and -m: the one list a command is kept to, or both.
-[[nodiscard]] std::optional<mediaType> onlyType(const args::parsed& line);
+[[nodiscard]] std::optional<MediaType> OnlyType(const args::Parsed& line);
 
 // How the REFs of a command are matched: in which list, whether a REF may
 // stand for several titles, and whether the person can be asked which.
-struct naming {
-	std::optional<mediaType> only;
+struct Naming {
+	std::optional<MediaType> only;
 	bool all = false;
 	bool ask = false;
 };
 
 // The options of every command that takes REFs: -a, -m and --all first.
-[[nodiscard]] std::vector<args::option> withRefOptions(std::vector<args::option> options);
+[[nodiscard]] std::vector<args::Option> WithRefOptions(std::vector<args::Option> options);
 
 // The REFs given, or the exit code when there is nothing to go on with.
-struct refRequest {
+struct RefRequest {
 	std::vector<std::string> refs;
-	naming how;
+	Naming how;
 	std::optional<int> stop;
 };
 
 // Reads the REF operands; a `-` among them stands for the lines of standard
 // input, which then cannot answer a question as well.
-[[nodiscard]] refRequest readRefs(const command& cmd, const args::parsed& line, cliContext& ctx);
+[[nodiscard]] RefRequest ReadRefs(const Command& cmd, const args::Parsed& line, CliContext& ctx);
 
 // Asks which of the numbered choices was meant; nothing when the answer is
 // empty or not one of them.
-[[nodiscard]] std::optional<size_t> askWhich(cliContext& ctx, size_t count);
+[[nodiscard]] std::optional<size_t> AskWhich(CliContext& ctx, size_t count);
 
 // Every title the REFs name, each once, in the order named. Nothing, with
 // the reason on standard error, when any REF fails: a command works on all
 // it was given, or on none.
-[[nodiscard]] std::optional<std::vector<entry>> resolve(cliContext& ctx,
+[[nodiscard]] std::optional<std::vector<Entry>> Resolve(CliContext& ctx,
                                                         const std::vector<std::string>& given,
-                                                        const naming& how);
+                                                        const Naming& how);
 
 // Reads the lists; false, with the reason on standard error, when they
 // cannot be read.
-[[nodiscard]] bool load(cliContext& ctx);
+[[nodiscard]] bool Load(CliContext& ctx);
 // Takes the catalogue for writing, then reads it: nothing another program
 // does can come between what the command reads and what it saves.
-[[nodiscard]] bool loadForWrite(cliContext& ctx);
+[[nodiscard]] bool LoadForWrite(CliContext& ctx);
 
 // ---- Changing titles ----
 
 // A line for every field that changed. Into a pipe: the ref, the title, the
 // field, its old value and its new one.
-void printChanges(cliContext& ctx, const std::vector<journal::change>& changes);
+void PrintChanges(CliContext& ctx, const std::vector<journal::Change>& changes);
 
 // Saves what a command changed as one undo step and prints it (not with
 // -q), then tells the sites (unless `tell` is false: the command does). A
 // command that changed nothing says so and saves nothing.
-int saveAndReport(cliContext& ctx, const args::parsed& line,
-                  const std::vector<journal::change>& changes, bool tell = true);
+int SaveAndReport(CliContext& ctx, const args::Parsed& line,
+                  const std::vector<journal::Change>& changes, bool tell = true);
 
-using titleChange = std::function<entry(const entry&)>;
+using TitleChange = std::function<Entry(const Entry&)>;
 
 // Makes one change to each title, then saves and reports it.
-int applyTo(cliContext& ctx, const args::parsed& line, const std::vector<entry>& titles,
-            const titleChange& change);
+int ApplyTo(CliContext& ctx, const args::Parsed& line, const std::vector<Entry>& titles,
+            const TitleChange& change);
 
 // Makes one change to every title the REFs name; every REF is resolved
 // before any title changes.
-int changeTitles(const command& self, const args::parsed& line, cliContext& ctx,
-                 const titleChange& change);
+int ChangeTitles(const Command& self, const args::Parsed& line, CliContext& ctx,
+                 const TitleChange& change);
 
 // The N of -n, or `otherwise` when it is not given.
-[[nodiscard]] result<int> countGiven(const args::parsed& line, int otherwise);
+[[nodiscard]] Result<int> CountGiven(const args::Parsed& line, int otherwise);
 
 // ---- The sites ----
 
 // --from SITE: a site to ask other than the provider.
-extern const args::option kFrom;
+extern const args::Option kFrom;
 // Checks the site --from names. False, after the usage error, when it names
 // none.
-[[nodiscard]] bool fromKnown(const command& cmd, const args::parsed& line, cliContext& ctx);
+[[nodiscard]] bool FromKnown(const Command& cmd, const args::Parsed& line, CliContext& ctx);
 // Whether the command needs the catalogue read to know its site: no --from.
-[[nodiscard]] bool asksProvider(const args::parsed& line);
+[[nodiscard]] bool AsksProvider(const args::Parsed& line);
 // The site a command asks: --from's, else the provider (read the catalogue
 // first).
-[[nodiscard]] provider siteOf(const args::parsed& line, const cliContext& ctx);
+[[nodiscard]] Provider SiteOf(const args::Parsed& line, const CliContext& ctx);
 // The site's adapter, reached through the context's link.
-[[nodiscard]] std::unique_ptr<web::iTracker> trackerFor(const cliContext& ctx, provider site);
+[[nodiscard]] std::unique_ptr<web::Tracker> TrackerFor(const CliContext& ctx, Provider site);
 // A search of the site, with Mihon's two forms besides the words: "id:N",
 // the title with the site's id N; and "my:WORDS", the titles of your own
 // list there (logged in) that hold the words.
-[[nodiscard]] web::answer<std::vector<web::match>> searchSite(cliContext& ctx, web::iTracker& site,
-                                                             mediaType type,
-                                                             const std::string& query);
+[[nodiscard]] web::Answer<std::vector<web::Match>> SearchSite(CliContext& ctx, web::Tracker& site,
+                                                              MediaType type,
+                                                              const std::string& query);
 // The match to take of a search on the site: the only one, the one `pick`
 // numbers, or the one chosen at a terminal. Nothing, with the reason on
 // standard error, when there is no such match.
-[[nodiscard]] std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site,
-                                                    mediaType type, const std::string& query,
+[[nodiscard]] std::optional<web::Match> ChooseMatch(CliContext& ctx, web::Tracker& site,
+                                                    MediaType type, const std::string& query,
                                                     std::optional<int> pick);
 
 // What to say when a request to a site failed: when it could not be
 // reached, to check the connection.
-[[nodiscard]] std::string webError(const web::failure& why);
+[[nodiscard]] std::string WebError(const web::Failure& why);
 
 // AniList, MyAnimeList and Kitsu, in the order they are listed.
-[[nodiscard]] const std::vector<provider>& allSites();
+[[nodiscard]] const std::vector<Provider>& AllSites();
 // Your entry on a site as a title of the lists (its score out of 10), for
-// mergeLinked and the like.
-[[nodiscard]] entry asTitle(const web::siteEntry& theirs, provider site);
+// MergeLinked and the like.
+[[nodiscard]] Entry AsTitle(const web::SiteEntry& theirs, Provider site);
 // Takes the catalogue for writing and reads the title again, as it is now.
 // Nothing, with the reason on standard error, when it is gone meanwhile.
-[[nodiscard]] std::optional<entry> heldAgain(cliContext& ctx, const entry& title);
+[[nodiscard]] std::optional<Entry> HeldAgain(CliContext& ctx, const Entry& title);
 
 // The logins, from the accounts file (none when there is no file).
-[[nodiscard]] std::vector<account> readAccounts(const cliContext& ctx);
+[[nodiscard]] std::vector<Account> ReadAccounts(const CliContext& ctx);
 // Writes them, readable by their owner only; false when that failed.
-[[nodiscard]] bool saveAccounts(const cliContext& ctx, const std::vector<account>& logins);
+[[nodiscard]] bool SaveAccounts(const CliContext& ctx, const std::vector<Account>& logins);
 
 // ---- Telling the sites (sync.cpp) ----
 
 // What a send did: how many titles the sites were told of, and how many
 // still wait.
-struct sendReport {
+struct SendReport {
 	size_t told = 0;
 	size_t left = 0;
-	// Refused too often to try again (see sendTo).
-	size_t gaveUp = 0;
+	// Refused too often to try again (see SendTo).
+	size_t gave_up = 0;
 };
 // Tells the logged-in sites what waits in the outbox, oldest first: all of
 // it with `everything`, else what is due (not tried a short while ago) as
 // long as it is a few. The lists are read.
-sendReport sendOutbox(cliContext& ctx, bool everything);
+SendReport SendOutbox(CliContext& ctx, bool everything);
 // "note: 3 changes wait to be sent", when some do.
-void noteWaiting(cliContext& ctx, const sendReport& report);
+void NoteWaiting(CliContext& ctx, const SendReport& report);
 // Sends what waits and is due, when anyone is logged in: the commands that
 // go online anyway send it on the way, as Mihon retries once it is online.
-void sendWaiting(cliContext& ctx);
+void SendWaiting(CliContext& ctx);
 // After a save: queues each changed title for every logged-in site where
 // it is linked, and sends what waits.
-void tellSites(cliContext& ctx, const std::vector<journal::change>& changes);
+void TellSites(CliContext& ctx, const std::vector<journal::Change>& changes);
 // Queues what changed in each title for every logged-in site where it is
 // linked but `skip`, sending nothing; false when it could not be kept.
-[[nodiscard]] bool queueChanges(cliContext& ctx, const std::vector<journal::change>& changes,
-                                std::optional<provider> skip);
+[[nodiscard]] bool QueueChanges(CliContext& ctx, const std::vector<journal::Change>& changes,
+                                std::optional<Provider> skip);
 // After rm --remote: queues the titles to come off the sites' lists.
-void tellSitesGone(cliContext& ctx, const std::vector<entry>& gone);
+void TellSitesGone(CliContext& ctx, const std::vector<Entry>& gone);
 
 // What the helps share.
-extern const args::option kQuiet;
+extern const args::Option kQuiet;
 extern const char* const kRefsHelp;
 extern const char* const kChangeFormat;
 
 // ---- The commands, by file ----
 
 // listing.cpp: ls, show and stats, which only read.
-[[nodiscard]] std::vector<command> listingCommands();
+[[nodiscard]] std::vector<Command> ListingCommands();
 // What `ls` lists, and how.
-struct listQuery {
+struct ListQuery {
 	// Words the titles hold.
 	std::string text{};
 	// Any of these; all of them when empty.
-	std::vector<watchStatus> statuses{};
-	std::optional<mediaType> only{};
+	std::vector<WatchStatus> statuses{};
+	std::optional<MediaType> only{};
 	// Only titles with an id on each of these sites, and none on any of
 	// those.
-	std::vector<provider> linked{};
-	std::vector<provider> unlinked{};
-	sortKey key = sortKey::kTitle;
+	std::vector<Provider> linked{};
+	std::vector<Provider> unlinked{};
+	SortKey key = SortKey::kTitle;
 	bool reverse = false;
 	// The refs alone, one a line.
-	bool refsOnly = false;
+	bool refs_only = false;
 	bool json = false;
 	bool header = false;
 };
 // Lists the titles the query asks for: a table at a terminal, else lines.
 // The exit code: 1 when the lists cannot be read.
-int printList(cliContext& ctx, const listQuery& query);
+int PrintList(CliContext& ctx, const ListQuery& query);
 // tracking.cpp: +, -, set, done, hold, drop, plan, resume, rewatch and rm.
-[[nodiscard]] std::vector<command> trackingCommands();
+[[nodiscard]] std::vector<Command> TrackingCommands();
 // The fields `set` takes, for the completion scripts.
-[[nodiscard]] std::vector<std::string> settableNames();
+[[nodiscard]] std::vector<std::string> SettableNames();
 // online.cpp: add, search and refresh, which ask a site about titles.
-[[nodiscard]] std::vector<command> onlineCommands();
+[[nodiscard]] std::vector<Command> OnlineCommands();
 // accounts.cpp: login, logout and accounts.
-[[nodiscard]] std::vector<command> accountCommands();
+[[nodiscard]] std::vector<Command> AccountCommands();
 // sync.cpp: sync, link and unlink.
-[[nodiscard]] std::vector<command> syncCommands();
+[[nodiscard]] std::vector<Command> SyncCommands();
 // track.cpp: track, each site's entry of a title.
-[[nodiscard]] std::vector<command> trackCommands();
+[[nodiscard]] std::vector<Command> TrackCommands();
 // transfer.cpp: import and export.
-[[nodiscard]] std::vector<command> transferCommands();
+[[nodiscard]] std::vector<Command> TransferCommands();
 // history.cpp: undo, redo and log.
-[[nodiscard]] std::vector<command> historyCommands();
+[[nodiscard]] std::vector<Command> HistoryCommands();
 // setup.cpp: provider and completion, and the hidden commands of the
 // completion scripts and the build.
-[[nodiscard]] std::vector<command> setupCommands();
+[[nodiscard]] std::vector<Command> SetupCommands();
 
 }  // namespace catalist::cli
 

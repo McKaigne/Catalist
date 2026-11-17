@@ -6,40 +6,40 @@
 
 namespace catalist::store {
 
-statement::statement(sqlite3* db, const std::string& sql) {
+Statement::Statement(sqlite3* db, const std::string& sql) {
 	failed_ = db == nullptr or sqlite3_prepare_v2(db, sql.c_str(), static_cast<int>(sql.size()),
 	                                              &handle_, nullptr) != SQLITE_OK;
 }
 
-statement::~statement() {
+Statement::~Statement() {
 	sqlite3_finalize(handle_);
 }
 
-statement::statement(statement&& other) noexcept
+Statement::Statement(Statement&& other) noexcept
     : handle_(std::exchange(other.handle_, nullptr)),
       nextParameter_(other.nextParameter_),
       failed_(other.failed_) {}
 
-statement& statement::bind(long long value) {
+Statement& Statement::Bind(long long value) {
 	if (not failed_)
 		failed_ = sqlite3_bind_int64(handle_, nextParameter_++, value) != SQLITE_OK;
 	return *this;
 }
 
-statement& statement::bind(const std::string& value) {
+Statement& Statement::Bind(const std::string& value) {
 	if (not failed_)
 		failed_ = sqlite3_bind_text(handle_, nextParameter_++, value.data(),
 		                            static_cast<int>(value.size()), SQLITE_TRANSIENT) != SQLITE_OK;
 	return *this;
 }
 
-statement& statement::bindNull() {
+Statement& Statement::BindNull() {
 	if (not failed_)
 		failed_ = sqlite3_bind_null(handle_, nextParameter_++) != SQLITE_OK;
 	return *this;
 }
 
-bool statement::step() {
+bool Statement::Step() {
 	if (failed_)
 		return false;
 	int state = sqlite3_step(handle_);
@@ -47,7 +47,7 @@ bool statement::step() {
 	return state == SQLITE_ROW;
 }
 
-bool statement::run() {
+bool Statement::Run() {
 	if (failed_)
 		return false;
 	failed_ = sqlite3_step(handle_) != SQLITE_DONE;
@@ -57,17 +57,17 @@ bool statement::run() {
 	return not failed_;
 }
 
-void statement::reset() {
+void Statement::Reset() {
 	sqlite3_reset(handle_);
 	sqlite3_clear_bindings(handle_);
 	nextParameter_ = 1;
 }
 
-long long statement::intAt(int column) const {
+long long Statement::IntAt(int column) const {
 	return sqlite3_column_int64(handle_, column);
 }
 
-std::string statement::textAt(int column) const {
+std::string Statement::TextAt(int column) const {
 	const unsigned char* text = sqlite3_column_text(handle_, column);
 	if (text == nullptr)
 		return "";
@@ -75,59 +75,59 @@ std::string statement::textAt(int column) const {
 	                   static_cast<size_t>(sqlite3_column_bytes(handle_, column)));
 }
 
-database::~database() {
-	close();
+Database::~Database() {
+	Close();
 }
 
-bool database::open(const std::filesystem::path& file, openMode mode, int busyWaitMs) {
-	close();
-	int flags = mode == openMode::kReadOnly ? SQLITE_OPEN_READONLY
+bool Database::Open(const std::filesystem::path& file, OpenMode mode, int busy_wait_ms) {
+	Close();
+	int flags = mode == OpenMode::kReadOnly ? SQLITE_OPEN_READONLY
 	                                        : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
 	if (sqlite3_open_v2(file.c_str(), &handle_, flags, nullptr) != SQLITE_OK) {
 		// A handle is returned even for a failed open, to carry the message.
 		openError_ = handle_ ? sqlite3_errmsg(handle_) : "out of memory";
-		close();
+		Close();
 		return false;
 	}
-	sqlite3_busy_timeout(handle_, busyWaitMs);
+	sqlite3_busy_timeout(handle_, busy_wait_ms);
 	return true;
 }
 
-void database::close() {
+void Database::Close() {
 	sqlite3_close(handle_);
 	handle_ = nullptr;
 }
 
-bool database::run(const std::string& sql) {
+bool Database::Run(const std::string& sql) {
 	return handle_ != nullptr and
 	       sqlite3_exec(handle_, sql.c_str(), nullptr, nullptr, nullptr) == SQLITE_OK;
 }
 
-statement database::prepare(const std::string& sql) const {
-	return statement(handle_, sql);
+Statement Database::Prepare(const std::string& sql) const {
+	return Statement(handle_, sql);
 }
 
-long long database::lastInsertId() const {
+long long Database::LastInsertId() const {
 	return handle_ ? sqlite3_last_insert_rowid(handle_) : 0;
 }
 
-std::string database::lastError() const {
+std::string Database::LastError() const {
 	return handle_ ? sqlite3_errmsg(handle_) : openError_;
 }
 
-transaction::transaction(database& db) : db_(db), active_(db.run("BEGIN IMMEDIATE")) {}
+Transaction::Transaction(Database& db) : db_(db), active_(db.Run("BEGIN IMMEDIATE")) {}
 
-transaction::~transaction() {
+Transaction::~Transaction() {
 	if (active_)
-		(void)db_.run("ROLLBACK");
+		(void)db_.Run("ROLLBACK");
 }
 
-bool transaction::commit() {
+bool Transaction::Commit() {
 	if (not active_)
 		return false;
-	bool done = db_.run("COMMIT");
+	bool done = db_.Run("COMMIT");
 	if (not done)
-		(void)db_.run("ROLLBACK");
+		(void)db_.Run("ROLLBACK");
 	active_ = false;
 	return done;
 }

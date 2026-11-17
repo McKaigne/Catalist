@@ -9,7 +9,7 @@ namespace catalist::utf8 {
 
 namespace {
 
-size_t utf8SequenceLength(unsigned char lead) {
+size_t Utf8SequenceLength(unsigned char lead) {
 	if ((lead & 0x80) == 0)
 		return 1;
 	if ((lead & 0xE0) == 0xC0)
@@ -21,9 +21,9 @@ size_t utf8SequenceLength(unsigned char lead) {
 	return 1;
 }
 
-// The code point of one glyph of splitGlyphs; a broken sequence counts as
+// The code point of one glyph of SplitGlyphs; a broken sequence counts as
 // one ordinary character.
-std::uint32_t codePoint(const std::string& glyph) {
+std::uint32_t CodePoint(const std::string& glyph) {
 	auto lead = static_cast<unsigned char>(glyph[0]);
 	if (glyph.size() == 1)
 		return lead;
@@ -33,19 +33,19 @@ std::uint32_t codePoint(const std::string& glyph) {
 	return point;
 }
 
-struct range {
+struct Range {
 	std::uint32_t first;
 	std::uint32_t last;
 };
 
-bool inRanges(std::uint32_t point, const range* ranges, size_t count) {
+bool InRanges(std::uint32_t point, const Range* ranges, size_t count) {
 	return std::any_of(ranges, ranges + count,
-	                   [point](const range& r) { return point >= r.first and point <= r.last; });
+	                   [point](const Range& r) { return point >= r.first and point <= r.last; });
 }
 
 // Marks drawn over the glyph before them, and characters that are not drawn:
 // they take no column.
-constexpr range kZeroWidth[] = {
+constexpr Range kZeroWidth[] = {
     {0x0000, 0x001F}, {0x007F, 0x009F}, {0x0300, 0x036F}, {0x1AB0, 0x1AFF},   {0x1DC0, 0x1DFF},
     {0x200B, 0x200F}, {0x2028, 0x202E}, {0x2060, 0x2064}, {0x20D0, 0x20FF},   {0x3099, 0x309A},
     {0xFE00, 0xFE0F}, {0xFE20, 0xFE2F}, {0xFEFF, 0xFEFF}, {0xE0100, 0xE01EF},
@@ -53,7 +53,7 @@ constexpr range kZeroWidth[] = {
 
 // East Asian wide and full-width characters, and emoji: two columns each
 // (Unicode's East Asian Width, as terminals apply it).
-constexpr range kDoubleWidth[] = {
+constexpr Range kDoubleWidth[] = {
     {0x1100, 0x115F},   {0x231A, 0x231B},   {0x2329, 0x232A},   {0x23E9, 0x23EC},
     {0x25FD, 0x25FE},   {0x2614, 0x2615},   {0x2648, 0x2653},   {0x26AA, 0x26AB},
     {0x26BD, 0x26BE},   {0x26C4, 0x26C5},   {0x2705, 0x2705},   {0x270A, 0x270B},
@@ -65,20 +65,20 @@ constexpr range kDoubleWidth[] = {
     {0x30000, 0x3FFFD},
 };
 
-int glyphWidth(const std::string& glyph) {
-	std::uint32_t point = codePoint(glyph);
-	if (inRanges(point, kZeroWidth, std::size(kZeroWidth)))
+int GlyphWidth(const std::string& glyph) {
+	std::uint32_t point = CodePoint(glyph);
+	if (InRanges(point, kZeroWidth, std::size(kZeroWidth)))
 		return 0;
-	return inRanges(point, kDoubleWidth, std::size(kDoubleWidth)) ? 2 : 1;
+	return InRanges(point, kDoubleWidth, std::size(kDoubleWidth)) ? 2 : 1;
 }
 
 }  // namespace
 
-std::vector<std::string> splitGlyphs(const std::string& text) {
+std::vector<std::string> SplitGlyphs(const std::string& text) {
 	std::vector<std::string> glyphs;
 	size_t position = 0;
 	while (position < text.size()) {
-		size_t length = utf8SequenceLength(static_cast<unsigned char>(text[position]));
+		size_t length = Utf8SequenceLength(static_cast<unsigned char>(text[position]));
 		length = std::min(length, text.size() - position);
 		glyphs.push_back(text.substr(position, length));
 		position += length;
@@ -86,41 +86,41 @@ std::vector<std::string> splitGlyphs(const std::string& text) {
 	return glyphs;
 }
 
-std::string clip(const std::string& text, size_t maxGlyphs) {
-	auto glyphs = splitGlyphs(text);
-	if (glyphs.size() <= maxGlyphs)
+std::string Clip(const std::string& text, size_t max_glyphs) {
+	auto glyphs = SplitGlyphs(text);
+	if (glyphs.size() <= max_glyphs)
 		return text;
 	std::string clipped;
-	for (size_t i = 0; i < maxGlyphs; ++i)
+	for (size_t i = 0; i < max_glyphs; ++i)
 		clipped += glyphs[i];
 	return clipped;
 }
 
-int width(const std::string& text) {
+int Width(const std::string& text) {
 	int columns = 0;
-	for (const auto& glyph : splitGlyphs(text))
-		columns += glyphWidth(glyph);
+	for (const auto& glyph : SplitGlyphs(text))
+		columns += GlyphWidth(glyph);
 	return columns;
 }
 
-std::string fit(const std::string& text, int columns) {
-	int used = width(text);
+std::string Fit(const std::string& text, int columns) {
+	int used = Width(text);
 	if (used <= columns)
 		return text + std::string(static_cast<size_t>(columns - used), ' ');
 	// Leave a column for the ellipsis.
 	std::string fitted;
 	used = 0;
-	for (const auto& glyph : splitGlyphs(text)) {
-		int columnsTaken = glyphWidth(glyph);
-		if (used + columnsTaken > columns - 1)
+	for (const auto& glyph : SplitGlyphs(text)) {
+		int columns_taken = GlyphWidth(glyph);
+		if (used + columns_taken > columns - 1)
 			break;
 		fitted += glyph;
-		used += columnsTaken;
+		used += columns_taken;
 	}
 	return fitted + "…" + std::string(static_cast<size_t>(std::max(0, columns - 1 - used)), ' ');
 }
 
-std::string lowercase(std::string text) {
+std::string Lowercase(std::string text) {
 	std::transform(text.begin(), text.end(), text.begin(),
 	               [](unsigned char c) { return std::tolower(c); });
 	return text;

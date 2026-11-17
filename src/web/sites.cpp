@@ -6,16 +6,16 @@
 
 namespace catalist::web {
 
-std::unique_ptr<iTracker> makeTracker(provider site, const link& net) {
+std::unique_ptr<Tracker> MakeTracker(Provider site, const Link& net) {
 	switch (site) {
-		case provider::kMyAnimeList:
-			return std::make_unique<mal::tracker>(net);
-		case provider::kKitsu:
-			return std::make_unique<kitsu::tracker>(net);
-		case provider::kAniList:
+		case Provider::kMyAnimeList:
+			return std::make_unique<mal::Tracker>(net);
+		case Provider::kKitsu:
+			return std::make_unique<kitsu::Tracker>(net);
+		case Provider::kAniList:
 			break;
 	}
-	return std::make_unique<anilist::tracker>(net);
+	return std::make_unique<anilist::Tracker>(net);
 }
 
 }  // namespace catalist::web

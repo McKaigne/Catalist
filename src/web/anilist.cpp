@@ -8,12 +8,12 @@ namespace catalist::anilist {
 
 namespace {
 
-std::string typeName(mediaType type) {
-	return type == mediaType::kAnime ? "ANIME" : "MANGA";
+std::string TypeName(MediaType type) {
+	return type == MediaType::kAnime ? "ANIME" : "MANGA";
 }
 
 // A JSON string literal: quotes, backslashes and control characters escaped.
-std::string jsonString(const std::string& text) {
+std::string JsonString(const std::string& text) {
 	std::string quoted = "\"";
 	for (unsigned char c : text) {
 		if (c == '"' or c == '\\')
@@ -26,124 +26,124 @@ std::string jsonString(const std::string& text) {
 	return quoted + "\"";
 }
 
-std::string listStatus(watchStatus status) {
+std::string ListStatus(WatchStatus status) {
 	switch (status) {
-		case watchStatus::kWatching:
+		case WatchStatus::kWatching:
 			return "CURRENT";
-		case watchStatus::kCompleted:
+		case WatchStatus::kCompleted:
 			return "COMPLETED";
-		case watchStatus::kOnHold:
+		case WatchStatus::kOnHold:
 			return "PAUSED";
-		case watchStatus::kDropped:
+		case WatchStatus::kDropped:
 			return "DROPPED";
-		case watchStatus::kPlanToWatch:
+		case WatchStatus::kPlanToWatch:
 			return "PLANNING";
-		case watchStatus::kRewatching:
+		case WatchStatus::kRewatching:
 			return "REPEATING";
 	}
 	return "PLANNING";
 }
 
 // A FuzzyDateInput; all null clears the date.
-std::string fuzzyDate(const std::optional<isoDate>& day) {
+std::string FuzzyDate(const std::optional<IsoDate>& day) {
 	if (not day)
 		return R"({"year":null,"month":null,"day":null})";
-	return std::format(R"({{"year":{},"month":{},"day":{}}})", day->year(), day->month(),
-	                   day->day());
+	return std::format(R"({{"year":{},"month":{},"day":{}}})", day->Year(), day->Month(),
+	                   day->Day());
 }
 
-std::optional<watchStatus> statusOf(const std::string& listStatus) {
-	if (listStatus == "CURRENT")
-		return watchStatus::kWatching;
-	if (listStatus == "REPEATING")
-		return watchStatus::kRewatching;
-	if (listStatus == "COMPLETED")
-		return watchStatus::kCompleted;
-	if (listStatus == "PAUSED")
-		return watchStatus::kOnHold;
-	if (listStatus == "DROPPED")
-		return watchStatus::kDropped;
-	if (listStatus == "PLANNING")
-		return watchStatus::kPlanToWatch;
+std::optional<WatchStatus> StatusOf(const std::string& list_status) {
+	if (list_status == "CURRENT")
+		return WatchStatus::kWatching;
+	if (list_status == "REPEATING")
+		return WatchStatus::kRewatching;
+	if (list_status == "COMPLETED")
+		return WatchStatus::kCompleted;
+	if (list_status == "PAUSED")
+		return WatchStatus::kOnHold;
+	if (list_status == "DROPPED")
+		return WatchStatus::kDropped;
+	if (list_status == "PLANNING")
+		return WatchStatus::kPlanToWatch;
 	return std::nullopt;
 }
 
 // AniList's statuses: FINISHED, RELEASING, NOT_YET_RELEASED, CANCELLED and
 // HIATUS.
-web::details detailsOf(const json::value& media, mediaType type) {
-	std::string status = media["status"].asString().value_or("");
-	web::details found;
-	found.name = media["title"]["romaji"].asString().value_or("");
-	found.facts.anilistId = media["id"].asCount();
-	found.facts.malId = media["idMal"].asCount();
-	found.facts.totalUnits = media[type == mediaType::kAnime ? "episodes" : "chapters"].asCount();
-	found.facts.totalVolumes = media["volumes"].asCount();
+web::Details DetailsOf(const json::Value& media, MediaType type) {
+	std::string status = media["status"].AsString().value_or("");
+	web::Details found;
+	found.name = media["title"]["romaji"].AsString().value_or("");
+	found.facts.anilist_id = media["id"].AsCount();
+	found.facts.mal_id = media["idMal"].AsCount();
+	found.facts.total_units = media[type == MediaType::kAnime ? "episodes" : "chapters"].AsCount();
+	found.facts.total_volumes = media["volumes"].AsCount();
 	found.ongoing = status == "RELEASING" or status == "HIATUS";
 	if (status == "FINISHED" or status == "CANCELLED")
-		found.facts.released = found.facts.totalUnits;
+		found.facts.released = found.facts.total_units;
 	// An airing anime: every episode before the next one to air is out.
-	int nextEpisode = media["nextAiringEpisode"]["episode"].asCount();
-	if (found.ongoing and nextEpisode > 1)
-		found.facts.released = nextEpisode - 1;
+	int next_episode = media["nextAiringEpisode"]["episode"].AsCount();
+	if (found.ongoing and next_episode > 1)
+		found.facts.released = next_episode - 1;
 	return found;
 }
 
 }  // namespace
 
-std::string lookupRequest(const titleRef& wanted) {
+std::string LookupRequest(const TitleRef& wanted) {
 	// AniList's own id when known; a MyAnimeList id goes in idMal.
-	bool own = wanted.anilistId > 0;
+	bool own = wanted.anilist_id > 0;
 	return std::format(R"({{"query":"query($id:Int,$type:MediaType){{Media({}:$id,type:$type){{)"
 	                   R"(id idMal title{{romaji}} episodes chapters volumes status )"
 	                   R"(nextAiringEpisode{{episode}}}}}}",)"
 	                   R"("variables":{{"id":{},"type":"{}"}}}})",
-	                   own ? "id" : "idMal", own ? wanted.anilistId : wanted.malId,
-	                   typeName(wanted.type));
+	                   own ? "id" : "idMal", own ? wanted.anilist_id : wanted.mal_id,
+	                   TypeName(wanted.type));
 }
 
-web::answer<web::details> parseLookup(const std::string& body, mediaType type) {
-	auto reply = json::parse(body);
-	if (not reply.has_value() or reply.value()["data"]["Media"].isNull())
-		return web::refused("AniList does not know the title");
-	return detailsOf(reply.value()["data"]["Media"], type);
+web::Answer<web::Details> ParseLookup(const std::string& body, MediaType type) {
+	auto reply = json::Parse(body);
+	if (not reply.has_value() or reply.value()["data"]["Media"].IsNull())
+		return web::Refused("AniList does not know the title");
+	return DetailsOf(reply.value()["data"]["Media"], type);
 }
 
-std::string searchRequest(mediaType type, const std::string& query) {
+std::string SearchRequest(MediaType type, const std::string& query) {
 	return std::format(
 	    R"({{"query":"query($search:String,$type:MediaType){{Page(perPage:10){{)"
 	    R"(media(search:$search,type:$type,sort:SEARCH_MATCH){{id idMal title{{romaji}} )"
 	    R"(episodes chapters volumes averageScore startDate{{year}}}}}}}}",)"
 	    R"("variables":{{"search":{},"type":"{}"}}}})",
-	    jsonString(query), typeName(type));
+	    JsonString(query), TypeName(type));
 }
 
-std::string saveRequest(const entry& title, const web::sending& what) {
+std::string SaveRequest(const Entry& title, const web::Sending& what) {
 	// One variable a field sent: its declaration, its argument and its value.
-	struct sent {
+	struct Sent {
 		unsigned field;
 		const char* declared;
 		const char* argument;
 		std::string value;
 	};
 	// scoreRaw is out of 100 whatever scale the person chose on AniList.
-	std::vector<sent> all = {
-	    {siteField::kStatus, "$s:MediaListStatus", "status:$s",
-	     std::format(R"("s":"{}")", listStatus(title.status))},
-	    {siteField::kScore, "$c:Int", "scoreRaw:$c", std::format(R"("c":{})", title.score * 10)},
-	    {siteField::kProgress, "$p:Int", "progress:$p", std::format(R"("p":{})", title.progress)},
-	    {siteField::kVolumes, "$v:Int", "progressVolumes:$v",
+	std::vector<Sent> all = {
+	    {site_field::kStatus, "$s:MediaListStatus", "status:$s",
+	     std::format(R"("s":"{}")", ListStatus(title.status))},
+	    {site_field::kScore, "$c:Int", "scoreRaw:$c", std::format(R"("c":{})", title.score * 10)},
+	    {site_field::kProgress, "$p:Int", "progress:$p", std::format(R"("p":{})", title.progress)},
+	    {site_field::kVolumes, "$v:Int", "progressVolumes:$v",
 	     std::format(R"("v":{})", title.volumes)},
-	    {siteField::kRewatched, "$r:Int", "repeat:$r", std::format(R"("r":{})", title.rewatched)},
-	    {siteField::kStarted, "$a:FuzzyDateInput", "startedAt:$a",
-	     std::format(R"("a":{})", fuzzyDate(title.startDate))},
-	    {siteField::kFinished, "$f:FuzzyDateInput", "completedAt:$f",
-	     std::format(R"("f":{})", fuzzyDate(title.finishDate))},
-	    {siteField::kHidden, "$h:Boolean", "private:$h",
+	    {site_field::kRewatched, "$r:Int", "repeat:$r", std::format(R"("r":{})", title.rewatched)},
+	    {site_field::kStarted, "$a:FuzzyDateInput", "startedAt:$a",
+	     std::format(R"("a":{})", FuzzyDate(title.start_date))},
+	    {site_field::kFinished, "$f:FuzzyDateInput", "completedAt:$f",
+	     std::format(R"("f":{})", FuzzyDate(title.finish_date))},
+	    {site_field::kHidden, "$h:Boolean", "private:$h",
 	     std::format(R"("h":{})", what.hidden ? "true" : "false")},
 	};
 	std::string declared = "$m:Int";
 	std::string arguments = "mediaId:$m";
-	std::string values = std::format(R"("m":{})", title.anilistId);
+	std::string values = std::format(R"("m":{})", title.anilist_id);
 	for (const auto& each : all) {
 		if (not(what.fields & each.field))
 			continue;
@@ -156,49 +156,49 @@ std::string saveRequest(const entry& title, const web::sending& what) {
 	    declared, arguments, values);
 }
 
-std::string listEntryRequest(int mediaId, const std::string& userId) {
+std::string ListEntryRequest(int media_id, const std::string& user_id) {
 	return std::format(
 	    R"({{"query":"query($m:Int,$u:Int){{MediaList(mediaId:$m,userId:$u){{id}}}}",)"
 	    R"("variables":{{"m":{},"u":{}}}}})",
-	    mediaId, userId.empty() ? "0" : userId);
+	    media_id, user_id.empty() ? "0" : user_id);
 }
 
-std::string entryRequest(const entry& title, const std::string& userId) {
-	return std::format(
-	    R"({{"query":"query($m:Int,$u:Int){{Page{{mediaList(userId:$u,mediaId:$m){{)"
-	    R"(status score(format:POINT_100) progress progressVolumes repeat private )"
-	    R"(startedAt{{year month day}} completedAt{{year month day}}}}}}}}",)"
-	    R"("variables":{{"m":{},"u":{}}}}})",
-	    title.anilistId, userId.empty() ? "0" : userId);
+std::string EntryRequest(const Entry& title, const std::string& user_id) {
+	return std::format(R"({{"query":"query($m:Int,$u:Int){{Page{{mediaList(userId:$u,mediaId:$m){{)"
+	                   R"(status score(format:POINT_100) progress progressVolumes repeat private )"
+	                   R"(startedAt{{year month day}} completedAt{{year month day}}}}}}}}",)"
+	                   R"("variables":{{"m":{},"u":{}}}}})",
+	                   title.anilist_id, user_id.empty() ? "0" : user_id);
 }
 
-web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body) {
-	auto reply = json::parse(body);
-	const json::value& found =
-	    reply.has_value() ? reply.value()["data"]["Page"]["mediaList"] : json::value();
-	if (not found.isArray())
-		return web::refused("unexpected reply from AniList");
-	if (found.items().empty())
-		return std::optional<web::siteEntry>();
-	const json::value& item = found.items().front();
-	auto dayOf = [](const json::value& fuzzy) {
-		return isoDate::fromParts(fuzzy["year"].asCount(), fuzzy["month"].asCount(),
-		                          fuzzy["day"].asCount());
+web::Answer<std::optional<web::SiteEntry>> ParseEntry(const std::string& body) {
+	auto reply = json::Parse(body);
+	const json::Value& found =
+	    reply.has_value() ? reply.value()["data"]["Page"]["mediaList"] : json::Value();
+	if (not found.IsArray())
+		return web::Refused("unexpected reply from AniList");
+	if (found.Items().empty())
+		return std::optional<web::SiteEntry>();
+	const json::Value& item = found.Items().front();
+	auto day_of = [](const json::Value& fuzzy) {
+		return IsoDate::FromParts(fuzzy["year"].AsCount(), fuzzy["month"].AsCount(),
+		                          fuzzy["day"].AsCount());
 	};
-	web::siteEntry mine;
-	mine.status = statusOf(item["status"].asString().value_or("")).value_or(watchStatus::kPlanToWatch);
+	web::SiteEntry mine;
+	mine.status =
+	    StatusOf(item["status"].AsString().value_or("")).value_or(WatchStatus::kPlanToWatch);
 	// Asked as POINT_100: out of 100 whatever the person scores in.
-	mine.score = static_cast<int>(item["score"].asNumber().value_or(0.0) + 0.5);
-	mine.progress = item["progress"].asCount();
-	mine.volumes = item["progressVolumes"].asCount();
-	mine.rewatched = item["repeat"].asCount();
-	mine.startDate = dayOf(item["startedAt"]);
-	mine.finishDate = dayOf(item["completedAt"]);
-	mine.hidden = item["private"].asBool().value_or(false);
+	mine.score = static_cast<int>(item["score"].AsNumber().value_or(0.0) + 0.5);
+	mine.progress = item["progress"].AsCount();
+	mine.volumes = item["progressVolumes"].AsCount();
+	mine.rewatched = item["repeat"].AsCount();
+	mine.start_date = day_of(item["startedAt"]);
+	mine.finish_date = day_of(item["completedAt"]);
+	mine.hidden = item["private"].AsBool().value_or(false);
 	return mine;
 }
 
-std::string listRequest(mediaType type, const std::string& user) {
+std::string ListRequest(MediaType type, const std::string& user) {
 	return std::format(
 	    R"({{"query":"query($u:String,$t:MediaType){{MediaListCollection(userName:$u,type:$t))"
 	    R"({{lists{{entries{{status score(format:POINT_10) progress progressVolumes repeat )"
@@ -206,40 +206,40 @@ std::string listRequest(mediaType type, const std::string& user) {
 	    R"(media{{id idMal title{{romaji}} episodes chapters volumes status )"
 	    R"(nextAiringEpisode{{episode}}}}}}}}}}}}",)"
 	    R"("variables":{{"u":{},"t":"{}"}}}})",
-	    jsonString(user), typeName(type));
+	    JsonString(user), TypeName(type));
 }
 
-web::answer<std::vector<entry>> parseList(const std::string& body, mediaType type) {
-	auto reply = json::parse(body);
-	const json::value& lists =
-	    reply.has_value() ? reply.value()["data"]["MediaListCollection"]["lists"] : json::value();
-	if (not lists.isArray())
-		return web::refused("unexpected reply from AniList");
-	auto dayOf = [](const json::value& fuzzy) {
-		return isoDate::fromParts(fuzzy["year"].asCount(), fuzzy["month"].asCount(),
-		                          fuzzy["day"].asCount());
+web::Answer<std::vector<Entry>> ParseList(const std::string& body, MediaType type) {
+	auto reply = json::Parse(body);
+	const json::Value& lists =
+	    reply.has_value() ? reply.value()["data"]["MediaListCollection"]["lists"] : json::Value();
+	if (not lists.IsArray())
+		return web::Refused("unexpected reply from AniList");
+	auto day_of = [](const json::Value& fuzzy) {
+		return IsoDate::FromParts(fuzzy["year"].AsCount(), fuzzy["month"].AsCount(),
+		                          fuzzy["day"].AsCount());
 	};
-	std::vector<entry> found;
-	for (const auto& list : lists.items()) {
-		for (const auto& item : list["entries"].items()) {
-			auto status = statusOf(item["status"].asString().value_or(""));
-			auto media = detailsOf(item["media"], type);
-			if (not status or media.facts.anilistId == 0 or media.name.empty())
+	std::vector<Entry> found;
+	for (const auto& list : lists.Items()) {
+		for (const auto& item : list["entries"].Items()) {
+			auto status = StatusOf(item["status"].AsString().value_or(""));
+			auto media = DetailsOf(item["media"], type);
+			if (not status or media.facts.anilist_id == 0 or media.name.empty())
 				continue;
-			entry e;
+			Entry e;
 			e.type = type;
 			e.title = media.name;
 			e.status = *status;
-			e.score = static_cast<int>(item["score"].asNumber().value_or(0.0) + 0.5);
-			e.progress = item["progress"].asCount();
-			e.volumes = item["progressVolumes"].asCount();
-			e.rewatched = item["repeat"].asCount();
-			e.startDate = dayOf(item["startedAt"]);
-			e.finishDate = dayOf(item["completedAt"]);
-			e.anilistId = media.facts.anilistId;
-			e.malId = media.facts.malId;
-			e.totalUnits = media.facts.totalUnits;
-			e.totalVolumes = media.facts.totalVolumes;
+			e.score = static_cast<int>(item["score"].AsNumber().value_or(0.0) + 0.5);
+			e.progress = item["progress"].AsCount();
+			e.volumes = item["progressVolumes"].AsCount();
+			e.rewatched = item["repeat"].AsCount();
+			e.start_date = day_of(item["startedAt"]);
+			e.finish_date = day_of(item["completedAt"]);
+			e.anilist_id = media.facts.anilist_id;
+			e.mal_id = media.facts.mal_id;
+			e.total_units = media.facts.total_units;
+			e.total_volumes = media.facts.total_volumes;
 			e.released = media.facts.released;
 			found.push_back(std::move(e));
 		}
@@ -247,7 +247,7 @@ web::answer<std::vector<entry>> parseList(const std::string& body, mediaType typ
 	return found;
 }
 
-std::string batchRequest(mediaType type, const std::vector<int>& ids, bool byMal) {
+std::string BatchRequest(MediaType type, const std::vector<int>& ids, bool by_mal) {
 	std::string list;
 	for (int id : ids)
 		list += (list.empty() ? "" : ",") + std::to_string(id);
@@ -256,172 +256,172 @@ std::string batchRequest(mediaType type, const std::vector<int>& ids, bool byMal
 	    R"(media({}:$ids,type:$type){{id idMal title{{romaji}} episodes chapters volumes )"
 	    R"(status nextAiringEpisode{{episode}}}}}}}}",)"
 	    R"("variables":{{"ids":[{}],"type":"{}"}}}})",
-	    kBatchSize, byMal ? "idMal_in" : "id_in", list, typeName(type));
+	    kBatchSize, by_mal ? "idMal_in" : "id_in", list, TypeName(type));
 }
 
-web::answer<std::vector<web::details>> parseBatch(const std::string& body, mediaType type) {
-	auto reply = json::parse(body);
-	const json::value& media =
-	    reply.has_value() ? reply.value()["data"]["Page"]["media"] : json::value();
-	if (not media.isArray())
-		return web::refused("unexpected reply from AniList");
-	std::vector<web::details> found;
-	for (const auto& item : media.items())
-		found.push_back(detailsOf(item, type));
+web::Answer<std::vector<web::Details>> ParseBatch(const std::string& body, MediaType type) {
+	auto reply = json::Parse(body);
+	const json::Value& media =
+	    reply.has_value() ? reply.value()["data"]["Page"]["media"] : json::Value();
+	if (not media.IsArray())
+		return web::Refused("unexpected reply from AniList");
+	std::vector<web::Details> found;
+	for (const auto& item : media.Items())
+		found.push_back(DetailsOf(item, type));
 	return found;
 }
 
-web::answer<std::vector<web::match>> parseSearch(const std::string& body, mediaType type) {
-	auto reply = json::parse(body);
-	const json::value& media =
-	    reply.has_value() ? reply.value()["data"]["Page"]["media"] : json::value();
-	if (not media.isArray())
-		return web::refused("unexpected reply from AniList");
-	std::vector<web::match> found;
-	for (const auto& item : media.items()) {
-		web::match match;
-		match.anilistId = item["id"].asCount();
-		match.malId = item["idMal"].asCount();
-		match.name = item["title"]["romaji"].asString().value_or("");
-		if (match.anilistId == 0 or match.name.empty())
+web::Answer<std::vector<web::Match>> ParseSearch(const std::string& body, MediaType type) {
+	auto reply = json::Parse(body);
+	const json::Value& media =
+	    reply.has_value() ? reply.value()["data"]["Page"]["media"] : json::Value();
+	if (not media.IsArray())
+		return web::Refused("unexpected reply from AniList");
+	std::vector<web::Match> found;
+	for (const auto& item : media.Items()) {
+		web::Match match;
+		match.anilist_id = item["id"].AsCount();
+		match.mal_id = item["idMal"].AsCount();
+		match.name = item["title"]["romaji"].AsString().value_or("");
+		if (match.anilist_id == 0 or match.name.empty())
 			continue;
-		match.totalUnits = item[type == mediaType::kAnime ? "episodes" : "chapters"].asCount();
-		match.totalVolumes = item["volumes"].asCount();
-		int year = item["startDate"]["year"].asCount();
+		match.total_units = item[type == MediaType::kAnime ? "episodes" : "chapters"].AsCount();
+		match.total_volumes = item["volumes"].AsCount();
+		int year = item["startDate"]["year"].AsCount();
 		match.year = year > 0 ? std::to_string(year) : "";
-		match.score = item["averageScore"].asNumber().value_or(0.0) / 10.0;
+		match.score = item["averageScore"].AsNumber().value_or(0.0) / 10.0;
 		found.push_back(std::move(match));
 	}
 	return found;
 }
 
-web::answer<std::string> tracker::ask(const std::string& query, const std::string& token) const {
+web::Answer<std::string> Tracker::Ask(const std::string& query, const std::string& token) const {
 	std::vector<std::string> headers = {"Content-Type: application/json",
 	                                    "Accept: application/json"};
 	if (not token.empty())
-		headers.push_back(web::bearer(token));
-	return web::checked(net_.fetch({"POST", kApiUrl, headers, query}), provider::kAniList);
+		headers.push_back(web::Bearer(token));
+	return web::Checked(net_.fetch({"POST", kApiUrl, headers, query}), Provider::kAniList);
 }
 
-web::answer<web::loginStart> tracker::startLogin() {
+web::Answer<web::LoginStart> Tracker::StartLogin() {
 	if (net_.ids.anilist.empty())
-		return web::refused(
+		return web::Refused(
 		    "this Catalist has no AniList client id: register it at "
 		    "https://anilist.co/settings/developer (redirect URL "
 		    "https://anilist.co/api/v2/oauth/pin) and set CATALIST_ANILIST_CLIENT_ID");
-	return web::loginStart{
+	return web::LoginStart{
 	    std::format("https://anilist.co/api/v2/oauth/authorize?client_id={}&response_type=token",
 	                net_.ids.anilist),
 	    "Open this page, let Catalist in, and copy the token AniList shows.",
 	    {{"Token", true}}};
 }
 
-web::answer<account> tracker::finishLogin(const std::vector<std::string>& answers) {
+web::Answer<Account> Tracker::FinishLogin(const std::vector<std::string>& answers) {
 	std::string token = answers.empty() ? "" : answers[0];
 	if (token.empty())
-		return web::refused("no token given");
-	auto body = ask(R"({"query":"query{Viewer{id name}}"})", token);
-	if (not body and body.error().why == web::failure::kind::kUnreachable)
+		return web::Refused("no token given");
+	auto body = Ask(R"({"query":"query{Viewer{id name}}"})", token);
+	if (not body and body.error().why == web::Failure::Kind::kUnreachable)
 		return std::unexpected(body.error());
-	auto reply = body ? json::parse(*body) : std::unexpected("");
-	const json::value& viewer = reply.has_value() ? reply.value()["data"]["Viewer"] : json::value();
-	auto name = viewer["name"].asString();
+	auto reply = body ? json::Parse(*body) : std::unexpected("");
+	const json::Value& viewer = reply.has_value() ? reply.value()["data"]["Viewer"] : json::Value();
+	auto name = viewer["name"].AsString();
 	if (not name)
-		return web::refused("AniList did not take the token");
+		return web::Refused("AniList did not take the token");
 	constexpr long long kYear = 365LL * 24 * 60 * 60;
-	return account{provider::kAniList,      *name, std::to_string(viewer["id"].asCount()), token, "",
+	return Account{Provider::kAniList, *name, std::to_string(viewer["id"].AsCount()), token, "",
 	               net_.now() + kYear};
 }
 
-web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
-	auto body = ask(listRequest(type, user));
+web::Answer<std::vector<Entry>> Tracker::Pull(MediaType type, const std::string& user) {
+	auto body = Ask(ListRequest(type, user));
 	// AniList answers 404 for a user it has not, and for a private list.
 	if (not body and body.error().status == 404)
-		return web::refused(std::format("AniList has no public list of {}", user));
+		return web::Refused(std::format("AniList has no public list of {}", user));
 	if (not body)
 		return std::unexpected(body.error());
-	return parseList(*body, type);
+	return ParseList(*body, type);
 }
 
-web::answer<std::optional<web::siteEntry>> tracker::entryOf(const entry& title,
-                                                            const account& login) {
-	if (title.anilistId <= 0)
-		return web::notLinked(provider::kAniList);
-	auto body = ask(entryRequest(title, login.userId), login.token);
+web::Answer<std::optional<web::SiteEntry>> Tracker::EntryOf(const Entry& title,
+                                                            const Account& login) {
+	if (title.anilist_id <= 0)
+		return web::NotLinked(Provider::kAniList);
+	auto body = Ask(EntryRequest(title, login.user_id), login.token);
 	if (not body)
 		return std::unexpected(body.error());
-	return parseEntry(*body);
+	return ParseEntry(*body);
 }
 
-web::answer<void> tracker::push(const entry& title, const account& login,
-                                const web::sending& what) {
-	if (title.anilistId <= 0)
-		return web::notLinked(provider::kAniList);
-	auto body = ask(saveRequest(title, what), login.token);
+web::Answer<void> Tracker::Push(const Entry& title, const Account& login,
+                                const web::Sending& what) {
+	if (title.anilist_id <= 0)
+		return web::NotLinked(Provider::kAniList);
+	auto body = Ask(SaveRequest(title, what), login.token);
 	if (not body)
 		return std::unexpected(body.error());
-	auto reply = json::parse(*body);
-	if (not reply.has_value() or reply.value()["data"]["SaveMediaListEntry"]["id"].isNull())
-		return web::refused("AniList did not take the change");
+	auto reply = json::Parse(*body);
+	if (not reply.has_value() or reply.value()["data"]["SaveMediaListEntry"]["id"].IsNull())
+		return web::Refused("AniList did not take the change");
 	return {};
 }
 
-web::answer<void> tracker::remove(mediaType, int siteId, const account& login) {
+web::Answer<void> Tracker::Remove(MediaType, int site_id, const Account& login) {
 	// AniList answers 404 for a title that is not on the list: it is gone
 	// already.
-	auto body = ask(listEntryRequest(siteId, login.userId), login.token);
+	auto body = Ask(ListEntryRequest(site_id, login.user_id), login.token);
 	if (not body and body.error().status != 404)
 		return std::unexpected(body.error());
-	auto reply = body ? json::parse(*body) : std::unexpected("");
-	int listId = reply.has_value() ? reply.value()["data"]["MediaList"]["id"].asCount() : 0;
-	if (listId == 0)
+	auto reply = body ? json::Parse(*body) : std::unexpected("");
+	int list_id = reply.has_value() ? reply.value()["data"]["MediaList"]["id"].AsCount() : 0;
+	if (list_id == 0)
 		return {};
-	pause();
-	auto gone = ask(std::format(R"({{"query":"mutation($i:Int){{DeleteMediaListEntry(id:$i))"
+	Pause();
+	auto gone = Ask(std::format(R"({{"query":"mutation($i:Int){{DeleteMediaListEntry(id:$i))"
 	                            R"({{deleted}}}}","variables":{{"i":{}}}}})",
-	                            listId),
+	                            list_id),
 	                login.token);
 	if (not gone)
 		return std::unexpected(gone.error());
 	return {};
 }
 
-web::answer<account> tracker::current(const account& login) {
-	if (web::runningOut(login, net_.now()))
-		return std::unexpected(
-		    web::failure{web::failure::kind::kLoginRefused,
-		                 "your AniList login has run out: log in again with 'catalist login anilist'"});
+web::Answer<Account> Tracker::Current(const Account& login) {
+	if (web::RunningOut(login, net_.now()))
+		return std::unexpected(web::Failure{
+		    web::Failure::Kind::kLoginRefused,
+		    "your AniList login has run out: log in again with 'catalist login anilist'"});
 	return login;
 }
 
-web::answer<web::details> tracker::lookUp(const entry& known) {
-	if (known.anilistId <= 0 and known.malId <= 0)
-		return web::refused("the title has no id to look up");
-	auto body = ask(lookupRequest({known.type, known.anilistId, known.malId}));
+web::Answer<web::Details> Tracker::LookUp(const Entry& known) {
+	if (known.anilist_id <= 0 and known.mal_id <= 0)
+		return web::Refused("the title has no id to look up");
+	auto body = Ask(LookupRequest({known.type, known.anilist_id, known.mal_id}));
 	if (not body and body.error().status == 404)
-		return web::refused("AniList does not know the title");
+		return web::Refused("AniList does not know the title");
 	if (not body)
 		return std::unexpected(body.error());
-	return parseLookup(*body, known.type);
+	return ParseLookup(*body, known.type);
 }
 
-std::vector<web::answer<web::details>> tracker::lookUpMany(const std::vector<entry>& known) {
-	using outcome = web::answer<web::details>;
-	std::vector<outcome> found(known.size(), web::refused("AniList does not know the title"));
+std::vector<web::Answer<web::Details>> Tracker::LookUpMany(const std::vector<Entry>& known) {
+	using Outcome = web::Answer<web::Details>;
+	std::vector<Outcome> found(known.size(), web::Refused("AniList does not know the title"));
 	bool asked = false;
 	bool reached = true;
-	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
-		for (bool byMal : {false, true}) {
+	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
+		for (bool by_mal : {false, true}) {
 			// The titles this kind of request finds: by AniList's id when
 			// they have one, else by MyAnimeList's.
 			std::vector<size_t> wanted;
 			for (size_t i = 0; i < known.size(); ++i) {
-				const entry& each = known[i];
-				bool fits = byMal ? each.anilistId <= 0 and each.malId > 0 : each.anilistId > 0;
+				const Entry& each = known[i];
+				bool fits = by_mal ? each.anilist_id <= 0 and each.mal_id > 0 : each.anilist_id > 0;
 				if (each.type == type and fits)
 					wanted.push_back(i);
-				if (each.anilistId <= 0 and each.malId <= 0)
-					found[i] = web::refused("the title has no id to look up");
+				if (each.anilist_id <= 0 and each.mal_id <= 0)
+					found[i] = web::Refused("the title has no id to look up");
 			}
 			for (size_t from = 0; from < wanted.size(); from += kBatchSize) {
 				std::vector<size_t> batch(wanted.begin() + static_cast<std::ptrdiff_t>(from),
@@ -429,25 +429,25 @@ std::vector<web::answer<web::details>> tracker::lookUpMany(const std::vector<ent
 				                                               from + kBatchSize, wanted.size())));
 				std::vector<int> ids;
 				for (size_t i : batch)
-					ids.push_back(byMal ? known[i].malId : known[i].anilistId);
+					ids.push_back(by_mal ? known[i].mal_id : known[i].anilist_id);
 				if (asked and reached)
-					pause();
+					Pause();
 				asked = true;
-				auto body = reached ? ask(batchRequest(type, ids, byMal))
-				                    : web::unreachable("could not reach AniList");
-				auto titles = body ? parseBatch(*body, type)
-				                   : web::answer<std::vector<web::details>>(
-				                         std::unexpected(body.error()));
-				reached = reached and
-				          (body or body.error().why != web::failure::kind::kUnreachable);
+				auto body = reached ? Ask(BatchRequest(type, ids, by_mal))
+				                    : web::Unreachable("could not reach AniList");
+				auto titles =
+				    body ? ParseBatch(*body, type)
+				         : web::Answer<std::vector<web::Details>>(std::unexpected(body.error()));
+				reached =
+				    reached and (body or body.error().why != web::Failure::Kind::kUnreachable);
 				for (size_t i : batch) {
 					if (not titles.has_value()) {
 						found[i] = std::unexpected(titles.error());
 						continue;
 					}
 					for (const auto& title : titles.value()) {
-						int id = byMal ? title.facts.malId : title.facts.anilistId;
-						if (id == (byMal ? known[i].malId : known[i].anilistId))
+						int id = by_mal ? title.facts.mal_id : title.facts.anilist_id;
+						if (id == (by_mal ? known[i].mal_id : known[i].anilist_id))
 							found[i] = title;
 					}
 				}
@@ -457,11 +457,11 @@ std::vector<web::answer<web::details>> tracker::lookUpMany(const std::vector<ent
 	return found;
 }
 
-web::answer<std::vector<web::match>> tracker::search(mediaType type, const std::string& query) {
-	auto body = ask(searchRequest(type, query));
+web::Answer<std::vector<web::Match>> Tracker::Search(MediaType type, const std::string& query) {
+	auto body = Ask(SearchRequest(type, query));
 	if (not body)
 		return std::unexpected(body.error());
-	return parseSearch(*body, type);
+	return ParseSearch(*body, type);
 }
 
 }  // namespace catalist::anilist

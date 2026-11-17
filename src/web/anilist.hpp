@@ -19,77 +19,77 @@ namespace catalist::anilist {
 inline const std::string kApiUrl = "https://graphql.anilist.co";
 
 // A title to look up: by its AniList id when known, else its MyAnimeList id.
-struct titleRef {
-	mediaType type = mediaType::kAnime;
-	int anilistId = 0;
-	int malId = 0;
+struct TitleRef {
+	MediaType type = MediaType::kAnime;
+	int anilist_id = 0;
+	int mal_id = 0;
 };
 
 // The request bodies, and readers for their replies.
-[[nodiscard]] std::string lookupRequest(const titleRef& wanted);
-[[nodiscard]] web::answer<web::details> parseLookup(const std::string& body, mediaType type);
-[[nodiscard]] std::string searchRequest(mediaType type, const std::string& query);
-[[nodiscard]] web::answer<std::vector<web::match>> parseSearch(const std::string& body,
-                                                               mediaType type);
+[[nodiscard]] std::string LookupRequest(const TitleRef& wanted);
+[[nodiscard]] web::Answer<web::Details> ParseLookup(const std::string& body, MediaType type);
+[[nodiscard]] std::string SearchRequest(MediaType type, const std::string& query);
+[[nodiscard]] web::Answer<std::vector<web::Match>> ParseSearch(const std::string& body,
+                                                               MediaType type);
 
 // One request for up to kBatchSize titles of one type, by their AniList ids
-// or, with `byMal`, their MyAnimeList ids; the titles of its reply, in no
+// or, with `by_mal`, their MyAnimeList ids; the titles of its reply, in no
 // particular order.
 inline constexpr size_t kBatchSize = 50;
-[[nodiscard]] std::string batchRequest(mediaType type, const std::vector<int>& ids, bool byMal);
-[[nodiscard]] web::answer<std::vector<web::details>> parseBatch(const std::string& body,
-                                                                mediaType type);
+[[nodiscard]] std::string BatchRequest(MediaType type, const std::vector<int>& ids, bool by_mal);
+[[nodiscard]] web::Answer<std::vector<web::Details>> ParseBatch(const std::string& body,
+                                                                MediaType type);
 
 // The mutation that sets a title on the account's list, and the query for
 // the list entry of a title (to remove it).
-[[nodiscard]] std::string saveRequest(const entry& title, const web::sending& what = {});
-[[nodiscard]] std::string listEntryRequest(int mediaId, const std::string& userId);
+[[nodiscard]] std::string SaveRequest(const Entry& title, const web::Sending& what = {});
+[[nodiscard]] std::string ListEntryRequest(int media_id, const std::string& user_id);
 // The query for the user's own entry of a title, and the entry of its
 // reply (nothing when the title is not on the list).
-[[nodiscard]] std::string entryRequest(const entry& title, const std::string& userId);
-[[nodiscard]] web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body);
+[[nodiscard]] std::string EntryRequest(const Entry& title, const std::string& user_id);
+[[nodiscard]] web::Answer<std::optional<web::SiteEntry>> ParseEntry(const std::string& body);
 
 // The query for a user's whole list of one type, and the entries of its
 // reply.
-[[nodiscard]] std::string listRequest(mediaType type, const std::string& user);
-[[nodiscard]] web::answer<std::vector<entry>> parseList(const std::string& body, mediaType type);
+[[nodiscard]] std::string ListRequest(MediaType type, const std::string& user);
+[[nodiscard]] web::Answer<std::vector<Entry>> ParseList(const std::string& body, MediaType type);
 
-class tracker : public web::iTracker {
+class Tracker : public web::Tracker {
 public:
-	explicit tracker(web::link net) : net_(std::move(net)) {}
+	explicit Tracker(web::Link net) : net_(std::move(net)) {}
 
-	[[nodiscard]] provider site() const override { return provider::kAniList; }
-	[[nodiscard]] web::answer<std::vector<web::match>> search(mediaType type,
+	[[nodiscard]] Provider Site() const override { return Provider::kAniList; }
+	[[nodiscard]] web::Answer<std::vector<web::Match>> Search(MediaType type,
 	                                                          const std::string& query) override;
-	[[nodiscard]] web::answer<web::details> lookUp(const entry& known) override;
+	[[nodiscard]] web::Answer<web::Details> LookUp(const Entry& known) override;
 	// kBatchSize titles a request.
-	[[nodiscard]] std::vector<web::answer<web::details>> lookUpMany(
-	    const std::vector<entry>& known) override;
+	[[nodiscard]] std::vector<web::Answer<web::Details>> LookUpMany(
+	    const std::vector<Entry>& known) override;
 	// AniList's implicit grant: its page shows a token to paste, good for a
 	// year, which cannot be renewed.
-	[[nodiscard]] web::answer<web::loginStart> startLogin() override;
-	[[nodiscard]] web::answer<account> finishLogin(
+	[[nodiscard]] web::Answer<web::LoginStart> StartLogin() override;
+	[[nodiscard]] web::Answer<Account> FinishLogin(
 	    const std::vector<std::string>& answers) override;
-	[[nodiscard]] web::answer<account> current(const account& login) override;
-	[[nodiscard]] web::answer<std::vector<entry>> pull(mediaType type,
+	[[nodiscard]] web::Answer<Account> Current(const Account& login) override;
+	[[nodiscard]] web::Answer<std::vector<Entry>> Pull(MediaType type,
 	                                                   const std::string& user) override;
-	[[nodiscard]] web::answer<std::optional<web::siteEntry>> entryOf(
-	    const entry& title, const account& login) override;
-	[[nodiscard]] web::answer<void> push(const entry& title, const account& login,
-	                                     const web::sending& what) override;
-	[[nodiscard]] web::answer<void> remove(mediaType type, int siteId,
-	                                       const account& login) override;
+	[[nodiscard]] web::Answer<std::optional<web::SiteEntry>> EntryOf(const Entry& title,
+	                                                                 const Account& login) override;
+	[[nodiscard]] web::Answer<void> Push(const Entry& title, const Account& login,
+	                                     const web::Sending& what) override;
+	[[nodiscard]] web::Answer<void> Remove(MediaType type, int site_id,
+	                                       const Account& login) override;
 
 protected:
-	void pause() const override { net_.pause(); }
+	void Pause() const override { net_.pause(); }
 
 private:
 	// The reply to a query, asked as the account of `token` when there is
 	// one; the failure when AniList cannot be reached or said no.
-	[[nodiscard]] web::answer<std::string> ask(const std::string& query,
+	[[nodiscard]] web::Answer<std::string> Ask(const std::string& query,
 	                                           const std::string& token = "") const;
 
-	web::link net_;
+	web::Link net_;
 };
 
 }  // namespace catalist::anilist

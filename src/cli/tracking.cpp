@@ -13,77 +13,77 @@ namespace {
 
 // A field `set` can set: its name, another name it goes by, what its value
 // must be, and the rule that sets it (nothing when the value is not one).
-struct settable {
+struct Settable {
 	std::string name;
 	std::string alias;
 	std::string wants;
-	std::optional<entry> (*set)(entry target, const std::string& value, const isoDate& today);
+	std::optional<Entry> (*set)(Entry target, const std::string& value, const IsoDate& today);
 };
 
-std::optional<entry> withCount(const entry& target, countField field, const std::string& value,
-                               const isoDate& today) {
-	auto count = args::parseCount(value);
-	return count ? std::optional(setCount(target, field, *count, today)) : std::nullopt;
+std::optional<Entry> WithCount(const Entry& target, CountField field, const std::string& value,
+                               const IsoDate& today) {
+	auto count = args::ParseCount(value);
+	return count ? std::optional(SetCount(target, field, *count, today)) : std::nullopt;
 }
 
 // An empty value clears the date; `today` is today's.
-std::optional<entry> withDate(const entry& target, bool start, const std::string& value,
-                              const isoDate& today) {
-	auto day = value == "today" ? std::optional(today) : isoDate::parse(value);
+std::optional<Entry> WithDate(const Entry& target, bool start, const std::string& value,
+                              const IsoDate& today) {
+	auto day = value == "today" ? std::optional(today) : IsoDate::Parse(value);
 	if (not day and not value.empty())
 		return std::nullopt;
-	return start ? setStartDate(target, day, today) : setFinishDate(target, day, today);
+	return start ? SetStartDate(target, day, today) : SetFinishDate(target, day, today);
 }
 
 // In the order they are set when several are given: the total first, so the
 // progress can reach it; the status after the progress, so a status that is
 // given stands (completed still means all of a known total); the dates last,
 // so they stand whatever the status did.
-const std::vector<settable>& settables() {
-	using text = const std::string&;
-	using day = const isoDate&;
-	static const std::vector<settable> all = {
+const std::vector<Settable>& Settables() {
+	using Text = const std::string&;
+	using Day = const IsoDate&;
+	static const std::vector<Settable> kAll = {
 	    {"total", "", "a count",
-	     [](entry e, text value, day today) {
-		     return withCount(e, countField::kTotalUnits, value, today);
+	     [](Entry e, Text value, Day today) {
+		     return WithCount(e, CountField::kTotalUnits, value, today);
 	     }},
 	    {"progress", "", "a count",
-	     [](entry e, text value, day today) {
-		     return withCount(e, countField::kProgress, value, today);
+	     [](Entry e, Text value, Day today) {
+		     return WithCount(e, CountField::kProgress, value, today);
 	     }},
 	    {"status", "", "watching, completed, on-hold, dropped, planned or rewatching",
-	     [](entry e, text value, day today) {
-		     auto status = statusNamed(value);
-		     return status ? std::optional(setStatus(e, *status, today)) : std::nullopt;
+	     [](Entry e, Text value, Day today) {
+		     auto status = StatusNamed(value);
+		     return status ? std::optional(SetStatus(e, *status, today)) : std::nullopt;
 	     }},
 	    {"score", "", "0 to 10",
-	     [](entry e, text value, day today) {
-		     auto score = args::parseCount(value);
+	     [](Entry e, Text value, Day today) {
+		     auto score = args::ParseCount(value);
 		     bool valid = score and *score <= 10;
-		     return valid ? std::optional(setScore(e, *score, today)) : std::nullopt;
+		     return valid ? std::optional(SetScore(e, *score, today)) : std::nullopt;
 	     }},
 	    {"volumes", "", "a count",
-	     [](entry e, text value, day today) {
-		     return withCount(e, countField::kVolumes, value, today);
+	     [](Entry e, Text value, Day today) {
+		     return WithCount(e, CountField::kVolumes, value, today);
 	     }},
 	    {"rewatched", "", "a count",
-	     [](entry e, text value, day today) {
-		     return withCount(e, countField::kRewatched, value, today);
+	     [](Entry e, Text value, Day today) {
+		     return WithCount(e, CountField::kRewatched, value, today);
 	     }},
 	    {"title", "", "a title",
-	     [](entry e, text value, day today) {
-		     return value.empty() ? std::nullopt : std::optional(setTitle(e, value, today));
+	     [](Entry e, Text value, Day today) {
+		     return value.empty() ? std::nullopt : std::optional(SetTitle(e, value, today));
 	     }},
 	    {"start", "started", "a date such as 2026-10-20, today, or empty to clear it",
-	     [](entry e, text value, day today) { return withDate(e, true, value, today); }},
+	     [](Entry e, Text value, Day today) { return WithDate(e, true, value, today); }},
 	    {"finish", "finished", "a date such as 2026-10-20, today, or empty to clear it",
-	     [](entry e, text value, day today) { return withDate(e, false, value, today); }},
+	     [](Entry e, Text value, Day today) { return WithDate(e, false, value, today); }},
 	};
-	return all;
+	return kAll;
 }
 
-const settable* findSettable(const std::string& name) {
-	for (const auto& each : settables())
+const Settable* FindSettable(const std::string& name) {
+	for (const auto& each : Settables())
 		if (each.name == name or (not each.alias.empty() and each.alias == name))
 			return &each;
 	return nullptr;
@@ -91,21 +91,21 @@ const settable* findSettable(const std::string& name) {
 
 // The FIELD=VALUE operands (all but the first, the REF) by field name;
 // fails on the first that names no field or holds no value for it.
-result<std::map<std::string, std::string>> readAssignments(const std::vector<std::string>& operands,
-                                                           const isoDate& today) {
+Result<std::map<std::string, std::string>> ReadAssignments(const std::vector<std::string>& operands,
+                                                           const IsoDate& today) {
 	std::map<std::string, std::string> values;
 	for (size_t i = 1; i < operands.size(); ++i) {
 		auto equals = operands[i].find('=');
 		if (equals == std::string::npos)
 			return std::unexpected(std::format(
 			    "'{}' is not FIELD=VALUE; quote a title of several words", operands[i]));
-		std::string name = utf8::lowercase(operands[i].substr(0, equals));
+		std::string name = utf8::Lowercase(operands[i].substr(0, equals));
 		std::string value = operands[i].substr(equals + 1);
-		const settable* field = findSettable(name);
+		const Settable* field = FindSettable(name);
 		if (not field)
 			return std::unexpected(
-			    std::format("unknown field '{}'{}", name, didYouMean(name, settableNames())));
-		if (not field->set(entry{}, value, today))
+			    std::format("unknown field '{}'{}", name, DidYouMean(name, SettableNames())));
+		if (not field->set(Entry{}, value, today))
 			return std::unexpected(
 			    std::format("{} '{}' is not {}", field->name, value, field->wants));
 		values[field->name] = value;
@@ -113,9 +113,9 @@ result<std::map<std::string, std::string>> readAssignments(const std::vector<std
 	return values;
 }
 
-entry withValues(entry target, const std::map<std::string, std::string>& values,
-                 const isoDate& today) {
-	for (const auto& field : settables()) {
+Entry WithValues(Entry target, const std::map<std::string, std::string>& values,
+                 const IsoDate& today) {
+	for (const auto& field : Settables()) {
 		auto given = values.find(field.name);
 		if (given != values.end())
 			target = *field.set(target, given->second, today);
@@ -123,143 +123,141 @@ entry withValues(entry target, const std::map<std::string, std::string>& values,
 	return target;
 }
 
-int runStep(const command& self, const args::parsed& line, cliContext& ctx) {
-	auto by = countGiven(line, 1);
+int RunStep(const Command& self, const args::Parsed& line, CliContext& ctx) {
+	auto by = CountGiven(line, 1);
 	if (not by.has_value())
-		return usageError(ctx, self, by.error());
+		return UsageError(ctx, self, by.error());
 	int delta = self.name == "+" ? by.value() : -by.value();
-	isoDate today = ctx.today();
-	return changeTitles(self, line, ctx,
-	                    [&](const entry& e) { return stepProgress(e, delta, today); });
+	IsoDate today = ctx.Today();
+	return ChangeTitles(self, line, ctx,
+	                    [&](const Entry& e) { return StepProgress(e, delta, today); });
 }
 
-int runSet(const command& self, const args::parsed& line, cliContext& ctx) {
+int RunSet(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	if (line.operands.empty() or line.operands[0].empty())
-		return usageError(ctx, self, "name a title: a ref such as a:12, or part of it");
+		return UsageError(ctx, self, "name a title: a ref such as a:12, or part of it");
 	if (line.operands.size() < 2)
-		return usageError(ctx, self, "nothing to change: give a FIELD=VALUE such as score=8");
-	isoDate today = ctx.today();
-	auto values = readAssignments(line.operands, today);
+		return UsageError(ctx, self, "nothing to change: give a FIELD=VALUE such as score=8");
+	IsoDate today = ctx.Today();
+	auto values = ReadAssignments(line.operands, today);
 	if (not values.has_value())
-		return usageError(ctx, self, values.error());
-	if (not loadForWrite(ctx))
+		return UsageError(ctx, self, values.error());
+	if (not LoadForWrite(ctx))
 		return 1;
 	auto found =
-	    resolve(ctx, {line.operands[0]}, {onlyType(line), line.has("all"), ctx.interactive});
+	    Resolve(ctx, {line.operands[0]}, {OnlyType(line), line.Has("all"), ctx.interactive});
 	if (not found)
 		return 1;
-	return applyTo(ctx, line, *found,
-	               [&](const entry& e) { return withValues(e, values.value(), today); });
+	return ApplyTo(ctx, line, *found,
+	               [&](const Entry& e) { return WithValues(e, values.value(), today); });
 }
 
 // The status each of the status commands sets.
-const std::map<std::string, watchStatus> kStatusCommands = {{"done", watchStatus::kCompleted},
-                                                            {"hold", watchStatus::kOnHold},
-                                                            {"drop", watchStatus::kDropped},
-                                                            {"plan", watchStatus::kPlanToWatch},
-                                                            {"resume", watchStatus::kWatching},
-                                                            {"rewatch", watchStatus::kRewatching}};
+const std::map<std::string, WatchStatus> kStatusCommands = {
+    {"done", WatchStatus::kCompleted},  {"hold", WatchStatus::kOnHold},
+    {"drop", WatchStatus::kDropped},    {"plan", WatchStatus::kPlanToWatch},
+    {"resume", WatchStatus::kWatching}, {"rewatch", WatchStatus::kRewatching}};
 
-int runStatus(const command& self, const args::parsed& line, cliContext& ctx) {
-	watchStatus status = kStatusCommands.at(self.name);
+int RunStatus(const Command& self, const args::Parsed& line, CliContext& ctx) {
+	WatchStatus status = kStatusCommands.at(self.name);
 	std::optional<int> score;
-	if (line.has("score")) {
-		score = args::parseCount(line.get("score"));
+	if (line.Has("score")) {
+		score = args::ParseCount(line.Get("score"));
 		if (not score or *score > 10)
-			return usageError(ctx, self,
-			                  std::format("--score '{}' is not 0 to 10", line.get("score")));
+			return UsageError(ctx, self,
+			                  std::format("--score '{}' is not 0 to 10", line.Get("score")));
 	}
-	isoDate today = ctx.today();
-	return changeTitles(self, line, ctx, [&](const entry& e) {
-		entry next = setStatus(e, status, today);
-		return score ? setScore(next, *score, today) : next;
+	IsoDate today = ctx.Today();
+	return ChangeTitles(self, line, ctx, [&](const Entry& e) {
+		Entry next = SetStatus(e, status, today);
+		return score ? SetScore(next, *score, today) : next;
 	});
 }
 
 // Asks before titles are removed. False, with the reason on standard error,
 // when the answer is not yes or when there is nobody to ask.
-bool removalConfirmed(cliContext& ctx, const std::vector<entry>& gone, bool ask) {
+bool RemovalConfirmed(CliContext& ctx, const std::vector<Entry>& gone, bool ask) {
 	for (size_t i = 0; gone.size() > 1 and i < gone.size(); ++i)
-		ctx.err << "  " << refs::of(gone[i]) << "  " << gone[i].title << "\n";
-	std::string what = gone.size() == 1 ? std::format("{} ({})", gone[0].title, refs::of(gone[0]))
+		ctx.err << "  " << refs::Of(gone[i]) << "  " << gone[i].title << "\n";
+	std::string what = gone.size() == 1 ? std::format("{} ({})", gone[0].title, refs::Of(gone[0]))
 	                                    : std::format("these {} titles", gone.size());
 	if (not ask) {
-		fail(ctx, std::format("nobody to ask here: pass -f to remove {}", what));
+		Fail(ctx, std::format("nobody to ask here: pass -f to remove {}", what));
 		return false;
 	}
 	ctx.err << std::format("Remove {} from your lists? [y/N]: ", what) << std::flush;
 	std::string answer;
 	std::getline(ctx.in, answer);
-	answer = utf8::lowercase(answer);
+	answer = utf8::Lowercase(answer);
 	if (answer == "y" or answer == "yes")
 		return true;
 	ctx.err << "Cancelled.\n";
 	return false;
 }
 
-int runRemove(const command& self, const args::parsed& line, cliContext& ctx) {
-	auto request = readRefs(self, line, ctx);
+int RunRemove(const Command& self, const args::Parsed& line, CliContext& ctx) {
+	auto request = ReadRefs(self, line, ctx);
 	if (request.stop)
 		return *request.stop;
-	if (not loadForWrite(ctx))
+	if (not LoadForWrite(ctx))
 		return 1;
-	auto found = resolve(ctx, request.refs, request.how);
+	auto found = Resolve(ctx, request.refs, request.how);
 	if (not found)
 		return 1;
-	if (not line.has("f") and not removalConfirmed(ctx, *found, request.how.ask))
+	if (not line.Has("f") and not RemovalConfirmed(ctx, *found, request.how.ask))
 		return 1;
-	std::vector<journal::change> changes;
+	std::vector<journal::Change> changes;
 	for (const auto& gone : *found) {
-		ctx.db.removeEntry(gone.type, gone.id);
+		ctx.db.RemoveEntry(gone.type, gone.id);
 		changes.push_back({gone.type, gone.id, gone, std::nullopt});
 	}
-	int code = saveAndReport(ctx, line, changes);
-	if (code == 0 and line.has("remote"))
-		tellSitesGone(ctx, *found);
+	int code = SaveAndReport(ctx, line, changes);
+	if (code == 0 and line.Has("remote"))
+		TellSitesGone(ctx, *found);
 	return code;
 }
 
 // done, hold, drop, plan and resume differ in their name and their words.
-command statusCommand(const std::string& name, const std::string& summary,
+Command StatusCommand(const std::string& name, const std::string& summary,
                       const std::string& details) {
-	std::vector<args::option> options = {kQuiet};
+	std::vector<args::Option> options = {kQuiet};
 	if (name == "done")
 		options.insert(options.begin(), {0, "score", "N", "give it a score as well, 0 to 10"});
 	return {.name = name,
 	        .summary = summary,
 	        .details = details + "\n" + kRefsHelp + "\n" + kChangeFormat,
-	        .options = withRefOptions(options),
+	        .options = WithRefOptions(options),
 	        .operands = "REF...",
-	        .run = runStatus,
-	        .completes = operandKind::kRefs};
+	        .run = RunStatus,
+	        .completes = OperandKind::kRefs};
 }
 
-command stepCommand(const std::string& name, const std::string& alias, const std::string& summary,
+Command StepCommand(const std::string& name, const std::string& alias, const std::string& summary,
                     const std::string& details) {
 	return {.name = name,
 	        .aliases = {alias},
 	        .summary = summary,
 	        .details = details + "\n" + kRefsHelp + "\n" + kChangeFormat,
-	        .options = withRefOptions({{'n', "", "N", "count N instead of one"}, kQuiet}),
+	        .options = WithRefOptions({{'n', "", "N", "count N instead of one"}, kQuiet}),
 	        .operands = "REF...",
-	        .run = runStep,
-	        .completes = operandKind::kRefs};
+	        .run = RunStep,
+	        .completes = OperandKind::kRefs};
 }
 
 }  // namespace
 
-std::vector<std::string> settableNames() {
+std::vector<std::string> SettableNames() {
 	std::vector<std::string> names;
-	for (const auto& each : settables())
+	for (const auto& each : Settables())
 		names.push_back(each.name);
 	return names;
 }
 
-std::vector<command> trackingCommands() {
+std::vector<Command> TrackingCommands() {
 	return {
-	    stepCommand("+", "inc", "Count one more episode or chapter",
+	    StepCommand("+", "inc", "Count one more episode or chapter",
 	                "The first one starts a title, and the last one completes it.\n"),
-	    stepCommand("-", "dec", "Count one less episode or chapter",
+	    StepCommand("-", "dec", "Count one less episode or chapter",
 	                "Going back below the total reopens a completed title.\n"),
 	    {.name = "set",
 	     .summary = "Set fields of a title",
@@ -271,18 +269,18 @@ std::vector<command> trackingCommands() {
 	             "title, as + does. All values are checked before anything changes.\n\n"
 	             "The REF is a ref such as a:12, or part of a title.\n\n") +
 	         kChangeFormat,
-	     .options = withRefOptions({kQuiet}),
+	     .options = WithRefOptions({kQuiet}),
 	     .operands = "REF FIELD=VALUE...",
-	     .run = runSet,
-	     .completes = operandKind::kRefThenFields},
-	    statusCommand("done", "Mark titles completed",
+	     .run = RunSet,
+	     .completes = OperandKind::kRefThenFields},
+	    StatusCommand("done", "Mark titles completed",
 	                  "Sets the finish date, and the progress to the total when it is known.\n"),
-	    statusCommand("hold", "Put titles on hold", ""),
-	    statusCommand("drop", "Mark titles dropped", ""),
-	    statusCommand("plan", "Mark titles planned", ""),
-	    statusCommand("resume", "Take titles up again",
+	    StatusCommand("hold", "Put titles on hold", ""),
+	    StatusCommand("drop", "Mark titles dropped", ""),
+	    StatusCommand("plan", "Mark titles planned", ""),
+	    StatusCommand("resume", "Take titles up again",
 	                  "Sets the status to watching (reading, for a manga).\n"),
-	    statusCommand("rewatch", "Watch or read titles again",
+	    StatusCommand("rewatch", "Watch or read titles again",
 	                  "Sets the status to rewatching (rereading, for a manga). A completed title\n"
 	                  "starts again from the first episode or chapter and keeps the dates of\n"
 	                  "the first time; reaching the total completes it again, one more to\n"
@@ -296,12 +294,12 @@ std::vector<command> trackingCommands() {
 	                     "to keep the title on your lists there, unless --remote is given.\n\n") +
 	         kRefsHelp + "\n" + kChangeFormat,
 	     .options =
-	         withRefOptions({{'f', "", "", "remove without asking"},
+	         WithRefOptions({{'f', "", "", "remove without asking"},
 	                         {0, "remote", "", "take them off your lists on the sites as well"},
 	                         kQuiet}),
 	     .operands = "REF...",
-	     .run = runRemove,
-	     .completes = operandKind::kRefs},
+	     .run = RunRemove,
+	     .completes = OperandKind::kRefs},
 	};
 }
 

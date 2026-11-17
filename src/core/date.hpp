@@ -8,37 +8,37 @@
 
 namespace catalist {
 
-class isoDate {
+class IsoDate {
 public:
 	// Accepts "YYYY-MM-DD", optionally followed by a 'T' or ' ' and a time.
-	static std::optional<isoDate> parse(std::string_view dateStr);
+	static std::optional<IsoDate> Parse(std::string_view date_str);
 	// Absent unless the parts name a real calendar day in year 1 or later.
-	static std::optional<isoDate> fromParts(int year, int month, int day);
-	static isoDate fromLocalTm(const std::tm& local);
+	static std::optional<IsoDate> FromParts(int year, int month, int day);
+	static IsoDate FromLocalTm(const std::tm& local);
 
-	[[nodiscard]] std::string toString() const;
+	[[nodiscard]] std::string ToString() const;
 
-	[[nodiscard]] int year() const { return year_; }
-	[[nodiscard]] int month() const { return month_; }
-	[[nodiscard]] int day() const { return day_; }
+	[[nodiscard]] int Year() const { return year_; }
+	[[nodiscard]] int Month() const { return month_; }
+	[[nodiscard]] int Day() const { return day_; }
 
-	bool operator==(const isoDate& other) const {
+	bool operator==(const IsoDate& other) const {
 		return year_ == other.year_ and month_ == other.month_ and day_ == other.day_;
 	}
-	bool operator!=(const isoDate& other) const { return not(*this == other); }
-	bool operator<(const isoDate& other) const {
+	bool operator!=(const IsoDate& other) const { return not(*this == other); }
+	bool operator<(const IsoDate& other) const {
 		if (year_ != other.year_)
 			return year_ < other.year_;
 		if (month_ != other.month_)
 			return month_ < other.month_;
 		return day_ < other.day_;
 	}
-	bool operator<=(const isoDate& other) const { return not(other < *this); }
-	bool operator>(const isoDate& other) const { return other < *this; }
-	bool operator>=(const isoDate& other) const { return not(*this < other); }
+	bool operator<=(const IsoDate& other) const { return not(other < *this); }
+	bool operator>(const IsoDate& other) const { return other < *this; }
+	bool operator>=(const IsoDate& other) const { return not(*this < other); }
 
 private:
-	isoDate() = default;
+	IsoDate() = default;
 
 	int year_ = 0;
 	int month_ = 0;
@@ -47,7 +47,7 @@ private:
 
 // "2026-10-20 21:30:00": a local date and time, as a step of the undo
 // history is stamped.
-[[nodiscard]] std::string stampOf(const std::tm& local);
+[[nodiscard]] std::string StampOf(const std::tm& local);
 
 }  // namespace catalist
 

@@ -9,11 +9,11 @@ namespace catalist {
 
 // A login on a site: what Catalist needs to tell that site what changes in
 // the lists. The password never is one of these; the token stands for it.
-struct account {
-	provider site = provider::kAniList;
+struct Account {
+	Provider site = Provider::kAniList;
 	std::string user;
 	// The site's number for the user, where its API asks for it (Kitsu).
-	std::string userId;
+	std::string user_id;
 	std::string token;
 	// What gets a new token once this one runs out; empty where the site
 	// gives none (AniList).

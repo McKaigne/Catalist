@@ -18,7 +18,7 @@ namespace catalist::args {
 
 // An option a command takes. `letter` is 0 or `name` is empty when it has
 // only the other form; `value` names what follows it (empty for a flag).
-struct option {
+struct Option {
 	char letter = 0;
 	std::string name;
 	std::string value;
@@ -29,38 +29,38 @@ struct option {
 };
 
 // How the option is written: "--sort", or "-n" when it has no long name.
-[[nodiscard]] std::string spelled(const option& taken);
+[[nodiscard]] std::string Spelled(const Option& taken);
 
-struct parsed {
+struct Parsed {
 	// By the option's long name, or its letter when it has none. A flag's
 	// value is empty.
 	std::map<std::string, std::string> options;
 	std::vector<std::string> operands;
 
-	[[nodiscard]] bool has(const std::string& name) const { return options.count(name) > 0; }
+	[[nodiscard]] bool Has(const std::string& name) const { return options.count(name) > 0; }
 	// The option's value, empty when it was not given.
-	[[nodiscard]] std::string get(const std::string& name) const;
+	[[nodiscard]] std::string Get(const std::string& name) const;
 };
 
 // Fails, saying which argument is wrong, on an option not in `options`, a
 // missing value, or a value given to a flag.
-[[nodiscard]] result<parsed> parse(const std::vector<std::string>& arguments,
-                                   const std::vector<option>& options);
+[[nodiscard]] Result<Parsed> Parse(const std::vector<std::string>& arguments,
+                                   const std::vector<Option>& options);
 
 // The operands with each `-` replaced by the lines of `in` (blank lines are
 // skipped), for commands that take their operands from a pipe.
-[[nodiscard]] std::vector<std::string> withLinesFor(const std::vector<std::string>& operands,
+[[nodiscard]] std::vector<std::string> WithLinesFor(const std::vector<std::string>& operands,
                                                     std::istream& in);
 
 // How many single-character edits turn one word into the other.
-[[nodiscard]] size_t editDistance(const std::string& from, const std::string& to);
+[[nodiscard]] size_t EditDistance(const std::string& from, const std::string& to);
 
 // The known word a typo was probably meant to be: at most two edits away.
-[[nodiscard]] std::optional<std::string> closestTo(const std::string& typed,
+[[nodiscard]] std::optional<std::string> ClosestTo(const std::string& typed,
                                                    const std::vector<std::string>& known);
 
 // A count: digits only, and few enough of them to fit an int.
-[[nodiscard]] std::optional<int> parseCount(const std::string& text);
+[[nodiscard]] std::optional<int> ParseCount(const std::string& text);
 
 }  // namespace catalist::args
 

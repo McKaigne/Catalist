@@ -14,48 +14,48 @@
 // A small read-only JSON document model for the replies of the title search.
 namespace catalist::json {
 
-struct member;
+struct Member;
 
-class value {
+class Value {
 public:
-	using array = std::vector<value>;
-	using object = std::vector<member>;
+	using Array = std::vector<Value>;
+	using Object = std::vector<Member>;
 
-	value() = default;
-	value(std::nullptr_t) {}
-	value(bool flag) : data_(flag) {}
-	value(double number) : data_(number) {}
-	value(std::string text) : data_(std::move(text)) {}
-	value(array items) : data_(std::move(items)) {}
-	value(object members) : data_(std::move(members)) {}
+	Value() = default;
+	Value(std::nullptr_t) {}
+	Value(bool flag) : data_(flag) {}
+	Value(double number) : data_(number) {}
+	Value(std::string text) : data_(std::move(text)) {}
+	Value(Array items) : data_(std::move(items)) {}
+	Value(Object members) : data_(std::move(members)) {}
 
-	[[nodiscard]] bool isNull() const;
-	[[nodiscard]] bool isArray() const;
+	[[nodiscard]] bool IsNull() const;
+	[[nodiscard]] bool IsArray() const;
 
-	[[nodiscard]] std::optional<double> asNumber() const;
-	[[nodiscard]] std::optional<bool> asBool() const;
+	[[nodiscard]] std::optional<double> AsNumber() const;
+	[[nodiscard]] std::optional<bool> AsBool() const;
 	// Whole numbers only; 3.5 or a string is absent.
-	[[nodiscard]] std::optional<long long> asInteger() const;
+	[[nodiscard]] std::optional<long long> AsInteger() const;
 	// A count, an id or a total: a whole number above 0, else 0.
-	[[nodiscard]] int asCount() const;
-	[[nodiscard]] std::optional<std::string> asString() const;
+	[[nodiscard]] int AsCount() const;
+	[[nodiscard]] std::optional<std::string> AsString() const;
 
 	// A missing key, or indexing something that is not an object, yields null
 	// so that lookups along a path can be chained.
-	[[nodiscard]] const value& operator[](std::string_view key) const;
+	[[nodiscard]] const Value& operator[](std::string_view key) const;
 	// Elements of an array; empty for any other kind.
-	[[nodiscard]] const array& items() const;
+	[[nodiscard]] const Array& Items() const;
 
 private:
-	std::variant<std::nullptr_t, bool, double, std::string, array, object> data_;
+	std::variant<std::nullptr_t, bool, double, std::string, Array, Object> data_;
 };
 
-struct member {
+struct Member {
 	std::string key;
-	value item;
+	Value item;
 };
 
-[[nodiscard]] result<value> parse(std::string_view text);
+[[nodiscard]] Result<Value> Parse(std::string_view text);
 
 }  // namespace catalist::json
 

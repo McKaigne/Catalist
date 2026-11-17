@@ -13,49 +13,49 @@ namespace catalist::output {
 
 // One field of a row. `text` is how it reads in a table or a tab-separated
 // line; `json` says how JSON writes it.
-enum class jsonForm { kString, kNumber, kNull };
-struct cell {
+enum class JsonForm { kString, kNumber, kNull };
+struct Cell {
 	std::string text;
-	jsonForm json = jsonForm::kString;
+	JsonForm json = JsonForm::kString;
 };
 
-[[nodiscard]] cell text(std::string value);
-[[nodiscard]] cell number(long long value);
+[[nodiscard]] Cell Text(std::string value);
+[[nodiscard]] Cell Number(long long value);
 // A count that is 0 while it is not known: 0 in a line, null in JSON.
-[[nodiscard]] cell known(int value);
+[[nodiscard]] Cell Known(int value);
 // A date that may be absent: "-" in a line, null in JSON.
-[[nodiscard]] cell date(const std::optional<isoDate>& value);
+[[nodiscard]] Cell Date(const std::optional<IsoDate>& value);
 // Text that may be empty: "-" in a line, null in JSON.
-[[nodiscard]] cell maybe(const std::string& value);
+[[nodiscard]] Cell Maybe(const std::string& value);
 
 // One line of tab-separated fields, with its line end. A tab or a line break
 // inside a field becomes one space, so every line has the same fields.
-[[nodiscard]] std::string tsvLine(const std::vector<std::string>& fields);
-[[nodiscard]] std::string tsvLine(const std::vector<cell>& cells);
+[[nodiscard]] std::string TsvLine(const std::vector<std::string>& fields);
+[[nodiscard]] std::string TsvLine(const std::vector<Cell>& cells);
 
 // One line of comma-separated fields, with its line end, quoted as RFC 4180
 // has it: a field that holds a comma, a quote or a line break goes in double
 // quotes, with each quote in it doubled. A cell that JSON writes as null (no
 // date, a total that is not known) is an empty field.
-[[nodiscard]] std::string csvLine(const std::vector<std::string>& fields);
-[[nodiscard]] std::string csvLine(const std::vector<cell>& cells);
+[[nodiscard]] std::string CsvLine(const std::vector<std::string>& fields);
+[[nodiscard]] std::string CsvLine(const std::vector<Cell>& cells);
 
 // The text as a JSON string, quotes included.
-[[nodiscard]] std::string jsonString(const std::string& value);
+[[nodiscard]] std::string JsonString(const std::string& value);
 // One JSON object on one line, with its line end: `names[i]` is the key of
 // `cells[i]`.
-[[nodiscard]] std::string jsonLine(const std::vector<std::string>& names,
-                                   const std::vector<cell>& cells);
+[[nodiscard]] std::string JsonLine(const std::vector<std::string>& names,
+                                   const std::vector<Cell>& cells);
 
 // A score out of 10 as five Nerd Font stars (nf-md-star, nf-md-star_half_full
 // and nf-md-star_outline: full, a whole star half filled, and empty), each
 // half a point, rounded to the nearest: 7 is three full stars, a half filled
 // one and an empty one. "-" for no score.
-[[nodiscard]] std::string stars(double outOfTen);
+[[nodiscard]] std::string Stars(double out_of_ten);
 
 // The text in an SGR colour or style ("1", "32"...), or as it is when
 // `color` is off or there is no style.
-[[nodiscard]] std::string paint(const std::string& value, const char* sgr, bool color);
+[[nodiscard]] std::string Paint(const std::string& value, const char* sgr, bool color);
 
 inline const char* const kBold = "1";
 inline const char* const kDim = "2";
@@ -64,24 +64,24 @@ inline const char* const kGreen = "32";
 inline const char* const kYellow = "33";
 inline const char* const kCyan = "36";
 
-struct tableColumn {
+struct TableColumn {
 	std::string header;
-	bool alignRight = false;
+	bool align_right = false;
 	// The one column that gives way when the table is wider than the
 	// terminal (the title).
 	bool flexible = false;
 };
 
 // A table cell, with the style it is painted in (none when null).
-struct styled {
+struct Styled {
 	std::string text;
 	const char* sgr = nullptr;
 };
 
 // The header and the rows, every column as wide as what it holds (a CJK
 // glyph counts two), two spaces apart, at most `width` columns across.
-[[nodiscard]] std::string table(const std::vector<tableColumn>& columns,
-                                const std::vector<std::vector<styled>>& rows, int width,
+[[nodiscard]] std::string Table(const std::vector<TableColumn>& columns,
+                                const std::vector<std::vector<Styled>>& rows, int width,
                                 bool color);
 
 }  // namespace catalist::output

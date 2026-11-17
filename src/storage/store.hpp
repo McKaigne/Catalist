@@ -14,34 +14,34 @@ namespace catalist::store {
 
 // One prepared statement. Parameters are bound left to right; a failure at
 // any point makes `step` and `run` return false.
-class statement {
+class Statement {
 public:
-	statement(sqlite3* db, const std::string& sql);
-	~statement();
-	statement(statement&& other) noexcept;
-	statement(const statement&) = delete;
-	statement& operator=(const statement&) = delete;
-	statement& operator=(statement&&) = delete;
+	Statement(sqlite3* db, const std::string& sql);
+	~Statement();
+	Statement(Statement&& other) noexcept;
+	Statement(const Statement&) = delete;
+	Statement& operator=(const Statement&) = delete;
+	Statement& operator=(Statement&&) = delete;
 
-	statement& bind(long long value);
-	statement& bind(int value) { return bind(static_cast<long long>(value)); }
-	statement& bind(const std::string& value);
-	statement& bindNull();
+	Statement& Bind(long long value);
+	Statement& Bind(int value) { return Bind(static_cast<long long>(value)); }
+	Statement& Bind(const std::string& value);
+	Statement& BindNull();
 
 	// Moves to the next row; false when there is none (or on an error).
-	[[nodiscard]] bool step();
+	[[nodiscard]] bool Step();
 	// Runs a statement that returns no rows, then readies it for new
 	// parameters, so one statement can write many rows.
-	[[nodiscard]] bool run();
+	[[nodiscard]] bool Run();
 	// Readies a query for new parameters, to be asked again.
-	void reset();
+	void Reset();
 
 	// False once preparing, binding or stepping has failed.
-	[[nodiscard]] bool ok() const { return not failed_; }
+	[[nodiscard]] bool Ok() const { return not failed_; }
 
-	[[nodiscard]] long long intAt(int column) const;
+	[[nodiscard]] long long IntAt(int column) const;
 	// Empty for NULL.
-	[[nodiscard]] std::string textAt(int column) const;
+	[[nodiscard]] std::string TextAt(int column) const;
 
 private:
 	sqlite3_stmt* handle_ = nullptr;
@@ -49,29 +49,29 @@ private:
 	bool failed_ = false;
 };
 
-enum class openMode { kReadWrite, kReadOnly };
+enum class OpenMode { kReadWrite, kReadOnly };
 
-class database {
+class Database {
 public:
-	database() = default;
-	~database();
-	database(const database&) = delete;
-	database& operator=(const database&) = delete;
+	Database() = default;
+	~Database();
+	Database(const Database&) = delete;
+	Database& operator=(const Database&) = delete;
 
 	// Opens the file, creating it unless read-only. Another program's write
-	// is waited for up to `busyWaitMs`.
-	[[nodiscard]] bool open(const std::filesystem::path& file, openMode mode = openMode::kReadWrite,
-	                        int busyWaitMs = 5000);
-	void close();
-	[[nodiscard]] bool isOpen() const { return handle_ != nullptr; }
+	// is waited for up to `busy_wait_ms`.
+	[[nodiscard]] bool Open(const std::filesystem::path& file, OpenMode mode = OpenMode::kReadWrite,
+	                        int busy_wait_ms = 5000);
+	void Close();
+	[[nodiscard]] bool IsOpen() const { return handle_ != nullptr; }
 
 	// Runs statements that take no parameters and return nothing.
-	[[nodiscard]] bool run(const std::string& sql);
-	[[nodiscard]] statement prepare(const std::string& sql) const;
+	[[nodiscard]] bool Run(const std::string& sql);
+	[[nodiscard]] Statement Prepare(const std::string& sql) const;
 	// The row id the last INSERT made.
-	[[nodiscard]] long long lastInsertId() const;
+	[[nodiscard]] long long LastInsertId() const;
 	// Why the last call failed, in SQLite's words.
-	[[nodiscard]] std::string lastError() const;
+	[[nodiscard]] std::string LastError() const;
 
 private:
 	sqlite3* handle_ = nullptr;
@@ -80,19 +80,19 @@ private:
 
 // A write transaction (BEGIN IMMEDIATE): other writers wait from here on,
 // readers carry on until the commit.
-class transaction {
+class Transaction {
 public:
-	explicit transaction(database& db);
-	~transaction();
-	transaction(const transaction&) = delete;
-	transaction& operator=(const transaction&) = delete;
+	explicit Transaction(Database& db);
+	~Transaction();
+	Transaction(const Transaction&) = delete;
+	Transaction& operator=(const Transaction&) = delete;
 
 	// False when the lock could not be taken, and after the end.
-	[[nodiscard]] bool active() const { return active_; }
-	[[nodiscard]] bool commit();
+	[[nodiscard]] bool Active() const { return active_; }
+	[[nodiscard]] bool Commit();
 
 private:
-	database& db_;
+	Database& db_;
 	bool active_ = false;
 };
 

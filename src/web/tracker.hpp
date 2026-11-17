@@ -21,20 +21,20 @@ namespace catalist::web {
 // The ids the sites gave this program, for their APIs and their logins.
 // MyAnimeList answers nothing without its id; AniList and Kitsu need theirs
 // only to log in.
-struct appIds {
+struct AppIds {
 	std::string anilist{};
 	std::string mal{};
 	std::string kitsu{};
-	std::string kitsuSecret{};
+	std::string kitsu_secret{};
 };
 
 // What a site is reached through. The program passes the network; the tests
 // a fake.
-struct link {
-	fetcher fetch;
+struct Link {
+	Fetcher fetch;
 	// The wait between two requests to one site, so that none is flooded.
 	std::function<void()> pause = [] {};
-	appIds ids{};
+	AppIds ids{};
 	// Seconds since 1970, for when a login runs out.
 	std::function<long long()> now = [] { return 0LL; };
 	// Random text of the length asked, for OAuth's PKCE.
@@ -45,27 +45,27 @@ struct link {
 
 // What to ask of the person to log in: a page to open (empty when there is
 // none), then the answers to read, in order.
-struct question {
+struct Question {
 	std::string ask;
 	// Not shown as it is typed: a password.
 	bool secret = false;
 };
-struct loginStart {
+struct LoginStart {
 	std::string page;
 	std::string explanation;
-	std::vector<question> questions;
+	std::vector<Question> questions;
 };
 
 // One match of a search on a site.
-struct match {
+struct Match {
 	// The ids the site knows the title by; 0 for those it does not.
-	int anilistId = 0;
-	int malId = 0;
-	int kitsuId = 0;
+	int anilist_id = 0;
+	int mal_id = 0;
+	int kitsu_id = 0;
 	std::string name;
 	// Episodes or chapters; 0 while the series is still running.
-	int totalUnits = 0;
-	int totalVolumes = 0;
+	int total_units = 0;
+	int total_volumes = 0;
 	// Four digits, or empty when there is no date.
 	std::string year;
 	// The site-wide score out of 10, 0 when there is none yet.
@@ -74,8 +74,8 @@ struct match {
 
 // Why a site did not answer as asked. Callers act on the kind; the message
 // is what the person is told.
-struct failure {
-	enum class kind {
+struct Failure {
+	enum class Kind {
 		// No answer worth acting on: no connection, a timeout, a site too
 		// busy (429) or failing (5xx). Trying again later may work.
 		kUnreachable,
@@ -88,7 +88,7 @@ struct failure {
 		// must log in again.
 		kLoginRefused,
 	};
-	kind why = kind::kRefused;
+	Kind why = Kind::kRefused;
 	std::string message;
 	// The HTTP status when the site answered with one, else 0.
 	int status = 0;
@@ -96,89 +96,89 @@ struct failure {
 
 // What a site answers: the value asked for, or why not.
 template <typename T>
-using answer = std::expected<T, failure>;
+using Answer = std::expected<T, Failure>;
 
 // "could not reach AniList" and the like.
-[[nodiscard]] std::unexpected<failure> unreachable(std::string message);
+[[nodiscard]] std::unexpected<Failure> Unreachable(std::string message);
 // "not linked to AniList".
-[[nodiscard]] std::unexpected<failure> notLinked(provider site);
-[[nodiscard]] std::unexpected<failure> refused(std::string message);
+[[nodiscard]] std::unexpected<Failure> NotLinked(Provider site);
+[[nodiscard]] std::unexpected<Failure> Refused(std::string message);
 
 // The body of a reply from `site` that is a success (2xx). Anything else is
 // the failure it is: no reply, 429 or 5xx unreachable; 401 or 403 a login
 // the site does not take; any other status refused. The failure keeps the
 // status, for an adapter to read a 404 its own way.
-[[nodiscard]] answer<std::string> checked(const std::optional<reply>& got, provider site);
+[[nodiscard]] Answer<std::string> Checked(const std::optional<Reply>& got, Provider site);
 
 // Your own entry for a title on a site, as the site keeps it.
-struct siteEntry {
-	watchStatus status = watchStatus::kPlanToWatch;
+struct SiteEntry {
+	WatchStatus status = WatchStatus::kPlanToWatch;
 	// The score as the site keeps it: AniList out of 100, Kitsu's
 	// ratingTwenty from 2 to 20, MyAnimeList out of 10; 0 for none. Only
-	// what shows it converts it (outOfTen).
+	// what shows it converts it (OutOfTen).
 	int score = 0;
 	int progress = 0;
 	int volumes = 0;
 	int rewatched = 0;
-	std::optional<isoDate> startDate;
-	std::optional<isoDate> finishDate;
+	std::optional<IsoDate> start_date;
+	std::optional<IsoDate> finish_date;
 	// Hidden from others, where the site has that (AniList, Kitsu).
 	bool hidden = false;
 };
 
 // A score as `site` keeps it, out of 10: AniList's 85 is 8.5, Kitsu's 17 is
 // 8.5. For showing it; what is stored and sent stays the site's own.
-[[nodiscard]] double outOfTen(provider site, int score);
+[[nodiscard]] double OutOfTen(Provider site, int score);
 
-// What a push sends: the fields (siteField bits) and, with
-// siteField::kHidden, whether the entry is hidden from others.
-struct sending {
-	unsigned fields = siteField::kAll;
+// What a push sends: the fields (site_field bits) and, with
+// site_field::kHidden, whether the entry is hidden from others.
+struct Sending {
+	unsigned fields = site_field::kAll;
 	bool hidden = false;
 };
 
 // What a site knows about one title.
-struct details {
+struct Details {
 	std::string name;
 	// The ids, totals and, once the title has ended, everything as released;
 	// for an anime still airing, the episodes aired so far where the site
 	// says so.
-	webFacts facts;
+	WebFacts facts;
 	// Still airing or publishing.
 	bool ongoing = false;
 };
 
-class iTracker {
+class Tracker {
 public:
-	virtual ~iTracker() = default;
+	virtual ~Tracker() = default;
 
-	[[nodiscard]] virtual provider site() const = 0;
+	[[nodiscard]] virtual Provider Site() const = 0;
 
 	// Up to ten matches, best first. Fails when the site cannot be reached,
 	// which the caller must tell apart from a search that found nothing.
-	[[nodiscard]] virtual answer<std::vector<match>> search(mediaType type,
+	[[nodiscard]] virtual Answer<std::vector<Match>> Search(MediaType type,
 	                                                        const std::string& query) = 0;
 
 	// The title by the site's own id, else by its MyAnimeList id. Fails when
 	// it has neither, when the site does not know it, or cannot be reached.
-	[[nodiscard]] virtual answer<details> lookUp(const entry& known) = 0;
+	[[nodiscard]] virtual Answer<Details> LookUp(const Entry& known) = 0;
 
-	// What lookUp says of each title, in the order given. Here one request
+	// What LookUp says of each title, in the order given. Here one request
 	// a title, a pause apart; a site that answers many in one request does
 	// better. Once the site cannot be reached, every title left fails so.
-	[[nodiscard]] virtual std::vector<answer<details>> lookUpMany(const std::vector<entry>& known);
+	[[nodiscard]] virtual std::vector<Answer<Details>> LookUpMany(const std::vector<Entry>& known);
 
 	// ---- Logging in ----
 
 	// The first half: what to show and ask the person. Fails when this
 	// build has no id from the site to log in with.
-	[[nodiscard]] virtual answer<loginStart> startLogin() = 0;
+	[[nodiscard]] virtual Answer<LoginStart> StartLogin() = 0;
 	// The second half: the answers, in the order asked, for the account.
-	[[nodiscard]] virtual answer<account> finishLogin(const std::vector<std::string>& answers) = 0;
+	[[nodiscard]] virtual Answer<Account> FinishLogin(const std::vector<std::string>& answers) = 0;
 	// The account with a token that has not run out: as it is while it has
 	// not, else renewed. Fails when it cannot be, and the person must log in
 	// again.
-	[[nodiscard]] virtual answer<account> current(const account& login) = 0;
+	[[nodiscard]] virtual Answer<Account> Current(const Account& login) = 0;
 
 	// ---- Moving in ----
 
@@ -186,15 +186,15 @@ public:
 	// knows (so linked to it), the user's status, score out of 10, progress,
 	// volumes, rewatches and dates. Fails when the site cannot be reached,
 	// or has no public list of that user.
-	[[nodiscard]] virtual answer<std::vector<entry>> pull(mediaType type,
+	[[nodiscard]] virtual Answer<std::vector<Entry>> Pull(MediaType type,
 	                                                      const std::string& user) = 0;
 
 	// ---- Your entries ----
 	// Your entry for the title on the account's list; nothing when it is not
 	// on the list. Fails when the title has no id on this site, when the
 	// site cannot be reached, or says no.
-	[[nodiscard]] virtual answer<std::optional<siteEntry>> entryOf(const entry& title,
-	                                                               const account& login) = 0;
+	[[nodiscard]] virtual Answer<std::optional<SiteEntry>> EntryOf(const Entry& title,
+	                                                               const Account& login) = 0;
 
 	// ---- Telling the site, one way ----
 
@@ -203,35 +203,36 @@ public:
 	// dates, hidden); the site keeps the rest of its entry. Catalist's lists
 	// are the truth for what is sent. Fails when the title has no id on this
 	// site, when the site cannot be reached, or says no.
-	[[nodiscard]] virtual answer<void> push(const entry& title, const account& login,
-	                                        const sending& what) = 0;
+	[[nodiscard]] virtual Answer<void> Push(const Entry& title, const Account& login,
+	                                        const Sending& what) = 0;
 	// Takes the title with this id on the site off the account's list; a
 	// title that is not on it is gone already.
-	[[nodiscard]] virtual answer<void> remove(mediaType type, int siteId, const account& login) = 0;
+	[[nodiscard]] virtual Answer<void> Remove(MediaType type, int site_id,
+	                                          const Account& login) = 0;
 
 protected:
-	// The pause between two requests of lookUpMany.
-	virtual void pause() const = 0;
+	// The pause between two requests of LookUpMany.
+	virtual void Pause() const = 0;
 };
 
 // What an OAuth token endpoint answers: the token, what renews it, and how
 // many seconds it lasts. Nothing when the reply has no token.
-struct tokenReply {
+struct TokenReply {
 	std::string token;
 	std::string renewal;
 	long long lifetime = 0;
 };
-[[nodiscard]] std::optional<tokenReply> parseTokenReply(const std::string& body);
+[[nodiscard]] std::optional<TokenReply> ParseTokenReply(const std::string& body);
 
 // "Authorization: Bearer <token>".
-[[nodiscard]] std::string bearer(const std::string& token);
+[[nodiscard]] std::string Bearer(const std::string& token);
 
 // The day of "2026-10-01", "2026-10-01T00:00:00.000Z" and the like; nothing
 // for anything shorter.
-[[nodiscard]] std::optional<isoDate> dayOf(const std::string& text);
+[[nodiscard]] std::optional<IsoDate> DayOf(const std::string& text);
 
 // Whether the login's token runs out within a minute (or has).
-[[nodiscard]] bool runningOut(const account& login, long long now);
+[[nodiscard]] bool RunningOut(const Account& login, long long now);
 
 }  // namespace catalist::web
 

@@ -46,10 +46,10 @@ add_library(catalistLib STATIC
   # The lists in SQLite, the undo history, and the MyAnimeList XML format.
   src/storage/accounts.cpp
   src/storage/catalogue.cpp
-  src/storage/csvCodec.cpp
+  src/storage/csv_codec.cpp
   src/storage/history.cpp
   src/storage/journal.cpp
-  src/storage/malXml.cpp
+  src/storage/mal_xml.cpp
   src/storage/store.cpp
   # The sites behind one tracker interface, and the JSON they answer in.
   src/web/anilist.cpp
@@ -87,7 +87,7 @@ target_link_libraries(catalist PRIVATE catalistLib)
 target_compile_options(catalist PRIVATE ${CATALIST_WARNING_FLAGS})
 
 # The program writes its manual page and its completion scripts from its
-# own table of commands (see cmake/shellSupport.cmake).
+# own table of commands (see cmake/shell_support.cmake).
 set(CATALIST_SHARE_DIR "${CMAKE_CURRENT_BINARY_DIR}/share")
 set(CATALIST_SHELL_FILES
   "${CATALIST_SHARE_DIR}/man/man1/catalist.1"
@@ -101,8 +101,8 @@ add_custom_command(
     "-DVERSION=${PROJECT_VERSION}"
     "-DTEMPLATE=${CMAKE_CURRENT_SOURCE_DIR}/docs/catalist.1.in"
     "-DOUT_DIR=${CATALIST_SHARE_DIR}"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/shellSupport.cmake"
-  DEPENDS catalist docs/catalist.1.in cmake/shellSupport.cmake
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/shell_support.cmake"
+  DEPENDS catalist docs/catalist.1.in cmake/shell_support.cmake
   COMMENT "Writing the manual page and the completions"
   VERBATIM
 )
@@ -126,42 +126,42 @@ find_package(doctest CONFIG REQUIRED)
 include(doctest)
 
 add_executable(catalistTests
-  tests/testMain.cpp
-  tests/support/sampleLibrary.cpp
-  tests/support/testSupport.cpp
-  tests/core/dateTest.cpp
-  tests/core/entryTest.cpp
-  tests/core/listsTest.cpp
-  tests/core/textTest.cpp
-  tests/core/versionTest.cpp
-  tests/storage/accountsTest.cpp
-  tests/storage/catalogueTest.cpp
-  tests/storage/csvCodecTest.cpp
-  tests/storage/journalTest.cpp
-  tests/storage/malXmlTest.cpp
-  tests/web/anilistTest.cpp
-  tests/web/jsonTest.cpp
-  tests/web/kitsuTest.cpp
-  tests/web/loginTest.cpp
-  tests/web/pullTest.cpp
-  tests/web/pushTest.cpp
-  tests/web/malTest.cpp
-  tests/web/entryOfTest.cpp
-  tests/cli/accountsTest.cpp
-  tests/cli/argsTest.cpp
-  tests/cli/cliTest.cpp
-  tests/cli/completionTest.cpp
-  tests/cli/historyTest.cpp
-  tests/cli/listingTest.cpp
-  tests/cli/onlineTest.cpp
-  tests/cli/outputTest.cpp
-  tests/cli/refsTest.cpp
-  tests/cli/setupTest.cpp
-  tests/cli/syncTest.cpp
-  tests/cli/trackTest.cpp
-  tests/cli/trackingTest.cpp
-  tests/cli/transferTest.cpp
-  tests/systemTest.cpp
+  tests/test_main.cpp
+  tests/support/sample_library.cpp
+  tests/support/test_support.cpp
+  tests/core/date_test.cpp
+  tests/core/entry_test.cpp
+  tests/core/lists_test.cpp
+  tests/core/text_test.cpp
+  tests/core/version_test.cpp
+  tests/storage/accounts_test.cpp
+  tests/storage/catalogue_test.cpp
+  tests/storage/csv_codec_test.cpp
+  tests/storage/journal_test.cpp
+  tests/storage/mal_xml_test.cpp
+  tests/web/anilist_test.cpp
+  tests/web/json_test.cpp
+  tests/web/kitsu_test.cpp
+  tests/web/login_test.cpp
+  tests/web/pull_test.cpp
+  tests/web/push_test.cpp
+  tests/web/mal_test.cpp
+  tests/web/entry_of_test.cpp
+  tests/cli/accounts_test.cpp
+  tests/cli/args_test.cpp
+  tests/cli/cli_test.cpp
+  tests/cli/completion_test.cpp
+  tests/cli/history_test.cpp
+  tests/cli/listing_test.cpp
+  tests/cli/online_test.cpp
+  tests/cli/output_test.cpp
+  tests/cli/refs_test.cpp
+  tests/cli/setup_test.cpp
+  tests/cli/sync_test.cpp
+  tests/cli/track_test.cpp
+  tests/cli/tracking_test.cpp
+  tests/cli/transfer_test.cpp
+  tests/system_test.cpp
 )
 target_include_directories(catalistTests PRIVATE tests)
 target_link_libraries(catalistTests PRIVATE doctest::doctest catalistLib)

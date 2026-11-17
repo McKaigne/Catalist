@@ -9,41 +9,41 @@ namespace catalist::cli {
 
 namespace {
 
-int runProvider(const command& self, const args::parsed& line, cliContext& ctx) {
+int RunProvider(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	if (line.operands.size() > 1)
-		return usageError(ctx, self, "name one provider: anilist, mal or kitsu");
+		return UsageError(ctx, self, "name one provider: anilist, mal or kitsu");
 	if (line.operands.empty()) {
-		if (not load(ctx))
+		if (not Load(ctx))
 			return 1;
-		ctx.out << providerKey(ctx.db.getProvider()) << "\n";
+		ctx.out << ProviderKey(ctx.db.provider()) << "\n";
 		return 0;
 	}
-	auto chosen = parseProvider(line.operands[0]);
+	auto chosen = ParseProvider(line.operands[0]);
 	if (not chosen)
-		return usageError(ctx, self,
+		return UsageError(ctx, self,
 		                  std::format("unknown provider '{}'{}; choose anilist, mal or kitsu",
-		                              line.operands[0], didYouMean(line.operands[0], self.words)));
-	if (not loadForWrite(ctx))
+		                              line.operands[0], DidYouMean(line.operands[0], self.words)));
+	if (not LoadForWrite(ctx))
 		return 1;
-	if (ctx.db.getProvider() == *chosen) {
+	if (ctx.db.provider() == *chosen) {
 		ctx.err << "Nothing changed.\n";
 		return 0;
 	}
-	ctx.db.setProvider(*chosen);
-	if (not ctx.db.saveSettings())
-		return saveFailed(ctx);
-	ctx.err << std::format("Your provider is now {}.\n", providerName(*chosen));
+	ctx.db.set_provider(*chosen);
+	if (not ctx.db.SaveSettings())
+		return SaveFailed(ctx);
+	ctx.err << std::format("Your provider is now {}.\n", ProviderName(*chosen));
 	return 0;
 }
 
-int runCompletion(const command& self, const args::parsed& line, cliContext& ctx) {
+int RunCompletion(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	std::string shell = line.operands.size() == 1 ? line.operands[0] : "";
 	if (shell == "zsh")
-		ctx.out << completion::zsh(commands());
+		ctx.out << completion::Zsh(Commands());
 	else if (shell == "fish")
-		ctx.out << completion::fish(commands());
+		ctx.out << completion::Fish(Commands());
 	else
-		return usageError(ctx, self, "say which shell: zsh or fish");
+		return UsageError(ctx, self, "say which shell: zsh or fish");
 	return 0;
 }
 
@@ -52,34 +52,34 @@ int runCompletion(const command& self, const args::parsed& line, cliContext& ctx
 // get in the way: it only looks at the lists, and when anything is wrong (no
 // lists yet, a file it cannot read, a word it does not know) it prints
 // nothing and still exits with 0.
-int runComplete(const command&, const args::parsed& line, cliContext& ctx) {
+int RunComplete(const Command&, const args::Parsed& line, CliContext& ctx) {
 	std::string what = line.operands.empty() ? "" : line.operands[0];
 	if (what == "statuses")
-		for (const auto& word : statusWords())
+		for (const auto& word : StatusWords())
 			ctx.out << word << "\n";
 	if (what == "fields")
-		for (const auto& name : settableNames())
+		for (const auto& name : SettableNames())
 			ctx.out << name << "=\n";
-	if ((what != "refs" and what != "titles") or not ctx.db.peek())
+	if ((what != "refs" and what != "titles") or not ctx.db.Peek())
 		return 0;
-	for (mediaType type : {mediaType::kAnime, mediaType::kManga}) {
-		for (const auto& e : ctx.db.getEntries(type))
-			ctx.out << (what == "refs" ? output::tsvLine({refs::of(e), e.title})
-			                           : output::tsvLine({e.title, refs::of(e)}));
+	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
+		for (const auto& e : ctx.db.GetEntries(type))
+			ctx.out << (what == "refs" ? output::TsvLine({refs::Of(e), e.title})
+			                           : output::TsvLine({e.title, refs::Of(e)}));
 	}
 	return 0;
 }
 
 // The build's own command: the COMMANDS section of the manual page, which
-// cmake/shellSupport.cmake puts into docs/catalist.1.in.
-int runManual(const command&, const args::parsed&, cliContext& ctx) {
-	ctx.out << completion::manual(commands());
+// cmake/shell_support.cmake puts into docs/catalist.1.in.
+int RunManual(const Command&, const args::Parsed&, CliContext& ctx) {
+	ctx.out << completion::Manual(Commands());
 	return 0;
 }
 
 }  // namespace
 
-std::vector<command> setupCommands() {
+std::vector<Command> SetupCommands() {
 	return {
 	    {.name = "provider",
 	     .summary = "Show or choose your provider",
@@ -90,8 +90,8 @@ std::vector<command> setupCommands() {
 	                "printed, as anilist, mal or kitsu. Choosing a provider is not a step\n"
 	                "for undo.\n",
 	     .operands = "[anilist|mal|kitsu]",
-	     .run = runProvider,
-	     .completes = operandKind::kWords,
+	     .run = RunProvider,
+	     .completes = OperandKind::kWords,
 	     .words = {"anilist", "mal", "kitsu"}},
 	    {.name = "completion",
 	     .summary = "Print the completion script of a shell",
@@ -103,17 +103,17 @@ std::vector<command> setupCommands() {
 	                "scripts complete the commands and their options, and your titles by\n"
 	                "ref or by any part of their name.\n",
 	     .operands = "zsh|fish",
-	     .run = runCompletion,
-	     .completes = operandKind::kWords,
+	     .run = RunCompletion,
+	     .completes = OperandKind::kWords,
 	     .words = {"zsh", "fish"}},
 	    {.name = "__complete",
 	     .summary = "Print the words the completion scripts ask for",
 	     .operands = "refs|titles|statuses|fields",
-	     .run = runComplete,
+	     .run = RunComplete,
 	     .hidden = true},
 	    {.name = "__man",
 	     .summary = "Print the commands as the manual page lists them",
-	     .run = runManual,
+	     .run = RunManual,
 	     .hidden = true},
 	};
 }

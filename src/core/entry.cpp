@@ -5,165 +5,165 @@
 
 namespace catalist {
 
-std::string statusToString(watchStatus status, mediaType type) {
+std::string StatusToString(WatchStatus status, MediaType type) {
 	switch (status) {
-		case watchStatus::kWatching:
-			return (type == mediaType::kManga) ? "Reading" : "Watching";
-		case watchStatus::kCompleted:
+		case WatchStatus::kWatching:
+			return (type == MediaType::kManga) ? "Reading" : "Watching";
+		case WatchStatus::kCompleted:
 			return "Completed";
-		case watchStatus::kOnHold:
+		case WatchStatus::kOnHold:
 			return "On-Hold";
-		case watchStatus::kDropped:
+		case WatchStatus::kDropped:
 			return "Dropped";
-		case watchStatus::kPlanToWatch:
-			return (type == mediaType::kManga) ? "Plan to Read" : "Plan to Watch";
-		case watchStatus::kRewatching:
-			return (type == mediaType::kManga) ? "Rereading" : "Rewatching";
+		case WatchStatus::kPlanToWatch:
+			return (type == MediaType::kManga) ? "Plan to Read" : "Plan to Watch";
+		case WatchStatus::kRewatching:
+			return (type == MediaType::kManga) ? "Rereading" : "Rewatching";
 	}
 	return "Unknown";
 }
 
-unsigned mergeFields(unsigned first, unsigned second) {
-	auto upOnly = [](unsigned fields) {
-		return not(fields & siteField::kProgress) or (fields & siteField::kRaiseOnly);
+unsigned MergeFields(unsigned first, unsigned second) {
+	auto up_only = [](unsigned fields) {
+		return not(fields & site_field::kProgress) or (fields & site_field::kRaiseOnly);
 	};
-	unsigned merged = (first | second) & ~siteField::kRaiseOnly;
-	if ((merged & siteField::kProgress) and upOnly(first) and upOnly(second))
-		merged |= siteField::kRaiseOnly;
+	unsigned merged = (first | second) & ~site_field::kRaiseOnly;
+	if ((merged & site_field::kProgress) and up_only(first) and up_only(second))
+		merged |= site_field::kRaiseOnly;
 	return merged;
 }
 
-std::string statusKey(watchStatus status) {
+std::string StatusKey(WatchStatus status) {
 	switch (status) {
-		case watchStatus::kWatching:
+		case WatchStatus::kWatching:
 			return "watching";
-		case watchStatus::kCompleted:
+		case WatchStatus::kCompleted:
 			return "completed";
-		case watchStatus::kOnHold:
+		case WatchStatus::kOnHold:
 			return "on-hold";
-		case watchStatus::kDropped:
+		case WatchStatus::kDropped:
 			return "dropped";
-		case watchStatus::kPlanToWatch:
+		case WatchStatus::kPlanToWatch:
 			return "planned";
-		case watchStatus::kRewatching:
+		case WatchStatus::kRewatching:
 			return "rewatching";
 	}
 	return "planned";
 }
 
-std::optional<watchStatus> parseStatus(const std::string& str) {
+std::optional<WatchStatus> ParseStatus(const std::string& str) {
 	std::string lower = str;
 	std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
 	if (lower.find("plan") != std::string::npos or lower == "5") {
-		return watchStatus::kPlanToWatch;
+		return WatchStatus::kPlanToWatch;
 	} else if (lower.find("rewatch") != std::string::npos or
 	           lower.find("reread") != std::string::npos or
 	           lower.find("repeat") != std::string::npos) {
-		return watchStatus::kRewatching;
+		return WatchStatus::kRewatching;
 	} else if (lower.find("watch") != std::string::npos or
 	           lower.find("read") != std::string::npos or lower == "1") {
-		return watchStatus::kWatching;
+		return WatchStatus::kWatching;
 	} else if (lower.find("complete") != std::string::npos or lower == "2") {
-		return watchStatus::kCompleted;
+		return WatchStatus::kCompleted;
 	} else if (lower.find("hold") != std::string::npos or lower == "3") {
-		return watchStatus::kOnHold;
+		return WatchStatus::kOnHold;
 	} else if (lower.find("drop") != std::string::npos or lower == "4") {
-		return watchStatus::kDropped;
+		return WatchStatus::kDropped;
 	}
 	return std::nullopt;
 }
 
-std::string providerName(provider site) {
+std::string ProviderName(Provider site) {
 	switch (site) {
-		case provider::kAniList:
+		case Provider::kAniList:
 			return "AniList";
-		case provider::kMyAnimeList:
+		case Provider::kMyAnimeList:
 			return "MyAnimeList";
-		case provider::kKitsu:
+		case Provider::kKitsu:
 			return "Kitsu";
 	}
 	return "AniList";
 }
 
-std::string providerKey(provider site) {
+std::string ProviderKey(Provider site) {
 	switch (site) {
-		case provider::kAniList:
+		case Provider::kAniList:
 			return "anilist";
-		case provider::kMyAnimeList:
+		case Provider::kMyAnimeList:
 			return "mal";
-		case provider::kKitsu:
+		case Provider::kKitsu:
 			return "kitsu";
 	}
 	return "anilist";
 }
 
-std::optional<provider> parseProvider(const std::string& name) {
+std::optional<Provider> ParseProvider(const std::string& name) {
 	std::string lower = name;
 	std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 	if (lower == "anilist" or lower == "al")
-		return provider::kAniList;
+		return Provider::kAniList;
 	if (lower == "myanimelist" or lower == "mal")
-		return provider::kMyAnimeList;
+		return Provider::kMyAnimeList;
 	if (lower == "kitsu")
-		return provider::kKitsu;
+		return Provider::kKitsu;
 	return std::nullopt;
 }
 
-int idOn(const entry& shown, provider site) {
+int IdOn(const Entry& shown, Provider site) {
 	switch (site) {
-		case provider::kAniList:
-			return shown.anilistId;
-		case provider::kMyAnimeList:
-			return shown.malId;
-		case provider::kKitsu:
-			return shown.kitsuId;
+		case Provider::kAniList:
+			return shown.anilist_id;
+		case Provider::kMyAnimeList:
+			return shown.mal_id;
+		case Provider::kKitsu:
+			return shown.kitsu_id;
 	}
 	return 0;
 }
 
-std::string pageOn(const entry& shown, provider site) {
-	int id = idOn(shown, site);
+std::string PageOn(const Entry& shown, Provider site) {
+	int id = IdOn(shown, site);
 	if (id <= 0)
 		return "";
-	std::string kind = shown.type == mediaType::kAnime ? "anime" : "manga";
+	std::string kind = shown.type == MediaType::kAnime ? "anime" : "manga";
 	switch (site) {
-		case provider::kAniList:
+		case Provider::kAniList:
 			return std::format("https://anilist.co/{}/{}", kind, id);
-		case provider::kMyAnimeList:
+		case Provider::kMyAnimeList:
 			return std::format("https://myanimelist.net/{}/{}", kind, id);
-		case provider::kKitsu:
+		case Provider::kKitsu:
 			return std::format("https://kitsu.app/{}/{}", kind, id);
 	}
 	return "";
 }
 
-std::string typeToString(mediaType type) {
+std::string TypeToString(MediaType type) {
 	switch (type) {
-		case mediaType::kAnime:
+		case MediaType::kAnime:
 			return "Anime";
-		case mediaType::kManga:
+		case MediaType::kManga:
 			return "Manga";
 	}
 	return "Anime";
 }
 
-std::string typeKey(mediaType type) {
-	return type == mediaType::kAnime ? "anime" : "manga";
+std::string TypeKey(MediaType type) {
+	return type == MediaType::kAnime ? "anime" : "manga";
 }
 
-std::string formatDate(const std::optional<isoDate>& date) {
-	return date ? date->toString() : "";
+std::string FormatDate(const std::optional<IsoDate>& date) {
+	return date ? date->ToString() : "";
 }
 
-std::optional<isoDate> listDate(const entry& shown) {
-	if (shown.status == watchStatus::kCompleted and shown.finishDate)
-		return shown.finishDate;
-	return shown.startDate ? shown.startDate : shown.updatedAt;
+std::optional<IsoDate> ListDate(const Entry& shown) {
+	if (shown.status == WatchStatus::kCompleted and shown.finish_date)
+		return shown.finish_date;
+	return shown.start_date ? shown.start_date : shown.updated_at;
 }
 
-int newReleases(const entry& shown) {
-	bool following = shown.status == watchStatus::kWatching or shown.status == watchStatus::kOnHold;
+int NewReleases(const Entry& shown) {
+	bool following = shown.status == WatchStatus::kWatching or shown.status == WatchStatus::kOnHold;
 	return following ? std::max(0, shown.released - shown.progress) : 0;
 }
 
@@ -173,246 +173,246 @@ namespace catalist {
 
 namespace {
 
-bool hasKnownTotal(const entry& target) {
-	return target.totalUnits > 0;
+bool HasKnownTotal(const Entry& target) {
+	return target.total_units > 0;
 }
 
-bool isFinished(const entry& target) {
-	return hasKnownTotal(target) and target.progress >= target.totalUnits;
+bool IsFinished(const Entry& target) {
+	return HasKnownTotal(target) and target.progress >= target.total_units;
 }
 
-bool isPaused(watchStatus status) {
-	return status == watchStatus::kPlanToWatch or status == watchStatus::kOnHold or
-	       status == watchStatus::kDropped;
+bool IsPaused(WatchStatus status) {
+	return status == WatchStatus::kPlanToWatch or status == WatchStatus::kOnHold or
+	       status == WatchStatus::kDropped;
 }
 
-entry applyStatusDates(entry target, watchStatus previous, const isoDate& today) {
+Entry ApplyStatusDates(Entry target, WatchStatus previous, const IsoDate& today) {
 	switch (target.status) {
-		case watchStatus::kWatching:
-			if (not target.startDate)
-				target.startDate = today;
-			if (previous == watchStatus::kCompleted)
-				target.finishDate.reset();
+		case WatchStatus::kWatching:
+			if (not target.start_date)
+				target.start_date = today;
+			if (previous == WatchStatus::kCompleted)
+				target.finish_date.reset();
 			break;
-		case watchStatus::kCompleted:
-			if (not target.startDate)
-				target.startDate = today;
-			target.finishDate = today;
-			if (hasKnownTotal(target))
-				target.progress = std::max(target.progress, target.totalUnits);
+		case WatchStatus::kCompleted:
+			if (not target.start_date)
+				target.start_date = today;
+			target.finish_date = today;
+			if (HasKnownTotal(target))
+				target.progress = std::max(target.progress, target.total_units);
 			break;
-		case watchStatus::kOnHold:
-		case watchStatus::kDropped:
-			if (not target.finishDate)
-				target.finishDate = today;
+		case WatchStatus::kOnHold:
+		case WatchStatus::kDropped:
+			if (not target.finish_date)
+				target.finish_date = today;
 			break;
-		case watchStatus::kPlanToWatch:
-			target.finishDate.reset();
+		case WatchStatus::kPlanToWatch:
+			target.finish_date.reset();
 			break;
-		case watchStatus::kRewatching:
+		case WatchStatus::kRewatching:
 			// Again from the start; the dates stay those of the first time.
-			if (previous == watchStatus::kCompleted)
+			if (previous == WatchStatus::kCompleted)
 				target.progress = 0;
-			if (not target.startDate)
-				target.startDate = today;
+			if (not target.start_date)
+				target.start_date = today;
 			break;
 	}
 	return target;
 }
 
-entry withProgress(entry target, int progress, const isoDate& today) {
+Entry WithProgress(Entry target, int progress, const IsoDate& today) {
 	target.progress = progress;
-	if (isFinished(target)) {
-		target.progress = target.totalUnits;
-		if (target.status == watchStatus::kRewatching)
+	if (IsFinished(target)) {
+		target.progress = target.total_units;
+		if (target.status == WatchStatus::kRewatching)
 			++target.rewatched;
-		target.status = watchStatus::kCompleted;
+		target.status = WatchStatus::kCompleted;
 	}
-	target.updatedAt = today;
+	target.updated_at = today;
 	return target;
 }
 
-entry stepForward(entry target, int newProgress, const isoDate& today) {
-	if (not target.startDate)
-		target.startDate = today;
-	if (isPaused(target.status))
-		target.status = watchStatus::kWatching;
-	target = withProgress(target, newProgress, today);
-	if (isFinished(target))
-		target.finishDate = today;
+Entry StepForward(Entry target, int new_progress, const IsoDate& today) {
+	if (not target.start_date)
+		target.start_date = today;
+	if (IsPaused(target.status))
+		target.status = WatchStatus::kWatching;
+	target = WithProgress(target, new_progress, today);
+	if (IsFinished(target))
+		target.finish_date = today;
 	return target;
 }
 
-entry stepBackward(entry target, int newProgress, const isoDate& today) {
-	bool reopens = isFinished(target) and newProgress < target.totalUnits;
+Entry StepBackward(Entry target, int new_progress, const IsoDate& today) {
+	bool reopens = IsFinished(target) and new_progress < target.total_units;
 	if (reopens) {
-		target.status = watchStatus::kWatching;
-		target.finishDate.reset();
+		target.status = WatchStatus::kWatching;
+		target.finish_date.reset();
 	}
-	target.progress = newProgress;
-	target.updatedAt = today;
+	target.progress = new_progress;
+	target.updated_at = today;
 	return target;
 }
 
 }  // namespace
 
-entry stepProgress(entry target, int delta, const isoDate& today) {
-	int newProgress = std::max(0, target.progress + delta);
-	if (newProgress == target.progress or (delta > 0 and isFinished(target)))
+Entry StepProgress(Entry target, int delta, const IsoDate& today) {
+	int new_progress = std::max(0, target.progress + delta);
+	if (new_progress == target.progress or (delta > 0 and IsFinished(target)))
 		return target;
-	return delta > 0 ? stepForward(target, newProgress, today)
-	                 : stepBackward(target, newProgress, today);
+	return delta > 0 ? StepForward(target, new_progress, today)
+	                 : StepBackward(target, new_progress, today);
 }
 
-entry setStatus(entry target, watchStatus status, const isoDate& today) {
+Entry SetStatus(Entry target, WatchStatus status, const IsoDate& today) {
 	if (status == target.status)
 		return target;
-	watchStatus previous = target.status;
+	WatchStatus previous = target.status;
 	target.status = status;
-	target = applyStatusDates(target, previous, today);
-	target.updatedAt = today;
+	target = ApplyStatusDates(target, previous, today);
+	target.updated_at = today;
 	return target;
 }
 
-entry setScore(entry target, int score, const isoDate& today) {
+Entry SetScore(Entry target, int score, const IsoDate& today) {
 	score = std::clamp(score, 0, 10);
 	if (score == target.score)
 		return target;
 	target.score = score;
-	target.updatedAt = today;
+	target.updated_at = today;
 	return target;
 }
 
-int countOf(const entry& target, countField field) {
+int CountOf(const Entry& target, CountField field) {
 	switch (field) {
-		case countField::kProgress:
+		case CountField::kProgress:
 			return target.progress;
-		case countField::kTotalUnits:
-			return target.totalUnits;
-		case countField::kVolumes:
+		case CountField::kTotalUnits:
+			return target.total_units;
+		case CountField::kVolumes:
 			return target.volumes;
-		case countField::kRewatched:
+		case CountField::kRewatched:
 			return target.rewatched;
 	}
 	return 0;
 }
 
-entry setCount(entry target, countField field, int value, const isoDate& today) {
+Entry SetCount(Entry target, CountField field, int value, const IsoDate& today) {
 	value = std::max(0, value);
-	if (field == countField::kProgress)
-		return stepProgress(target, value - target.progress, today);
-	if (field == countField::kVolumes and target.totalVolumes > 0)
-		value = std::min(value, target.totalVolumes);
-	if (value == countOf(target, field))
+	if (field == CountField::kProgress)
+		return StepProgress(target, value - target.progress, today);
+	if (field == CountField::kVolumes and target.total_volumes > 0)
+		value = std::min(value, target.total_volumes);
+	if (value == CountOf(target, field))
 		return target;
 
-	if (field == countField::kTotalUnits) {
-		target.totalUnits = value;
+	if (field == CountField::kTotalUnits) {
+		target.total_units = value;
 		if (value > 0)
 			target.progress = std::min(target.progress, value);
-	} else if (field == countField::kVolumes) {
+	} else if (field == CountField::kVolumes) {
 		target.volumes = value;
 	} else {
 		target.rewatched = value;
 	}
-	target.updatedAt = today;
+	target.updated_at = today;
 	return target;
 }
 
-entry setTitle(entry target, const std::string& title, const isoDate& today) {
+Entry SetTitle(Entry target, const std::string& title, const IsoDate& today) {
 	if (title == target.title)
 		return target;
 	target.title = title;
-	target.updatedAt = today;
+	target.updated_at = today;
 	return target;
 }
 
-entry setStartDate(entry target, std::optional<isoDate> day, const isoDate& today) {
-	if (day == target.startDate)
+Entry SetStartDate(Entry target, std::optional<IsoDate> day, const IsoDate& today) {
+	if (day == target.start_date)
 		return target;
-	target.startDate = day;
-	target.updatedAt = today;
+	target.start_date = day;
+	target.updated_at = today;
 	return target;
 }
 
-entry setFinishDate(entry target, std::optional<isoDate> day, const isoDate& today) {
-	if (day == target.finishDate)
+Entry SetFinishDate(Entry target, std::optional<IsoDate> day, const IsoDate& today) {
+	if (day == target.finish_date)
 		return target;
-	target.finishDate = day;
-	target.updatedAt = today;
+	target.finish_date = day;
+	target.updated_at = today;
 	return target;
 }
 
-entry mergeImported(entry existing, const entry& incoming) {
-	if (incoming.totalUnits > 0)
-		existing.totalUnits = incoming.totalUnits;
-	if (incoming.totalVolumes > 0)
-		existing.totalVolumes = incoming.totalVolumes;
-	if (incoming.malId > 0)
-		existing.malId = incoming.malId;
-	if (incoming.anilistId > 0)
-		existing.anilistId = incoming.anilistId;
-	if (incoming.kitsuId > 0)
-		existing.kitsuId = incoming.kitsuId;
+Entry MergeImported(Entry existing, const Entry& incoming) {
+	if (incoming.total_units > 0)
+		existing.total_units = incoming.total_units;
+	if (incoming.total_volumes > 0)
+		existing.total_volumes = incoming.total_volumes;
+	if (incoming.mal_id > 0)
+		existing.mal_id = incoming.mal_id;
+	if (incoming.anilist_id > 0)
+		existing.anilist_id = incoming.anilist_id;
+	if (incoming.kitsu_id > 0)
+		existing.kitsu_id = incoming.kitsu_id;
 	if (existing.score == 0 and incoming.score > 0)
 		existing.score = incoming.score;
 	if (existing.progress == 0 and incoming.progress > 0)
 		existing.progress = incoming.progress;
-	if (not existing.startDate and incoming.startDate)
-		existing.startDate = incoming.startDate;
-	if (not existing.finishDate and incoming.finishDate)
-		existing.finishDate = incoming.finishDate;
+	if (not existing.start_date and incoming.start_date)
+		existing.start_date = incoming.start_date;
+	if (not existing.finish_date and incoming.finish_date)
+		existing.finish_date = incoming.finish_date;
 	return existing;
 }
 
-entry mergeLinked(entry mine, const entry& theirs, const isoDate& today) {
-	entry merged = mine;
-	int most = merged.totalUnits > 0 ? merged.totalUnits : theirs.progress;
+Entry MergeLinked(Entry mine, const Entry& theirs, const IsoDate& today) {
+	Entry merged = mine;
+	int most = merged.total_units > 0 ? merged.total_units : theirs.progress;
 	merged.progress = std::max(merged.progress, std::min(theirs.progress, most));
 	merged.volumes = std::max(merged.volumes, theirs.volumes);
 	merged.rewatched = std::max(merged.rewatched, theirs.rewatched);
 	if (merged.score == 0)
 		merged.score = theirs.score;
-	if (not merged.startDate)
-		merged.startDate = theirs.startDate;
-	if (not merged.finishDate)
-		merged.finishDate = theirs.finishDate;
-	if (merged.status == watchStatus::kPlanToWatch)
+	if (not merged.start_date)
+		merged.start_date = theirs.start_date;
+	if (not merged.finish_date)
+		merged.finish_date = theirs.finish_date;
+	if (merged.status == WatchStatus::kPlanToWatch)
 		merged.status = theirs.status;
 	if (not(merged == mine))
-		merged.updatedAt = today;
+		merged.updated_at = today;
 	return merged;
 }
 
-entry pullFromSite(entry mine, const entry& theirs, const isoDate& today) {
-	entry pulled = mine;
+Entry PullFromSite(Entry mine, const Entry& theirs, const IsoDate& today) {
+	Entry pulled = mine;
 	pulled.status = theirs.status;
 	pulled.score = theirs.score;
 	pulled.progress =
-	    pulled.totalUnits > 0 ? std::min(theirs.progress, pulled.totalUnits) : theirs.progress;
+	    pulled.total_units > 0 ? std::min(theirs.progress, pulled.total_units) : theirs.progress;
 	pulled.volumes = theirs.volumes;
 	pulled.rewatched = theirs.rewatched;
-	pulled.startDate = theirs.startDate;
-	pulled.finishDate = theirs.finishDate;
+	pulled.start_date = theirs.start_date;
+	pulled.finish_date = theirs.finish_date;
 	if (not(pulled == mine))
-		pulled.updatedAt = today;
+		pulled.updated_at = today;
 	return pulled;
 }
 
-entry applyWebFacts(entry target, const webFacts& facts, const isoDate& today) {
-	if (target.anilistId == 0)
-		target.anilistId = facts.anilistId;
-	if (target.malId == 0)
-		target.malId = facts.malId;
-	if (target.kitsuId == 0)
-		target.kitsuId = facts.kitsuId;
-	if (facts.totalUnits > 0)
-		target.totalUnits = facts.totalUnits;
-	if (facts.totalVolumes > 0)
-		target.totalVolumes = facts.totalVolumes;
+Entry ApplyWebFacts(Entry target, const WebFacts& facts, const IsoDate& today) {
+	if (target.anilist_id == 0)
+		target.anilist_id = facts.anilist_id;
+	if (target.mal_id == 0)
+		target.mal_id = facts.mal_id;
+	if (target.kitsu_id == 0)
+		target.kitsu_id = facts.kitsu_id;
+	if (facts.total_units > 0)
+		target.total_units = facts.total_units;
+	if (facts.total_volumes > 0)
+		target.total_volumes = facts.total_volumes;
 	if (facts.released > 0)
 		target.released = facts.released;
-	target.checkedAt = today;
+	target.checked_at = today;
 	return target;
 }
 

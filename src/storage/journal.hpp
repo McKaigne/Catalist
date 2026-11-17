@@ -20,21 +20,21 @@ namespace catalist::journal {
 
 // One entry before and after a command. No `before`: the command added it.
 // No `after`: the command removed it.
-struct change {
-	mediaType type = mediaType::kAnime;
+struct Change {
+	MediaType type = MediaType::kAnime;
 	int id = 0;
-	std::optional<entry> before;
-	std::optional<entry> after;
+	std::optional<Entry> before;
+	std::optional<Entry> after;
 };
 
 // The entries of one list that differ between `saved` and `current`, by
 // their id: those added or changed in the order of `current`, then those
 // removed.
-[[nodiscard]] std::vector<change> diff(const std::vector<entry>& saved,
-                                       const std::vector<entry>& current);
+[[nodiscard]] std::vector<Change> Diff(const std::vector<Entry>& saved,
+                                       const std::vector<Entry>& current);
 
 // One field of a change as text, the way a command reports it.
-struct fieldChange {
+struct FieldChange {
 	std::string field;
 	std::string before;
 	std::string after;
@@ -44,7 +44,7 @@ struct fieldChange {
 // rewatched, started, finished and title, in that order. An added entry is
 // the one field `added` (from "-" to its status), a removed one `removed`
 // (from its status to "-"). An absent date is "-".
-[[nodiscard]] std::vector<fieldChange> changedFields(const change& made);
+[[nodiscard]] std::vector<FieldChange> ChangedFields(const Change& made);
 
 // What stands in `list` once an entry goes from `from` back (or on) to `to`:
 // the entry to put there, or nothing when it is to be removed. Undo passes a
@@ -56,9 +56,9 @@ struct fieldChange {
 // change); everything else keeps its present value. An entry that comes
 // back does so under its old id, which fails, forced or not, when that id
 // or one of its site ids belongs to another entry by now.
-[[nodiscard]] result<std::optional<entry>> transition(const std::vector<entry>& list,
-                                                      const std::optional<entry>& from,
-                                                      const std::optional<entry>& to, bool force);
+[[nodiscard]] Result<std::optional<Entry>> Transition(const std::vector<Entry>& list,
+                                                      const std::optional<Entry>& from,
+                                                      const std::optional<Entry>& to, bool force);
 
 }  // namespace catalist::journal
 

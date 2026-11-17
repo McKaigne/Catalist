@@ -5,7 +5,7 @@
 
 namespace catalist::web {
 
-std::string urlEncoded(const std::string& text) {
+std::string UrlEncoded(const std::string& text) {
 	std::string encoded;
 	for (unsigned char c : text) {
 		if (std::isalnum(c) or c == '-' or c == '.' or c == '_' or c == '~')
@@ -16,15 +16,15 @@ std::string urlEncoded(const std::string& text) {
 	return encoded;
 }
 
-std::string formEncoded(const std::vector<std::pair<std::string, std::string>>& fields) {
+std::string FormEncoded(const std::vector<std::pair<std::string, std::string>>& fields) {
 	std::string body;
 	for (const auto& [name, value] : fields)
 		body +=
-		    std::format("{}{}={}", body.empty() ? "" : "&", urlEncoded(name), urlEncoded(value));
+		    std::format("{}{}={}", body.empty() ? "" : "&", UrlEncoded(name), UrlEncoded(value));
 	return body;
 }
 
-std::optional<std::string> queryValue(const std::string& url, const std::string& name) {
+std::optional<std::string> QueryValue(const std::string& url, const std::string& name) {
 	auto query = url.find('?');
 	if (query == std::string::npos)
 		return std::nullopt;

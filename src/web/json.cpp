@@ -13,30 +13,30 @@ namespace {
 // the stack.
 constexpr int kMaxDepth = 64;
 
-const value& nullValue() {
-	static const value kNull;
+const Value& NullValue() {
+	static const Value kNull;
 	return kNull;
 }
 
-void appendUtf8(std::string& out, std::uint32_t codePoint) {
-	if (codePoint < 0x80) {
-		out += static_cast<char>(codePoint);
-	} else if (codePoint < 0x800) {
-		out += static_cast<char>(0xC0 | (codePoint >> 6));
-		out += static_cast<char>(0x80 | (codePoint & 0x3F));
-	} else if (codePoint < 0x10000) {
-		out += static_cast<char>(0xE0 | (codePoint >> 12));
-		out += static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F));
-		out += static_cast<char>(0x80 | (codePoint & 0x3F));
+void AppendUtf8(std::string& out, std::uint32_t code_point) {
+	if (code_point < 0x80) {
+		out += static_cast<char>(code_point);
+	} else if (code_point < 0x800) {
+		out += static_cast<char>(0xC0 | (code_point >> 6));
+		out += static_cast<char>(0x80 | (code_point & 0x3F));
+	} else if (code_point < 0x10000) {
+		out += static_cast<char>(0xE0 | (code_point >> 12));
+		out += static_cast<char>(0x80 | ((code_point >> 6) & 0x3F));
+		out += static_cast<char>(0x80 | (code_point & 0x3F));
 	} else {
-		out += static_cast<char>(0xF0 | (codePoint >> 18));
-		out += static_cast<char>(0x80 | ((codePoint >> 12) & 0x3F));
-		out += static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F));
-		out += static_cast<char>(0x80 | (codePoint & 0x3F));
+		out += static_cast<char>(0xF0 | (code_point >> 18));
+		out += static_cast<char>(0x80 | ((code_point >> 12) & 0x3F));
+		out += static_cast<char>(0x80 | ((code_point >> 6) & 0x3F));
+		out += static_cast<char>(0x80 | (code_point & 0x3F));
 	}
 }
 
-std::optional<char> simpleEscape(char escaped) {
+std::optional<char> SimpleEscape(char escaped) {
 	switch (escaped) {
 		case '"':
 			return '"';
@@ -59,81 +59,81 @@ std::optional<char> simpleEscape(char escaped) {
 	}
 }
 
-bool isHighSurrogate(std::uint32_t unit) {
+bool IsHighSurrogate(std::uint32_t unit) {
 	return unit >= 0xD800 and unit <= 0xDBFF;
 }
 
-bool isLowSurrogate(std::uint32_t unit) {
+bool IsLowSurrogate(std::uint32_t unit) {
 	return unit >= 0xDC00 and unit <= 0xDFFF;
 }
 
-class parser {
+class Parser {
 public:
-	explicit parser(std::string_view text) : text_(text) {}
+	explicit Parser(std::string_view text) : text_(text) {}
 
-	result<value> parseDocument() {
-		auto parsed = parseValue(0);
+	Result<Value> ParseDocument() {
+		auto parsed = ParseValue(0);
 		if (not parsed)
 			return std::unexpected(error_);
-		skipSpace();
+		SkipSpace();
 		if (pos_ != text_.size())
 			return std::unexpected("unexpected text after the JSON value");
 		return std::move(*parsed);
 	}
 
 private:
-	std::optional<value> fail(std::string message) {
+	std::optional<Value> Fail(std::string message) {
 		if (error_.empty())
 			error_ = std::format("{} at offset {}", message, pos_);
 		return std::nullopt;
 	}
 
-	void skipSpace() {
+	void SkipSpace() {
 		while (pos_ < text_.size() and (text_[pos_] == ' ' or text_[pos_] == '\n' or
 		                                text_[pos_] == '\r' or text_[pos_] == '\t'))
 			++pos_;
 	}
 
-	bool consume(char expected) {
-		skipSpace();
+	bool Consume(char expected) {
+		SkipSpace();
 		if (pos_ >= text_.size() or text_[pos_] != expected)
 			return false;
 		++pos_;
 		return true;
 	}
 
-	bool consumeWord(std::string_view word) {
+	bool ConsumeWord(std::string_view word) {
 		if (text_.substr(pos_, word.size()) != word)
 			return false;
 		pos_ += word.size();
 		return true;
 	}
 
-	std::optional<value> parseValue(int depth) {
+	std::optional<Value> ParseValue(int depth) {
 		if (depth > kMaxDepth)
-			return fail("nesting too deep");
-		skipSpace();
+			return Fail("nesting too deep");
+		SkipSpace();
 		if (pos_ >= text_.size())
-			return fail("unexpected end of input");
+			return Fail("unexpected end of input");
 		char lead = text_[pos_];
 		if (lead == '{')
-			return parseObject(depth);
+			return ParseObject(depth);
 		if (lead == '[')
-			return parseArray(depth);
+			return ParseArray(depth);
 		if (lead == '"') {
-			auto text = parseString();
-			return text ? std::optional<value>(std::move(*text)) : std::nullopt;
+			auto text = ParseString();
+			return text ? std::optional<Value>(std::move(*text)) : std::nullopt;
 		}
-		if (consumeWord("true"))
-			return value(true);
-		if (consumeWord("false"))
-			return value(false);
-		if (consumeWord("null"))
-			return value();
-		return parseNumber();
+		if (ConsumeWord("true"))
+			return Value(true);
+		if (ConsumeWord("false"))
+			return Value(false);
+		if (ConsumeWord("null"))
+			return Value();
+		return ParseNumber();
 	}
 
-	std::optional<value> parseNumber() {
+	std::optional<Value> ParseNumber() {
 		size_t start = pos_;
 		while (pos_ < text_.size() and
 		       std::string_view("+-0123456789.eE").find(text_[pos_]) != std::string_view::npos)
@@ -141,11 +141,11 @@ private:
 		double number = 0.0;
 		auto [end, error] = std::from_chars(text_.data() + start, text_.data() + pos_, number);
 		if (start == pos_ or error != std::errc() or end != text_.data() + pos_)
-			return fail("invalid number");
-		return value(number);
+			return Fail("invalid number");
+		return Value(number);
 	}
 
-	std::optional<std::uint32_t> parseHex4() {
+	std::optional<std::uint32_t> ParseHex4() {
 		if (pos_ + 4 > text_.size())
 			return std::nullopt;
 		std::uint32_t unit = 0;
@@ -157,35 +157,35 @@ private:
 	}
 
 	// Reads the digits after "\u", joining a surrogate pair into one code point.
-	std::optional<std::uint32_t> parseUnicodeEscape() {
-		auto unit = parseHex4();
-		if (not unit or not isHighSurrogate(*unit))
+	std::optional<std::uint32_t> ParseUnicodeEscape() {
+		auto unit = ParseHex4();
+		if (not unit or not IsHighSurrogate(*unit))
 			return unit;
-		if (not consumeWord("\\u"))
+		if (not ConsumeWord("\\u"))
 			return std::nullopt;
-		auto low = parseHex4();
-		if (not low or not isLowSurrogate(*low))
+		auto low = ParseHex4();
+		if (not low or not IsLowSurrogate(*low))
 			return std::nullopt;
 		return 0x10000 + ((*unit - 0xD800) << 10) + (*low - 0xDC00);
 	}
 
-	bool appendEscape(std::string& out) {
+	bool AppendEscape(std::string& out) {
 		if (pos_ >= text_.size())
 			return false;
 		char escaped = text_[pos_++];
-		if (auto simple = simpleEscape(escaped)) {
+		if (auto simple = SimpleEscape(escaped)) {
 			out += *simple;
 			return true;
 		}
 		if (escaped != 'u')
 			return false;
-		auto codePoint = parseUnicodeEscape();
-		if (codePoint)
-			appendUtf8(out, *codePoint);
-		return codePoint.has_value();
+		auto code_point = ParseUnicodeEscape();
+		if (code_point)
+			AppendUtf8(out, *code_point);
+		return code_point.has_value();
 	}
 
-	std::optional<std::string> parseString() {
+	std::optional<std::string> ParseString() {
 		++pos_;
 		std::string out;
 		while (pos_ < text_.size() and text_[pos_] != '"') {
@@ -194,68 +194,68 @@ private:
 				out += current;
 				continue;
 			}
-			if (not appendEscape(out)) {
-				fail("invalid escape in string");
+			if (not AppendEscape(out)) {
+				Fail("invalid escape in string");
 				return std::nullopt;
 			}
 		}
 		if (pos_ >= text_.size()) {
-			fail("unterminated string");
+			Fail("unterminated string");
 			return std::nullopt;
 		}
 		++pos_;
 		return out;
 	}
 
-	std::optional<value> parseArray(int depth) {
+	std::optional<Value> ParseArray(int depth) {
 		++pos_;
-		value::array items;
-		if (consume(']'))
-			return value(std::move(items));
+		Value::Array items;
+		if (Consume(']'))
+			return Value(std::move(items));
 		do {
-			auto item = parseValue(depth + 1);
+			auto item = ParseValue(depth + 1);
 			if (not item)
 				return std::nullopt;
 			items.push_back(std::move(*item));
-		} while (consume(','));
-		if (not consume(']'))
-			return fail("expected ',' or ']'");
-		return value(std::move(items));
+		} while (Consume(','));
+		if (not Consume(']'))
+			return Fail("expected ',' or ']'");
+		return Value(std::move(items));
 	}
 
-	std::optional<member> parseMember(int depth) {
-		skipSpace();
+	std::optional<Member> ParseMember(int depth) {
+		SkipSpace();
 		if (pos_ >= text_.size() or text_[pos_] != '"') {
-			fail("expected a key");
+			Fail("expected a key");
 			return std::nullopt;
 		}
-		auto key = parseString();
+		auto key = ParseString();
 		if (not key)
 			return std::nullopt;
-		if (not consume(':')) {
-			fail("expected ':'");
+		if (not Consume(':')) {
+			Fail("expected ':'");
 			return std::nullopt;
 		}
-		auto item = parseValue(depth + 1);
+		auto item = ParseValue(depth + 1);
 		if (not item)
 			return std::nullopt;
-		return member{std::move(*key), std::move(*item)};
+		return Member{std::move(*key), std::move(*item)};
 	}
 
-	std::optional<value> parseObject(int depth) {
+	std::optional<Value> ParseObject(int depth) {
 		++pos_;
-		value::object members;
-		if (consume('}'))
-			return value(std::move(members));
+		Value::Object members;
+		if (Consume('}'))
+			return Value(std::move(members));
 		do {
-			auto parsed = parseMember(depth);
+			auto parsed = ParseMember(depth);
 			if (not parsed)
 				return std::nullopt;
 			members.push_back(std::move(*parsed));
-		} while (consume(','));
-		if (not consume('}'))
-			return fail("expected ',' or '}'");
-		return value(std::move(members));
+		} while (Consume(','));
+		if (not Consume('}'))
+			return Fail("expected ',' or '}'");
+		return Value(std::move(members));
 	}
 
 	std::string_view text_;
@@ -265,63 +265,63 @@ private:
 
 }  // namespace
 
-bool value::isNull() const {
+bool Value::IsNull() const {
 	return std::holds_alternative<std::nullptr_t>(data_);
 }
 
-bool value::isArray() const {
-	return std::holds_alternative<array>(data_);
+bool Value::IsArray() const {
+	return std::holds_alternative<Array>(data_);
 }
 
-std::optional<double> value::asNumber() const {
+std::optional<double> Value::AsNumber() const {
 	if (auto number = std::get_if<double>(&data_))
 		return *number;
 	return std::nullopt;
 }
 
-std::optional<bool> value::asBool() const {
+std::optional<bool> Value::AsBool() const {
 	if (auto flag = std::get_if<bool>(&data_))
 		return *flag;
 	return std::nullopt;
 }
 
-std::optional<long long> value::asInteger() const {
-	auto number = asNumber();
+std::optional<long long> Value::AsInteger() const {
+	auto number = AsNumber();
 	if (not number or std::trunc(*number) != *number)
 		return std::nullopt;
 	return static_cast<long long>(*number);
 }
 
-int value::asCount() const {
-	auto count = asInteger();
+int Value::AsCount() const {
+	auto count = AsInteger();
 	return count and *count > 0 ? static_cast<int>(*count) : 0;
 }
 
-std::optional<std::string> value::asString() const {
+std::optional<std::string> Value::AsString() const {
 	if (auto text = std::get_if<std::string>(&data_))
 		return *text;
 	return std::nullopt;
 }
 
-const value& value::operator[](std::string_view key) const {
-	auto members = std::get_if<object>(&data_);
+const Value& Value::operator[](std::string_view key) const {
+	auto members = std::get_if<Object>(&data_);
 	if (not members)
-		return nullValue();
+		return NullValue();
 	for (const auto& entry : *members) {
 		if (entry.key == key)
 			return entry.item;
 	}
-	return nullValue();
+	return NullValue();
 }
 
-const value::array& value::items() const {
-	static const array kEmpty;
-	auto found = std::get_if<array>(&data_);
+const Value::Array& Value::Items() const {
+	static const Array kEmpty;
+	auto found = std::get_if<Array>(&data_);
 	return found ? *found : kEmpty;
 }
 
-result<value> parse(std::string_view text) {
-	return parser(text).parseDocument();
+Result<Value> Parse(std::string_view text) {
+	return Parser(text).ParseDocument();
 }
 
 }  // namespace catalist::json

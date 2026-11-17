@@ -6,8 +6,8 @@ namespace catalist {
 
 namespace {
 
-// The sum of one count over a list, e.g. sumOf(list, &entry::progress).
-int sumOf(const std::vector<entry>& list, int entry::* count) {
+// The sum of one count over a list, e.g. SumOf(list, &entry::progress).
+int SumOf(const std::vector<Entry>& list, int Entry::* count) {
 	int total = 0;
 	for (const auto& e : list)
 		total += e.*count;
@@ -16,33 +16,33 @@ int sumOf(const std::vector<entry>& list, int entry::* count) {
 
 // True when `a` comes before `b` in the natural order of `key`; ties fall
 // back to the title so the order never depends on how the list was stored.
-bool comesBefore(const entry& a, const entry& b, sortKey key) {
+bool ComesBefore(const Entry& a, const Entry& b, SortKey key) {
 	switch (key) {
-		case sortKey::kNew:
-			if (newReleases(a) != newReleases(b))
-				return newReleases(a) > newReleases(b);
+		case SortKey::kNew:
+			if (NewReleases(a) != NewReleases(b))
+				return NewReleases(a) > NewReleases(b);
 			[[fallthrough]];
-		case sortKey::kUpdated:
-			if (a.updatedAt != b.updatedAt)
-				return a.updatedAt > b.updatedAt;
+		case SortKey::kUpdated:
+			if (a.updated_at != b.updated_at)
+				return a.updated_at > b.updated_at;
 			break;
-		case sortKey::kScore:
+		case SortKey::kScore:
 			if (a.score != b.score)
 				return a.score > b.score;
 			break;
-		case sortKey::kProgress:
+		case SortKey::kProgress:
 			if (a.progress != b.progress)
 				return a.progress > b.progress;
 			break;
-		case sortKey::kDate:
-			if (listDate(a) != listDate(b))
-				return listDate(a) > listDate(b);
+		case SortKey::kDate:
+			if (ListDate(a) != ListDate(b))
+				return ListDate(a) > ListDate(b);
 			break;
-		case sortKey::kStatus:
+		case SortKey::kStatus:
 			if (a.status != b.status)
 				return static_cast<int>(a.status) < static_cast<int>(b.status);
 			break;
-		case sortKey::kTitle:
+		case SortKey::kTitle:
 			break;
 	}
 	return a.title < b.title;
@@ -50,21 +50,21 @@ bool comesBefore(const entry& a, const entry& b, sortKey key) {
 
 }  // namespace
 
-void sortEntries(std::vector<entry>& entries, sortKey key, bool reverse) {
+void SortEntries(std::vector<Entry>& entries, SortKey key, bool reverse) {
 	// Stable, so titles that compare equal keep the order they came in and
 	// the same command prints the same lines every time.
 	std::stable_sort(entries.begin(), entries.end(),
-	                 [key, reverse](const entry& a, const entry& b) {
-		                 return reverse ? comesBefore(b, a, key) : comesBefore(a, b, key);
+	                 [key, reverse](const Entry& a, const Entry& b) {
+		                 return reverse ? ComesBefore(b, a, key) : ComesBefore(a, b, key);
 	                 });
 }
 
-size_t countByStatus(const std::vector<entry>& list, watchStatus status) {
+size_t CountByStatus(const std::vector<Entry>& list, WatchStatus status) {
 	return static_cast<size_t>(std::count_if(
-	    list.begin(), list.end(), [status](const entry& e) { return e.status == status; }));
+	    list.begin(), list.end(), [status](const Entry& e) { return e.status == status; }));
 }
 
-double averageScore(const std::vector<entry>& list) {
+double AverageScore(const std::vector<Entry>& list) {
 	int sum = 0;
 	int rated = 0;
 	for (const auto& e : list) {
@@ -76,23 +76,23 @@ double averageScore(const std::vector<entry>& list) {
 	return rated == 0 ? 0.0 : static_cast<double>(sum) / rated;
 }
 
-int totalProgress(const std::vector<entry>& list) {
-	return sumOf(list, &entry::progress);
+int TotalProgress(const std::vector<Entry>& list) {
+	return SumOf(list, &Entry::progress);
 }
 
-int totalVolumes(const std::vector<entry>& list) {
-	return sumOf(list, &entry::volumes);
+int TotalVolumes(const std::vector<Entry>& list) {
+	return SumOf(list, &Entry::volumes);
 }
 
-int totalRewatched(const std::vector<entry>& list) {
-	return sumOf(list, &entry::rewatched);
+int TotalRewatched(const std::vector<Entry>& list) {
+	return SumOf(list, &Entry::rewatched);
 }
 
-double daysSpent(const std::vector<entry>& list) {
+double DaysSpent(const std::vector<Entry>& list) {
 	constexpr double kMinutesPerDay = 1440.0;
 	double minutes = 0.0;
 	for (const auto& e : list)
-		minutes += e.progress * (e.type == mediaType::kAnime ? 24.0 : 5.0);
+		minutes += e.progress * (e.type == MediaType::kAnime ? 24.0 : 5.0);
 	return minutes / kMinutesPerDay;
 }
 

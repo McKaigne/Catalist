@@ -22,11 +22,11 @@ int main(int argc, char* argv[]) {
 		const char* value = std::getenv(name);
 		return std::string(value ? value : "");
 	};
-	catalist::dataDirEnv dirs{env("CATALIST_DATA_DIR"), env("XDG_DATA_HOME"), env("HOME")};
-	catalist::catalogue db(catalist::dataDirFor(dirs));
+	catalist::DataDirEnv dirs{env("CATALIST_DATA_DIR"), env("XDG_DATA_HOME"), env("HOME")};
+	catalist::Catalogue db(catalist::DataDirFor(dirs));
 
 	// A second apart, as the sites ask of programs that send many requests.
-	catalist::web::link net{catalist::httpFetch,
+	catalist::web::Link net{catalist::HttpFetch,
 	                        [] { std::this_thread::sleep_for(std::chrono::seconds(1)); }};
 	// The ids the sites gave this build, unless the environment names others.
 	auto either = [&env](const char* name, const char* built) {
@@ -37,15 +37,15 @@ int main(int argc, char* argv[]) {
 	           either("CATALIST_MAL_CLIENT_ID", catalist::kMalClientId),
 	           either("CATALIST_KITSU_CLIENT_ID", catalist::kKitsuClientId),
 	           either("CATALIST_KITSU_CLIENT_SECRET", catalist::kKitsuClientSecret)};
-	net.now = catalist::unixNow;
-	net.random = catalist::randomText;
-	catalist::cliContext ctx{db, std::cin, std::cout, std::cerr, catalist::localTime, net};
-	ctx.interactive = catalist::isInteractive();
-	ctx.accountsFile = catalist::accounts::defaultPath(env("CATALIST_DATA_DIR"),
-	                                                   env("XDG_STATE_HOME"), env("HOME"));
-	ctx.readSecret = catalist::readSecretLine;
+	net.now = catalist::UnixNow;
+	net.random = catalist::RandomText;
+	catalist::CliContext ctx{db, std::cin, std::cout, std::cerr, catalist::LocalTime, net};
+	ctx.interactive = catalist::IsInteractive();
+	ctx.accounts_file = catalist::accounts::DefaultPath(env("CATALIST_DATA_DIR"),
+	                                                    env("XDG_STATE_HOME"), env("HOME"));
+	ctx.read_secret = catalist::ReadSecretLine;
 	ctx.offline = not env("CATALIST_OFFLINE").empty() and env("CATALIST_OFFLINE") != "0";
-	ctx.columns = catalist::terminalColumns();
+	ctx.columns = catalist::TerminalColumns();
 	// https://no-color.org; a dumb terminal cannot show colours either.
 	// CLICOLOR_FORCE asks for them into a pipe as well.
 	bool forced = not env("CLICOLOR_FORCE").empty() and env("CLICOLOR_FORCE") != "0";
@@ -53,8 +53,8 @@ int main(int argc, char* argv[]) {
 	            env("TERM") != "dumb";
 	// The shell's COLUMNS, for --table into a pipe; too narrow to be meant
 	// is not taken.
-	auto shellColumns = catalist::args::parseCount(env("COLUMNS"));
-	if (shellColumns and *shellColumns >= 20)
-		ctx.tableWidth = *shellColumns;
-	return catalist::runCli({argv + 1, argv + argc}, ctx);
+	auto shell_columns = catalist::args::ParseCount(env("COLUMNS"));
+	if (shell_columns and *shell_columns >= 20)
+		ctx.table_width = *shell_columns;
+	return catalist::RunCli({argv + 1, argv + argc}, ctx);
 }

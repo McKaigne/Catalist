@@ -17,14 +17,14 @@ namespace catalist::completion {
 
 // The completion function for zsh: the file `_catalist` of a directory in
 // $fpath.
-[[nodiscard]] std::string zsh(const std::vector<command>& table);
+[[nodiscard]] std::string Zsh(const std::vector<Command>& table);
 
 // The completions for fish: the file `catalist.fish`.
-[[nodiscard]] std::string fish(const std::vector<command>& table);
+[[nodiscard]] std::string Fish(const std::vector<Command>& table);
 
 // The COMMANDS section of the manual page, in roff: each command with its
 // usage line, what it does and its options.
-[[nodiscard]] std::string manual(const std::vector<command>& table);
+[[nodiscard]] std::string Manual(const std::vector<Command>& table);
 
 }  // namespace catalist::completion
 

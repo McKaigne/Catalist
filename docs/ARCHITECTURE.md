@@ -97,10 +97,13 @@ drive. Most hold up. Three carry a real cost and say so:
   `heldAgain`).
 
 ### D4: Naming and Formatting (was ADR-008)
-- **Names:** types, functions, variables and files are camelCase;
-  interfaces are `i` + PascalCase (`iTracker`); private members end in
-  `_`; constants and enumerators are `kPascalCase`. Namespaces are lower
-  case and macros SCREAMING_SNAKE_CASE.
+- **Names:** type names are `PascalCase`. Function names are `PascalCase`.
+  Variable names and parameters are `snake_case`. Data members are
+  `snake_case_` with a trailing underscore. Constants and enumerators are
+  `kPascalCase`. Namespaces are lower case. File names are lower case with
+  underscores. Macros are `SCREAMING_SNAKE_CASE`. Interfaces have no
+  special prefix. Accessors and mutators match the variable name
+  (`count()`, `set_count()`).
 - **Formatting:** `.clang-format` (Google-based): tabs four wide, a
   100-column limit, braces on the line of their statement. Logical
   operators are written `and`, `or`, `not`.

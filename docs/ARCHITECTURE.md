@@ -12,29 +12,29 @@ layer uses only the layers above it in this table, and `system`.
 
 | Folder | Module | Holds |
 | :--- | :--- | :--- |
-| `core/` | `date`, `result` | `isoDate` and the stamp of a step; `result<T>` and `done`, `std::expected` with an error message |
+| `core/` | `date`, `result` | `IsoDate` and the stamp of a step; `Result<T>` and `Done`, `std::expected` with an error message |
 | | `account.hpp` | a login on a site: user, token, renewal, expiry |
 | | `entry` | one anime or manga title, its statuses and the rules that change it (progress, status, score, counts, dates, import merge) |
-| | `lists` | what a list of titles works out to: its order (`sortEntries`) and its numbers (`countByStatus`, `averageScore`, ...) |
+| | `lists` | what a list of titles works out to: its order (`SortEntries`) and its numbers (`CountByStatus`, `AverageScore`, ...) |
 | | `text` | UTF-8 helpers: glyphs, terminal width, clipping, lower case |
-| `storage/` | `store` | a small RAII wrapper over SQLite (`database`, `statement`, `transaction`), the only code that includes `sqlite3.h` |
+| `storage/` | `store` | a small RAII wrapper over SQLite (`Database`, `Statement`, `Transaction`), the only code that includes `sqlite3.h` |
 | | `catalogue` | the two lists in memory, kept in `catalist.db` with the Kitsu ids beside them, and the outbox of what the sites are still to be told; `history.cpp` holds its undo and redo |
 | | `accounts` | the logins file: its place, and its lines in and out |
-| | `csvCodec` | the CSV form of a title: the rows of the undo history, and the files of 0.3.0 and earlier that `import` reads |
+| | `csv_codec` | the CSV form of a title: the rows of the undo history, and the files of 0.3.0 and earlier that `import` reads |
 | | `journal` | pure functions over the undo history: what changed between two lists, taking a step back or forward |
-| | `malXml` | the MyAnimeList XML format lists are imported and exported in |
+| | `mal_xml` | the MyAnimeList XML format lists are imported and exported in |
 | `web/` | `http`, `json` | one request type, form and URL encoding; the JSON the sites answer in |
-| | `tracker` | `iTracker`, the one interface every site implements (D12); `answer<T>`, `failure` and `checked`, what a site answers; `siteEntry`, your entry there; `sending`, what a push sends |
-| | `anilist`, `mal`, `kitsu`, `sites` | the adapters of AniList, MyAnimeList and Kitsu, and `makeTracker`, which picks one |
+| | `tracker` | `Tracker`, the one interface every site implements (D12); `Answer<T>`, `Failure` and `Checked`, what a site answers; `SiteEntry`, your entry there; `Sending`, what a push sends |
+| | `anilist`, `mal`, `kitsu`, `sites` | the adapters of AniList, MyAnimeList and Kitsu, and `MakeTracker`, which picks one |
 | `cli/` | `args`, `refs`, `output` | the POSIX option parser; refs (`a:12`) and title matching; tables, tab-separated lines and JSON Lines |
-| | `cli` | `cliContext`, the `command` row, the table put together, dispatch and help |
+| | `cli` | `CliContext`, the `Command` row, the table put together, dispatch and help |
 | | `common` | what the commands share (naming titles, statuses, loading, saving and reporting a change), and one function per group of commands |
 | | `listing`, `tracking`, `online`, `accounts`, `sync`, `track`, `transfer`, `history`, `setup` | the commands, by group: their handlers and their rows of the table |
 | | `completion` | the zsh and fish completions and the manual page's COMMANDS, written from the command table |
-| `src/` | `system` | everything that touches the outside world: files, `runProgram` and `httpFetch` (curl), the clock, the terminal, random text |
+| `src/` | `system` | everything that touches the outside world: files, `RunProgram` and `HttpFetch` (curl), the clock, the terminal, random text |
 
 `main.cpp` reads the environment, builds the catalogue on the data
-directory and the `cliContext`, and runs the command line. Tests mirror the
+directory and the `CliContext`, and runs the command line. Tests mirror the
 folders; `tests/smoke/` runs the built program from `sh`, and
 `tests/support/` holds the fixtures.
 
@@ -70,7 +70,7 @@ drive. Most hold up. Three carry a real cost and say so:
   Lines, 0.3.0's CSV files or a user's public lists on a site; `export`
   writes XML (which all three sites import), CSV or JSON. Importing merges
   by id: a title there already keeps what the person gave it and gets only
-  what it lacks (`mergeImported`).
+  what it lacks (`MergeImported`).
 - **Why:** a tracker is used daily, offline as often as not, and must not
   depend on a site staying up or keeping its API.
 
@@ -94,8 +94,8 @@ drive. Most hold up. Three carry a real cost and say so:
   functions so they read in sections.
 - **Shallow control flow:** function bodies nest at most three levels.
   Preconditions and errors return early; loops skip with `continue`; each
-  distinct subtask is a small, named helper (`readRefs`, `chooseMatch`,
-  `heldAgain`).
+  distinct subtask is a small, named helper (`ReadRefs`, `ChooseMatch`,
+  `HeldAgain`).
 
 ### D4: Naming and Formatting (was ADR-008)
 - **Names:** type names are `PascalCase`. Function names are `PascalCase`.
@@ -118,23 +118,23 @@ drive. Most hold up. Three carry a real cost and say so:
   `catalist.db` and the logins file (D9).
 
 ### D5: Types over Sentinels (was ADR-002)
-- **Decision:** `std::optional<T>` for what may be absent, and `result<T>`
-  / `done` (`std::expected` with a message) for what may fail; no `-1` or
-  `"0000-00-00"`. A site's failure says what kind it is (`web::failure`:
+- **Decision:** `std::optional<T>` for what may be absent, and `Result<T>`
+  / `Done` (`std::expected` with a message) for what may fail; no `-1` or
+  `"0000-00-00"`. A site's failure says what kind it is (`web::Failure`:
   unreachable, not linked, refused) rather than leaving callers to read
   its message.
 
 ### D6: Side Effects in One Place (was ADR-005)
 - **Decision:** `system.cpp` is the only code that touches file streams,
   other programs, the terminal or the system clock, as plain functions
-  (`readFile`, `runProgram`, `httpFetch`, `localTime`, `isInteractive`,
-  `terminalColumns`). `store.cpp` is the only code that includes
+  (`ReadFile`, `RunProgram`, `HttpFetch`, `LocalTime`, `IsInteractive`,
+  `TerminalColumns`). `store.cpp` is the only code that includes
   `sqlite3.h`. Where a test must swap a side effect, the caller takes a
-  function: a site takes a `web::link` (the fetch, the pause between
-  requests, the clock and the app ids), and `cliContext` carries the clock
+  function: a site takes a `web::Link` (the fetch, the pause between
+  requests, the clock and the app ids), and `CliContext` carries the clock
   and the link.
 - **Composition root:** `main.cpp` reads the environment, builds the
-  catalogue and the `cliContext`. There are no singletons.
+  catalogue and the `CliContext`. There are no singletons.
 - **Processes:** the only program run is curl, with `execvp` and an
   argument list, so nothing passes through a shell. A request body goes in
   on standard input, never on the command line.
@@ -154,12 +154,12 @@ drive. Most hold up. Three carry a real cost and say so:
   records the step; a new step deletes the undone ones, and the last 100
   are kept.
 - **Locking:** a command that changes the lists takes the write lock
-  (`beginWrite`, `BEGIN IMMEDIATE`) before it loads, so nothing another
+  (`BeginWrite`, `BEGIN IMMEDIATE`) before it loads, so nothing another
   program does comes between what it reads and what it saves. A site is
   asked *before* the lock is taken (D11), so no program waits on the
   network.
-- **Undo and redo:** `journal` computes the changes (`diff`) and takes a
-  step per entry (`transition`): only the fields the step changed are
+- **Undo and redo:** `journal` computes the changes (`Diff`) and takes a
+  step per entry (`Transition`): only the fields the step changed are
   checked and set, so what a site filled in since is kept. A title changed
   since stops the step unless forced; a removed title comes back under its
   old id, never over another title. Ids and released counts are no step.
@@ -254,8 +254,8 @@ drive. Most hold up. Three carry a real cost and say so:
 - **Completion:** the scripts ask the hidden `catalist __complete` for
   titles, statuses and fields. It opens the database read-only, waits at
   most 100 ms, creates nothing, and prints nothing on any failure.
-- **Testing:** `cliContext` carries the streams, the clock, the
-  `web::link` and whether a terminal is attached, so tests drive every
+- **Testing:** `CliContext` carries the streams, the clock, the
+  `web::Link` and whether a terminal is attached, so tests drive every
   command with string streams and a fake web.
 
 ## Sites
@@ -267,32 +267,32 @@ drive. Most hold up. Three carry a real cost and say so:
   tracker by its id there; every tracker does the same few jobs behind one
   interface. Its source (`AddTracks`, `TrackChapter`, `RefreshTracks`,
   `DelayedTrackingUpdateWorker`, the trackers) is what these rules follow.
-- **Decision:** `web::iTracker` is that interface, and `anilist`, `mal`
-  and `kitsu` each implement all of it: `search`, `lookUp`/`lookUpMany`,
-  `startLogin`/`finishLogin`/`current`, `pull` (a user's public list),
-  `entryOf` (your own entry of a title) and `push`/`remove`. `makeTracker`
+- **Decision:** `web::Tracker` is that interface, and `anilist`, `mal`
+  and `kitsu` each implement all of it: `Search`, `LookUp`/`LookUpMany`,
+  `StartLogin`/`FinishLogin`/`Current`, `Pull` (a user's public list),
+  `EntryOf` (your own entry of a title) and `Push`/`Remove`. `MakeTracker`
   picks one; no command names a site in its code.
 - **One entry, sent one way:** the lists are the truth, and each title is
   one entry, sent to every logged-in site where it is linked; a site's
   entry is never a second, editable copy. `track REF` shows each site's
   entry read live, and `track --pull SITE` takes one as the title's.
 - **Binding:** `link` reads your entry on the site first and folds it in
-  (`mergeLinked`: what you set stays, the higher progress wins, the site
+  (`MergeLinked`: what you set stays, the higher progress wins, the site
   fills in what you have not set, its status replaces planned), one step
   for undo; the site then gets the title whole, as Mihon's `bind` and
   `AddTracks`.
 - **Sending:** only the fields a change changed are sent (the outbox
-  keeps them as `siteField` bits, merged when the title changes again), so
+  keeps them as `site_field` bits, merged when the title changes again), so
   what you changed on the site itself stays. A partial send reads the
   site's entry first, as `TrackChapter` refreshes before it updates: a site
   without the title gets all of it, and progress that only went up (`+`)
   does not lower a site further along. `-`, `set` and `undo` send what you
   set.
-- **Retries:** the HTTP status decides (`web::checked`): no reply, 429 and
+- **Retries:** the HTTP status decides (`web::Checked`): no reply, 429 and
   5xx wait; 401 and 403 wait for a new login; other refusals wait too, and
   after three tries are given up (Mihon's worker stops after three).
   Waiting is five minutes, then twice as long each time, up to six hours;
-  the next command that goes online sends what is due (`sendWaiting`), and
+  the next command that goes online sends what is due (`SendWaiting`), and
   `sync` sends everything at once. There is no background job.
 - **Linking:** a title is linked to a site when it has that site's id.
   `add`, `refresh` and `import` keep every id a site gives (AniList gives
@@ -303,7 +303,7 @@ drive. Most hold up. Three carry a real cost and say so:
   much of a running show has aired; MyAnimeList answers nothing without the
   program's client id, and has no hidden entries; Kitsu has no volumes.
   Scores are kept and sent in each site's scale (AniList out of 100,
-  Kitsu's ratingTwenty, MyAnimeList out of 10); `web::outOfTen` converts
+  Kitsu's ratingTwenty, MyAnimeList out of 10); `web::OutOfTen` converts
   one only to draw it, as five stars like every score at a terminal.
 - **Not taken from Mihon:** its settings (update after reading, ask first),
   its background job, half points, a separate entry per site, and the
@@ -341,7 +341,7 @@ drive. Most hold up. Three carry a real cost and say so:
 - **What a test checks:** what the person would see: the lists as another
   catalogue reads them back, the exit code and the output. No test is
   skipped or switched off.
-- **Where:** unit tests mirror `src/`; command tests share `cliFixture`;
+- **Where:** unit tests mirror `src/`; command tests share `CliFixture`;
   `tests/smoke/smoke.sh` drives the built program from `sh` with a stub
   `curl`; ctest checks that the completions parse with `zsh -n` and
   `fish -n`. CI also runs the suite under AddressSanitizer and UBSan.

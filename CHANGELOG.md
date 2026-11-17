@@ -12,7 +12,7 @@ SQLite file, commands made for daily tracking, scripts and pipes with undo
 and redo, and AniList, MyAnimeList and Kitsu as equal sites to find titles
 on and, logged in, to tell what changes, one way, as Mihon tells its
 trackers. The full-screen terminal interface is now a separate program,
-Catalist-TUI, which keeps its lists in the same file.
+Catalist-TUI, kept as an archive.
 
 ### Added
 - Tracking at parity with Mihon's: `catalist link` reads your entry on the

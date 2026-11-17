@@ -46,8 +46,9 @@ drive. Most hold up. Three carry a real cost and say so:
 - **D2 No settings** holds, with two exceptions it names: the provider and
   the sites' app ids.
 - **D9 One file with Catalist-TUI** is what makes the storage look
-  roundabout (a side table for Kitsu ids, undo rows as CSV text). That is
-  the price of sharing the file, and it is paid on purpose.
+  roundabout (a side table for Kitsu ids, undo rows as CSV text). Since
+  Catalist-TUI was archived, nothing holds it in place; it stays until a
+  change to the schema is needed.
 - **D12 Sites as trackers** is a third of the code, now at parity with
   Mihon's tracking, and has not been run against the live sites. It stays,
   documented as untested; it is the first thing to cut if the program must
@@ -174,6 +175,9 @@ drive. Most hold up. Three carry a real cost and say so:
   line and the tests for something done once.
 
 ### D9: One File with Catalist-TUI; New Data in Tables of Its Own (was ADR-017, ADR-019)
+- **Status:** no longer binding. Catalist-TUI was archived on 2026-11-17.
+  The schema below stays as it is, but the next change that needs it may
+  move to version 2 (see **Cost**) without keeping the TUI working.
 - **Context:** Catalist-TUI, the full-screen program, shares
   `catalist.db`. It opens only `user_version` 1 and writes `entry` with a
   positional 17-value INSERT, so a new `entry` column or a new version
@@ -352,7 +356,7 @@ drive. Most hold up. Three carry a real cost and say so:
   fixes, MINOR for new commands or options, MAJOR for big releases; 0.x
   until the first full release. Every bump adds a Keep a Changelog entry,
   is its own `release: vX.Y.Z` commit and gets an annotated tag. Internal
-  work, such as the `simplify/cleanup` branch, does not bump.
+  work, such as the cleanup of November 2026, does not bump.
 
 ## History
 Decisions that were replaced, for reading old commits and the changelog:

@@ -14,8 +14,7 @@ three. Everything else works offline. Lists move in and out as MyAnimeList
 XML, which all three sites read.
 
 The full-screen terminal interface of earlier versions is now a separate
-program, Catalist-TUI. Both keep their lists in the same `catalist.db`, so
-they can be used side by side.
+program, Catalist-TUI, kept as an archive and no longer developed.
 
 ## Install
 

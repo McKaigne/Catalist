@@ -85,9 +85,6 @@ in one SQLite file.
 The logins of \fBlogin\fR: one line a site with its token, readable by
 its owner only, and kept apart from the lists so that copying them gives
 no one your logins. Passwords are never kept.
-.PP
-Catalist-TUI, the full-screen interface, keeps its lists in the same
-\fIcatalist.db\fR.
 .SH ENVIRONMENT
 .TP
 .B CATALIST_DATA_DIR

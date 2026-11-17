@@ -34,7 +34,8 @@ later, Ninja or Make, and SQLite 3 (`libsqlite3-dev` on Debian and Ubuntu),
 and doctest for the tests (`doctest-dev`; `-DBUILD_TESTING=OFF` builds
 without them).
 At run time, `curl` reaches the sites; without it `add --no-lookup` still
-works.
+works. Scores are drawn as stars from a [Nerd Font](https://www.nerdfonts.com);
+in a terminal font without them they show as boxes.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -115,9 +116,9 @@ of its name will do.
 ```console
 $ catalist ls
 REF  TITLE              STATUS         SCORE  PROGRESS  NEW
-m:1  Berserk            Reading            -  0/?
-a:2  Odd Taxi           Plan to Watch      -  0/?
-a:1  Sousou no Frieren  Plan to Watch      -  0/28
+m:1  Berserk            Reading        -      0/?
+a:2  Odd Taxi           Plan to Watch  -      0/?
+a:1  Sousou no Frieren  Plan to Watch  -      0/28
 $ catalist show a:1                   # everything about one title
 ```
 
@@ -144,8 +145,8 @@ site what is out).
 ```console
 $ catalist
 REF  TITLE              STATUS    SCORE  PROGRESS  NEW
-m:1  Berserk            Reading       -  0/?
-a:1  Sousou no Frieren  Watching     10  5/28
+m:1  Berserk            Reading   -      0/?
+a:1  Sousou no Frieren  Watching  󰓎󰓎󰓎󰓎󰓎  5/28
 ```
 
 **8. Take a mistake back.** Every command that changes the lists is one
@@ -167,11 +168,13 @@ catalist export --format=json > backup.jsonl
 ```
 
 **10. Tell a site (optional).** Logged in, Catalist sends each change to
-the site as you make it (see [Tracking](#tracking)):
+the site as you make it, as Mihon does (see [Tracking](#tracking)):
 
 ```sh
 catalist login anilist
-catalist sync --all                   # send what you already have, once
+catalist link frieren anilist         # fold in your entry there, then keep it told
+catalist track frieren                # the title as each site has it
+catalist sync --all                   # send everything linked, once
 ```
 
 ---
@@ -209,11 +212,15 @@ A shorter name is a shell alias away: `alias cl=catalist`.
   `--header` names the columns. Messages and questions go to stderr. Exit
   codes: 0 done, 1 failed, 2 wrong command line (also `catalist` with no
   command into a pipe).
-- **Statuses** are `watching`, `completed`, `on-hold`, `dropped` and
-  `planned` (`reading` is watching), in capitals or not; a manga's are
-  shown as Reading and Plan to Read.
-- **Network:** only `add`, `search`, `refresh`, `import --user`, `login`
-  and `sync` go online, and, logged in, the change a command saves is sent
+- **Statuses** are `watching`, `completed`, `on-hold`, `dropped`,
+  `planned` and `rewatching` (`reading` and `rereading` say the same), in
+  capitals or not; a manga's are shown as Reading, Plan to Read and
+  Rereading.
+- **Scores** are whole numbers from 0 to 10 (0 is none), drawn at a
+  terminal as five Nerd Font stars, a half star a point. Pipes and JSON
+  keep the number.
+- **Network:** only `add`, `search`, `refresh`, `import --user`, `login`,
+  `link`, `track` and `sync` go online, and, logged in, the change a command saves is sent
   to the sites (see Tracking). `add` fails
   when the site cannot be reached, unless `--no-lookup` adds the title as
   written. A title's total, and how many episodes are out (which the `new`
@@ -262,26 +269,46 @@ command, and `catalist show` links to a title's page there.
 
 ## Tracking
 
-As Mihon tells its trackers, Catalist tells the sites you are logged in to
-what changes in your lists, one way: your lists are the truth.
+Catalist tracks as [Mihon](https://mihon.app) does: it tells the sites you
+are logged in to what changes in your lists, one way. Your lists are the
+truth; the sites hear of it.
 
-`catalist login anilist|mal|kitsu` logs in to a site; `catalist accounts`
-lists the logins and `catalist logout SITE` forgets one. Each site has its
-own way (AniList shows a token to paste back, MyAnimeList sends the browser
-to an address to paste back, Kitsu takes your email and password once, for
-a token). The tokens are kept apart from your lists, readable by you only,
-in `~/.local/state/catalist/accounts`; passwords never are.
+```sh
+catalist login anilist          # also mal or kitsu; accounts lists them, logout forgets one
+catalist link frieren anilist   # read your entry there, fold it in, then keep it told
+catalist + frieren              # each change goes to every site the title is linked to
+catalist track frieren          # the title as each site has it, beside your lists
+catalist sync --list            # what waits to be sent, and when
+```
 
-Logged in, each change to a title's status, score, progress, volumes,
-rewatches or dates is sent at once to every such site where the title is
-**linked** (has its id there). Titles added from a site, imported or
-refreshed are linked to every site that knew their ids; `catalist link REF
-SITE [ID]` links one by hand, `catalist ls --unlinked SITE` lists those that
-are not, and `catalist unlink REF SITE` stops telling a site of one. What
-could not be sent (offline, a site down, `--offline`, more than ten changes
-at once) waits, and `catalist sync` sends it; `catalist sync --all` sends
-every linked title, as after a first login. `rm` leaves the sites' lists
-alone unless `--remote` is given.
+Each site has its own way in: AniList shows a token to paste back,
+MyAnimeList sends the browser to an address to paste back, and Kitsu takes
+your email and password once, for a token. The tokens are kept apart from
+your lists, readable by you only, in `~/.local/state/catalist/accounts`;
+passwords never are.
+
+What Mihon's tracking does, and what Catalist does:
+
+| Mihon | Catalist |
+| :--- | :--- |
+| Add tracking to a series: your entry on the tracker is read and taken in; reading further along here is sent back | `catalist link REF SITE`: your entry there is folded in (what you set here stays, the higher progress wins, the site fills in a score or dates you have not set), one step for `undo`; then the title is sent there whole. Titles added from a site, imported or refreshed are linked to every site that knew their ids. |
+| Search with a different title; `id:` for a site's id; `my:` for your MyAnimeList list | `link --query TEXT`; `id:N` and `my:WORDS` work in `search`, `add` and `link --query`, on all three sites |
+| After reading, the tracker's progress goes up, never down; status and dates follow | `+` sends the new progress, unless the site is already further along; reaching the total completes the title with a finish date. `-`, `set` and `undo` send what you set, lower too. Only the fields that changed are sent, so what you changed on the site itself stays. |
+| Offline updates are sent once back online, retried a few times | What could not be sent waits: the next command that goes online sends it once due (five minutes after a failure, then twice as long each time), `catalist sync` at once. A change a site refuses three times is given up. |
+| The track sheet: each tracker's entry, refreshed | `catalist track REF`: each site's entry read there, what differs from your lists marked; `track --pull SITE` takes it as the title's |
+| Scores in the format you chose on the tracker | Shown as five stars (Nerd Font glyphs), a half star a point, whatever scale you score in there; sent in the site's own scale |
+| Private tracking (AniList, Kitsu) | `track --private SITE`, `track --public SITE` |
+| Rereading | `catalist rewatch REF`: the status `rewatching` (AniList's REPEATING, MyAnimeList's re-watching, Kitsu's reconsuming); finishing it adds one to the rewatch count |
+| Remove tracking, optionally from the tracker too | `catalist unlink REF SITE`, and `--remote` to take it off your list there; `rm --remote` for a title you remove |
+| Filter the library by tracked or untracked, per tracker | `ls --linked SITE` and `ls --unlinked SITE`, each with one site or several (`anilist,kitsu`) |
+
+Not carried over: Mihon's settings to update the tracker after reading or
+to ask first (Catalist has no settings; `--offline` keeps a command's
+changes back), its background job (a command-line program has none; put
+`catalist sync -q` in cron if you want one), half points (your score here is
+a whole 0 to 10, and a finer score set on a site stays there until you
+change the score), a separate entry per site (one entry, sent to all), the
+trackers other than these three, and the self-hosted ones.
 
 MyAnimeList's API answers only programs it has registered, even about
 public titles. Register Catalist once at
@@ -292,10 +319,10 @@ in to AniList or Kitsu likewise wants their ids
 `CATALIST_KITSU_CLIENT_SECRET`).
 
 > **Not yet tried on the live sites.** Logging in and sending changes are
-> built to each site's documented API and tested against recorded answers,
-> but no release has been checked against AniList, MyAnimeList or Kitsu
-> themselves. Keep a backup (`export --format=json`) before a first
-> `sync --all`.
+> built to each site's documented API, after Mihon's own requests, and
+> tested against recorded answers, but no release has been checked against
+> AniList, MyAnimeList or Kitsu themselves. Keep a backup
+> (`export --format=json`) before a first `link` or `sync --all`.
 
 ---
 
@@ -359,7 +386,7 @@ src/core/         a title and its rules, dates, results, UTF-8 text (no I/O)
 src/storage/      the lists in SQLite, the undo history, the old CSV files, MyAnimeList XML
 src/web/          AniList, MyAnimeList and Kitsu behind one tracker interface, and the JSON they answer in
 src/cli/          the command line: parser, refs, output, completion, and the commands
-                  (listing, tracking, online, accounts, sync, transfer, history, setup)
+                  (listing, tracking, online, accounts, sync, track, transfer, history, setup)
 tests/            unit tests, one folder per source folder; tests/smoke runs the program from the shells
 docs/             the design decisions and the manual page's template
 cmake/            the build step that writes the manual page and the completions

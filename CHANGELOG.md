@@ -15,6 +15,23 @@ trackers. The full-screen terminal interface is now a separate program,
 Catalist-TUI, which keeps its lists in the same file.
 
 ### Added
+- Tracking at parity with Mihon's: `catalist link` reads your entry on the
+  site first and folds it in (one step for undo) before sending the title
+  there whole; `link --query` searches under another name, and `id:N` and
+  `my:WORDS` work in `search`, `add` and `link --query`. `catalist track
+  REF` shows the title as each site has it beside your lists, what differs
+  marked; `track --private`/`--public SITE` hide it on AniList or Kitsu,
+  and `track --pull SITE` takes the site's entry as the title's.
+  `unlink --remote` takes a title off your list on the site, `ls --linked
+  SITE` lists the titles linked to it (`--linked`/`--unlinked` take
+  `a,b`), and `sync --list` shows what waits and when it is tried again.
+- A `rewatching` status (`catalist rewatch`, rereading for a manga):
+  AniList's REPEATING, MyAnimeList's is_rewatching, Kitsu's reconsuming and
+  MyAnimeList XML's my_rewatching; finishing a rewatch adds one to the
+  count. `stats` has a `rewatching` column, last.
+- Scores are five Nerd Font stars at a terminal (a half-filled star a
+  point) in `ls`, `show` and `track`; pipes and JSON keep the numbers, and
+  each site's score stays in its own scale.
 - Tracking, as Mihon does it: `catalist login anilist|mal|kitsu` (each
   site's own way in; tokens kept apart from the lists, mode 600, passwords
   never), `logout` and `accounts`. Logged in, each change to a title's
@@ -111,6 +128,16 @@ Catalist-TUI, which keeps its lists in the same file.
 - Dates such as 2024-13-45 or 2023-02-29 are rejected instead of stored.
 - A failed save (full disk, read-only folder) is reported with exit code 1
   instead of looking like success.
+- A site's HTTP status is read (curl no longer runs with `-f`): a title a
+  site does not know no longer stops `refresh`, a refusal is no longer
+  taken for being offline, and a login a site no longer takes says to log
+  in again.
+- Only the fields that changed are sent to the sites, so what you changed
+  on a site itself stays; `+` never lowers a site's progress that is
+  further along. A change that fails waits five minutes, then twice as
+  long each time, and the next command that goes online sends it once
+  due; a change a site refuses three times is given up, and no longer
+  holds back the titles after it.
 - `link REF SITE` searches the site before it takes the lists for writing,
   so another program (or Catalist-TUI) no longer waits on the search and
   the choice.

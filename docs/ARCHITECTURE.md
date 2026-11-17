@@ -24,12 +24,12 @@ layer uses only the layers above it in this table, and `system`.
 | | `journal` | pure functions over the undo history: what changed between two lists, taking a step back or forward |
 | | `malXml` | the MyAnimeList XML format lists are imported and exported in |
 | `web/` | `http`, `json` | one request type, form and URL encoding; the JSON the sites answer in |
-| | `tracker` | `iTracker`, the one interface every site implements (D12); `answer<T>` and `failure`, what a site answers |
+| | `tracker` | `iTracker`, the one interface every site implements (D12); `answer<T>`, `failure` and `checked`, what a site answers; `siteEntry`, your entry there; `sending`, what a push sends |
 | | `anilist`, `mal`, `kitsu`, `sites` | the adapters of AniList, MyAnimeList and Kitsu, and `makeTracker`, which picks one |
 | `cli/` | `args`, `refs`, `output` | the POSIX option parser; refs (`a:12`) and title matching; tables, tab-separated lines and JSON Lines |
 | | `cli` | `cliContext`, the `command` row, the table put together, dispatch and help |
 | | `common` | what the commands share (naming titles, statuses, loading, saving and reporting a change), and one function per group of commands |
-| | `listing`, `tracking`, `online`, `accounts`, `sync`, `transfer`, `history`, `setup` | the commands, by group: their handlers and their rows of the table |
+| | `listing`, `tracking`, `online`, `accounts`, `sync`, `track`, `transfer`, `history`, `setup` | the commands, by group: their handlers and their rows of the table |
 | | `completion` | the zsh and fish completions and the manual page's COMMANDS, written from the command table |
 | `src/` | `system` | everything that touches the outside world: files, `runProgram` and `httpFetch` (curl), the clock, the terminal, random text |
 
@@ -48,9 +48,10 @@ drive. Most hold up. Three carry a real cost and say so:
 - **D9 One file with Catalist-TUI** is what makes the storage look
   roundabout (a side table for Kitsu ids, undo rows as CSV text). That is
   the price of sharing the file, and it is paid on purpose.
-- **D12 Sites as trackers** is a third of the code and has not been run
-  against the live sites. It stays, documented as untested; it is the
-  first thing to cut if the program must shrink.
+- **D12 Sites as trackers** is a third of the code, now at parity with
+  Mihon's tracking, and has not been run against the live sites. It stays,
+  documented as untested; it is the first thing to cut if the program must
+  shrink.
 
 ## Principles
 
@@ -184,10 +185,16 @@ drive. Most hold up. Three carry a real cost and say so:
     the title had when written: the TUI gives a removed title's ref to the
     next one, and a row whose ids no longer match is not read as that
     other title's.
-  - `outbox` holds the titles the sites are still to be told of.
+  - `outbox` holds the titles the sites are still to be told of, with the
+    fields to send, the tries that failed and when to try again (columns
+    added to an older outbox with `ALTER TABLE` on the first write).
+  - `track_option` holds whether a title is hidden on a site, with the
+    site's id, for the same reason as `entry_id`.
   The undo rows may carry an 18th CSV field, `kitsu_id`, which the TUI's
   reader ignores. This program writes only the `provider` setting and
-  leaves other keys (the TUI's `linked`) alone.
+  leaves other keys (the TUI's `linked`) alone. The `rewatching` status is
+  read by the TUI as watching, and written back as watching when the TUI
+  saves the title; nothing else is lost.
 - **Logins** are kept outside the database, in
   `$XDG_STATE_HOME/catalist/accounts` (or `~/.local/state/catalist`; with
   `CATALIST_DATA_DIR`, in that directory), mode 600, written beside and
@@ -211,7 +218,7 @@ drive. Most hold up. Three carry a real cost and say so:
   interface is Catalist-TUI. `src/` has a folder per layer (`core`,
   `storage`, `web`, `cli`) and `system` beside `main.cpp`. The commands
   are grouped in files (`listing`, `tracking`, `online`, `accounts`,
-  `sync`, `transfer`, `history`, `setup`), each with its handlers and its
+  `sync`, `track`, `transfer`, `history`, `setup`), each with its handlers and its
   rows of the table, sharing `cli/common`; `cli.cpp` collects the groups in
   help order. A new command goes in the file of its group.
 - **Why:** two ways in made each one harder to change. Two programs, each
@@ -253,44 +260,62 @@ drive. Most hold up. Three carry a real cost and say so:
 
 ## Sites
 
-### D12: Sites as Equal Trackers, Told One Way (was ADR-018)
+### D12: Sites as Equal Trackers, Told One Way, as Mihon Does (was ADR-018)
 - **Context:** the owner wanted AniList, MyAnimeList and Kitsu to work the
-  same, after Mihon, which supports many trackers with little code: it
-  tells the tracker, never merges back; each title is linked to each
-  tracker by its id there; every tracker does the same few jobs behind
-  one interface.
+  same, and tracking at parity with Mihon's (reading aside). Mihon tells
+  each tracker what changes, one way; each series is linked to each
+  tracker by its id there; every tracker does the same few jobs behind one
+  interface. Its source (`AddTracks`, `TrackChapter`, `RefreshTracks`,
+  `DelayedTrackingUpdateWorker`, the trackers) is what these rules follow.
 - **Decision:** `web::iTracker` is that interface, and `anilist`, `mal`
   and `kitsu` each implement all of it: `search`, `lookUp`/`lookUpMany`,
-  `startLogin`/`finishLogin`/`current`, `pull` (a user's public list, for
-  `import --user`) and `push`/`remove`. `makeTracker` picks one; no command
-  names a site in its code.
-- **One way:** logged in to a site, each saved change to a field the sites
-  keep (status, score, progress, volumes, rewatches, dates) is pushed to
-  every site where the title is linked. The site's entry is overwritten;
-  nothing is read back, so there is nothing to reconcile. What cannot be
-  sent (offline, a site down, `--offline`, more than ten at once) waits in
-  the outbox for `sync`. `rm` leaves the sites alone unless `--remote`.
+  `startLogin`/`finishLogin`/`current`, `pull` (a user's public list),
+  `entryOf` (your own entry of a title) and `push`/`remove`. `makeTracker`
+  picks one; no command names a site in its code.
+- **One entry, sent one way:** the lists are the truth, and each title is
+  one entry, sent to every logged-in site where it is linked; a site's
+  entry is never a second, editable copy. `track REF` shows each site's
+  entry read live, and `track --pull SITE` takes one as the title's.
+- **Binding:** `link` reads your entry on the site first and folds it in
+  (`mergeLinked`: what you set stays, the higher progress wins, the site
+  fills in what you have not set, its status replaces planned), one step
+  for undo; the site then gets the title whole, as Mihon's `bind` and
+  `AddTracks`.
+- **Sending:** only the fields a change changed are sent (the outbox
+  keeps them as `siteField` bits, merged when the title changes again), so
+  what you changed on the site itself stays. A partial send reads the
+  site's entry first, as `TrackChapter` refreshes before it updates: a site
+  without the title gets all of it, and progress that only went up (`+`)
+  does not lower a site further along. `-`, `set` and `undo` send what you
+  set.
+- **Retries:** the HTTP status decides (`web::checked`): no reply, 429 and
+  5xx wait; 401 and 403 wait for a new login; other refusals wait too, and
+  after three tries are given up (Mihon's worker stops after three).
+  Waiting is five minutes, then twice as long each time, up to six hours;
+  the next command that goes online sends what is due (`sendWaiting`), and
+  `sync` sends everything at once. There is no background job.
 - **Linking:** a title is linked to a site when it has that site's id.
   `add`, `refresh` and `import` keep every id a site gives (AniList gives
   MyAnimeList's; Kitsu's mappings give both), so linking is mostly
-  automatic; `link`/`unlink` set one by hand.
+  automatic. `unlink --remote` and `rm --remote` take a title off the
+  site's list too.
 - **Known differences** stay behind the interface: only AniList says how
   much of a running show has aired; MyAnimeList answers nothing without the
-  program's client id; the score scales differ and each adapter converts
-  from Catalist's 0–10.
+  program's client id, and has no hidden entries; Kitsu has no volumes.
+  Scores are kept and sent in each site's scale (AniList out of 100,
+  Kitsu's ratingTwenty, MyAnimeList out of 10); `web::outOfTen` converts
+  one only to draw it, as five stars like every score at a terminal.
+- **Not taken from Mihon:** its settings (update after reading, ask first),
+  its background job, half points, a separate entry per site, and the
+  trackers other than these three.
 - **Cost and status:** this is about a third of the code (`web/`,
-  `cli/sync`, `cli/accounts`, the outbox). It is tested against recorded
-  answers only: **no request has been made to the live sites**, the app
-  ids are not registered yet, and Kitsu's endpoints, MyAnimeList's date
-  clearing and Kitsu's volumes are unchecked. One known weakness: curl
-  runs with `-f`, so an HTTP error (a 404 for an unknown title, a 401 for
-  a revoked login) reads as "could not reach" the site. A refresh on
-  MyAnimeList or Kitsu then stops at an unknown title, and a push the site
-  refuses waits in the outbox (blocking that site's later ones) until
-  `sync --forget`. Telling the two apart needs the HTTP status in
-  `web::link`'s fetch, and should be done once the live sites can be
-  tried. **Revisit:** if the program must shrink, tracking goes first,
-  keeping `search`, `add`, `refresh` and `import --user`.
+  `cli/sync`, `cli/track`, `cli/accounts`, the outbox). It is tested
+  against recorded answers shaped like Mihon's requests only: **no request
+  has been made to the live sites**, the app ids are not registered yet,
+  and Kitsu's endpoints, MyAnimeList's date clearing and Kitsu's
+  `reconsuming` are unchecked. **Revisit:** if the program must shrink,
+  tracking goes first, keeping `search`, `add`, `refresh` and
+  `import --user`.
 
 ## Build, tests and releases
 

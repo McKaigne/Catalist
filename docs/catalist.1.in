@@ -10,7 +10,7 @@ tracks the anime you watch and the manga you read in one SQLite file on
 your computer, from the shell, in scripts and in pipes.
 .PP
 Only \fBadd\fR, \fBsearch\fR, \fBrefresh\fR, \fBimport \-\-user\fR,
-\fBlogin\fR and \fBsync\fR go online (and, logged in, the changes sent
+\fBlogin\fR, \fBlink\fR, \fBtrack\fR and \fBsync\fR go online (and, logged in, the changes sent
 to the sites; see below), through curl,
 to the public API of your provider (AniList, MyAnimeList or Kitsu; see
 \fBprovider\fR) or of the site \fB\-\-from\fR names. A title's total, and
@@ -44,11 +44,17 @@ Each command that changes the lists is one step for \fBundo\fR.
 \fBredo\fR makes again what \fBundo\fR took back, until the next change.
 The last 100 steps are kept.
 .PP
-Logged in to a site (\fBlogin\fR), Catalist tells it what changes in your
-lists, one way, as Mihon tells its trackers: each change to a title's
-status, score, progress, volumes, rewatches or dates is sent to every site
-you are logged in to where the title is linked (\fBlink\fR). What could not
-be sent waits until \fBsync\fR.
+Logged in to a site (\fBlogin\fR), Catalist tracks as Mihon does: it tells
+the site what changes in your lists, one way. \fBlink\fR reads your entry
+there and folds it in, then each change to a title's status, score,
+progress, volumes, rewatches or dates is sent to every site where the
+title is linked, only the fields that changed, and \fB+\fR never lowers a
+site's progress. \fBtrack\fR shows the title as each site has it. What
+could not be sent is tried again by the next command that goes online, or
+at once by \fBsync\fR.
+.PP
+At a terminal, scores are five stars drawn from a Nerd Font, a half star a
+point.
 .SH OPTIONS
 These come before the command.
 .TP

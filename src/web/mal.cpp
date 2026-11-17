@@ -154,6 +154,39 @@ web::answer<std::vector<entry>> parseList(const std::string& body, mediaType typ
 	return found;
 }
 
+std::string entryUrl(mediaType type, int malId) {
+	bool anime = type == mediaType::kAnime;
+	return std::format(
+	    "{}/{}/{}?fields=my_list_status{{{}}}", kApiUrl, typeKey(type), malId,
+	    anime ? "status,score,num_episodes_watched,is_rewatching,num_times_rewatched,start_date,"
+	            "finish_date"
+	          : "status,score,num_chapters_read,num_volumes_read,is_rereading,num_times_reread,"
+	            "start_date,finish_date");
+}
+
+web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body, mediaType type) {
+	auto reply = json::parse(body);
+	if (not reply.has_value() or reply.value()["id"].asCount() == 0)
+		return web::refused("unexpected reply from MyAnimeList");
+	const json::value& mine = reply.value()["my_list_status"];
+	if (mine.isNull())
+		return std::optional<web::siteEntry>();
+	bool anime = type == mediaType::kAnime;
+	bool again = mine[anime ? "is_rewatching" : "is_rereading"].asBool().value_or(false);
+	web::siteEntry found;
+	found.status = again ? watchStatus::kRewatching
+	                     : statusOf(mine["status"].asString().value_or(""))
+	                           .value_or(watchStatus::kPlanToWatch);
+	found.score = mine["score"].asCount();
+	found.rawScore = found.score;
+	found.progress = mine[anime ? "num_episodes_watched" : "num_chapters_read"].asCount();
+	found.volumes = mine["num_volumes_read"].asCount();
+	found.rewatched = mine[anime ? "num_times_rewatched" : "num_times_reread"].asCount();
+	found.startDate = web::dayOf(mine["start_date"].asString().value_or(""));
+	found.finishDate = web::dayOf(mine["finish_date"].asString().value_or(""));
+	return found;
+}
+
 std::string listStatusForm(const entry& title) {
 	bool anime = title.type == mediaType::kAnime;
 	std::vector<std::pair<std::string, std::string>> fields = {
@@ -195,6 +228,20 @@ web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string&
 		all.insert(all.end(), entries.value().begin(), entries.value().end());
 	}
 	return all;
+}
+
+web::answer<std::optional<web::siteEntry>> tracker::entryOf(const entry& title,
+                                                            const account& login) {
+	if (title.malId <= 0)
+		return web::notLinked(provider::kMyAnimeList);
+	auto body = web::checked(
+	    net_.fetch({"GET", entryUrl(title.type, title.malId), {web::bearer(login.token)}, ""}),
+	    provider::kMyAnimeList);
+	if (not body and body.error().status == 404)
+		return web::refused("MyAnimeList does not know the title");
+	if (not body)
+		return std::unexpected(body.error());
+	return parseEntry(*body, title.type);
 }
 
 web::answer<void> tracker::push(const entry& title, const account& login) {

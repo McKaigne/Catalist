@@ -44,6 +44,10 @@ inline constexpr size_t kBatchSize = 50;
 // the list entry of a title (to remove it).
 [[nodiscard]] std::string saveRequest(const entry& title);
 [[nodiscard]] std::string listEntryRequest(int mediaId, const std::string& userId);
+// The query for the user's own entry of a title, and the entry of its
+// reply (nothing when the title is not on the list).
+[[nodiscard]] std::string entryRequest(const entry& title, const std::string& userId);
+[[nodiscard]] web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body);
 
 // The query for a user's whole list of one type, and the entries of its
 // reply.
@@ -69,6 +73,8 @@ public:
 	[[nodiscard]] web::answer<account> current(const account& login) override;
 	[[nodiscard]] web::answer<std::vector<entry>> pull(mediaType type,
 	                                                   const std::string& user) override;
+	[[nodiscard]] web::answer<std::optional<web::siteEntry>> entryOf(
+	    const entry& title, const account& login) override;
 	[[nodiscard]] web::answer<void> push(const entry& title, const account& login) override;
 	[[nodiscard]] web::answer<void> remove(mediaType type, int siteId,
 	                                       const account& login) override;

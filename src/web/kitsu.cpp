@@ -70,6 +70,12 @@ std::string libraryStatus(watchStatus status) {
 	return "planned";
 }
 
+// The account's library entry of a title, if it has one.
+std::string libraryEntryUrl(mediaType type, int kitsuId, const account& login) {
+	return std::format("{}/library-entries?filter[userId]={}&filter[{}Id]={}&page[limit]=1",
+	                   kApiUrl, login.userId, typeKey(type), kitsuId);
+}
+
 // An ISO 8601 time at midnight, UTC, or null.
 std::string timeOf(const std::optional<isoDate>& day) {
 	return day ? std::format(R"("{}T00:00:00.000Z")", day->toString()) : "null";
@@ -205,6 +211,30 @@ web::answer<std::vector<entry>> parseLibrary(const std::string& body, mediaType 
 	return found;
 }
 
+web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body) {
+	auto reply = json::parse(body);
+	const json::value& data = reply.has_value() ? reply.value()["data"] : json::value();
+	if (not data.isArray())
+		return web::refused("unexpected reply from Kitsu");
+	if (data.items().empty())
+		return std::optional<web::siteEntry>();
+	const json::value& attributes = data.items().front()["attributes"];
+	bool again = attributes["reconsuming"].asBool().value_or(false);
+	web::siteEntry found;
+	found.status = again ? watchStatus::kRewatching
+	                     : statusOf(attributes["status"].asString().value_or(""))
+	                           .value_or(watchStatus::kPlanToWatch);
+	found.rawScore = attributes["ratingTwenty"].asCount();
+	// ratingTwenty runs from 2 to 20.
+	found.score = (attributes["ratingTwenty"].asCount() + 1) / 2;
+	found.progress = attributes["progress"].asCount();
+	found.rewatched = attributes["reconsumeCount"].asCount();
+	found.startDate = web::dayOf(attributes["startedAt"].asString().value_or(""));
+	found.finishDate = web::dayOf(attributes["finishedAt"].asString().value_or(""));
+	found.hidden = attributes["private"].asBool().value_or(false);
+	return found;
+}
+
 std::string libraryAttributes(const entry& title) {
 	// ratingTwenty runs from 2 to 20; null is no rating.
 	return std::format(R"({{"status":"{}","reconsuming":{},"progress":{},"reconsumeCount":{},)"
@@ -222,11 +252,7 @@ std::vector<std::string> tracker::asUser(const account& login) {
 }
 
 web::answer<int> tracker::libraryEntry(mediaType type, int kitsuId, const account& login) const {
-	auto body = send({"GET",
-	                  std::format("{}/library-entries?filter[userId]={}&filter[{}Id]={}"
-	                              "&page[limit]=1",
-	                              kApiUrl, login.userId, typeKey(type), kitsuId),
-	                  asUser(login), ""});
+	auto body = send({"GET", libraryEntryUrl(type, kitsuId, login), asUser(login), ""});
 	if (not body)
 		return std::unexpected(body.error());
 	auto reply = json::parse(*body);
@@ -259,6 +285,17 @@ web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string&
 		all.insert(all.end(), entries.value().begin(), entries.value().end());
 	}
 	return all;
+}
+
+web::answer<std::optional<web::siteEntry>> tracker::entryOf(const entry& title,
+                                                            const account& login) {
+	if (title.kitsuId <= 0)
+		return web::notLinked(provider::kKitsu);
+	auto body =
+	    send({"GET", libraryEntryUrl(title.type, title.kitsuId, login), asUser(login), ""});
+	if (not body)
+		return std::unexpected(body.error());
+	return parseEntry(*body);
 }
 
 web::answer<void> tracker::push(const entry& title, const account& login) {
@@ -371,8 +408,13 @@ web::answer<account> tracker::accountFor(std::vector<std::pair<std::string, std:
 	auto name = user ? (*user)["attributes"]["name"].asString() : std::nullopt;
 	if (not name)
 		return web::refused("Kitsu did not say whose login it is");
-	return account{provider::kKitsu, *name,          (*user)["id"].asString().value_or(""),
-	               token->token,     token->renewal, net_.now() + token->lifetime};
+	return account{provider::kKitsu,
+	               *name,
+	               (*user)["id"].asString().value_or(""),
+	               token->token,
+	               token->renewal,
+	               net_.now() + token->lifetime,
+	               (*user)["attributes"]["ratingSystem"].asString().value_or("advanced")};
 }
 
 web::answer<account> tracker::finishLogin(const std::vector<std::string>& answers) {

@@ -136,6 +136,41 @@ std::string listEntryRequest(int mediaId, const std::string& userId) {
 	    mediaId, userId.empty() ? "0" : userId);
 }
 
+std::string entryRequest(const entry& title, const std::string& userId) {
+	return std::format(
+	    R"({{"query":"query($m:Int,$u:Int){{Page{{mediaList(userId:$u,mediaId:$m){{)"
+	    R"(status score(format:POINT_100) progress progressVolumes repeat private )"
+	    R"(startedAt{{year month day}} completedAt{{year month day}}}}}}}}",)"
+	    R"("variables":{{"m":{},"u":{}}}}})",
+	    title.anilistId, userId.empty() ? "0" : userId);
+}
+
+web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body) {
+	auto reply = json::parse(body);
+	const json::value& found =
+	    reply.has_value() ? reply.value()["data"]["Page"]["mediaList"] : json::value();
+	if (not found.isArray())
+		return web::refused("unexpected reply from AniList");
+	if (found.items().empty())
+		return std::optional<web::siteEntry>();
+	const json::value& item = found.items().front();
+	auto dayOf = [](const json::value& fuzzy) {
+		return isoDate::fromParts(fuzzy["year"].asCount(), fuzzy["month"].asCount(),
+		                          fuzzy["day"].asCount());
+	};
+	web::siteEntry mine;
+	mine.status = statusOf(item["status"].asString().value_or("")).value_or(watchStatus::kPlanToWatch);
+	mine.rawScore = item["score"].asNumber().value_or(0.0);
+	mine.score = static_cast<int>(mine.rawScore / 10.0 + 0.5);
+	mine.progress = item["progress"].asCount();
+	mine.volumes = item["progressVolumes"].asCount();
+	mine.rewatched = item["repeat"].asCount();
+	mine.startDate = dayOf(item["startedAt"]);
+	mine.finishDate = dayOf(item["completedAt"]);
+	mine.hidden = item["private"].asBool().value_or(false);
+	return mine;
+}
+
 std::string listRequest(mediaType type, const std::string& user) {
 	return std::format(
 	    R"({{"query":"query($u:String,$t:MediaType){{MediaListCollection(userName:$u,type:$t))"
@@ -258,7 +293,7 @@ web::answer<account> tracker::finishLogin(const std::vector<std::string>& answer
 	std::string token = answers.empty() ? "" : answers[0];
 	if (token.empty())
 		return web::refused("no token given");
-	auto body = ask(R"({"query":"query{Viewer{id name}}"})", token);
+	auto body = ask(R"({"query":"query{Viewer{id name mediaListOptions{scoreFormat}}}"})", token);
 	if (not body and body.error().why == web::failure::kind::kUnreachable)
 		return std::unexpected(body.error());
 	auto reply = body ? json::parse(*body) : std::unexpected("");
@@ -267,8 +302,13 @@ web::answer<account> tracker::finishLogin(const std::vector<std::string>& answer
 	if (not name)
 		return web::refused("AniList did not take the token");
 	constexpr long long kYear = 365LL * 24 * 60 * 60;
-	return account{provider::kAniList, *name, std::to_string(viewer["id"].asCount()), token, "",
-	               net_.now() + kYear};
+	return account{provider::kAniList,
+	               *name,
+	               std::to_string(viewer["id"].asCount()),
+	               token,
+	               "",
+	               net_.now() + kYear,
+	               viewer["mediaListOptions"]["scoreFormat"].asString().value_or("POINT_10")};
 }
 
 web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
@@ -279,6 +319,16 @@ web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string&
 	if (not body)
 		return std::unexpected(body.error());
 	return parseList(*body, type);
+}
+
+web::answer<std::optional<web::siteEntry>> tracker::entryOf(const entry& title,
+                                                            const account& login) {
+	if (title.anilistId <= 0)
+		return web::notLinked(provider::kAniList);
+	auto body = ask(entryRequest(title, login.userId), login.token);
+	if (not body)
+		return std::unexpected(body.error());
+	return parseEntry(*body);
 }
 
 web::answer<void> tracker::push(const entry& title, const account& login) {

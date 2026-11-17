@@ -110,6 +110,22 @@ using answer = std::expected<T, failure>;
 // status, for an adapter to read a 404 its own way.
 [[nodiscard]] answer<std::string> checked(const std::optional<reply>& got, provider site);
 
+// Your own entry for a title on a site, as the site keeps it.
+struct siteEntry {
+	watchStatus status = watchStatus::kPlanToWatch;
+	// The score as the site keeps it (AniList out of 100, MyAnimeList out
+	// of 10, Kitsu's ratingTwenty from 2 to 20), 0 for none; and out of 10.
+	double rawScore = 0.0;
+	int score = 0;
+	int progress = 0;
+	int volumes = 0;
+	int rewatched = 0;
+	std::optional<isoDate> startDate;
+	std::optional<isoDate> finishDate;
+	// Hidden from others, where the site has that (AniList, Kitsu).
+	bool hidden = false;
+};
+
 // What a site knows about one title.
 struct details {
 	std::string name;
@@ -161,6 +177,13 @@ public:
 	// or has no public list of that user.
 	[[nodiscard]] virtual answer<std::vector<entry>> pull(mediaType type,
 	                                                      const std::string& user) = 0;
+
+	// ---- Your entries ----
+	// Your entry for the title on the account's list; nothing when it is not
+	// on the list. Fails when the title has no id on this site, when the
+	// site cannot be reached, or says no.
+	[[nodiscard]] virtual answer<std::optional<siteEntry>> entryOf(const entry& title,
+	                                                               const account& login) = 0;
 
 	// ---- Telling the site, one way ----
 

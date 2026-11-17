@@ -36,6 +36,9 @@ inline const std::string kTokenUrl = "https://kitsu.app/api/oauth/token";
 [[nodiscard]] web::answer<std::vector<entry>> parseLibrary(const std::string& body, mediaType type,
                                                            std::string& next);
 
+// The user's own library entry of a title, from a reply of
+// library-entries; nothing when the reply has none.
+[[nodiscard]] web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body);
 // The attributes of a library entry, as Catalist's lists have the title.
 [[nodiscard]] std::string libraryAttributes(const entry& title);
 
@@ -55,6 +58,8 @@ public:
 	[[nodiscard]] web::answer<account> current(const account& login) override;
 	[[nodiscard]] web::answer<std::vector<entry>> pull(mediaType type,
 	                                                   const std::string& user) override;
+	[[nodiscard]] web::answer<std::optional<web::siteEntry>> entryOf(
+	    const entry& title, const account& login) override;
 	[[nodiscard]] web::answer<void> push(const entry& title, const account& login) override;
 	[[nodiscard]] web::answer<void> remove(mediaType type, int siteId,
 	                                       const account& login) override;

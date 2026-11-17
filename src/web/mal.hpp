@@ -36,6 +36,12 @@ inline const std::string kTokenUrl = "https://myanimelist.net/v1/oauth2/token";
 // not is left out: MyAnimeList keeps the one it had.
 [[nodiscard]] std::string listStatusForm(const entry& title);
 
+// The user's own entry of a title: its URL, and the entry of the reply
+// (nothing when the title is not on the list).
+[[nodiscard]] std::string entryUrl(mediaType type, int malId);
+[[nodiscard]] web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body,
+                                                                    mediaType type);
+
 class tracker : public web::iTracker {
 public:
 	explicit tracker(web::link net) : net_(std::move(net)) {}
@@ -52,6 +58,8 @@ public:
 	[[nodiscard]] web::answer<account> current(const account& login) override;
 	[[nodiscard]] web::answer<std::vector<entry>> pull(mediaType type,
 	                                                   const std::string& user) override;
+	[[nodiscard]] web::answer<std::optional<web::siteEntry>> entryOf(
+	    const entry& title, const account& login) override;
 	[[nodiscard]] web::answer<void> push(const entry& title, const account& login) override;
 	[[nodiscard]] web::answer<void> remove(mediaType type, int siteId,
 	                                       const account& login) override;

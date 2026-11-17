@@ -160,6 +160,12 @@ extern const args::option kFrom;
 [[nodiscard]] provider siteOf(const args::parsed& line, const cliContext& ctx);
 // The site's adapter, reached through the context's link.
 [[nodiscard]] std::unique_ptr<web::iTracker> trackerFor(const cliContext& ctx, provider site);
+// A search of the site, with Mihon's two forms besides the words: "id:N",
+// the title with the site's id N; and "my:WORDS", the titles of your own
+// list there (logged in) that hold the words.
+[[nodiscard]] web::answer<std::vector<web::match>> searchSite(cliContext& ctx, web::iTracker& site,
+                                                             mediaType type,
+                                                             const std::string& query);
 // The match to take of a search on the site: the only one, the one `pick`
 // numbers, or the one chosen at a terminal. Nothing, with the reason on
 // standard error, when there is no such match.
@@ -230,8 +236,10 @@ struct listQuery {
 	// Any of these; all of them when empty.
 	std::vector<watchStatus> statuses{};
 	std::optional<mediaType> only{};
-	// Only titles with no id on this site.
-	std::optional<provider> unlinked{};
+	// Only titles with an id on each of these sites, and none on any of
+	// those.
+	std::vector<provider> linked{};
+	std::vector<provider> unlinked{};
 	sortKey key = sortKey::kTitle;
 	bool reverse = false;
 	// The refs alone, one a line.

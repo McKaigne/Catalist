@@ -98,6 +98,14 @@ TEST_CASE_FIXTURE(cliFixture, "cli tells a site only of the titles linked to it"
 	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").kitsuId == 43095);
 	CHECK(run({"ls", "-q", "--unlinked", "kitsu"}) == 0);
 	CHECK(out == "m:1\na:1\nm:2\n");
+	CHECK(run({"ls", "-q", "--linked", "kitsu"}) == 0);
+	CHECK(out == "a:2\n");
+	// On AniList and on Kitsu; on AniList but not on Kitsu.
+	CHECK(run({"ls", "-q", "--linked", "anilist,kitsu"}) == 0);
+	CHECK(out == "a:2\n");
+	CHECK(run({"ls", "-q", "--linked", "anilist", "--unlinked", "kitsu"}) == 0);
+	CHECK(out == "m:1\na:1\nm:2\n");
+	CHECK(run({"ls", "--linked", "myspace"}) == 2);
 	// An id is no step for undo: the one step is the + above.
 	CHECK(steps().size() == 1);
 

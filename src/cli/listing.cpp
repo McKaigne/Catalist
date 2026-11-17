@@ -73,12 +73,21 @@ int runList(const command& self, const args::parsed& line, cliContext& ctx) {
 	}
 	if (line.has("s") and query.statuses.empty())
 		return usageError(ctx, self, "-s needs a status");
-	if (line.has("unlinked")) {
-		query.unlinked = parseProvider(line.get("unlinked"));
-		if (not query.unlinked)
-			return usageError(
-			    ctx, self,
-			    std::format("--unlinked '{}' is not anilist, mal or kitsu", line.get("unlinked")));
+	// --linked anilist,mal and --unlinked kitsu: on these sites, and not on
+	// those.
+	for (const char* option : {"linked", "unlinked"}) {
+		std::istringstream sites(line.get(option));
+		auto& into = std::string(option) == "linked" ? query.linked : query.unlinked;
+		for (std::string word; std::getline(sites, word, ',');) {
+			auto site = parseProvider(word);
+			if (not site)
+				return usageError(ctx, self,
+				                  std::format("--{} '{}' is not anilist, mal or kitsu{}", option,
+				                              word, didYouMean(word, {"anilist", "mal", "kitsu"})));
+			into.push_back(*site);
+		}
+		if (line.has(option) and into.empty())
+			return usageError(ctx, self, std::format("--{} needs a site", option));
 	}
 	if (line.has("sort")) {
 		auto found = kSortKeys.find(line.get("sort"));
@@ -242,7 +251,10 @@ int printList(cliContext& ctx, const listQuery& query) {
 		for (const auto& e : ctx.db.getEntries(type))
 			if ((query.statuses.empty() or std::ranges::contains(query.statuses, e.status)) and
 			    refs::titleHolds(e, query.text) and
-			    (not query.unlinked or idOn(e, *query.unlinked) == 0))
+			    std::ranges::all_of(query.linked,
+			                        [&e](provider site) { return idOn(e, site) > 0; }) and
+			    std::ranges::all_of(query.unlinked,
+			                        [&e](provider site) { return idOn(e, site) == 0; }))
 				shown.push_back(e);
 	}
 	sortEntries(shown, query.key, query.reverse);
@@ -284,9 +296,14 @@ std::vector<command> listingCommands() {
 	                  sortWords()},
 	                 {'r', "", "", "reverse the order"},
 	                 {0,
+	                  "linked",
+	                  "SITE",
+	                  "only titles linked to the site, or to each of a,b",
+	                  {"anilist", "mal", "kitsu"}},
+	                 {0,
 	                  "unlinked",
 	                  "SITE",
-	                  "only titles with no id on the site",
+	                  "only titles not linked to the site, nor to any of a,b",
 	                  {"anilist", "mal", "kitsu"}},
 	                 {'q', "", "", "print the refs and nothing else"},
 	                 {0, "json", "", "print one JSON object a line"},

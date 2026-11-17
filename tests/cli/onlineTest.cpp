@@ -387,3 +387,28 @@ TEST_CASE_FIXTURE(cliFixture, "cli refresh with nothing followed says what to gi
 	CHECK(err == "Nothing is being watched or read: name the titles to refresh.\n");
 	CHECK(web.sent.empty());
 }
+
+TEST_CASE_FIXTURE(cliFixture, "cli searches by a site's id, and in your own list there") {
+	seed();
+	web.respond(R"({"id":171018,"type":"ANIME")", R"({"data":{"Media":{"id":171018,
+	  "idMal":57334,"title":{"romaji":"Dandadan"},"episodes":12,"status":"FINISHED"}}})");
+	// id:N is the title with that id on the site.
+	CHECK(run({"search", "id:171018"}) == 0);
+	CHECK(out == "1\tanime\tDandadan\t-\t12\t0\t171018\t57334\t-\t0\n");
+	CHECK(run({"add", "id:171018"}) == 0);
+	CHECK(savedTitle(mediaType::kAnime, "Dandadan").anilistId == 171018);
+	CHECK(run({"search", "id:x"}) == 1);
+	CHECK(has(err, "'id:x' is not id: and a number"));
+
+	// my: is your own list there, which wants a login.
+	CHECK(run({"search", "my:taxi"}) == 1);
+	CHECK(has(err, "my: searches your list on AniList: log in first"));
+	logIn(catalist::provider::kAniList);
+	web.respond(R"("u":"Abel")", R"({"data":{"MediaListCollection":{"lists":[{"entries":[
+	  {"status":"CURRENT","score":8,"progress":5,"media":{"id":128547,"idMal":44265,
+	   "title":{"romaji":"Odd Taxi"},"episodes":13,"status":"FINISHED"}},
+	  {"status":"PLANNING","score":0,"progress":0,"media":{"id":1,"idMal":1,
+	   "title":{"romaji":"Cowboy Bebop"},"episodes":26,"status":"FINISHED"}}]}]}}})");
+	CHECK(run({"search", "my:taxi"}) == 0);
+	CHECK(out == "1\tanime\tOdd Taxi\t-\t13\t0\t128547\t44265\ta:2\t0\n");
+}

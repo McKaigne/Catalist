@@ -39,8 +39,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	}
 	CHECK(run({"help", "ls"}) == 0);
 	CHECK(out.find("List your titles.\n\n"
-	               "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--unlinked=SITE] [--json] "
-	               "[--header] [QUERY...]\n") == 0);
+	               "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--linked=SITE] "
+	               "[--unlinked=SITE] [--json] [--header] [QUERY...]\n") == 0);
 	CHECK(has(out, "ref type title status score progress total volumes rewatched\n"));
 	CHECK(has(out, "\nOptions:\n  -a                   list anime only\n"));
 	CHECK(has(
@@ -137,8 +137,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli points out a mistyped command or option, with
 	CHECK(run({"ls", "--jsno"}) == 2);
 	CHECK(err ==
 	      "error: unknown option '--jsno' (did you mean '--json'?)\n"
-	      "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--unlinked=SITE] [--json] "
-	      "[--header] [QUERY...]\n"
+	      "Usage: catalist ls [-amrq] [-s STATUS] [--sort=KEY] [--linked=SITE] [--unlinked=SITE] "
+	      "[--json] [--header] [QUERY...]\n"
 	      "Run 'catalist help ls' for more.\n");
 	CHECK(run({"ls", "-ax"}) == 2);
 	CHECK(err.find("error: unknown option '-x'\n") == 0);

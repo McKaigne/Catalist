@@ -5,6 +5,7 @@
 #include "cli/common.hpp"
 #include "cli/refs.hpp"
 #include "core/text.hpp"
+#include "storage/accounts.hpp"
 
 namespace catalist::cli {
 
@@ -182,7 +183,7 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 		return 1;
 	sendWaiting(ctx);
 	auto site = trackerFor(ctx, siteOf(line, ctx));
-	auto found = site->search(*type, *query);
+	auto found = searchSite(ctx, *site, *type, *query);
 	if (not found.has_value())
 		return fail(ctx, webError(found.error()));
 	const auto& matches = found.value();
@@ -350,13 +351,60 @@ std::string lengthOf(const web::match& match, mediaType type) {
 
 }  // namespace
 
+web::answer<std::vector<web::match>> searchSite(cliContext& ctx, web::iTracker& site,
+                                                mediaType type, const std::string& query) {
+	provider where = site.site();
+	if (query.starts_with("id:")) {
+		auto id = args::parseCount(query.substr(3));
+		if (not id or *id == 0)
+			return web::refused(std::format("'{}' is not id: and a number", query));
+		entry probe;
+		probe.type = type;
+		if (where == provider::kAniList)
+			probe.anilistId = *id;
+		else if (where == provider::kMyAnimeList)
+			probe.malId = *id;
+		else
+			probe.kitsuId = *id;
+		auto found = site.lookUp(probe);
+		if (not found and found.error().why == web::failure::kind::kRefused)
+			return std::vector<web::match>{};
+		if (not found)
+			return std::unexpected(found.error());
+		const auto& facts = found->facts;
+		return std::vector<web::match>{{facts.anilistId, facts.malId, facts.kitsuId, found->name,
+		                                facts.totalUnits, facts.totalVolumes, "", 0.0}};
+	}
+	if (not query.starts_with("my:"))
+		return site.search(type, query);
+	auto login = accounts::on(readAccounts(ctx), where);
+	if (not login)
+		return web::refused(std::format("my: searches your list on {}: log in first with "
+		                                "'catalist login {}'",
+		                                providerName(where), providerKey(where)));
+	auto list = site.pull(type, login->user);
+	if (not list)
+		return std::unexpected(list.error());
+	std::string words = query.substr(3);
+	std::vector<web::match> found;
+	for (const auto& e : *list) {
+		if (not refs::titleHolds(e, words))
+			continue;
+		found.push_back({e.anilistId, e.malId, e.kitsuId, e.title, e.totalUnits, e.totalVolumes,
+		                 "", 0.0});
+		if (found.size() == 10)
+			break;
+	}
+	return found;
+}
+
 // The match `add` is to take: the only one, the one --pick names, or the one
 // chosen at a terminal. Nothing, with the reason on standard error, when
 // there is no such match.
 std::optional<web::match> chooseMatch(cliContext& ctx, web::iTracker& site, mediaType type,
                                       const std::string& query, std::optional<int> pick) {
 	std::string name = providerName(site.site());
-	auto found = site.search(type, query);
+	auto found = searchSite(ctx, site, type, query);
 	if (not found.has_value()) {
 		fail(ctx, webError(found.error()));
 		ctx.err << std::format("To add a title without {}: catalist add --no-lookup TITLE\n", name);

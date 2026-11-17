@@ -11,8 +11,8 @@ namespace catalist::web {
 
 // The score `raw`, as the site keeps it (AniList out of 100, MyAnimeList out
 // of 10, Kitsu's ratingTwenty from 2 to 20), in the person's `format` on that
-// site (see account::scoreFormat): "8.5", "4/5", ":)" or "good"; "-" for no
-// score. Plain text: the faces some formats draw are written as text.
+// site (see account::scoreFormat): "8.5", or stars as "4/5"; "-" for no
+// score. The faces some formats draw are shown as stars on their scale.
 [[nodiscard]] std::string displayScore(provider site, const std::string& format, double raw);
 
 }  // namespace catalist::web

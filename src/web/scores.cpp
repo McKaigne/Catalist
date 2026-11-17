@@ -22,20 +22,18 @@ std::string onAniList(const std::string& format, double raw) {
 		return std::format("{:.1f}", raw / 10.0);
 	if (format == "POINT_5")
 		return std::format("{}/5", static_cast<int>((raw + 10.0) / 20.0));
-	// AniList draws three faces; text stands in for them.
+	// AniList draws three faces: as stars, one to three.
 	if (format == "POINT_3")
-		return raw <= 35.0 ? ":(" : raw <= 60.0 ? ":|" : ":)";
+		return raw <= 35.0 ? "1/3" : raw <= 60.0 ? "2/3" : "3/3";
 	return std::format("{}", static_cast<int>(raw) / 10);
 }
 
 // Kitsu keeps ratingTwenty, 2 to 20, and rounds down to the format's steps.
 std::string onKitsu(const std::string& format, double raw) {
 	int twenty = static_cast<int>(raw);
-	// Kitsu's names for its four faces.
-	if (format == "simple") {
-		const char* faces[] = {"awful", "meh", "good", "great"};
-		return faces[std::min(3, (twenty - 2) / 6)];
-	}
+	// Kitsu draws four faces: as stars, one to four.
+	if (format == "simple")
+		return std::format("{}/4", std::min(3, (twenty - 2) / 6) + 1);
 	if (format == "regular")
 		return std::format("{}/5", halves((twenty / 2) / 2.0));
 	return halves(twenty / 2.0);

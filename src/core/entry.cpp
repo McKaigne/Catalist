@@ -384,6 +384,21 @@ entry mergeLinked(entry mine, const entry& theirs, const isoDate& today) {
 	return merged;
 }
 
+entry pullFromSite(entry mine, const entry& theirs, const isoDate& today) {
+	entry pulled = mine;
+	pulled.status = theirs.status;
+	pulled.score = theirs.score;
+	pulled.progress =
+	    pulled.totalUnits > 0 ? std::min(theirs.progress, pulled.totalUnits) : theirs.progress;
+	pulled.volumes = theirs.volumes;
+	pulled.rewatched = theirs.rewatched;
+	pulled.startDate = theirs.startDate;
+	pulled.finishDate = theirs.finishDate;
+	if (not(pulled == mine))
+		pulled.updatedAt = today;
+	return pulled;
+}
+
 entry applyWebFacts(entry target, const webFacts& facts, const isoDate& today) {
 	if (target.anilistId == 0)
 		target.anilistId = facts.anilistId;

@@ -1,6 +1,7 @@
 #include "cli/common.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <istream>
 #include <ostream>
@@ -412,6 +413,33 @@ provider siteOf(const args::parsed& line, const cliContext& ctx) {
 
 std::unique_ptr<web::iTracker> trackerFor(const cliContext& ctx, provider site) {
 	return web::makeTracker(site, ctx.net);
+}
+
+const std::vector<provider>& allSites() {
+	static const std::vector<provider> all = {provider::kAniList, provider::kMyAnimeList,
+	                                          provider::kKitsu};
+	return all;
+}
+
+entry asTitle(const web::siteEntry& theirs, provider site) {
+	entry title;
+	title.status = theirs.status;
+	title.score = static_cast<int>(std::lround(web::outOfTen(site, theirs.score)));
+	title.progress = theirs.progress;
+	title.volumes = theirs.volumes;
+	title.rewatched = theirs.rewatched;
+	title.startDate = theirs.startDate;
+	title.finishDate = theirs.finishDate;
+	return title;
+}
+
+std::optional<entry> heldAgain(cliContext& ctx, const entry& title) {
+	if (not loadForWrite(ctx))
+		return std::nullopt;
+	auto now = ctx.db.getById(title.type, title.id);
+	if (not now)
+		fail(ctx, std::format("{} was removed meanwhile", refs::of(title)));
+	return now;
 }
 
 std::vector<account> readAccounts(const cliContext& ctx) {

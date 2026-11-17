@@ -783,3 +783,18 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps what the sites are to be told
 	CHECK(merged.attempts == 0);
 	CHECK(merged.nextTry == 0);
 }
+
+TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps whether a title is hidden on a site") {
+	using catalist::provider;
+	catalogue db(tempDir() / "data");
+	CHECK_FALSE(db.hiddenOn(provider::kAniList, mediaType::kAnime, 1, 128547));
+	CHECK_FALSE(std::filesystem::exists(tempDir() / "data"));
+	REQUIRE(db.setHidden(provider::kAniList, mediaType::kAnime, 1, 128547, true));
+	catalogue again(tempDir() / "data");
+	CHECK(again.hiddenOn(provider::kAniList, mediaType::kAnime, 1, 128547) == true);
+	// Another title under the same ref is not the one hidden.
+	CHECK_FALSE(again.hiddenOn(provider::kAniList, mediaType::kAnime, 1, 999));
+	CHECK_FALSE(again.hiddenOn(provider::kKitsu, mediaType::kAnime, 1, 128547));
+	REQUIRE(again.setHidden(provider::kAniList, mediaType::kAnime, 1, 128547, false));
+	CHECK(again.hiddenOn(provider::kAniList, mediaType::kAnime, 1, 128547) == false);
+}

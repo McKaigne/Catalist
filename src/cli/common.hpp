@@ -171,6 +171,15 @@ extern const args::option kFrom;
 // reached, to check the connection.
 [[nodiscard]] std::string webError(const web::failure& why);
 
+// AniList, MyAnimeList and Kitsu, in the order they are listed.
+[[nodiscard]] const std::vector<provider>& allSites();
+// Your entry on a site as a title of the lists (its score out of 10), for
+// mergeLinked and the like.
+[[nodiscard]] entry asTitle(const web::siteEntry& theirs, provider site);
+// Takes the catalogue for writing and reads the title again, as it is now.
+// Nothing, with the reason on standard error, when it is gone meanwhile.
+[[nodiscard]] std::optional<entry> heldAgain(cliContext& ctx, const entry& title);
+
 // The logins, from the accounts file (none when there is no file).
 [[nodiscard]] std::vector<account> readAccounts(const cliContext& ctx);
 // Writes them, readable by their owner only; false when that failed.
@@ -199,8 +208,9 @@ void sendWaiting(cliContext& ctx);
 // it is linked, and sends what waits.
 void tellSites(cliContext& ctx, const std::vector<journal::change>& changes);
 // Queues what changed in each title for every logged-in site where it is
-// linked, sending nothing; false when it could not be kept.
-[[nodiscard]] bool queueChanges(cliContext& ctx, const std::vector<journal::change>& changes);
+// linked but `skip`, sending nothing; false when it could not be kept.
+[[nodiscard]] bool queueChanges(cliContext& ctx, const std::vector<journal::change>& changes,
+                                std::optional<provider> skip);
 // After rm --remote: queues the titles to come off the sites' lists.
 void tellSitesGone(cliContext& ctx, const std::vector<entry>& gone);
 
@@ -242,6 +252,8 @@ int printList(cliContext& ctx, const listQuery& query);
 [[nodiscard]] std::vector<command> accountCommands();
 // sync.cpp: sync, link and unlink.
 [[nodiscard]] std::vector<command> syncCommands();
+// track.cpp: track, each site's entry of a title.
+[[nodiscard]] std::vector<command> trackCommands();
 // transfer.cpp: import and export.
 [[nodiscard]] std::vector<command> transferCommands();
 // history.cpp: undo, redo and log.

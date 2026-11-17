@@ -158,6 +158,12 @@ public:
 	// Takes one off: it was told, or it cannot be.
 	[[nodiscard]] bool sent(const pending& done);
 
+	// Whether the person hides the title on the site from others (track
+	// --private), as said while it had `siteId` there; nothing while they
+	// have not said.
+	[[nodiscard]] std::optional<bool> hiddenOn(provider site, mediaType type, int id, int siteId);
+	[[nodiscard]] bool setHidden(provider site, mediaType type, int id, int siteId, bool hidden);
+
 private:
 	std::vector<entry>& getList(mediaType type);
 	const std::vector<entry>& getList(mediaType type) const;

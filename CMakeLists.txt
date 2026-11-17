@@ -72,6 +72,7 @@ add_library(catalistLib STATIC
   src/cli/refs.cpp
   src/cli/setup.cpp
   src/cli/sync.cpp
+  src/cli/track.cpp
   src/cli/tracking.cpp
   src/cli/transfer.cpp
   # Everything that touches the world outside the program.
@@ -157,6 +158,7 @@ add_executable(catalistTests
   tests/cli/refsTest.cpp
   tests/cli/setupTest.cpp
   tests/cli/syncTest.cpp
+  tests/cli/trackTest.cpp
   tests/cli/trackingTest.cpp
   tests/cli/transferTest.cpp
   tests/systemTest.cpp

@@ -22,8 +22,6 @@ constexpr size_t kSendAtOnce = 10;
 // delayed updates are after three tries.
 constexpr int kMostAttempts = 3;
 
-const std::vector<provider> kSites = {provider::kAniList, provider::kMyAnimeList, provider::kKitsu};
-
 // How long a title that could not be sent waits before it is tried again:
 // five minutes after the first failure, then twice as long each time, up to
 // six hours.
@@ -117,6 +115,13 @@ siteReport sendTo(cliContext& ctx, provider site, const std::vector<pending>& mi
 			sent = tracker->remove(each.type, each.siteId, *fresh);
 		} else if (auto now = ctx.db.getById(each.type, each.id)) {
 			auto what = whatToSend(*tracker, *now, each, *fresh, ctx);
+			// Hidden or not, as the person said (track --private), with
+			// whatever else is sent.
+			auto hidden = ctx.db.hiddenOn(site, each.type, each.id, idOn(*now, site));
+			if (what and hidden and (what->fields != 0 or (each.fields & siteField::kHidden))) {
+				what->fields |= siteField::kHidden;
+				what->hidden = *hidden;
+			}
 			if (what and what->fields == 0) {
 				// The site has all of it already.
 				(void)ctx.db.sent(each);
@@ -179,7 +184,7 @@ sendReport sendOutbox(cliContext& ctx, bool everything) {
 	}
 	auto logins = readAccounts(ctx);
 	bool renewed = false;
-	for (provider site : kSites) {
+	for (provider site : allSites()) {
 		std::vector<pending> mine;
 		std::copy_if(due.begin(), due.end(), std::back_inserter(mine),
 		             [site](const pending& each) { return each.site == site; });
@@ -215,7 +220,8 @@ void sendWaiting(cliContext& ctx) {
 	noteWaiting(ctx, sendOutbox(ctx, false));
 }
 
-bool queueChanges(cliContext& ctx, const std::vector<journal::change>& changes) {
+bool queueChanges(cliContext& ctx, const std::vector<journal::change>& changes,
+                  std::optional<provider> skip) {
 	auto logins = readAccounts(ctx);
 	std::vector<pending> more;
 	for (const auto& made : changes) {
@@ -223,7 +229,7 @@ bool queueChanges(cliContext& ctx, const std::vector<journal::change>& changes) 
 		if (not made.after or fields == 0)
 			continue;
 		for (const auto& login : logins)
-			if (idOn(*made.after, login.site) > 0)
+			if (login.site != skip and idOn(*made.after, login.site) > 0)
 				more.push_back({.site = login.site,
 				                .type = made.type,
 				                .id = made.id,
@@ -235,7 +241,7 @@ bool queueChanges(cliContext& ctx, const std::vector<journal::change>& changes) 
 void tellSites(cliContext& ctx, const std::vector<journal::change>& changes) {
 	if (readAccounts(ctx).empty())
 		return;
-	if (not queueChanges(ctx, changes)) {
+	if (not queueChanges(ctx, changes, std::nullopt)) {
 		ctx.err << "note: could not keep the changes to tell the sites of.\n";
 		return;
 	}
@@ -416,17 +422,6 @@ linkRequest readLink(const command& self, const args::parsed& line, cliContext& 
 	return request;
 }
 
-// Takes the catalogue for writing and reads the title again, as it is now.
-// Nothing, with the reason on standard error, when it is gone meanwhile.
-std::optional<entry> heldAgain(cliContext& ctx, const entry& title) {
-	if (not loadForWrite(ctx))
-		return std::nullopt;
-	auto now = ctx.db.getById(title.type, title.id);
-	if (not now)
-		fail(ctx, std::format("{} was removed meanwhile", refs::of(title)));
-	return now;
-}
-
 entry withSiteId(entry title, provider site, int id) {
 	switch (site) {
 		case provider::kAniList:
@@ -439,19 +434,6 @@ entry withSiteId(entry title, provider site, int id) {
 			title.kitsuId = id;
 			break;
 	}
-	return title;
-}
-
-// Your entry on a site as a title of the lists, for mergeLinked.
-entry asTitle(const web::siteEntry& theirs, provider site) {
-	entry title;
-	title.status = theirs.status;
-	title.score = static_cast<int>(std::lround(web::outOfTen(site, theirs.score)));
-	title.progress = theirs.progress;
-	title.volumes = theirs.volumes;
-	title.rewatched = theirs.rewatched;
-	title.startDate = theirs.startDate;
-	title.finishDate = theirs.finishDate;
 	return title;
 }
 
@@ -485,7 +467,7 @@ std::optional<entry> chosenIds(const command& self, const args::parsed& line, cl
 // The title with the site's id, and the other ids the match knows that it
 // lacks.
 entry withIds(entry title, const entry& chosen, provider site) {
-	for (provider other : kSites)
+	for (provider other : allSites())
 		if (idOn(title, other) == 0)
 			title = withSiteId(title, other, idOn(chosen, other));
 	return withSiteId(title, site, idOn(chosen, site));
@@ -553,7 +535,7 @@ int runLink(const command& self, const args::parsed& line, cliContext& ctx) {
 		return saved;
 	// The site gets all of it; the other sites what the fold changed.
 	bool kept = ctx.db.queue({{.site = site, .type = merged.type, .id = merged.id}}) and
-	            queueChanges(ctx, {folded});
+	            queueChanges(ctx, {folded}, std::nullopt);
 	if (not kept)
 		ctx.err << "note: could not keep the changes to tell the sites of.\n";
 	sendWaiting(ctx);

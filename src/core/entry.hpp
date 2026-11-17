@@ -159,6 +159,11 @@ enum class countField { kProgress, kTotalUnits, kVolumes, kRewatched };
 // the site's while the title is only planned here.
 [[nodiscard]] entry mergeLinked(entry mine, const entry& theirs, const isoDate& today);
 
+// Takes your entry on a site as the title's, the site winning (track
+// --pull): its status, score, progress (within a known total), volumes,
+// rewatches and dates.
+[[nodiscard]] entry pullFromSite(entry mine, const entry& theirs, const isoDate& today);
+
 // What a web check found out about a title; 0 means it did not say.
 struct webFacts {
 	int totalUnits = 0;

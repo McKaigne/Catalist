@@ -379,6 +379,41 @@ bool catalogue::sent(const pending& done) {
 	});
 }
 
+// Whether a title is hidden on a site, as the person said. The row keeps
+// the site's id, so that a ref Catalist-TUI gives to another title does not
+// take this one's choice with it.
+
+namespace {
+
+const char* kTrackOptionTable =
+    "CREATE TABLE IF NOT EXISTS track_option ("
+    " site TEXT NOT NULL, type TEXT NOT NULL, id INTEGER NOT NULL, site_id INTEGER NOT NULL,"
+    " hidden INTEGER NOT NULL, PRIMARY KEY (site, type, id))";
+
+}  // namespace
+
+std::optional<bool> catalogue::hiddenOn(provider site, mediaType type, int id, int siteId) {
+	std::error_code ignored;
+	if (not db_.isOpen() and not std::filesystem::exists(getStorePath(), ignored))
+		return std::nullopt;
+	if (not openStore().has_value() or not hasTable(db_, "track_option"))
+		return std::nullopt;
+	auto row = db_.prepare(
+	    "SELECT hidden FROM track_option WHERE site = ? AND type = ? AND id = ? AND site_id = ?");
+	row.bind(providerKey(site)).bind(typeKey(type)).bind(id).bind(siteId);
+	return row.step() ? std::optional<bool>(row.intAt(0) != 0) : std::nullopt;
+}
+
+bool catalogue::setHidden(provider site, mediaType type, int id, int siteId, bool hidden) {
+	return commit([&] {
+		if (not db_.run(kTrackOptionTable))
+			return false;
+		auto set = db_.prepare("INSERT OR REPLACE INTO track_option VALUES (?, ?, ?, ?, ?)");
+		set.bind(providerKey(site)).bind(typeKey(type)).bind(id).bind(siteId);
+		return set.bind(hidden ? 1 : 0).run();
+	});
+}
+
 // Opening and setting up the store.
 
 done catalogue::openStore() {

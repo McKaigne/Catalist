@@ -155,7 +155,8 @@ const std::vector<command>& commands() {
 		std::vector<command> table;
 		for (const auto& group :
 		     {cli::listingCommands(), cli::trackingCommands(), cli::onlineCommands(),
-		      cli::accountCommands(), cli::syncCommands(), cli::transferCommands(),
+		      cli::accountCommands(), cli::syncCommands(), cli::trackCommands(),
+		      cli::transferCommands(),
 		      cli::historyCommands(), cli::setupCommands()})
 			table.insert(table.end(), group.begin(), group.end());
 		table.push_back({.name = "help",

@@ -388,3 +388,32 @@ TEST_CASE("fields to send merge, and the progress stays up-only only when both s
 	CHECK(catalist::mergeFields(up, field::kProgress) == field::kProgress);
 	CHECK(catalist::mergeFields(field::kStatus, field::kAll) == field::kAll);
 }
+
+TEST_CASE("linking keeps what you set, and takes what the site has beyond it") {
+	entry mine = makeEntry().status(watchStatus::kPlanToWatch).totalUnits(12).progress(2);
+	entry theirs = makeEntry()
+	                   .status(watchStatus::kWatching)
+	                   .progress(7)
+	                   .score(8)
+	                   .rewatched(1)
+	                   .startDate("2026-09-01");
+	auto merged = catalist::mergeLinked(mine, theirs, kToday);
+	CHECK(merged.status == watchStatus::kWatching);
+	CHECK(merged.progress == 7);
+	CHECK(merged.score == 8);
+	CHECK(merged.rewatched == 1);
+	CHECK(formatDate(merged.startDate) == "2026-09-01");
+	CHECK(formatDate(merged.updatedAt) == "2026-10-20");
+
+	// What you set here stands.
+	entry set = makeEntry().status(watchStatus::kOnHold).progress(9).score(6).totalUnits(12);
+	auto kept = catalist::mergeLinked(set, theirs, kToday);
+	CHECK(kept.status == watchStatus::kOnHold);
+	CHECK(kept.progress == 9);
+	CHECK(kept.score == 6);
+	// Never past a known total, and nothing new is no change.
+	theirs.progress = 40;
+	CHECK(catalist::mergeLinked(set, theirs, kToday).progress == 12);
+	auto same = catalist::mergeLinked(kept, makeEntry().status(watchStatus::kPlanToWatch), kToday);
+	CHECK(same == kept);
+}

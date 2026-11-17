@@ -127,9 +127,10 @@ struct refRequest {
 void printChanges(cliContext& ctx, const std::vector<journal::change>& changes);
 
 // Saves what a command changed as one undo step and prints it (not with
-// -q). A command that changed nothing says so and saves nothing.
+// -q), then tells the sites (unless `tell` is false: the command does). A
+// command that changed nothing says so and saves nothing.
 int saveAndReport(cliContext& ctx, const args::parsed& line,
-                  const std::vector<journal::change>& changes);
+                  const std::vector<journal::change>& changes, bool tell = true);
 
 using titleChange = std::function<entry(const entry&)>;
 
@@ -197,6 +198,9 @@ void sendWaiting(cliContext& ctx);
 // After a save: queues each changed title for every logged-in site where
 // it is linked, and sends what waits.
 void tellSites(cliContext& ctx, const std::vector<journal::change>& changes);
+// Queues what changed in each title for every logged-in site where it is
+// linked, sending nothing; false when it could not be kept.
+[[nodiscard]] bool queueChanges(cliContext& ctx, const std::vector<journal::change>& changes);
 // After rm --remote: queues the titles to come off the sites' lists.
 void tellSitesGone(cliContext& ctx, const std::vector<entry>& gone);
 

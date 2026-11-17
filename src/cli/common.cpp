@@ -336,7 +336,7 @@ void printChanges(cliContext& ctx, const std::vector<journal::change>& changes) 
 // Saves what a command changed as one undo step and prints it (not with
 // -q). A command that changed nothing says so and saves nothing.
 int saveAndReport(cliContext& ctx, const args::parsed& line,
-                  const std::vector<journal::change>& changes) {
+                  const std::vector<journal::change>& changes, bool tell) {
 	bool any = std::any_of(changes.begin(), changes.end(), [](const journal::change& made) {
 		return not journal::changedFields(made).empty();
 	});
@@ -349,7 +349,8 @@ int saveAndReport(cliContext& ctx, const args::parsed& line,
 		return saveFailed(ctx);
 	if (not line.has("q"))
 		printChanges(ctx, changes);
-	tellSites(ctx, changes);
+	if (tell)
+		tellSites(ctx, changes);
 	return 0;
 }
 

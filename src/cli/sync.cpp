@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <ostream>
 
@@ -214,10 +215,8 @@ void sendWaiting(cliContext& ctx) {
 	noteWaiting(ctx, sendOutbox(ctx, false));
 }
 
-void tellSites(cliContext& ctx, const std::vector<journal::change>& changes) {
+bool queueChanges(cliContext& ctx, const std::vector<journal::change>& changes) {
 	auto logins = readAccounts(ctx);
-	if (logins.empty())
-		return;
 	std::vector<pending> more;
 	for (const auto& made : changes) {
 		unsigned fields = fieldsOf(made);
@@ -230,13 +229,17 @@ void tellSites(cliContext& ctx, const std::vector<journal::change>& changes) {
 				                .id = made.id,
 				                .fields = fields});
 	}
-	if (more.empty())
+	return more.empty() or ctx.db.queue(more);
+}
+
+void tellSites(cliContext& ctx, const std::vector<journal::change>& changes) {
+	if (readAccounts(ctx).empty())
 		return;
-	if (not ctx.db.queue(more)) {
+	if (not queueChanges(ctx, changes)) {
 		ctx.err << "note: could not keep the changes to tell the sites of.\n";
 		return;
 	}
-	noteWaiting(ctx, sendOutbox(ctx, false));
+	sendWaiting(ctx);
 }
 
 void tellSitesGone(cliContext& ctx, const std::vector<entry>& gone) {
@@ -439,52 +442,121 @@ entry withSiteId(entry title, provider site, int id) {
 	return title;
 }
 
+// Your entry on a site as a title of the lists, for mergeLinked.
+entry asTitle(const web::siteEntry& theirs, provider site) {
+	entry title;
+	title.status = theirs.status;
+	title.score = static_cast<int>(std::lround(web::outOfTen(site, theirs.score)));
+	title.progress = theirs.progress;
+	title.volumes = theirs.volumes;
+	title.rewatched = theirs.rewatched;
+	title.startDate = theirs.startDate;
+	title.finishDate = theirs.finishDate;
+	return title;
+}
+
+// The ids link gives the title on `site`: the ID given, else those of the
+// match chosen of a search (for --query's text, or the title's), the person
+// choosing as for add. Nothing, after the reason, when there is none.
+std::optional<entry> chosenIds(const command& self, const args::parsed& line, cliContext& ctx,
+                               const entry& title, provider site, int& code) {
+	std::string name = providerName(site);
+	entry chosen;
+	code = 1;
+	if (line.operands.size() == 3) {
+		auto id = args::parseCount(line.operands[2]);
+		if (not id or *id == 0) {
+			code = usageError(ctx, self, std::format("'{}' is not an id on {}", line.operands[2], name));
+			return std::nullopt;
+		}
+		return withSiteId(chosen, site, *id);
+	}
+	std::string query = line.has("query") ? line.get("query") : title.title;
+	auto tracker = trackerFor(ctx, site);
+	auto match = chooseMatch(ctx, *tracker, title.type, query, std::nullopt);
+	if (not match)
+		return std::nullopt;
+	chosen.anilistId = match->anilistId;
+	chosen.malId = match->malId;
+	chosen.kitsuId = match->kitsuId;
+	return chosen;
+}
+
+// The title with the site's id, and the other ids the match knows that it
+// lacks.
+entry withIds(entry title, const entry& chosen, provider site) {
+	for (provider other : kSites)
+		if (idOn(title, other) == 0)
+			title = withSiteId(title, other, idOn(chosen, other));
+	return withSiteId(title, site, idOn(chosen, site));
+}
+
+// Links a title as Mihon binds a tracker: logged in to the site, your entry
+// there is read first and folded into the title (mergeLinked: one step for
+// undo), then the title is sent there whole.
 int runLink(const command& self, const args::parsed& line, cliContext& ctx) {
 	auto request = readLink(self, line, ctx, 3);
 	if (not request.title)
 		return request.code;
-	std::string name = providerName(request.site);
-	// The ids to give the title: the one given, or those of the match
-	// chosen of a search for its title, the person choosing as for add.
-	entry chosen;
-	if (line.operands.size() == 3) {
-		auto id = args::parseCount(line.operands[2]);
-		if (not id or *id == 0)
-			return usageError(ctx, self,
-			                  std::format("'{}' is not an id on {}", line.operands[2], name));
-		chosen = withSiteId(chosen, request.site, *id);
-	} else {
-		auto site = trackerFor(ctx, request.site);
-		auto match = chooseMatch(ctx, *site, request.title->type, request.title->title,
-		                         std::nullopt);
-		if (not match)
+	if (line.operands.size() == 3 and line.has("query"))
+		return usageError(ctx, self, "give an ID or --query, not both");
+	provider site = request.site;
+	std::string name = providerName(site);
+	int code = 0;
+	auto chosen = chosenIds(self, line, ctx, *request.title, site, code);
+	if (not chosen)
+		return code;
+
+	// Your entry there, read before the lists are taken for writing.
+	auto login = accounts::on(readAccounts(ctx), site);
+	// Read, and there; read, and not on your list; or not read.
+	bool read = false;
+	std::optional<web::siteEntry> theirs;
+	if (login and not ctx.offline) {
+		auto tracker = trackerFor(ctx, site);
+		auto fresh = tracker->current(*login);
+		auto yours = fresh ? tracker->entryOf(withIds(*request.title, *chosen, site), *fresh)
+		                   : web::answer<std::optional<web::siteEntry>>(std::unexpected(fresh.error()));
+		if (not yours) {
+			fail(ctx, webError(yours.error()));
+			ctx.err << "Nothing was linked. With --offline the title is linked without reading "
+			           "your entry there, and sent whole later.\n";
 			return 1;
-		chosen.anilistId = match->anilistId;
-		chosen.malId = match->malId;
-		chosen.kitsuId = match->kitsuId;
+		}
+		read = true;
+		theirs = *yours;
 	}
+
 	auto held = heldAgain(ctx, *request.title);
 	if (not held)
 		return 1;
-	// The id on the site, and the other ids the match knows that the title
-	// lacks.
-	entry title = *held;
-	for (provider other : kSites)
-		if (idOn(title, other) == 0)
-			title = withSiteId(title, other, idOn(chosen, other));
-	title = withSiteId(title, request.site, idOn(chosen, request.site));
-	int id = idOn(title, request.site);
+	entry title = withIds(*held, *chosen, site);
+	int id = idOn(title, site);
 	for (const auto& other : ctx.db.getEntries(title.type))
-		if (other.id != title.id and idOn(other, request.site) == id)
+		if (other.id != title.id and idOn(other, site) == id)
 			return fail(ctx, std::format("{} is {} {} already", refs::of(other), name, id));
-	ctx.db.updateEntry(title);
-	// An id is no step for undo: undo puts back what you did to a title.
-	if (not ctx.db.saveAll())
-		return saveFailed(ctx);
+	entry merged = theirs ? mergeLinked(title, asTitle(*theirs, site), ctx.today()) : title;
+	ctx.db.updateEntry(merged);
 	if (not line.has("q"))
-		ctx.err << std::format("Linked {} ({}) to {} {}.\n", title.title, refs::of(title), name,
-		                       id);
-	tellSites(ctx, {{title.type, title.id, std::nullopt, title}});
+		ctx.err << std::format("Linked {} ({}) to {} {}{}.\n", merged.title, refs::of(merged), name,
+		                       id,
+		                       not login ? ""
+		                       : not read ? "; your entry there was not read (--offline)"
+		                       : theirs   ? "; your entry there is folded in"
+		                                  : "; it is new on your list there");
+	// What your entry there brought is a step for undo; an id alone is not.
+	journal::change folded{merged.type, merged.id, title, merged};
+	int saved = journal::changedFields(folded).empty()
+	                ? (ctx.db.saveAll() ? 0 : saveFailed(ctx))
+	                : saveAndReport(ctx, line, {folded}, false);
+	if (saved != 0 or not login)
+		return saved;
+	// The site gets all of it; the other sites what the fold changed.
+	bool kept = ctx.db.queue({{.site = site, .type = merged.type, .id = merged.id}}) and
+	            queueChanges(ctx, {folded});
+	if (not kept)
+		ctx.err << "note: could not keep the changes to tell the sites of.\n";
+	sendWaiting(ctx);
 	return 0;
 }
 
@@ -537,13 +609,21 @@ std::vector<command> syncCommands() {
 	     .run = runSync},
 	    {.name = "link",
 	     .summary = "Link a title to its entry on a site",
-	     .details = "Sets the title's id on the site: the ID given, or the match you choose\n"
-	                "of a search for its title there. A linked title is sent to that site\n"
-	                "when it changes (see 'sync'). Titles added from a site, imported or\n"
-	                "refreshed are linked to every site that knew their ids. Not a step\n"
-	                "for undo.\n",
+	     .details =
+	         std::string(
+	             "Sets the title's id on the site: the ID given, or the match you choose of\n"
+	             "a search for its title there (or for --query's TEXT). Logged in to the\n"
+	             "site, your entry there is read first, as Mihon does: what you set here\n"
+	             "stays, and the site fills in the rest (the higher progress, a score or\n"
+	             "dates you have not set, its status while the title is only planned\n"
+	             "here). What that changes is one step for undo; the title is then sent\n"
+	             "there whole, and changes after it as they come (see 'sync'). Titles\n"
+	             "added from a site, imported or refreshed are linked to every site that\n"
+	             "knew their ids.\n\n") +
+	         kChangeFormat,
 	     .options = {{'a', "", "", "look in the anime list only"},
 	                 {'m', "", "", "look in the manga list only"},
+	                 {0, "query", "TEXT", "search the site for TEXT, not the title"},
 	                 kQuiet},
 	     .operands = "REF anilist|mal|kitsu [ID]",
 	     .run = runLink,

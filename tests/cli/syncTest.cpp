@@ -91,9 +91,10 @@ TEST_CASE_FIXTURE(cliFixture, "cli tells a site only of the titles linked to it"
 	web.respond("filter[animeId]=43095", R"({"data":[]})");
 	web.respond("POST https://kitsu.app/api/edge/library-entries", "{}");
 	CHECK(run({"link", "taxi", "kitsu", "43095"}) == 0);
-	CHECK(err == "Linked Odd Taxi (a:2) to Kitsu 43095.\n");
-	// Linking sends the title there.
-	CHECK(web.sent.size() == 2);
+	CHECK(err == "Linked Odd Taxi (a:2) to Kitsu 43095; it is new on your list there.\n");
+	// Linking reads your entry there, then sends the title there whole.
+	CHECK(web.sent.size() == 3);
+	CHECK(has(web.sent[2], R"("status":"current","reconsuming":false,"progress":6,)"));
 	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").kitsuId == 43095);
 	CHECK(run({"ls", "-q", "--unlinked", "kitsu"}) == 0);
 	CHECK(out == "m:1\na:1\nm:2\n");
@@ -128,6 +129,44 @@ TEST_CASE_FIXTURE(cliFixture, "cli link asks the site before it takes the lists 
 	auto linked = savedTitle(mediaType::kAnime, "Dandadan");
 	CHECK(linked.anilistId == 171018);
 	CHECK(linked.malId == 57334);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli link folds your entry on the site in, as one step") {
+	seed();
+	logIn(provider::kAniList);
+	CHECK(run({"unlink", "taxi", "anilist"}) == 0);
+	web.respond("SaveMediaListEntry", kSaved);
+	// On AniList you are further along, and scored it 85 of 100.
+	web.respond(kEntry, R"({"data":{"Page":{"mediaList":[{"status":"CURRENT","score":85,
+	  "progress":9,"startedAt":{"year":2026,"month":9,"day":30}}]}}})");
+	CHECK(run({"link", "taxi", "anilist", "128547"}) == 0);
+	CHECK(out == "a:2\tOdd Taxi\tprogress\t5\t9\n");
+	CHECK(err == "Linked Odd Taxi (a:2) to AniList 128547; your entry there is folded in.\n");
+	auto taxi = savedTitle(mediaType::kAnime, "Odd Taxi");
+	CHECK(taxi.progress == 9);
+	// Your own score and start date stay.
+	CHECK(taxi.score == 8);
+	CHECK(catalist::formatDate(taxi.startDate) == "2026-10-01");
+	// AniList is then sent the title whole.
+	CHECK(has(web.sent.back(), R"("variables":{"m":128547,"s":"CURRENT","c":80,"p":9,)"));
+	CHECK(waiting().empty());
+	// The fold is a step for undo.
+	CHECK(run({"undo"}) == 0);
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 5);
+
+	// Searched for under another name.
+	CHECK(run({"unlink", "taxi", "anilist"}) == 0);
+	web.respond(R"("search":"odd taxi tv","type":"ANIME")", R"({"data":{"Page":{"media":[
+	  {"id":128547,"idMal":44265,"title":{"romaji":"Odd Taxi"}}]}}})");
+	CHECK(run({"link", "--query", "odd taxi tv", "taxi", "anilist"}) == 0);
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").anilistId == 128547);
+	CHECK(run({"link", "--query", "x", "taxi", "anilist", "1"}) == 2);
+	// AniList not reached: nothing is linked.
+	CHECK(run({"unlink", "taxi", "anilist"}) == 0);
+	web.bodies.erase(kEntry);
+	CHECK(run({"link", "taxi", "anilist", "128547"}) == 1);
+	CHECK(has(err, "Nothing was linked."));
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").anilistId == 0);
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli rm leaves the sites' lists alone, unless --remote") {

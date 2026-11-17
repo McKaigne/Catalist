@@ -152,6 +152,13 @@ enum class countField { kProgress, kTotalUnits, kVolumes, kRewatched };
 // win: imported values only fill fields the user never set.
 [[nodiscard]] entry mergeImported(entry existing, const entry& incoming);
 
+// Folds your entry on a site into the title when it is linked there, as
+// Mihon binds a tracker: what you set here stays, and the site's fills in
+// the rest. The progress, volumes and rewatches are the higher of the two;
+// the score and the dates the site's where there are none here; the status
+// the site's while the title is only planned here.
+[[nodiscard]] entry mergeLinked(entry mine, const entry& theirs, const isoDate& today);
+
 // What a web check found out about a title; 0 means it did not say.
 struct webFacts {
 	int totalUnits = 0;

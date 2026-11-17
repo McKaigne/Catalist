@@ -365,6 +365,25 @@ entry mergeImported(entry existing, const entry& incoming) {
 	return existing;
 }
 
+entry mergeLinked(entry mine, const entry& theirs, const isoDate& today) {
+	entry merged = mine;
+	int most = merged.totalUnits > 0 ? merged.totalUnits : theirs.progress;
+	merged.progress = std::max(merged.progress, std::min(theirs.progress, most));
+	merged.volumes = std::max(merged.volumes, theirs.volumes);
+	merged.rewatched = std::max(merged.rewatched, theirs.rewatched);
+	if (merged.score == 0)
+		merged.score = theirs.score;
+	if (not merged.startDate)
+		merged.startDate = theirs.startDate;
+	if (not merged.finishDate)
+		merged.finishDate = theirs.finishDate;
+	if (merged.status == watchStatus::kPlanToWatch)
+		merged.status = theirs.status;
+	if (not(merged == mine))
+		merged.updatedAt = today;
+	return merged;
+}
+
 entry applyWebFacts(entry target, const webFacts& facts, const isoDate& today) {
 	if (target.anilistId == 0)
 		target.anilistId = facts.anilistId;

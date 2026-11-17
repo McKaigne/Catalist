@@ -117,16 +117,43 @@ std::string searchRequest(mediaType type, const std::string& query) {
 	    jsonString(query), typeName(type));
 }
 
-std::string saveRequest(const entry& title) {
+std::string saveRequest(const entry& title, const web::sending& what) {
+	// One variable a field sent: its declaration, its argument and its value.
+	struct sent {
+		unsigned field;
+		const char* declared;
+		const char* argument;
+		std::string value;
+	};
 	// scoreRaw is out of 100 whatever scale the person chose on AniList.
+	std::vector<sent> all = {
+	    {siteField::kStatus, "$s:MediaListStatus", "status:$s",
+	     std::format(R"("s":"{}")", listStatus(title.status))},
+	    {siteField::kScore, "$c:Int", "scoreRaw:$c", std::format(R"("c":{})", title.score * 10)},
+	    {siteField::kProgress, "$p:Int", "progress:$p", std::format(R"("p":{})", title.progress)},
+	    {siteField::kVolumes, "$v:Int", "progressVolumes:$v",
+	     std::format(R"("v":{})", title.volumes)},
+	    {siteField::kRewatched, "$r:Int", "repeat:$r", std::format(R"("r":{})", title.rewatched)},
+	    {siteField::kStarted, "$a:FuzzyDateInput", "startedAt:$a",
+	     std::format(R"("a":{})", fuzzyDate(title.startDate))},
+	    {siteField::kFinished, "$f:FuzzyDateInput", "completedAt:$f",
+	     std::format(R"("f":{})", fuzzyDate(title.finishDate))},
+	    {siteField::kHidden, "$h:Boolean", "private:$h",
+	     std::format(R"("h":{})", what.hidden ? "true" : "false")},
+	};
+	std::string declared = "$m:Int";
+	std::string arguments = "mediaId:$m";
+	std::string values = std::format(R"("m":{})", title.anilistId);
+	for (const auto& each : all) {
+		if (not(what.fields & each.field))
+			continue;
+		declared += std::format(",{}", each.declared);
+		arguments += std::format(",{}", each.argument);
+		values += "," + each.value;
+	}
 	return std::format(
-	    R"({{"query":"mutation($m:Int,$s:MediaListStatus,$c:Int,$p:Int,$v:Int,$r:Int,)"
-	    R"($a:FuzzyDateInput,$f:FuzzyDateInput){{SaveMediaListEntry(mediaId:$m,status:$s,)"
-	    R"(scoreRaw:$c,progress:$p,progressVolumes:$v,repeat:$r,startedAt:$a,completedAt:$f))"
-	    R"({{id}}}}",)"
-	    R"("variables":{{"m":{},"s":"{}","c":{},"p":{},"v":{},"r":{},"a":{},"f":{}}}}})",
-	    title.anilistId, listStatus(title.status), title.score * 10, title.progress, title.volumes,
-	    title.rewatched, fuzzyDate(title.startDate), fuzzyDate(title.finishDate));
+	    R"({{"query":"mutation({}){{SaveMediaListEntry({}){{id}}}}","variables":{{{}}}}})",
+	    declared, arguments, values);
 }
 
 std::string listEntryRequest(int mediaId, const std::string& userId) {
@@ -326,10 +353,11 @@ web::answer<std::optional<web::siteEntry>> tracker::entryOf(const entry& title,
 	return parseEntry(*body);
 }
 
-web::answer<void> tracker::push(const entry& title, const account& login) {
+web::answer<void> tracker::push(const entry& title, const account& login,
+                                const web::sending& what) {
 	if (title.anilistId <= 0)
 		return web::notLinked(provider::kAniList);
-	auto body = ask(saveRequest(title), login.token);
+	auto body = ask(saveRequest(title, what), login.token);
 	if (not body)
 		return std::unexpected(body.error());
 	auto reply = json::parse(*body);

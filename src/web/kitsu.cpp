@@ -234,15 +234,25 @@ web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body) {
 	return found;
 }
 
-std::string libraryAttributes(const entry& title) {
+std::string libraryAttributes(const entry& title, const web::sending& what) {
+	std::string attributes;
+	auto add = [&attributes, &what](unsigned field, const std::string& pair) {
+		if (what.fields & field)
+			attributes += (attributes.empty() ? "" : ",") + pair;
+	};
+	bool again = title.status == watchStatus::kRewatching;
+	add(siteField::kStatus, std::format(R"("status":"{}")", libraryStatus(title.status)));
+	add(siteField::kStatus, std::format(R"("reconsuming":{})", again ? "true" : "false"));
+	add(siteField::kProgress, std::format(R"("progress":{})", title.progress));
+	add(siteField::kRewatched, std::format(R"("reconsumeCount":{})", title.rewatched));
 	// ratingTwenty runs from 2 to 20; null is no rating.
-	return std::format(R"({{"status":"{}","reconsuming":{},"progress":{},"reconsumeCount":{},)"
-	                   R"("ratingTwenty":{},"startedAt":{},"finishedAt":{}}})",
-	                   libraryStatus(title.status),
-	                   title.status == watchStatus::kRewatching ? "true" : "false", title.progress,
-	                   title.rewatched,
-	                   title.score > 0 ? std::to_string(title.score * 2) : "null",
-	                   timeOf(title.startDate), timeOf(title.finishDate));
+	add(siteField::kScore,
+	    std::format(R"("ratingTwenty":{})",
+	                title.score > 0 ? std::to_string(title.score * 2) : "null"));
+	add(siteField::kStarted, std::format(R"("startedAt":{})", timeOf(title.startDate)));
+	add(siteField::kFinished, std::format(R"("finishedAt":{})", timeOf(title.finishDate)));
+	add(siteField::kHidden, std::format(R"("private":{})", what.hidden ? "true" : "false"));
+	return "{" + attributes + "}";
 }
 
 std::vector<std::string> tracker::asUser(const account& login) {
@@ -297,7 +307,8 @@ web::answer<std::optional<web::siteEntry>> tracker::entryOf(const entry& title,
 	return parseEntry(*body);
 }
 
-web::answer<void> tracker::push(const entry& title, const account& login) {
+web::answer<void> tracker::push(const entry& title, const account& login,
+                                const web::sending& what) {
 	if (title.kitsuId <= 0)
 		return web::notLinked(provider::kKitsu);
 	auto existing = libraryEntry(title.type, title.kitsuId, login);
@@ -311,13 +322,15 @@ web::answer<void> tracker::push(const entry& title, const account& login) {
 	                      asUser(login),
 	                      std::format(R"({{"data":{{"id":"{}","type":"libraryEntries",)"
 	                                  R"("attributes":{}}}}})",
-	                                  *existing, libraryAttributes(title))})
+	                                  *existing, libraryAttributes(title, what))})
 	        : send(
 	              {"POST", kApiUrl + "/library-entries", asUser(login),
 	               std::format(R"({{"data":{{"type":"libraryEntries","attributes":{},)"
 	                           R"("relationships":{{"user":{{"data":{{"type":"users",)"
 	                           R"("id":"{}"}}}},"{}":{{"data":{{"type":"{}","id":"{}"}}}}}}}}}})",
-	                           libraryAttributes(title), login.userId, kind, kind, title.kitsuId)});
+	                           libraryAttributes(title, {siteField::kAll | what.fields,
+	                                                     what.hidden}),
+	                           login.userId, kind, kind, title.kitsuId)});
 	if (not body)
 		return std::unexpected(body.error());
 	return {};

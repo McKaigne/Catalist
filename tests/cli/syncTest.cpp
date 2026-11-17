@@ -10,6 +10,10 @@ using catalist::test::has;
 namespace {
 
 const char* kSaved = R"({"data":{"SaveMediaListEntry":{"id":9}}})";
+// Your entry on AniList, read before only some fields are sent.
+const char* kEntry = "mediaList(userId:$u,mediaId:$m)";
+const char* kOnList =
+    R"({"data":{"Page":{"mediaList":[{"status":"CURRENT","score":80,"progress":5}]}}})";
 
 }  // namespace
 
@@ -21,18 +25,21 @@ TEST_CASE_FIXTURE(cliFixture, "cli tells a logged-in site of each change, one wa
 
 	logIn(provider::kAniList);
 	web.respond("SaveMediaListEntry", kSaved);
+	web.respond(kEntry, kOnList);
+	// The entry on AniList is read first, and only the progress is sent.
 	CHECK(run({"+", "taxi"}) == 0);
-	REQUIRE(web.sent.size() == 1);
-	CHECK(has(web.sent[0], R"("m":128547,"s":"CURRENT","c":80,"p":7,)"));
+	REQUIRE(web.sent.size() == 2);
+	CHECK(has(web.sent[0], kEntry));
+	CHECK(has(web.sent[1], R"("variables":{"m":128547,"p":7}})"));
 	CHECK(err.empty());
 	CHECK(waiting().empty());
 	// What the sites do not keep (a title) is not theirs to hear of.
 	CHECK(run({"set", "taxi", "title=ODDTAXI"}) == 0);
-	CHECK(web.sent.size() == 1);
-	// Undo is a change like any.
-	CHECK(run({"undo", "-n", "2"}) == 0);
 	CHECK(web.sent.size() == 2);
-	CHECK(has(web.sent[1], R"("p":6,)"));
+	// Undo is a change like any; lowering the progress is meant.
+	CHECK(run({"undo", "-n", "2"}) == 0);
+	CHECK(web.sent.size() == 4);
+	CHECK(has(web.sent[3], R"("variables":{"m":128547,"p":6}})"));
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli keeps what it could not send, and sync sends it") {
@@ -48,6 +55,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli keeps what it could not send, and sync sends 
 	CHECK(has(err, "error: 1 change still to be sent; try again later\n"));
 
 	web.respond("SaveMediaListEntry", kSaved);
+	web.respond(kEntry, kOnList);
 	CHECK(run({"sync"}) == 0);
 	CHECK(err == "Told the sites of 1 change.\n");
 	CHECK(waiting().empty());
@@ -64,8 +72,9 @@ TEST_CASE_FIXTURE(cliFixture, "cli --offline keeps the changes for sync") {
 	CHECK(err.empty());
 	CHECK(waiting().size() == 1);
 	CHECK(run({"--offline", "sync"}) == 1);
+	web.respond(kEntry, kOnList);
 	CHECK(run({"sync", "-q"}) == 0);
-	CHECK(web.sent.size() == 1);
+	CHECK(web.sent.size() == 2);
 	CHECK(waiting().empty());
 }
 
@@ -126,8 +135,8 @@ TEST_CASE_FIXTURE(cliFixture, "cli rm leaves the sites' lists alone, unless --re
 	logIn(provider::kAniList);
 	CHECK(run({"rm", "-f", "taxi"}) == 0);
 	CHECK(web.sent.empty());
-	CHECK(run({"undo"}) == 0);
 	web.respond("SaveMediaListEntry", kSaved);
+	CHECK(run({"undo"}) == 0);
 	web.respond("MediaList(mediaId:$m,userId:$u)", R"({"data":{"MediaList":{"id":31}}})");
 	web.respond("DeleteMediaListEntry", R"({"data":{"DeleteMediaListEntry":{"deleted":true}}})");
 	size_t before = web.sent.size();
@@ -147,6 +156,68 @@ TEST_CASE_FIXTURE(cliFixture, "cli a title a site refuses does not hold back the
 	CHECK(has(err, "Told the sites of 3 changes.\n"));
 	REQUIRE(waiting().size() == 1);
 	CHECK(waiting()[0].id == 1);
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli lets a site further along keep its progress") {
+	seed();
+	logIn(provider::kAniList);
+	web.respond("SaveMediaListEntry", kSaved);
+	web.respond(kEntry,
+	            R"({"data":{"Page":{"mediaList":[{"status":"CURRENT","progress":10}]}}})");
+	// Odd Taxi goes from 5 to 6 here; AniList has 10: nothing to send.
+	CHECK(run({"+", "taxi"}) == 0);
+	REQUIRE(web.sent.size() == 1);
+	CHECK(has(web.sent[0], kEntry));
+	CHECK(waiting().empty());
+	// The score is sent, the progress still left as AniList has it.
+	CHECK(run({"+", "taxi"}) == 0);
+	CHECK(run({"set", "taxi", "score=9"}) == 0);
+	CHECK(has(web.sent.back(), R"("variables":{"m":128547,"c":90}})"));
+	// Lowering it on purpose is sent.
+	CHECK(run({"-", "taxi"}) == 0);
+	CHECK(has(web.sent.back(), R"("variables":{"m":128547,"p":6}})"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli sends a site without the title all of it") {
+	seed();
+	logIn(provider::kAniList);
+	web.respond("SaveMediaListEntry", kSaved);
+	web.respond(kEntry, R"({"data":{"Page":{"mediaList":[]}}})");
+	CHECK(run({"+", "taxi"}) == 0);
+	REQUIRE(web.sent.size() == 2);
+	CHECK(has(web.sent[1], R"("variables":{"m":128547,"s":"CURRENT","c":80,"p":6,)"));
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli waits longer after each failure, and gives a refusal up") {
+	seed();
+	logIn(provider::kAniList);
+	// AniList cannot be reached: the change waits five minutes.
+	CHECK(run({"done", "taxi"}) == 0);
+	REQUIRE(waiting().size() == 1);
+	CHECK(waiting()[0].attempts == 1);
+	CHECK(waiting()[0].nextTry == clock + 300);
+	// Another command that goes online sends only what is due.
+	size_t before = web.sent.size();
+	CHECK(run({"search", "taxi"}) == 1);
+	CHECK(web.sent.size() == before + 1);
+	clock += 301;
+	CHECK(run({"search", "taxi"}) == 1);
+	CHECK(waiting()[0].attempts == 2);
+	CHECK(waiting()[0].nextTry == clock + 600);
+	// What waits, and when it is tried again.
+	CHECK(run({"sync", "--list"}) == 0);
+	CHECK(out == "a:2\tanilist\tstatus, progress (up only), finished\t2\t600\n");
+	CHECK(run({"sync", "--list"}, "", 100) == 0);
+	CHECK(has(out, "a:2  AniList  status, progress (up only), finished"));
+	CHECK(has(out, "  2  in 10 min\n"));
+	// AniList says no to it, three times in all: it is given up.
+	web.respond(kEntry, kOnList);
+	web.respond("SaveMediaListEntry", R"({"errors":[{"message":"validation"}]})", 400);
+	CHECK(run({"sync"}) == 1);
+	CHECK(has(err, "note: gave up telling AniList of a:2 after 3 tries: AniList said no (HTTP 400).\n"));
+	CHECK(waiting().empty());
+	CHECK(run({"sync", "--list"}, "", 100) == 0);
+	CHECK(err == "Nothing waits to be sent.\n");
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli sync --all sends every linked title") {

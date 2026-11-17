@@ -378,3 +378,13 @@ TEST_CASE("setTitle and the date setters stamp the entry only when they change i
 	CHECK(finished.updatedAt == today);
 	CHECK(catalist::setFinishDate(before, std::nullopt, today).updatedAt == before.updatedAt);
 }
+
+TEST_CASE("fields to send merge, and the progress stays up-only only when both said so") {
+	namespace field = catalist::siteField;
+	unsigned up = field::kProgress | field::kRaiseOnly;
+	CHECK(catalist::mergeFields(up, field::kScore) == (up | field::kScore));
+	CHECK(catalist::mergeFields(up, up) == up);
+	// A progress set on purpose, as by -, is sent whatever the site has.
+	CHECK(catalist::mergeFields(up, field::kProgress) == field::kProgress);
+	CHECK(catalist::mergeFields(field::kStatus, field::kAll) == field::kAll);
+}

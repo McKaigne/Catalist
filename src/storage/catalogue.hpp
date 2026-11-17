@@ -44,6 +44,13 @@ struct pending {
 	int id = 0;
 	bool removed = false;
 	int siteId = 0;
+	// What to send (siteField bits): what changed since the site was last
+	// told.
+	unsigned fields = siteField::kAll;
+	// The tries that failed, and when to try again (seconds since 1970; 0
+	// is at once).
+	int attempts = 0;
+	long long nextTry = 0;
 };
 
 // One step of the undo history: what one command changed.
@@ -142,8 +149,12 @@ public:
 	// The titles waiting, oldest first; none when nothing waits or the file
 	// cannot be read.
 	[[nodiscard]] std::vector<pending> outbox();
-	// Adds them; one already waiting is not added twice.
+	// Adds them; one already waiting gets the fields of both (mergeFields)
+	// and is tried again at once.
 	[[nodiscard]] bool queue(const std::vector<pending>& more);
+	// Keeps one waiting after a try that failed: how many have, and when to
+	// try again.
+	[[nodiscard]] bool deferred(const pending& waiting, int attempts, long long nextTry);
 	// Takes one off: it was told, or it cannot be.
 	[[nodiscard]] bool sent(const pending& done);
 

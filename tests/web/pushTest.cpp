@@ -43,12 +43,12 @@ TEST_CASE("anilist sets the whole list entry, the score out of 100") {
 	catalist::test::fakeWeb web;
 	web.respond("SaveMediaListEntry", R"({"data":{"SaveMediaListEntry":{"id":9}}})");
 	catalist::anilist::tracker site(web.link());
-	CHECK(site.push(oddTaxi(), kLogin).has_value());
+	CHECK(site.push(oddTaxi(), kLogin, {}).has_value());
 	CHECK(web.sent.size() == 1);
 	catalist::entry unlinked = oddTaxi();
 	unlinked.anilistId = 0;
-	CHECK(site.push(unlinked, kLogin).error().message == "not linked to AniList");
-	CHECK(site.push(unlinked, kLogin).error().why == catalist::web::failure::kind::kNotLinked);
+	CHECK(site.push(unlinked, kLogin, {}).error().message == "not linked to AniList");
+	CHECK(site.push(unlinked, kLogin, {}).error().why == catalist::web::failure::kind::kNotLinked);
 }
 
 TEST_CASE("anilist removes a title by its list entry, and is done when there is none") {
@@ -92,7 +92,7 @@ TEST_CASE("mal sets the list status with the fields of the list") {
 	auto net = web.link();
 	net.ids.mal = "mal-id";
 	catalist::mal::tracker site(net);
-	CHECK(site.push(oddTaxi(), kLogin).has_value());
+	CHECK(site.push(oddTaxi(), kLogin, {}).has_value());
 	CHECK_FALSE(site.remove(mediaType::kAnime, 44265, kLogin).has_value());
 }
 
@@ -108,7 +108,7 @@ TEST_CASE("kitsu changes the library entry it has, or makes one") {
 	    R"({"data":[{"id":"555"}]})");
 	web.respond("PATCH https://kitsu.app/api/edge/library-entries/555", "{}");
 	catalist::kitsu::tracker site(web.link());
-	CHECK(site.push(oddTaxi(), kLogin).has_value());
+	CHECK(site.push(oddTaxi(), kLogin, {}).has_value());
 	REQUIRE(web.sent.size() == 2);
 	CHECK(web.sent[1].find(R"({"data":{"id":"555","type":"libraryEntries","attributes":)") !=
 	      std::string::npos);
@@ -117,11 +117,26 @@ TEST_CASE("kitsu changes the library entry it has, or makes one") {
 	fresh.respond("filter[animeId]=43095", R"({"data":[]})");
 	fresh.respond("POST https://kitsu.app/api/edge/library-entries", "{}");
 	catalist::kitsu::tracker making(fresh.link());
-	CHECK(making.push(oddTaxi(), kLogin).has_value());
+	CHECK(making.push(oddTaxi(), kLogin, {}).has_value());
 	REQUIRE(fresh.sent.size() == 2);
 	CHECK(fresh.sent[1].find(R"("user":{"data":{"type":"users","id":"77"}},)"
 	                         R"("anime":{"data":{"type":"anime","id":"43095"}})") !=
 	      std::string::npos);
 	// Not on the list: removed already.
 	CHECK(making.remove(mediaType::kAnime, 43095, kLogin).has_value());
+}
+
+TEST_CASE("a push sends only the fields it is given") {
+	namespace field = catalist::siteField;
+	auto taxi = oddTaxi();
+	CHECK(catalist::anilist::saveRequest(taxi, {field::kProgress, false}) ==
+	      R"({"query":"mutation($m:Int,$p:Int){SaveMediaListEntry(mediaId:$m,progress:$p){id}}",)"
+	      R"("variables":{"m":128547,"p":5}})");
+	auto hidden = catalist::anilist::saveRequest(taxi, {field::kScore | field::kHidden, true});
+	CHECK(hidden.find(R"("variables":{"m":128547,"c":80,"h":true})") != std::string::npos);
+	CHECK(catalist::json::parse(hidden).has_value());
+	CHECK(catalist::mal::listStatusForm(taxi, field::kStatus | field::kProgress) ==
+	      "status=watching&is_rewatching=false&num_watched_episodes=5");
+	CHECK(catalist::kitsu::libraryAttributes(taxi, {field::kScore | field::kHidden, true}) ==
+	      R"({"ratingTwenty":16,"private":true})");
 }

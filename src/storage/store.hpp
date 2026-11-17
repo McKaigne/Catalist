@@ -33,6 +33,8 @@ public:
 	// Runs a statement that returns no rows, then readies it for new
 	// parameters, so one statement can write many rows.
 	[[nodiscard]] bool run();
+	// Readies a query for new parameters, to be asked again.
+	void reset();
 
 	// False once preparing, binding or stepping has failed.
 	[[nodiscard]] bool ok() const { return not failed_; }

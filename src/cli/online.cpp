@@ -180,6 +180,7 @@ int runSearch(const command& self, const args::parsed& line, cliContext& ctx) {
 		return 2;
 	if (not load(ctx))
 		return 1;
+	sendWaiting(ctx);
 	auto site = trackerFor(ctx, siteOf(line, ctx));
 	auto found = site->search(*type, *query);
 	if (not found.has_value())
@@ -281,6 +282,7 @@ int runRefresh(const command& self, const args::parsed& line, cliContext& ctx) {
 
 	// The site is asked before the catalogue is taken for writing, as by
 	// add: nothing waits on the network.
+	sendWaiting(ctx);
 	auto site = trackerFor(ctx, siteOf(line, ctx));
 	std::string name = providerName(site->site());
 	if (not quiet and wanted.titles.size() > 1 and site->site() != provider::kAniList)

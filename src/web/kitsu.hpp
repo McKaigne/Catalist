@@ -40,7 +40,7 @@ inline const std::string kTokenUrl = "https://kitsu.app/api/oauth/token";
 // library-entries; nothing when the reply has none.
 [[nodiscard]] web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body);
 // The attributes of a library entry, as Catalist's lists have the title.
-[[nodiscard]] std::string libraryAttributes(const entry& title);
+[[nodiscard]] std::string libraryAttributes(const entry& title, const web::sending& what = {});
 
 class tracker : public web::iTracker {
 public:
@@ -60,7 +60,8 @@ public:
 	                                                   const std::string& user) override;
 	[[nodiscard]] web::answer<std::optional<web::siteEntry>> entryOf(
 	    const entry& title, const account& login) override;
-	[[nodiscard]] web::answer<void> push(const entry& title, const account& login) override;
+	[[nodiscard]] web::answer<void> push(const entry& title, const account& login,
+	                                     const web::sending& what) override;
 	[[nodiscard]] web::answer<void> remove(mediaType type, int siteId,
 	                                       const account& login) override;
 

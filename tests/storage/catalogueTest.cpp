@@ -768,4 +768,18 @@ TEST_CASE_FIXTURE(tempDirFixture, "catalogue keeps what the sites are to be told
 	catalogue again(tempDir() / "data");
 	REQUIRE(again.loadAll().value());
 	CHECK(again.outbox().size() == 2);
+
+	// A try that failed waits; a new change to the title merges its fields
+	// and makes it due at once.
+	namespace field = catalist::siteField;
+	pending score{.site = provider::kKitsu, .type = mediaType::kAnime, .id = 1,
+	              .fields = field::kScore};
+	REQUIRE(again.deferred(score, 2, 5000));
+	CHECK(again.outbox()[0].attempts == 2);
+	CHECK(again.outbox()[0].nextTry == 5000);
+	REQUIRE(again.queue({score}));
+	auto merged = again.outbox()[0];
+	CHECK(merged.fields == field::kAll);
+	CHECK(merged.attempts == 0);
+	CHECK(merged.nextTry == 0);
 }

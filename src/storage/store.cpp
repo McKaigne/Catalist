@@ -57,6 +57,12 @@ bool statement::run() {
 	return not failed_;
 }
 
+void statement::reset() {
+	sqlite3_reset(handle_);
+	sqlite3_clear_bindings(handle_);
+	nextParameter_ = 1;
+}
+
 long long statement::intAt(int column) const {
 	return sqlite3_column_int64(handle_, column);
 }

@@ -182,12 +182,18 @@ extern const args::option kFrom;
 struct sendReport {
 	size_t told = 0;
 	size_t left = 0;
+	// Refused too often to try again (see sendTo).
+	size_t gaveUp = 0;
 };
 // Tells the logged-in sites what waits in the outbox, oldest first: all of
-// it with `everything`, else as long as it is a few. The lists are read.
+// it with `everything`, else what is due (not tried a short while ago) as
+// long as it is a few. The lists are read.
 sendReport sendOutbox(cliContext& ctx, bool everything);
 // "note: 3 changes wait to be sent", when some do.
 void noteWaiting(cliContext& ctx, const sendReport& report);
+// Sends what waits and is due, when anyone is logged in: the commands that
+// go online anyway send it on the way, as Mihon retries once it is online.
+void sendWaiting(cliContext& ctx);
 // After a save: queues each changed title for every logged-in site where
 // it is linked, and sends what waits.
 void tellSites(cliContext& ctx, const std::vector<journal::change>& changes);

@@ -23,6 +23,16 @@ std::string statusToString(watchStatus status, mediaType type) {
 	return "Unknown";
 }
 
+unsigned mergeFields(unsigned first, unsigned second) {
+	auto upOnly = [](unsigned fields) {
+		return not(fields & siteField::kProgress) or (fields & siteField::kRaiseOnly);
+	};
+	unsigned merged = (first | second) & ~siteField::kRaiseOnly;
+	if ((merged & siteField::kProgress) and upOnly(first) and upOnly(second))
+		merged |= siteField::kRaiseOnly;
+	return merged;
+}
+
 std::string statusKey(watchStatus status) {
 	switch (status) {
 		case watchStatus::kWatching:

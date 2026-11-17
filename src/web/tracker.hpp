@@ -130,6 +130,13 @@ struct siteEntry {
 // 8.5. For showing it; what is stored and sent stays the site's own.
 [[nodiscard]] double outOfTen(provider site, int score);
 
+// What a push sends: the fields (siteField bits) and, with
+// siteField::kHidden, whether the entry is hidden from others.
+struct sending {
+	unsigned fields = siteField::kAll;
+	bool hidden = false;
+};
+
 // What a site knows about one title.
 struct details {
 	std::string name;
@@ -191,11 +198,13 @@ public:
 
 	// ---- Telling the site, one way ----
 
-	// Puts the title on the account's list as it is in Catalist's: status,
-	// score, progress, volumes, rewatches and dates. Catalist's lists are the
-	// truth; the site's entry is overwritten. Fails when the title has no id
-	// on this site, when the site cannot be reached, or says no.
-	[[nodiscard]] virtual answer<void> push(const entry& title, const account& login) = 0;
+	// Puts the fields `what` names of the title on the account's list as
+	// they are in Catalist's (status, score, progress, volumes, rewatches,
+	// dates, hidden); the site keeps the rest of its entry. Catalist's lists
+	// are the truth for what is sent. Fails when the title has no id on this
+	// site, when the site cannot be reached, or says no.
+	[[nodiscard]] virtual answer<void> push(const entry& title, const account& login,
+	                                        const sending& what) = 0;
 	// Takes the title with this id on the site off the account's list; a
 	// title that is not on it is gone already.
 	[[nodiscard]] virtual answer<void> remove(mediaType type, int siteId, const account& login) = 0;

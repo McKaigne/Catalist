@@ -17,17 +17,40 @@ namespace {
 // network: an import, say.
 constexpr size_t kSendAtOnce = 10;
 
+// A title a site has said no to this many times is given up on, as Mihon's
+// delayed updates are after three tries.
+constexpr int kMostAttempts = 3;
+
 const std::vector<provider> kSites = {provider::kAniList, provider::kMyAnimeList, provider::kKitsu};
 
-// The fields the sites keep of a title: a change to any other (a title, a
-// total) is not theirs to hear of.
-bool concernsSites(const journal::change& made) {
-	static const std::vector<std::string> kKept = {"added",   "status",    "score",   "progress",
-	                                               "volumes", "rewatched", "started", "finished"};
-	auto fields = journal::changedFields(made);
-	return std::any_of(fields.begin(), fields.end(), [](const journal::fieldChange& field) {
-		return std::find(kKept.begin(), kKept.end(), field.field) != kKept.end();
-	});
+// How long a title that could not be sent waits before it is tried again:
+// five minutes after the first failure, then twice as long each time, up to
+// six hours.
+long long backoff(int attempts) {
+	long long wait = 300;
+	for (int i = 1; i < attempts and wait < 6 * 3600; ++i)
+		wait *= 2;
+	return std::min<long long>(wait, 6 * 3600);
+}
+
+// The fields a change changed that the sites keep (siteField bits): none
+// for a change only to the title or the total. Progress that went up is
+// only to go up on the sites too.
+unsigned fieldsOf(const journal::change& made) {
+	static const std::vector<std::pair<std::string, unsigned>> kKept = {
+	    {"added", siteField::kAll},         {"status", siteField::kStatus},
+	    {"score", siteField::kScore},       {"progress", siteField::kProgress},
+	    {"volumes", siteField::kVolumes},   {"rewatched", siteField::kRewatched},
+	    {"started", siteField::kStarted},   {"finished", siteField::kFinished}};
+	unsigned fields = 0;
+	for (const auto& field : journal::changedFields(made))
+		for (const auto& [name, bits] : kKept)
+			if (field.field == name)
+				fields |= bits;
+	bool up = made.before and made.after and made.after->progress > made.before->progress;
+	if ((fields & siteField::kProgress) and up)
+		fields |= siteField::kRaiseOnly;
+	return fields;
 }
 
 std::string refOf(const pending& waiting) {
@@ -39,10 +62,33 @@ std::string refOf(const pending& waiting) {
 struct siteReport {
 	size_t told = 0;
 	size_t left = 0;
+	size_t gaveUp = 0;
 	std::optional<account> renewed;
 };
 
-// Tells one site what waits for it, in order, until one cannot be told.
+// What to send of a title that waits. Only some fields: the site's entry is
+// read first, as Mihon refreshes before it updates, so that a site without
+// the title gets all of it, and a site further along keeps its progress when
+// the progress was only to go up. Fails as the read does.
+web::answer<web::sending> whatToSend(web::iTracker& site, const entry& now, const pending& each,
+                                     const account& login, cliContext& ctx) {
+	web::sending what{each.fields & ~siteField::kRaiseOnly, false};
+	if ((each.fields & siteField::kAll) == siteField::kAll)
+		return what;
+	auto theirs = site.entryOf(now, login);
+	if (not theirs)
+		return std::unexpected(theirs.error());
+	ctx.net.pause();
+	if (not theirs->has_value())
+		what.fields |= siteField::kAll;
+	else if ((each.fields & siteField::kRaiseOnly) and (*theirs)->progress >= now.progress)
+		what.fields &= ~siteField::kProgress;
+	return what;
+}
+
+// Tells one site what waits for it, in order. A title the site says no to
+// waits, or after kMostAttempts tries is given up; when the site cannot be
+// reached, or does not take the login, the rest wait too.
 siteReport sendTo(cliContext& ctx, provider site, const std::vector<pending>& mine,
                   const std::optional<account>& login) {
 	siteReport report;
@@ -69,7 +115,13 @@ siteReport sendTo(cliContext& ctx, provider site, const std::vector<pending>& mi
 		if (each.removed) {
 			sent = tracker->remove(each.type, each.siteId, *fresh);
 		} else if (auto now = ctx.db.getById(each.type, each.id)) {
-			sent = tracker->push(*now, *fresh);
+			auto what = whatToSend(*tracker, *now, each, *fresh, ctx);
+			if (what and what->fields == 0) {
+				// The site has all of it already.
+				(void)ctx.db.sent(each);
+				continue;
+			}
+			sent = what ? tracker->push(*now, *fresh, *what) : std::unexpected(what.error());
 		} else {
 			// Removed from the lists since, and not from the site.
 			(void)ctx.db.sent(each);
@@ -80,15 +132,23 @@ siteReport sendTo(cliContext& ctx, provider site, const std::vector<pending>& mi
 			report.told += sent ? 1 : 0;
 			continue;
 		}
+		int attempts = each.attempts + 1;
+		bool refused = sent.error().why == web::failure::kind::kRefused;
+		if (refused and attempts >= kMostAttempts) {
+			ctx.err << std::format("note: gave up telling {} of {} after {} tries: {}.\n",
+			                       providerName(site), refOf(each), attempts, sent.error().message);
+			(void)ctx.db.sent(each);
+			++report.gaveUp;
+			continue;
+		}
 		ctx.err << std::format("note: could not tell {} of {}: {}.\n", providerName(site),
 		                       refOf(each), sent.error().message);
+		(void)ctx.db.deferred(each, attempts, ctx.net.now() + backoff(attempts));
 		// The site said no to this title only: it waits, and the rest go on.
-		if (sent.error().why == web::failure::kind::kRefused) {
+		if (refused) {
 			++report.left;
 			continue;
 		}
-		// The site is not there, or no longer takes the login: the rest wait
-		// too.
 		report.left += mine.size() - i;
 		break;
 	}
@@ -102,7 +162,17 @@ sendReport sendOutbox(cliContext& ctx, bool everything) {
 	auto waiting = ctx.db.outbox();
 	if (waiting.empty())
 		return report;
-	if (ctx.offline or (not everything and waiting.size() > kSendAtOnce)) {
+	// Not yet due: tried a while ago. sync tries everything.
+	std::vector<pending> due;
+	long long now = ctx.net.now();
+	std::copy_if(waiting.begin(), waiting.end(), std::back_inserter(due),
+	             [everything, now](const pending& each) {
+		             return everything or each.nextTry <= now;
+	             });
+	report.left = waiting.size() - due.size();
+	if (due.empty())
+		return report;
+	if (ctx.offline or (not everything and due.size() > kSendAtOnce)) {
 		report.left = waiting.size();
 		return report;
 	}
@@ -110,13 +180,14 @@ sendReport sendOutbox(cliContext& ctx, bool everything) {
 	bool renewed = false;
 	for (provider site : kSites) {
 		std::vector<pending> mine;
-		std::copy_if(waiting.begin(), waiting.end(), std::back_inserter(mine),
+		std::copy_if(due.begin(), due.end(), std::back_inserter(mine),
 		             [site](const pending& each) { return each.site == site; });
 		if (mine.empty())
 			continue;
 		auto sent = sendTo(ctx, site, mine, accounts::on(logins, site));
 		report.told += sent.told;
 		report.left += sent.left;
+		report.gaveUp += sent.gaveUp;
 		if (sent.renewed) {
 			logins = accounts::with(logins, *sent.renewed);
 			renewed = true;
@@ -137,17 +208,27 @@ void noteWaiting(cliContext& ctx, const sendReport& report) {
 	    report.left == 1 ? "it" : "them");
 }
 
+void sendWaiting(cliContext& ctx) {
+	if (ctx.offline or readAccounts(ctx).empty() or ctx.db.outbox().empty())
+		return;
+	noteWaiting(ctx, sendOutbox(ctx, false));
+}
+
 void tellSites(cliContext& ctx, const std::vector<journal::change>& changes) {
 	auto logins = readAccounts(ctx);
 	if (logins.empty())
 		return;
 	std::vector<pending> more;
 	for (const auto& made : changes) {
-		if (not made.after or not concernsSites(made))
+		unsigned fields = fieldsOf(made);
+		if (not made.after or fields == 0)
 			continue;
 		for (const auto& login : logins)
 			if (idOn(*made.after, login.site) > 0)
-				more.push_back({login.site, made.type, made.id});
+				more.push_back({.site = login.site,
+				                .type = made.type,
+				                .id = made.id,
+				                .fields = fields});
 	}
 	if (more.empty())
 		return;
@@ -175,13 +256,79 @@ void tellSitesGone(cliContext& ctx, const std::vector<entry>& gone) {
 
 namespace {
 
+// "status, progress (up only)", "everything" or "remove": what a title that
+// waits is to tell its site.
+std::string changeOf(const pending& waiting) {
+	if (waiting.removed)
+		return "remove";
+	if ((waiting.fields & siteField::kAll) == siteField::kAll)
+		return "everything";
+	static const std::vector<std::pair<unsigned, std::string>> kNames = {
+	    {siteField::kStatus, "status"},     {siteField::kScore, "score"},
+	    {siteField::kProgress, "progress"}, {siteField::kVolumes, "volumes"},
+	    {siteField::kRewatched, "rewatched"}, {siteField::kStarted, "started"},
+	    {siteField::kFinished, "finished"}, {siteField::kHidden, "hidden"}};
+	std::string named;
+	for (const auto& [bit, name] : kNames) {
+		if (not(waiting.fields & bit))
+			continue;
+		named += (named.empty() ? "" : ", ") + name;
+		if (bit == siteField::kProgress and (waiting.fields & siteField::kRaiseOnly))
+			named += " (up only)";
+	}
+	return named;
+}
+
+// "now", or "in 10 min" while a title that failed waits to be tried again.
+std::string dueText(long long nextTry, long long now) {
+	if (nextTry <= now)
+		return "now";
+	long long minutes = (nextTry - now + 59) / 60;
+	return minutes < 120 ? std::format("in {} min", minutes)
+	                     : std::format("in {} h", (minutes + 59) / 60);
+}
+
+// sync --list: what waits, for which site, what it is to tell, and when.
+int listWaiting(const args::parsed& line, cliContext& ctx) {
+	auto waiting = ctx.db.outbox();
+	long long now = ctx.net.now();
+	if (not line.has("json") and ctx.columns > 0) {
+		if (waiting.empty()) {
+			ctx.err << "Nothing waits to be sent.\n";
+			return 0;
+		}
+		std::vector<std::vector<output::styled>> rows;
+		for (const auto& each : waiting)
+			rows.push_back({{refOf(each), output::kCyan},
+			                {providerName(each.site)},
+			                {changeOf(each), nullptr},
+			                {std::to_string(each.attempts)},
+			                {dueText(each.nextTry, now)}});
+		ctx.out << output::table({{"REF"}, {"SITE"}, {"CHANGE", false, true}, {"TRIES", true},
+		                          {"NEXT"}},
+		                         rows, ctx.columns, ctx.color);
+		return 0;
+	}
+	std::vector<std::vector<output::cell>> rows;
+	for (const auto& each : waiting)
+		rows.push_back({output::text(refOf(each)), output::text(providerKey(each.site)),
+		                output::text(changeOf(each)), output::number(each.attempts),
+		                output::number(std::max(0LL, each.nextTry - now))});
+	writeRows(ctx, {"ref", "site", "change", "tries", "due_in"}, rows, line.has("json"),
+	          line.has("header"));
+	return 0;
+}
+
 int runSync(const command& self, const args::parsed& line, cliContext& ctx) {
 	if (not line.operands.empty())
 		return usageError(ctx, self, "sync takes no operands");
-	if (line.has("all") and line.has("forget"))
-		return usageError(ctx, self, "give --all or --forget, not both");
+	int modes = (line.has("all") ? 1 : 0) + (line.has("forget") ? 1 : 0) + (line.has("list") ? 1 : 0);
+	if (modes > 1)
+		return usageError(ctx, self, "give one of --all, --forget and --list");
 	if (not load(ctx))
 		return 1;
+	if (line.has("list"))
+		return listWaiting(line, ctx);
 	auto waiting = ctx.db.outbox();
 	if (line.has("forget")) {
 		for (const auto& each : waiting)
@@ -215,7 +362,7 @@ int runSync(const command& self, const args::parsed& line, cliContext& ctx) {
 		return fail(ctx, "--offline: nothing is sent");
 	auto report = sendOutbox(ctx, true);
 	if (not line.has("q")) {
-		if (report.told == 0 and report.left == 0)
+		if (report.told == 0 and report.left == 0 and report.gaveUp == 0)
 			ctx.err << "Nothing to send.\n";
 		else if (report.told > 0)
 			ctx.err << std::format(
@@ -226,7 +373,7 @@ int runSync(const command& self, const args::parsed& line, cliContext& ctx) {
 		return fail(ctx, std::format("{} still to be sent; try again later",
 		                             report.left == 1 ? "1 change"
 		                                              : std::format("{} changes", report.left)));
-	return 0;
+	return report.gaveUp > 0 ? 1 : 0;
 }
 
 // The REF and the site of link and unlink, the title resolved. Nothing,
@@ -368,15 +515,24 @@ std::vector<command> syncCommands() {
 	return {
 	    {.name = "sync",
 	     .summary = "Tell the sites what they have not heard of yet",
-	     .details = "Each change to a title (its status, score, progress, volumes,\n"
-	                "rewatches or dates) is sent at once to every site you are logged in to\n"
-	                "where the title is linked, as Mihon tells its trackers: your lists are\n"
-	                "the truth, and the site's entry is overwritten. What could not be sent\n"
-	                "(offline, a site down, a login run out, or more than ten changes at\n"
-	                "once) waits, and sync sends it. With --all every linked title is sent,\n"
-	                "as after a first login.\n",
+	     .details =
+	         "Each change to a title (its status, score, progress, volumes, rewatches\n"
+	         "or dates) is sent at once to every site you are logged in to where the\n"
+	         "title is linked, as Mihon tells its trackers. Only the fields that changed\n"
+	         "are sent, so what you changed on the site itself stays, and progress that\n"
+	         "went up does not lower a site that is further along. What could not be\n"
+	         "sent (offline, a site down, a login run out, more than ten changes at\n"
+	         "once) waits: the next command that goes online sends it once it is due,\n"
+	         "five minutes after a failure and twice as long after each one more, and\n"
+	         "sync sends it at once. A change a site refuses three times is given up.\n"
+	         "With --all every linked title is sent whole, as after a first login.\n\n"
+	         "--list prints what waits; into a pipe one line each: ref, site, change,\n"
+	         "tries and due_in (seconds).\n",
 	     .options = {{0, "all", "", "send every linked title, not only what waits"},
 	                 {0, "forget", "", "drop what waits, telling the sites nothing"},
+	                 {0, "list", "", "print what waits, and when it is tried again"},
+	                 {0, "json", "", "with --list: one JSON object a line"},
+	                 {0, "header", "", "with --list: name the columns on the first line"},
 	                 kQuiet},
 	     .run = runSync},
 	    {.name = "link",

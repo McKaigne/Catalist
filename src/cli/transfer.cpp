@@ -143,8 +143,9 @@ int importUser(const command& self, const args::parsed& line, cliContext& ctx) {
 		return usageError(ctx, self, "give FILEs or --user, not both");
 	if (not fromKnown(self, line, ctx))
 		return 2;
-	if (asksProvider(line) and not load(ctx))
+	if (not load(ctx))
 		return 1;
+	sendWaiting(ctx);
 	auto site = trackerFor(ctx, siteOf(line, ctx));
 	std::string user = line.get("user");
 	auto only = onlyType(line);

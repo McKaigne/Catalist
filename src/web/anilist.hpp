@@ -42,7 +42,7 @@ inline constexpr size_t kBatchSize = 50;
 
 // The mutation that sets a title on the account's list, and the query for
 // the list entry of a title (to remove it).
-[[nodiscard]] std::string saveRequest(const entry& title);
+[[nodiscard]] std::string saveRequest(const entry& title, const web::sending& what = {});
 [[nodiscard]] std::string listEntryRequest(int mediaId, const std::string& userId);
 // The query for the user's own entry of a title, and the entry of its
 // reply (nothing when the title is not on the list).
@@ -75,7 +75,8 @@ public:
 	                                                   const std::string& user) override;
 	[[nodiscard]] web::answer<std::optional<web::siteEntry>> entryOf(
 	    const entry& title, const account& login) override;
-	[[nodiscard]] web::answer<void> push(const entry& title, const account& login) override;
+	[[nodiscard]] web::answer<void> push(const entry& title, const account& login,
+	                                     const web::sending& what) override;
 	[[nodiscard]] web::answer<void> remove(mediaType type, int siteId,
 	                                       const account& login) override;
 

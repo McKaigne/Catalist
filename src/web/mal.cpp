@@ -186,26 +186,28 @@ web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body, m
 	return found;
 }
 
-std::string listStatusForm(const entry& title) {
+std::string listStatusForm(const entry& title, unsigned fields) {
 	bool anime = title.type == mediaType::kAnime;
-	std::vector<std::pair<std::string, std::string>> fields = {
-	    {"status", listStatus(title.status, title.type)}, {"score", std::to_string(title.score)}};
+	std::vector<std::pair<std::string, std::string>> form;
+	auto add = [&form, fields](unsigned field, const std::string& name, const std::string& value) {
+		if (fields & field)
+			form.emplace_back(name, value);
+	};
+	add(siteField::kStatus, "status", listStatus(title.status, title.type));
+	add(siteField::kScore, "score", std::to_string(title.score));
 	std::string again = title.status == watchStatus::kRewatching ? "true" : "false";
-	if (anime) {
-		fields.emplace_back("is_rewatching", again);
-		fields.emplace_back("num_watched_episodes", std::to_string(title.progress));
-		fields.emplace_back("num_times_rewatched", std::to_string(title.rewatched));
-	} else {
-		fields.emplace_back("is_rereading", again);
-		fields.emplace_back("num_chapters_read", std::to_string(title.progress));
-		fields.emplace_back("num_volumes_read", std::to_string(title.volumes));
-		fields.emplace_back("num_times_reread", std::to_string(title.rewatched));
-	}
+	add(siteField::kStatus, anime ? "is_rewatching" : "is_rereading", again);
+	add(siteField::kProgress, anime ? "num_watched_episodes" : "num_chapters_read",
+	    std::to_string(title.progress));
+	if (not anime)
+		add(siteField::kVolumes, "num_volumes_read", std::to_string(title.volumes));
+	add(siteField::kRewatched, anime ? "num_times_rewatched" : "num_times_reread",
+	    std::to_string(title.rewatched));
 	if (title.startDate)
-		fields.emplace_back("start_date", title.startDate->toString());
+		add(siteField::kStarted, "start_date", title.startDate->toString());
 	if (title.finishDate)
-		fields.emplace_back("finish_date", title.finishDate->toString());
-	return web::formEncoded(fields);
+		add(siteField::kFinished, "finish_date", title.finishDate->toString());
+	return web::formEncoded(form);
 }
 
 web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
@@ -243,14 +245,16 @@ web::answer<std::optional<web::siteEntry>> tracker::entryOf(const entry& title,
 	return parseEntry(*body, title.type);
 }
 
-web::answer<void> tracker::push(const entry& title, const account& login) {
+// MyAnimeList has no hidden entries: kHidden is not sent.
+web::answer<void> tracker::push(const entry& title, const account& login,
+                                const web::sending& what) {
 	if (title.malId <= 0)
 		return web::notLinked(provider::kMyAnimeList);
 	auto body = web::checked(net_.fetch(
 	    {"PATCH",
 	     std::format("{}/{}/{}/my_list_status", kApiUrl, typeKey(title.type), title.malId),
 	     {"Content-Type: application/x-www-form-urlencoded", web::bearer(login.token)},
-	     listStatusForm(title)}), provider::kMyAnimeList);
+	     listStatusForm(title, what.fields)}), provider::kMyAnimeList);
 	if (not body)
 		return std::unexpected(body.error());
 	return {};

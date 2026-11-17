@@ -138,11 +138,35 @@ bool readSiteIds(const store::database& db, std::vector<entry>& anime, std::vect
 
 // Titles the sites are still to be told of: kept beside the lists, so a
 // change made offline is sent the next time a site can be reached.
+// `fields` (what to send), `attempts` and `next_try` came later: an outbox
+// made before them gets them added (addOutboxColumns).
 const char* kOutboxTable =
     "CREATE TABLE IF NOT EXISTS outbox ("
     " seq INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT NOT NULL, type TEXT NOT NULL,"
     " id INTEGER NOT NULL, removed INTEGER NOT NULL, site_id INTEGER NOT NULL,"
-    " UNIQUE (site, type, id, removed))";
+    " fields INTEGER NOT NULL DEFAULT 127, attempts INTEGER NOT NULL DEFAULT 0,"
+    " next_try INTEGER NOT NULL DEFAULT 0, UNIQUE (site, type, id, removed))";
+static_assert(siteField::kAll == 127, "the outbox's default fields are every field");
+
+bool hasColumn(const store::database& db, const std::string& table, const std::string& column) {
+	auto found = db.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?");
+	return found.bind(table).bind(column).step();
+}
+
+// The outbox as this program reads it, made or brought up to date.
+bool addOutboxColumns(store::database& db) {
+	if (not db.run(kOutboxTable))
+		return false;
+	for (const char* column : {"fields INTEGER NOT NULL DEFAULT 127",
+	                           "attempts INTEGER NOT NULL DEFAULT 0",
+	                           "next_try INTEGER NOT NULL DEFAULT 0"}) {
+		std::string name(column, std::string_view(column).find(' '));
+		if (not hasColumn(db, "outbox", name) and
+		    not db.run(std::format("ALTER TABLE outbox ADD COLUMN {}", column)))
+			return false;
+	}
+	return true;
+}
 
 const entry* findById(const std::vector<entry>& list, int id) {
 	auto found =
@@ -279,33 +303,70 @@ void catalogue::setProvider(provider site) {
 
 std::vector<pending> catalogue::outbox() {
 	std::vector<pending> waiting;
+	// No lists yet: nothing waits, and nothing is made to say so.
+	std::error_code ignored;
+	if (not db_.isOpen() and not std::filesystem::exists(getStorePath(), ignored))
+		return waiting;
 	if (not openStore().has_value() or not hasTable(db_, "outbox"))
 		return waiting;
-	auto rows = db_.prepare("SELECT site, type, id, removed, site_id FROM outbox ORDER BY seq");
+	// An outbox no write of this version has brought up to date yet.
+	bool current = hasColumn(db_, "outbox", "next_try");
+	auto rows = db_.prepare(
+	    current ? "SELECT site, type, id, removed, site_id, fields, attempts, next_try FROM outbox"
+	              " ORDER BY seq"
+	            : "SELECT site, type, id, removed, site_id, 127, 0, 0 FROM outbox ORDER BY seq");
 	while (rows.step()) {
 		auto site = parseProvider(rows.textAt(0));
 		if (not site)
 			continue;
 		waiting.push_back({*site, rows.textAt(1) == "manga" ? mediaType::kManga : mediaType::kAnime,
 		                   static_cast<int>(rows.intAt(2)), rows.intAt(3) != 0,
-		                   static_cast<int>(rows.intAt(4))});
+		                   static_cast<int>(rows.intAt(4)), static_cast<unsigned>(rows.intAt(5)),
+		                   static_cast<int>(rows.intAt(6)), rows.intAt(7)});
 	}
 	return waiting;
 }
 
 bool catalogue::queue(const std::vector<pending>& more) {
 	return commit([this, &more] {
-		if (not db_.run(kOutboxTable))
+		if (not addOutboxColumns(db_))
 			return false;
+		auto known = db_.prepare(
+		    "SELECT fields FROM outbox WHERE site = ? AND type = ? AND id = ? AND removed = ?");
+		auto update = db_.prepare(
+		    "UPDATE outbox SET fields = ?, site_id = ?, attempts = 0, next_try = 0"
+		    " WHERE site = ? AND type = ? AND id = ? AND removed = ?");
 		auto insert = db_.prepare(
-		    "INSERT OR IGNORE INTO outbox (site, type, id, removed, site_id)"
-		    " VALUES (?, ?, ?, ?, ?)");
+		    "INSERT INTO outbox (site, type, id, removed, site_id, fields) VALUES (?, ?, ?, ?, ?, ?)");
 		for (const auto& each : more) {
-			insert.bind(providerKey(each.site)).bind(typeKey(each.type)).bind(each.id);
-			if (not insert.bind(each.removed ? 1 : 0).bind(each.siteId).run())
+			std::string site = providerKey(each.site);
+			std::string type = typeKey(each.type);
+			int removed = each.removed ? 1 : 0;
+			known.bind(site).bind(type).bind(each.id).bind(removed);
+			bool waiting = known.step();
+			unsigned fields = waiting ? mergeFields(static_cast<unsigned>(known.intAt(0)), each.fields)
+			                          : each.fields;
+			known.reset();
+			bool done = waiting ? update.bind(static_cast<long long>(fields)).bind(each.siteId)
+			                          .bind(site).bind(type).bind(each.id).bind(removed).run()
+			                    : insert.bind(site).bind(type).bind(each.id).bind(removed)
+			                          .bind(each.siteId).bind(static_cast<long long>(fields)).run();
+			if (not done)
 				return false;
 		}
 		return true;
+	});
+}
+
+bool catalogue::deferred(const pending& waiting, int attempts, long long nextTry) {
+	return commit([this, &waiting, attempts, nextTry] {
+		if (not addOutboxColumns(db_))
+			return false;
+		auto later = db_.prepare(
+		    "UPDATE outbox SET attempts = ?, next_try = ?"
+		    " WHERE site = ? AND type = ? AND id = ? AND removed = ?");
+		later.bind(attempts).bind(nextTry).bind(providerKey(waiting.site)).bind(typeKey(waiting.type));
+		return later.bind(waiting.id).bind(waiting.removed ? 1 : 0).run();
 	});
 }
 

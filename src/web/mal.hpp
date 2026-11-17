@@ -34,7 +34,7 @@ inline const std::string kTokenUrl = "https://myanimelist.net/v1/oauth2/token";
 
 // The form that sets a title on the account's list. A date the title has
 // not is left out: MyAnimeList keeps the one it had.
-[[nodiscard]] std::string listStatusForm(const entry& title);
+[[nodiscard]] std::string listStatusForm(const entry& title, unsigned fields = siteField::kAll);
 
 // The user's own entry of a title: its URL, and the entry of the reply
 // (nothing when the title is not on the list).
@@ -60,7 +60,8 @@ public:
 	                                                   const std::string& user) override;
 	[[nodiscard]] web::answer<std::optional<web::siteEntry>> entryOf(
 	    const entry& title, const account& login) override;
-	[[nodiscard]] web::answer<void> push(const entry& title, const account& login) override;
+	[[nodiscard]] web::answer<void> push(const entry& title, const account& login,
+	                                     const web::sending& what) override;
 	[[nodiscard]] web::answer<void> remove(mediaType type, int siteId,
 	                                       const account& login) override;
 

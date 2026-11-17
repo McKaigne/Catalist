@@ -47,6 +47,28 @@ struct entry {
 	bool operator==(const entry&) const = default;
 };
 
+// The fields of a title the sites keep, as bits: what a push sends.
+namespace siteField {
+inline constexpr unsigned kStatus = 1u << 0;
+inline constexpr unsigned kScore = 1u << 1;
+inline constexpr unsigned kProgress = 1u << 2;
+inline constexpr unsigned kVolumes = 1u << 3;
+inline constexpr unsigned kRewatched = 1u << 4;
+inline constexpr unsigned kStarted = 1u << 5;
+inline constexpr unsigned kFinished = 1u << 6;
+// Hidden from others on the site, where the person has said so.
+inline constexpr unsigned kHidden = 1u << 7;
+// Every field of the entry itself, as a new entry or a full send has them.
+inline constexpr unsigned kAll = (1u << 7) - 1;
+// With kProgress: the progress is only to go up, so a site that has more
+// keeps its own (Mihon's guard on the progress after reading).
+inline constexpr unsigned kRaiseOnly = 1u << 8;
+}  // namespace siteField
+
+// Two sets of fields to send, as one: the fields of both, and the progress
+// only up when both said so (or one had no progress).
+[[nodiscard]] unsigned mergeFields(unsigned first, unsigned second);
+
 std::string statusToString(watchStatus status, mediaType type = mediaType::kAnime);
 // The one word a status is stored and printed for scripts as: watching,
 // completed, on-hold, dropped, planned or rewatching. parseStatus reads it

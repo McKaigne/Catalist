@@ -63,6 +63,9 @@ std::string libraryStatus(watchStatus status) {
 			return "dropped";
 		case watchStatus::kPlanToWatch:
 			return "planned";
+		// With reconsuming (see libraryAttributes).
+		case watchStatus::kRewatching:
+			return "current";
 	}
 	return "planned";
 }
@@ -167,7 +170,9 @@ web::answer<std::vector<entry>> parseLibrary(const std::string& body, mediaType 
 	std::vector<entry> found;
 	for (const auto& item : data.items()) {
 		const json::value& attributes = item["attributes"];
-		auto status = statusOf(attributes["status"].asString().value_or(""));
+		bool again = attributes["reconsuming"].asBool().value_or(false);
+		auto status = again ? std::optional(watchStatus::kRewatching)
+		                    : statusOf(attributes["status"].asString().value_or(""));
 		auto mediaId = item["relationships"][kind]["data"]["id"].asString();
 		const json::value* media = nullptr;
 		for (const auto& each : included.items())
@@ -202,9 +207,11 @@ web::answer<std::vector<entry>> parseLibrary(const std::string& body, mediaType 
 
 std::string libraryAttributes(const entry& title) {
 	// ratingTwenty runs from 2 to 20; null is no rating.
-	return std::format(R"({{"status":"{}","progress":{},"reconsumeCount":{},"ratingTwenty":{},)"
-	                   R"("startedAt":{},"finishedAt":{}}})",
-	                   libraryStatus(title.status), title.progress, title.rewatched,
+	return std::format(R"({{"status":"{}","reconsuming":{},"progress":{},"reconsumeCount":{},)"
+	                   R"("ratingTwenty":{},"startedAt":{},"finishedAt":{}}})",
+	                   libraryStatus(title.status),
+	                   title.status == watchStatus::kRewatching ? "true" : "false", title.progress,
+	                   title.rewatched,
 	                   title.score > 0 ? std::to_string(title.score * 2) : "null",
 	                   timeOf(title.startDate), timeOf(title.finishDate));
 }

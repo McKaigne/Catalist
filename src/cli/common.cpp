@@ -152,6 +152,8 @@ const char* statusColor(watchStatus status) {
 			return "31";
 		case watchStatus::kPlanToWatch:
 			return "90";
+		case watchStatus::kRewatching:
+			return "36";
 	}
 	return nullptr;
 }
@@ -185,12 +187,14 @@ void writeRows(cliContext& ctx, const std::vector<std::string>& names,
 	}
 }
 
-extern const std::vector<watchStatus> kStatuses = {watchStatus::kWatching, watchStatus::kCompleted,
-                                                   watchStatus::kOnHold, watchStatus::kDropped,
-                                                   watchStatus::kPlanToWatch};
+// The order of the first five is that of the columns of `stats`; a status
+// that comes later goes at the end.
+extern const std::vector<watchStatus> kStatuses = {
+    watchStatus::kWatching, watchStatus::kCompleted,   watchStatus::kOnHold,
+    watchStatus::kDropped,  watchStatus::kPlanToWatch, watchStatus::kRewatching};
 
-// The words a status is written with: watching, completed, on-hold, dropped
-// and planned.
+// The words a status is written with: watching, completed, on-hold, dropped,
+// planned and rewatching.
 std::vector<std::string> statusWords() {
 	std::vector<std::string> words;
 	for (watchStatus status : kStatuses)
@@ -202,6 +206,8 @@ std::optional<watchStatus> statusNamed(const std::string& word) {
 	std::string wanted = utf8::lowercase(word);
 	if (wanted == "reading")
 		return watchStatus::kWatching;
+	if (wanted == "rereading")
+		return watchStatus::kRewatching;
 	for (watchStatus status : kStatuses)
 		if (statusKey(status) == wanted)
 			return status;

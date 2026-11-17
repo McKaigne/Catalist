@@ -38,6 +38,8 @@ std::string listStatus(watchStatus status) {
 			return "DROPPED";
 		case watchStatus::kPlanToWatch:
 			return "PLANNING";
+		case watchStatus::kRewatching:
+			return "REPEATING";
 	}
 	return "PLANNING";
 }
@@ -51,8 +53,10 @@ std::string fuzzyDate(const std::optional<isoDate>& day) {
 }
 
 std::optional<watchStatus> statusOf(const std::string& listStatus) {
-	if (listStatus == "CURRENT" or listStatus == "REPEATING")
+	if (listStatus == "CURRENT")
 		return watchStatus::kWatching;
+	if (listStatus == "REPEATING")
+		return watchStatus::kRewatching;
 	if (listStatus == "COMPLETED")
 		return watchStatus::kCompleted;
 	if (listStatus == "PAUSED")

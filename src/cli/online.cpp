@@ -228,7 +228,8 @@ std::string joinedWith(const std::vector<std::string>& words, const std::string&
 
 // What refresh checks when no REF is given: the titles being followed.
 bool followed(const entry& e) {
-	return e.status == watchStatus::kWatching or e.status == watchStatus::kOnHold;
+	return e.status == watchStatus::kWatching or e.status == watchStatus::kRewatching or
+	       e.status == watchStatus::kOnHold;
 }
 
 // The titles refresh is to check, read from the lists; nothing, with the
@@ -413,7 +414,7 @@ std::vector<command> onlineCommands() {
 	                 {'m', "", "", "add a manga"},
 	                 kFrom,
 	                 {0, "pick", "N", "take the Nth match without asking"},
-	                 {0, "status", "STATUS", "watching, completed, on-hold, dropped or planned",
+	                 {0, "status", "STATUS", "watching, completed, on-hold, dropped, planned or rewatching",
 	                  statusWords()},
 	                 {0, "score", "N", "give it a score as well, 0 to 10"},
 	                 {0, "progress", "N", "the episodes or chapters done already"},

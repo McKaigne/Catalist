@@ -154,16 +154,21 @@ int runShow(const command& self, const args::parsed& line, cliContext& ctx) {
 
 // The columns of a list's numbers: how many titles, how many in each
 // status, the mean of the scores given, the episodes or chapters done
-// (units), the volumes read, the rewatches, and the days all of it took.
-const std::vector<std::string> kStatsColumns = {"type",    "total",   "watching",  "completed",
-                                                "on_hold", "dropped", "planned",   "mean",
-                                                "units",   "volumes", "rewatched", "days"};
+// (units), the volumes read, the rewatches, the days all of it took, and
+// how many are being rewatched (a later column, so it comes last).
+const std::vector<std::string> kStatsColumns = {
+    "type",  "total", "watching", "completed", "on_hold",   "dropped", "planned",
+    "mean",  "units", "volumes",  "rewatched", "days",      "rewatching"};
 
 std::vector<output::cell> statsCells(const std::vector<entry>& list, mediaType type) {
 	std::vector<output::cell> cells = {output::text(typeKey(type)),
 	                                   output::number(static_cast<long long>(list.size()))};
+	auto counted = [&list](watchStatus status) {
+		return output::number(static_cast<long long>(countByStatus(list, status)));
+	};
 	for (watchStatus status : kStatuses)
-		cells.push_back(output::number(static_cast<long long>(countByStatus(list, status))));
+		if (status != watchStatus::kRewatching)
+			cells.push_back(counted(status));
 	double mean = averageScore(list);
 	cells.push_back(mean > 0.0
 	                    ? output::cell{std::format("{:.2f}", mean), output::jsonForm::kNumber}
@@ -172,6 +177,7 @@ std::vector<output::cell> statsCells(const std::vector<entry>& list, mediaType t
 	cells.push_back(output::number(totalVolumes(list)));
 	cells.push_back(output::number(totalRewatched(list)));
 	cells.push_back({std::format("{:.1f}", daysSpent(list)), output::jsonForm::kNumber});
+	cells.push_back(counted(watchStatus::kRewatching));
 	return cells;
 }
 
@@ -269,7 +275,8 @@ std::vector<command> listingCommands() {
 	     .options = {{'a', "", "", "list anime only"},
 	                 {'m', "", "", "list manga only"},
 	                 {'s', "", "STATUS",
-	                  "only watching, completed, on-hold, dropped, planned, or a,b", statusWords()},
+	                  "only watching, completed, on-hold, dropped, planned, rewatching, or a,b",
+	                  statusWords()},
 	                 {0, "sort", "KEY", "new, updated, score, progress, date, status or title",
 	                  sortWords()},
 	                 {'r', "", "", "reverse the order"},
@@ -300,7 +307,7 @@ std::vector<command> listingCommands() {
 	     .summary = "Show the numbers of your lists",
 	     .details = "Into a pipe each list is one line of fields with a tab between them:\n"
 	                "  type total watching completed on_hold dropped planned mean units\n"
-	                "  volumes rewatched days\n"
+	                "  volumes rewatched days rewatching\n"
 	                "mean is the mean of the scores you gave (0 when there is none), units\n"
 	                "the episodes or chapters done, and days an estimate of the time they\n"
 	                "took: 24 minutes an episode, 5 minutes a chapter.\n",

@@ -104,7 +104,7 @@ TEST_CASE("malXml maps each MyAnimeList status") {
 	CHECK(statusOf("Dropped") == watchStatus::kDropped);
 	CHECK(statusOf("Plan to Watch") == watchStatus::kPlanToWatch);
 	CHECK(statusOf("Plan to Read") == watchStatus::kPlanToWatch);
-	CHECK(statusOf("Rewatching?") == watchStatus::kWatching);
+	CHECK(statusOf("Rewatching?") == watchStatus::kRewatching);
 	CHECK(statusOf("nonsense") == watchStatus::kPlanToWatch);
 	CHECK(statusOf("") == watchStatus::kPlanToWatch);
 }
@@ -180,6 +180,7 @@ TEST_CASE("malXml writes one media type and leaves out titles without an id") {
 	      "\t\t<series_episodes>28</series_episodes>\n"
 	      "\t\t<my_watched_episodes>28</my_watched_episodes>\n"
 	      "\t\t<my_times_watched>1</my_times_watched>\n"
+	      "\t\t<my_rewatching>0</my_rewatching>\n"
 	      "\t\t<my_start_date>2023-09-29</my_start_date>\n"
 	      "\t\t<my_finish_date>2024-03-22</my_finish_date>\n"
 	      "\t\t<my_score>10</my_score>\n"
@@ -210,6 +211,7 @@ TEST_CASE("malXml reads back exactly what it wrote") {
 	        .status(watchStatus::kOnHold)
 	        .startDate("2020-01-02"),
 	    makeEntry().malId(9).title("Planned").status(watchStatus::kPlanToWatch),
+	    makeEntry().malId(3).title("Again").progress(4).status(watchStatus::kRewatching),
 	    makeEntry()
 	        .malId(2)
 	        .title("Berserk")
@@ -222,6 +224,11 @@ TEST_CASE("malXml reads back exactly what it wrote") {
 	        .score(10)
 	        .status(watchStatus::kDropped)
 	        .finishDate("2021-12-31"),
+	    makeEntry()
+	        .malId(4)
+	        .type(mediaType::kManga)
+	        .title("Read again")
+	        .status(watchStatus::kRewatching),
 	};
 
 	auto readBack = malXml::parse(malXml::write(entries, mediaType::kAnime).xml +

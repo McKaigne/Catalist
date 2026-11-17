@@ -279,6 +279,12 @@ std::optional<double> value::asNumber() const {
 	return std::nullopt;
 }
 
+std::optional<bool> value::asBool() const {
+	if (auto flag = std::get_if<bool>(&data_))
+		return *flag;
+	return std::nullopt;
+}
+
 std::optional<long long> value::asInteger() const {
 	auto number = asNumber();
 	if (not number or std::trunc(*number) != *number)

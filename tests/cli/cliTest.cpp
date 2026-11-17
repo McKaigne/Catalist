@@ -45,7 +45,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	CHECK(has(out, "\nOptions:\n  -a                   list anime only\n"));
 	CHECK(has(
 	    out,
-	    "  -s STATUS            only watching, completed, on-hold, dropped, planned, or a,b\n"));
+	    "  -s STATUS            only watching, completed, on-hold, dropped, planned, rewatching, or a,b\n"));
 	CHECK(
 	    has(out, "      --sort=KEY       new, updated, score, progress, date, status or title\n"));
 	CHECK(out.rfind("  -h, --help           show this help\n") + 38 == out.size());
@@ -77,7 +77,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli help lists the commands, and each command has
 	          "Usage: catalist add [-amq] [--from=SITE] [--pick=N] [--status=STATUS] "
 	          "[--score=N] [--progress=N] [--no-lookup] TITLE...\n"));
 	// The helps line up past the longest option.
-	CHECK(has(out, "      --status=STATUS  watching, completed, on-hold, dropped or planned\n"));
+	CHECK(has(out, "      --status=STATUS  watching, completed, on-hold, dropped, planned or rewatching\n"));
 	CHECK(has(out, "      --no-lookup      add TITLE as written, without asking a site\n"));
 	CHECK(has(out, "  -q                   print nothing\n"));
 	CHECK(run({"help", "rm"}) == 0);

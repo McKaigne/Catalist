@@ -74,7 +74,7 @@ TEST_CASE("anilist removes a title by its list entry, and is done when there is 
 
 TEST_CASE("mal sets the list status with the fields of the list") {
 	CHECK(catalist::mal::listStatusForm(oddTaxi()) ==
-	      "status=watching&score=8&num_watched_episodes=5&num_times_rewatched=1"
+	      "status=watching&score=8&is_rewatching=false&num_watched_episodes=5&num_times_rewatched=1"
 	      "&start_date=2026-10-01");
 	catalist::entry berserk = makeEntry()
 	                              .type(mediaType::kManga)
@@ -83,7 +83,7 @@ TEST_CASE("mal sets the list status with the fields of the list") {
 	                              .progress(364)
 	                              .volumes(41);
 	CHECK(catalist::mal::listStatusForm(berserk) ==
-	      "status=plan_to_read&score=0&num_chapters_read=364&num_volumes_read=41"
+	      "status=plan_to_read&score=0&is_rereading=false&num_chapters_read=364&num_volumes_read=41"
 	      "&num_times_reread=0");
 
 	catalist::test::fakeWeb web;
@@ -98,7 +98,7 @@ TEST_CASE("mal sets the list status with the fields of the list") {
 
 TEST_CASE("kitsu changes the library entry it has, or makes one") {
 	CHECK(catalist::kitsu::libraryAttributes(oddTaxi()) ==
-	      R"({"status":"current","progress":5,"reconsumeCount":1,"ratingTwenty":16,)"
+	      R"({"status":"current","reconsuming":false,"progress":5,"reconsumeCount":1,"ratingTwenty":16,)"
 	      R"("startedAt":"2026-10-01T00:00:00.000Z","finishedAt":null})");
 
 	catalist::test::fakeWeb web;

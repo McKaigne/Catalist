@@ -26,6 +26,9 @@ std::string listStatus(watchStatus status, mediaType type) {
 			return "dropped";
 		case watchStatus::kPlanToWatch:
 			return anime ? "plan_to_watch" : "plan_to_read";
+		// With is_rewatching or is_rereading (see listStatusForm).
+		case watchStatus::kRewatching:
+			return anime ? "watching" : "reading";
 	}
 	return anime ? "plan_to_watch" : "plan_to_read";
 }
@@ -105,9 +108,10 @@ std::string listUrl(mediaType type, const std::string& user) {
 	return std::format(
 	    "{}/users/{}/{}?fields=list_status{{{}}},{},status&limit=1000&nsfw=true", kApiUrl,
 	    web::urlEncoded(user), anime ? "animelist" : "mangalist",
-	    anime ? "status,score,num_episodes_watched,num_times_rewatched,start_date,finish_date"
-	          : "status,score,num_chapters_read,num_volumes_read,num_times_reread,start_date,"
-	            "finish_date",
+	    anime ? "status,score,num_episodes_watched,num_times_rewatched,is_rewatching,start_date,"
+	            "finish_date"
+	          : "status,score,num_chapters_read,num_volumes_read,num_times_reread,is_rereading,"
+	            "start_date,finish_date",
 	    anime ? "num_episodes" : "num_chapters,num_volumes");
 }
 
@@ -121,7 +125,10 @@ web::answer<std::vector<entry>> parseList(const std::string& body, mediaType typ
 	std::vector<entry> found;
 	for (const auto& item : data.items()) {
 		const json::value& mine = item["list_status"];
-		auto status = statusOf(mine["status"].asString().value_or(""));
+		// A rewatch is a rewatch whatever the status says, as Mihon reads it.
+		bool again = mine[anime ? "is_rewatching" : "is_rereading"].asBool().value_or(false);
+		auto status = again ? std::optional(watchStatus::kRewatching)
+		                    : statusOf(mine["status"].asString().value_or(""));
 		auto match = matchOf(item["node"], type);
 		if (not status or match.malId == 0 or match.name.empty())
 			continue;
@@ -151,10 +158,13 @@ std::string listStatusForm(const entry& title) {
 	bool anime = title.type == mediaType::kAnime;
 	std::vector<std::pair<std::string, std::string>> fields = {
 	    {"status", listStatus(title.status, title.type)}, {"score", std::to_string(title.score)}};
+	std::string again = title.status == watchStatus::kRewatching ? "true" : "false";
 	if (anime) {
+		fields.emplace_back("is_rewatching", again);
 		fields.emplace_back("num_watched_episodes", std::to_string(title.progress));
 		fields.emplace_back("num_times_rewatched", std::to_string(title.rewatched));
 	} else {
+		fields.emplace_back("is_rereading", again);
 		fields.emplace_back("num_chapters_read", std::to_string(title.progress));
 		fields.emplace_back("num_volumes_read", std::to_string(title.volumes));
 		fields.emplace_back("num_times_reread", std::to_string(title.rewatched));

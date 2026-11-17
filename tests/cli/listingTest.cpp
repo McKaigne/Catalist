@@ -251,19 +251,19 @@ TEST_CASE_FIXTURE(cliFixture, "cli stats prints one line of numbers a list") {
 	seed();
 	CHECK(run({"stats"}) == 0);
 	CHECK(out ==
-	      "anime\t2\t1\t1\t0\t0\t0\t9.00\t33\t0\t0\t0.6\n"
-	      "manga\t2\t1\t0\t0\t0\t1\t0\t364\t0\t0\t1.3\n");
+	      "anime\t2\t1\t1\t0\t0\t0\t9.00\t33\t0\t0\t0.6\t0\n"
+	      "manga\t2\t1\t0\t0\t0\t1\t0\t364\t0\t0\t1.3\t0\n");
 	CHECK(err.empty());
 	CHECK(run({"stats", "-m", "--header"}) == 0);
 	CHECK(out ==
 	      "type\ttotal\twatching\tcompleted\ton_hold\tdropped\tplanned\tmean\tunits\tvolumes\t"
-	      "rewatched\tdays\n"
-	      "manga\t2\t1\t0\t0\t0\t1\t0\t364\t0\t0\t1.3\n");
+	      "rewatched\tdays\trewatching\n"
+	      "manga\t2\t1\t0\t0\t0\t1\t0\t364\t0\t0\t1.3\t0\n");
 	CHECK(run({"stats", "-a", "--json"}, "", 100) == 0);
 	CHECK(out ==
 	      "{\"type\":\"anime\",\"total\":2,\"watching\":1,\"completed\":1,\"on_hold\":0,"
 	      "\"dropped\":0,\"planned\":0,\"mean\":9.00,\"units\":33,\"volumes\":0,"
-	      "\"rewatched\":0,\"days\":0.6}\n");
+	      "\"rewatched\":0,\"days\":0.6,\"rewatching\":0}\n");
 	// No score given yet: there is no mean.
 	CHECK(run({"stats", "-m", "--json"}) == 0);
 	CHECK(has(out, "\"planned\":1,\"mean\":null,\"units\":364,"));
@@ -282,6 +282,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli stats draws a card a list at a terminal") {
 	      "  On-Hold        0\n"
 	      "  Dropped        0\n"
 	      "  Plan to Watch  0\n"
+	      "  Rewatching     0\n"
 	      "  Mean score     9.00\n"
 	      "  Episodes       33\n"
 	      "  Rewatched      0\n"
@@ -294,6 +295,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli stats draws a card a list at a terminal") {
 	      "  On-Hold        0\n"
 	      "  Dropped        0\n"
 	      "  Plan to Read   1\n"
+	      "  Rereading      0\n"
 	      "  Mean score     -\n"
 	      "  Chapters       364\n"
 	      "  Volumes        0\n"
@@ -306,7 +308,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli stats draws a card a list at a terminal") {
 TEST_CASE_FIXTURE(cliFixture, "cli stats of an empty catalogue is all zeros, and writes nothing") {
 	CHECK(run({"stats"}) == 0);
 	CHECK(out ==
-	      "anime\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0.0\n"
-	      "manga\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0.0\n");
+	      "anime\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0.0\t0\n"
+	      "manga\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0.0\t0\n");
 	CHECK_FALSE(std::filesystem::exists("data"));
 }

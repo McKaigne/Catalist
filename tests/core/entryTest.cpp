@@ -22,9 +22,13 @@ void checkAllMapTo(const std::vector<std::string>& spellings, watchStatus expect
 }  // namespace
 
 TEST_CASE("parseStatus watching spellings") {
-	checkAllMapTo({"watching", "Watching", "WATCHING", "watch", "reading", "Reading", "read",
-	               "rewatching", "1"},
+	checkAllMapTo({"watching", "Watching", "WATCHING", "watch", "reading", "Reading", "read", "1"},
 	              watchStatus::kWatching);
+}
+
+TEST_CASE("parseStatus rewatching spellings") {
+	checkAllMapTo({"rewatching", "Rewatching", "rereading", "Rereading", "REPEATING"},
+	              watchStatus::kRewatching);
 }
 
 TEST_CASE("parseStatus completed spellings") {
@@ -289,6 +293,29 @@ TEST_CASE("setStatus fills the dates like the cycle and ignores no change") {
 	CHECK_FALSE(same.updatedAt.has_value());
 	CHECK(catalist::setScore(planned, 14, kToday).score == 10);
 	CHECK(catalist::setScore(planned, 7, kToday).score == 7);
+}
+
+TEST_CASE("a rewatch starts over, keeps the first dates, and counts once it is done") {
+	entry done = makeEntry()
+	                 .status(watchStatus::kCompleted)
+	                 .totalUnits(3)
+	                 .progress(3)
+	                 .startDate("2026-01-01")
+	                 .finishDate("2026-02-01");
+	auto again = catalist::setStatus(done, watchStatus::kRewatching, kToday);
+	CHECK(again.status == watchStatus::kRewatching);
+	CHECK(again.progress == 0);
+	CHECK(formatDate(again.startDate) == "2026-01-01");
+	CHECK(formatDate(again.finishDate) == "2026-02-01");
+	// Still a rewatch along the way, not plain watching.
+	auto along = catalist::stepProgress(again, 2, kToday);
+	CHECK(along.status == watchStatus::kRewatching);
+	CHECK(along.rewatched == 0);
+	auto over = catalist::stepProgress(along, 1, kToday);
+	CHECK(over.status == watchStatus::kCompleted);
+	CHECK(over.progress == 3);
+	CHECK(over.rewatched == 1);
+	CHECK(formatDate(over.finishDate) == "2026-10-20");
 }
 
 TEST_CASE("entries show the chosen provider's id and page") {

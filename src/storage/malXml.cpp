@@ -81,14 +81,16 @@ struct blockTags {
 	const char* total;
 	const char* progress;
 	const char* repeats;
+	// Watching or reading it again: "1" or "YES".
+	const char* again;
 };
 
 const blockTags kAnimeTags = {mediaType::kAnime, "anime",           "series_animedb_id",
                               "series_title",    "series_episodes", "my_watched_episodes",
-                              "my_times_watched"};
+                              "my_times_watched", "my_rewatching"};
 const blockTags kMangaTags = {mediaType::kManga, "manga",          "manga_mangadb_id",
                               "manga_title",     "manga_chapters", "my_read_chapters",
-                              "my_times_read"};
+                              "my_times_read",  "my_rereading"};
 
 void parseBlocks(const std::string& xml, const blockTags& tags, std::vector<entry>& found) {
 	std::string openTag = std::format("<{}>", tags.block);
@@ -116,6 +118,9 @@ void parseBlocks(const std::string& xml, const blockTags& tags, std::vector<entr
 		item.volumes = tagNumber(block, "my_read_volumes");
 		item.score = std::min(tagNumber(block, "my_score"), 10);
 		item.status = parseStatus(tagText(block, "my_status")).value_or(watchStatus::kPlanToWatch);
+		std::string again = tagText(block, tags.again);
+		if (again == "1" or again == "YES")
+			item.status = watchStatus::kRewatching;
 		// MyAnimeList writes 0000-00-00 for "no date", which parses as absent.
 		item.startDate = isoDate::parse(tagText(block, "my_start_date"));
 		item.finishDate = isoDate::parse(tagText(block, "my_finish_date"));
@@ -139,8 +144,11 @@ std::string xmlTag(const std::string& name, const std::string& value) {
 	return std::format("\t\t<{0}>{1}</{0}>\n", name, value);
 }
 
+// MyAnimeList has no status for a rewatch: it is watching, with
+// my_rewatching set.
 std::string xmlStatus(const entry& item) {
-	return statusToString(item.status, item.type);
+	bool again = item.status == watchStatus::kRewatching;
+	return statusToString(again ? watchStatus::kWatching : item.status, item.type);
 }
 
 std::string animeBlock(const entry& item) {
@@ -150,6 +158,7 @@ std::string animeBlock(const entry& item) {
 	block += xmlTag("series_episodes", std::to_string(item.totalUnits));
 	block += xmlTag("my_watched_episodes", std::to_string(item.progress));
 	block += xmlTag("my_times_watched", std::to_string(item.rewatched));
+	block += xmlTag("my_rewatching", item.status == watchStatus::kRewatching ? "1" : "0");
 	return block;
 }
 
@@ -162,6 +171,7 @@ std::string mangaBlock(const entry& item) {
 	block += xmlTag("my_read_volumes", std::to_string(item.volumes));
 	block += xmlTag("my_read_chapters", std::to_string(item.progress));
 	block += xmlTag("my_times_read", std::to_string(item.rewatched));
+	block += xmlTag("my_rereading", item.status == watchStatus::kRewatching ? "YES" : "NO");
 	return block;
 }
 

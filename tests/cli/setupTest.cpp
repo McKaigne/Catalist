@@ -74,7 +74,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli __complete prints the refs and titles for the
 	CHECK(run({"__complete", "titles"}) == 0);
 	CHECK(out == "Sousou no Frieren\ta:1\nOdd Taxi\ta:2\nBerserk\tm:1\nSousou no Frieren\tm:2\n");
 	CHECK(run({"__complete", "statuses"}) == 0);
-	CHECK(out == "watching\ncompleted\non-hold\ndropped\nplanned\n");
+	CHECK(out == "watching\ncompleted\non-hold\ndropped\nplanned\nrewatching\n");
 	CHECK(run({"__complete", "fields"}) == 0);
 	CHECK(out.rfind("total=\nprogress=\nstatus=\nscore=\n", 0) == 0);
 	CHECK(has(out, "start=\nfinish=\n"));

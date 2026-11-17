@@ -118,7 +118,8 @@ int commandError(cliContext& ctx, const std::string& what) {
 // The program alone at a terminal: what is being watched or read, the
 // titles with new episodes or chapters first.
 int runDefault(cliContext& ctx) {
-	return cli::printList(ctx, {.statuses = {watchStatus::kWatching}, .key = sortKey::kNew});
+	return cli::printList(
+	    ctx, {.statuses = {watchStatus::kWatching, watchStatus::kRewatching}, .key = sortKey::kNew});
 }
 
 // What the options before the command ask for: colours, and tables into a

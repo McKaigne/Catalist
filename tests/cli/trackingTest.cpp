@@ -43,6 +43,26 @@ TEST_CASE_FIXTURE(cliFixture, "cli + counts one more and says what changed") {
 	CHECK(catalist::formatDate(taxi.updatedAt) == "2026-10-20");
 }
 
+TEST_CASE_FIXTURE(cliFixture, "cli rewatch watches a completed title again") {
+	seed();
+	// Sousou no Frieren (a:1) is completed, 28 of 28.
+	CHECK(run({"rewatch", "a:1"}) == 0);
+	CHECK(out ==
+	      "a:1\tSousou no Frieren\tprogress\t28\t0\n"
+	      "a:1\tSousou no Frieren\tstatus\tcompleted\trewatching\n"
+	      "a:1\tSousou no Frieren\tstarted\t-\t2026-10-20\n");
+	CHECK(run({"ls", "-q", "-s", "rewatching"}) == 0);
+	CHECK(out == "a:1\n");
+	// Plain catalist lists it beside what is being watched.
+	CHECK(run({}, "", 100) == 0);
+	CHECK(has(out, "Rewatching"));
+	CHECK(run({"+", "-n", "28", "a:1"}) == 0);
+	CHECK(has(out, "a:1\tSousou no Frieren\tstatus\trewatching\tcompleted\n"));
+	CHECK(has(out, "a:1\tSousou no Frieren\trewatched\t0\t1\n"));
+	CHECK(run({"set", "a:1", "status=rereading"}) == 0);
+	CHECK(savedTitle(mediaType::kAnime, "Sousou no Frieren").status == watchStatus::kRewatching);
+}
+
 TEST_CASE_FIXTURE(cliFixture, "cli - counts one less") {
 	seed();
 	CHECK(run({"-", "taxi"}) == 0);
@@ -174,13 +194,14 @@ TEST_CASE_FIXTURE(cliFixture, "cli set checks every value before touching anythi
 	CHECK(err.find("error: score '11' is not 0 to 10\n") == 0);
 	CHECK(run({"set", "taxi", "progress=6", "status=bored"}) == 2);
 	CHECK(err.find(
-	          "error: status 'bored' is not watching, completed, on-hold, dropped or planned\n") ==
+	          "error: status 'bored' is not watching, completed, on-hold, dropped, planned or "
+	          "rewatching\n") ==
 	      0);
 	// Nothing is guessed: a word that holds a status is not one.
 	CHECK(run({"set", "taxi", "status=unwatched"}) == 2);
 	CHECK(run({"set", "taxi", "status=4"}) == 2);
-	CHECK(run({"ls", "-s", "rewatching"}) == 2);
-	CHECK(err.find("error: unknown status 'rewatching'") == 0);
+	CHECK(run({"ls", "-s", "rewatched"}) == 2);
+	CHECK(err.find("error: unknown status 'rewatched'") == 0);
 	CHECK(run({"ls", "-s", "watchng"}) == 2);
 	CHECK(err.find("error: unknown status 'watchng' (did you mean 'watching'?)\n") == 0);
 	CHECK(run({"add", "--no-lookup", "--status=plan", "Some OVA"}) == 2);

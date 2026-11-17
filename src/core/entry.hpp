@@ -14,7 +14,9 @@ enum class mediaType { kAnime, kManga };
 // would keep the catalogue in step with. Only one is chosen at a time.
 enum class provider { kAniList, kMyAnimeList, kKitsu };
 
-enum class watchStatus { kWatching, kCompleted, kOnHold, kDropped, kPlanToWatch };
+// kRewatching is watching (or reading) a completed title again, as AniList's
+// REPEATING and MyAnimeList's is_rewatching have it.
+enum class watchStatus { kWatching, kCompleted, kOnHold, kDropped, kPlanToWatch, kRewatching };
 
 struct entry {
 	// Numbers the title within its list: the 12 of the ref a:12.
@@ -47,10 +49,12 @@ struct entry {
 
 std::string statusToString(watchStatus status, mediaType type = mediaType::kAnime);
 // The one word a status is stored and printed for scripts as: watching,
-// completed, on-hold, dropped or planned. parseStatus reads it back.
+// completed, on-hold, dropped, planned or rewatching. parseStatus reads it
+// back.
 [[nodiscard]] std::string statusKey(watchStatus status);
-// Accepts the display names and MyAnimeList's 1-5 codes, in any case;
-// absent for anything else.
+// Accepts the display names and MyAnimeList's 1-5 codes, in any case
+// (rewatching, rereading and repeating for kRewatching); absent for anything
+// else.
 [[nodiscard]] std::optional<watchStatus> parseStatus(const std::string& str);
 
 std::string typeToString(mediaType type);
@@ -89,12 +93,15 @@ namespace catalist {
 
 // Moves progress by delta, never below zero nor past a known total. Moving
 // forward starts the entry (start date, and resumes it from planned, on-hold
-// or dropped); reaching the total completes it with a finish date. Moving
-// back below the total reopens a completed entry.
+// or dropped); reaching the total completes it with a finish date, and ends a
+// rewatch with one more to the rewatch count. Moving back below the total
+// reopens a completed entry.
 [[nodiscard]] entry stepProgress(entry target, int delta, const isoDate& today);
 
 // Sets the status, keeping the start and finish dates and the progress
-// consistent with it. Setting the status it already has changes nothing.
+// consistent with it. A rewatch starts again from the first episode or
+// chapter, and keeps the dates of the first time. Setting the status it
+// already has changes nothing.
 [[nodiscard]] entry setStatus(entry target, watchStatus status, const isoDate& today);
 
 // Sets the score, kept within 0..10.

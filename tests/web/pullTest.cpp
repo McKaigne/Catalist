@@ -26,7 +26,8 @@ TEST_CASE("anilist reads a user's list, with the ids and the person's fields") {
 	REQUIRE(found.value().size() == 2);
 	const auto& taxi = found.value()[0];
 	CHECK(taxi.title == "Odd Taxi");
-	CHECK(taxi.status == watchStatus::kWatching);
+	// REPEATING: a rewatch.
+	CHECK(taxi.status == watchStatus::kRewatching);
 	CHECK(taxi.score == 8);
 	CHECK(taxi.progress == 5);
 	CHECK(taxi.rewatched == 1);
@@ -81,7 +82,7 @@ TEST_CASE("kitsu reads a user's library page by page") {
 TEST_CASE("mal reads a user's list page by page") {
 	CHECK(catalist::mal::listUrl(mediaType::kManga, "Abel") ==
 	      "https://api.myanimelist.net/v2/users/Abel/mangalist?fields=list_status{status,score,"
-	      "num_chapters_read,num_volumes_read,num_times_reread,start_date,finish_date},"
+	      "num_chapters_read,num_volumes_read,num_times_reread,is_rereading,start_date,finish_date},"
 	      "num_chapters,num_volumes,status&limit=1000&nsfw=true");
 	std::string next;
 	auto found = catalist::mal::parseList(

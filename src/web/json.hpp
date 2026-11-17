@@ -33,6 +33,7 @@ public:
 	[[nodiscard]] bool isArray() const;
 
 	[[nodiscard]] std::optional<double> asNumber() const;
+	[[nodiscard]] std::optional<bool> asBool() const;
 	// Whole numbers only; 3.5 or a string is absent.
 	[[nodiscard]] std::optional<long long> asInteger() const;
 	// A count, an id or a total: a whole number above 0, else 0.

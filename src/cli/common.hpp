@@ -58,11 +58,12 @@ void writeRows(cliContext& ctx, const std::vector<std::string>& names,
                const std::vector<std::vector<output::cell>>& rows, bool json, bool header);
 
 // The statuses in the order they are listed, and the words they are
-// written with: watching, completed, on-hold, dropped and planned.
+// written with: watching, completed, on-hold, dropped, planned and
+// rewatching.
 extern const std::vector<watchStatus> kStatuses;
 [[nodiscard]] std::vector<std::string> statusWords();
-// A status as the command line takes it: one of statusWords(), or
-// "reading" for watching, in capitals or not. Nothing for any other word:
+// A status as the command line takes it: one of statusWords(), "reading"
+// for watching or "rereading" for rewatching, in capitals or not. Nothing for any other word:
 // the command line guesses nothing (import reads the sites' spellings).
 [[nodiscard]] std::optional<watchStatus> statusNamed(const std::string& word);
 
@@ -221,7 +222,7 @@ struct listQuery {
 // Lists the titles the query asks for: a table at a terminal, else lines.
 // The exit code: 1 when the lists cannot be read.
 int printList(cliContext& ctx, const listQuery& query);
-// tracking.cpp: +, -, set, done, hold, drop, plan, resume and rm.
+// tracking.cpp: +, -, set, done, hold, drop, plan, resume, rewatch and rm.
 [[nodiscard]] std::vector<command> trackingCommands();
 // The fields `set` takes, for the completion scripts.
 [[nodiscard]] std::vector<std::string> settableNames();

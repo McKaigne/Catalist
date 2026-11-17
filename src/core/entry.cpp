@@ -17,6 +17,8 @@ std::string statusToString(watchStatus status, mediaType type) {
 			return "Dropped";
 		case watchStatus::kPlanToWatch:
 			return (type == mediaType::kManga) ? "Plan to Read" : "Plan to Watch";
+		case watchStatus::kRewatching:
+			return (type == mediaType::kManga) ? "Rereading" : "Rewatching";
 	}
 	return "Unknown";
 }
@@ -33,6 +35,8 @@ std::string statusKey(watchStatus status) {
 			return "dropped";
 		case watchStatus::kPlanToWatch:
 			return "planned";
+		case watchStatus::kRewatching:
+			return "rewatching";
 	}
 	return "planned";
 }
@@ -43,6 +47,10 @@ std::optional<watchStatus> parseStatus(const std::string& str) {
 
 	if (lower.find("plan") != std::string::npos or lower == "5") {
 		return watchStatus::kPlanToWatch;
+	} else if (lower.find("rewatch") != std::string::npos or
+	           lower.find("reread") != std::string::npos or
+	           lower.find("repeat") != std::string::npos) {
+		return watchStatus::kRewatching;
 	} else if (lower.find("watch") != std::string::npos or
 	           lower.find("read") != std::string::npos or lower == "1") {
 		return watchStatus::kWatching;
@@ -191,6 +199,13 @@ entry applyStatusDates(entry target, watchStatus previous, const isoDate& today)
 		case watchStatus::kPlanToWatch:
 			target.finishDate.reset();
 			break;
+		case watchStatus::kRewatching:
+			// Again from the start; the dates stay those of the first time.
+			if (previous == watchStatus::kCompleted)
+				target.progress = 0;
+			if (not target.startDate)
+				target.startDate = today;
+			break;
 	}
 	return target;
 }
@@ -199,6 +214,8 @@ entry withProgress(entry target, int progress, const isoDate& today) {
 	target.progress = progress;
 	if (isFinished(target)) {
 		target.progress = target.totalUnits;
+		if (target.status == watchStatus::kRewatching)
+			++target.rewatched;
 		target.status = watchStatus::kCompleted;
 	}
 	target.updatedAt = today;

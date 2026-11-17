@@ -51,7 +51,7 @@ const std::vector<settable>& settables() {
 	     [](entry e, text value, day today) {
 		     return withCount(e, countField::kProgress, value, today);
 	     }},
-	    {"status", "", "watching, completed, on-hold, dropped or planned",
+	    {"status", "", "watching, completed, on-hold, dropped, planned or rewatching",
 	     [](entry e, text value, day today) {
 		     auto status = statusNamed(value);
 		     return status ? std::optional(setStatus(e, *status, today)) : std::nullopt;
@@ -157,7 +157,8 @@ const std::map<std::string, watchStatus> kStatusCommands = {{"done", watchStatus
                                                             {"hold", watchStatus::kOnHold},
                                                             {"drop", watchStatus::kDropped},
                                                             {"plan", watchStatus::kPlanToWatch},
-                                                            {"resume", watchStatus::kWatching}};
+                                                            {"resume", watchStatus::kWatching},
+                                                            {"rewatch", watchStatus::kRewatching}};
 
 int runStatus(const command& self, const args::parsed& line, cliContext& ctx) {
 	watchStatus status = kStatusCommands.at(self.name);
@@ -281,6 +282,11 @@ std::vector<command> trackingCommands() {
 	    statusCommand("plan", "Mark titles planned", ""),
 	    statusCommand("resume", "Take titles up again",
 	                  "Sets the status to watching (reading, for a manga).\n"),
+	    statusCommand("rewatch", "Watch or read titles again",
+	                  "Sets the status to rewatching (rereading, for a manga). A completed title\n"
+	                  "starts again from the first episode or chapter and keeps the dates of\n"
+	                  "the first time; reaching the total completes it again, one more to\n"
+	                  "its rewatch count.\n"),
 	    {.name = "rm",
 	     .summary = "Remove titles",
 	     .details =

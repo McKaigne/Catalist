@@ -20,10 +20,6 @@ struct account {
 	std::string renewal;
 	// When the token runs out, in seconds since 1970; 0 when not known.
 	long long expires = 0;
-	// How the user scores on the site, as the site names it: AniList's
-	// POINT_100, POINT_10_DECIMAL, POINT_10, POINT_5 or POINT_3, Kitsu's
-	// simple, regular or advanced; empty for out of 10 (MyAnimeList's only).
-	std::string scoreFormat{};
 };
 
 }  // namespace catalist

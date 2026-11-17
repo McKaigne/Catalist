@@ -11,7 +11,7 @@ using catalist::test::makeEntry;
 
 namespace {
 
-const catalist::account kLogin{catalist::provider::kAniList, "Abel", "77", "tok", "", 0, ""};
+const catalist::account kLogin{catalist::provider::kAniList, "Abel", "77", "tok", "", 0};
 
 }  // namespace
 

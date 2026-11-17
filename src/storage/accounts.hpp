@@ -10,8 +10,7 @@
 
 // The logins, kept in a file of their own that only its owner can read, and
 // never in catalist.db: the lists can be copied and shared, the logins not.
-// One line a site: site, user, user id, token, renewal, expiry and score
-// format, a tab
+// One line a site: site, user, user id, token, renewal and expiry, a tab
 // between them. Pure text in and out; system.cpp writes the file.
 namespace catalist::accounts {
 

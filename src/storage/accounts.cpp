@@ -22,8 +22,7 @@ std::vector<std::string> fieldsOf(const std::string& line) {
 // A tab or a line break in a field would split the line: none of the sites
 // puts one in a name or a token, and one that did is not kept.
 bool fits(const account& login) {
-	for (const auto& field :
-	     {login.user, login.userId, login.token, login.renewal, login.scoreFormat})
+	for (const auto& field : {login.user, login.userId, login.token, login.renewal})
 		if (field.find_first_of("\t\r\n") != std::string::npos)
 			return false;
 	return not login.token.empty();
@@ -48,13 +47,10 @@ std::vector<account> parse(const std::string& text) {
 	std::istringstream lines(text);
 	for (std::string line; std::getline(lines, line);) {
 		auto fields = fieldsOf(line);
-		// The score format, the 7th field, came later.
-		bool known = fields.size() == 6 or fields.size() == 7;
-		auto site = known ? parseProvider(fields[0]) : std::nullopt;
+		auto site = fields.size() == 6 ? parseProvider(fields[0]) : std::nullopt;
 		if (not site)
 			continue;
-		account login{*site, fields[1], fields[2], fields[3], fields[4], 0,
-		              fields.size() == 7 ? fields[6] : ""};
+		account login{*site, fields[1], fields[2], fields[3], fields[4], 0};
 		try {
 			login.expires = std::stoll(fields[5]);
 		} catch (const std::exception&) {
@@ -70,9 +66,8 @@ std::string format(const std::vector<account>& logins) {
 	std::string text;
 	for (const auto& login : logins)
 		if (fits(login))
-			text += std::format("{}\t{}\t{}\t{}\t{}\t{}\t{}\n", providerKey(login.site),
-			                    login.user, login.userId, login.token, login.renewal,
-			                    login.expires, login.scoreFormat);
+			text += std::format("{}\t{}\t{}\t{}\t{}\t{}\n", providerKey(login.site), login.user,
+			                    login.userId, login.token, login.renewal, login.expires);
 	return text;
 }
 

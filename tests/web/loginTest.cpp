@@ -40,12 +40,10 @@ TEST_CASE("anilist logs in with the token its page shows") {
 	REQUIRE(start.value().questions.size() == 1);
 	CHECK(start.value().questions[0].secret);
 
-	fake.respond("Viewer", R"({"data":{"Viewer":{"id":5,"name":"Abel",
-	  "mediaListOptions":{"scoreFormat":"POINT_100"}}}})");
+	fake.respond("Viewer", R"({"data":{"Viewer":{"id":5,"name":"Abel"}}})");
 	auto login = site.finishLogin({"tok"});
 	REQUIRE(login.has_value());
 	CHECK(login.value().user == "Abel");
-	CHECK(login.value().scoreFormat == "POINT_100");
 	CHECK(login.value().userId == "5");
 	CHECK(login.value().token == "tok");
 	CHECK(login.value().expires == 1000 + 365LL * 24 * 60 * 60);
@@ -113,11 +111,10 @@ TEST_CASE("kitsu logs in with email and password, for a token it renews") {
 	    "&password=p%20w",
 	    R"({"access_token":"kt","refresh_token":"kr","expires_in":2592000})");
 	fake.respond("GET https://kitsu.app/api/edge/users?filter[self]=true",
-	             R"({"data":[{"id":"77","attributes":{"name":"abel","ratingSystem":"regular"}}]})");
+	             R"({"data":[{"id":"77","attributes":{"name":"abel"}}]})");
 	auto login = site.finishLogin({"a@b.c", "p w"});
 	REQUIRE(login.has_value());
 	CHECK(login.value().user == "abel");
-	CHECK(login.value().scoreFormat == "regular");
 	CHECK(login.value().userId == "77");
 	CHECK(login.value().token == "kt");
 	// The password is in no field of the account.

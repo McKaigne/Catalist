@@ -8,23 +8,16 @@ using catalist::provider;
 
 TEST_CASE("accounts are one line a site, and read back as written") {
 	std::vector<account> logins = {
-	    {provider::kAniList, "Abel", "5", "tok.en", "", 1800000000, "POINT_100"},
-	    {provider::kKitsu, "abel", "77", "kt", "rt", 0, "simple"},
+	    {provider::kAniList, "Abel", "5", "tok.en", "", 1800000000},
+	    {provider::kKitsu, "abel", "77", "kt", "rt", 0},
 	};
 	std::string text = accounts::format(logins);
-	CHECK(text ==
-	      "anilist\tAbel\t5\ttok.en\t\t1800000000\tPOINT_100\n"
-	      "kitsu\tabel\t77\tkt\trt\t0\tsimple\n");
+	CHECK(text == "anilist\tAbel\t5\ttok.en\t\t1800000000\nkitsu\tabel\t77\tkt\trt\t0\n");
 	auto read = accounts::parse(text);
 	REQUIRE(read.size() == 2);
 	CHECK(read[1].site == provider::kKitsu);
 	CHECK(read[1].renewal == "rt");
-	CHECK(read[1].scoreFormat == "simple");
 	CHECK(read[0].expires == 1800000000);
-	// A file written before the score format was kept still reads.
-	auto older = accounts::parse("anilist\tAbel\t5\ttok.en\t\t1800000000\n");
-	REQUIRE(older.size() == 1);
-	CHECK(older[0].scoreFormat.empty());
 }
 
 TEST_CASE("accounts leave out what they cannot read, and keep one login a site") {

@@ -293,7 +293,7 @@ web::answer<account> tracker::finishLogin(const std::vector<std::string>& answer
 	std::string token = answers.empty() ? "" : answers[0];
 	if (token.empty())
 		return web::refused("no token given");
-	auto body = ask(R"({"query":"query{Viewer{id name mediaListOptions{scoreFormat}}}"})", token);
+	auto body = ask(R"({"query":"query{Viewer{id name}}"})", token);
 	if (not body and body.error().why == web::failure::kind::kUnreachable)
 		return std::unexpected(body.error());
 	auto reply = body ? json::parse(*body) : std::unexpected("");
@@ -302,13 +302,8 @@ web::answer<account> tracker::finishLogin(const std::vector<std::string>& answer
 	if (not name)
 		return web::refused("AniList did not take the token");
 	constexpr long long kYear = 365LL * 24 * 60 * 60;
-	return account{provider::kAniList,
-	               *name,
-	               std::to_string(viewer["id"].asCount()),
-	               token,
-	               "",
-	               net_.now() + kYear,
-	               viewer["mediaListOptions"]["scoreFormat"].asString().value_or("POINT_10")};
+	return account{provider::kAniList,      *name, std::to_string(viewer["id"].asCount()), token, "",
+	               net_.now() + kYear};
 }
 
 web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {

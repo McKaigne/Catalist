@@ -5,16 +5,18 @@
 
 #include "core/entry.hpp"
 
-// Scores as each site shows them to the person, in the format they chose
-// there, as Mihon's trackers display them. Pure text out.
+// Scores as stars: every site's, and every format a person can score in
+// there, shown the one way. Pure text out.
 namespace catalist::web {
 
-// The score `raw`, as the site keeps it (AniList out of 100, MyAnimeList out
-// of 10, Kitsu's ratingTwenty from 2 to 20), in the person's `format` on that
-// site (see account::scoreFormat): "8.5", or a row of Nerd Font stars (full,
-// half and empty) for the formats in stars; "-" for no score. The faces some
-// formats draw are shown as stars too, one star a face.
-[[nodiscard]] std::string displayScore(provider site, const std::string& format, double raw);
+// A score out of 10 as five Nerd Font stars, each half star a point:
+// 7 is three full stars, a half and an empty one. Rounded to the nearest
+// point; "-" for no score.
+[[nodiscard]] std::string stars(double outOfTen);
+
+// The score `raw`, as `site` keeps it (AniList out of 100, MyAnimeList out of
+// 10, Kitsu's ratingTwenty from 2 to 20), out of 10.
+[[nodiscard]] double outOfTen(provider site, double raw);
 
 }  // namespace catalist::web
 

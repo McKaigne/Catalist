@@ -408,13 +408,8 @@ web::answer<account> tracker::accountFor(std::vector<std::pair<std::string, std:
 	auto name = user ? (*user)["attributes"]["name"].asString() : std::nullopt;
 	if (not name)
 		return web::refused("Kitsu did not say whose login it is");
-	return account{provider::kKitsu,
-	               *name,
-	               (*user)["id"].asString().value_or(""),
-	               token->token,
-	               token->renewal,
-	               net_.now() + token->lifetime,
-	               (*user)["attributes"]["ratingSystem"].asString().value_or("advanced")};
+	return account{provider::kKitsu, *name,          (*user)["id"].asString().value_or(""),
+	               token->token,     token->renewal, net_.now() + token->lifetime};
 }
 
 web::answer<account> tracker::finishLogin(const std::vector<std::string>& answers) {

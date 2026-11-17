@@ -26,10 +26,9 @@ namespace catalist {
 [[nodiscard]] std::optional<std::string> runProgram(const std::vector<std::string>& arguments,
                                                     const std::string& input = "");
 
-// Sends the request through the curl program: the body of the reply, or
-// nothing when the request failed for any reason (no connection, a timeout,
-// an HTTP error status).
-[[nodiscard]] std::optional<std::string> httpFetch(const web::request& sent);
+// Sends the request through the curl program: the reply, whatever its
+// status, or nothing when there was none (no connection, a timeout).
+[[nodiscard]] std::optional<web::reply> httpFetch(const web::request& sent);
 
 // The date and time on this computer's calendar and clock.
 [[nodiscard]] std::tm localTime();

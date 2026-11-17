@@ -310,10 +310,9 @@ TEST_CASE_FIXTURE(cliFixture, "cli import --user moves in a user's lists from a 
 	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").progress == 5);
 	CHECK(steps().size() == 1);
 
+	web.respond(R"("u":"Nobody")", R"({"errors":[{"message":"Not Found."}]})", 404);
 	CHECK(run({"import", "--user", "Nobody"}) == 1);
-	CHECK(err ==
-	      "error: could not reach AniList, or it has no public list of Nobody; check the "
-	      "connection and try again\n");
+	CHECK(err == "error: AniList has no public list of Nobody\n");
 	CHECK(run({"import", "--user", "Abel", "file.xml"}) == 2);
 	CHECK(run({"import", "-a", "file.xml"}) == 2);
 	CHECK(err.find("error: --from, -a and -m go with --user\n") == 0);

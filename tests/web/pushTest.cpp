@@ -60,9 +60,16 @@ TEST_CASE("anilist removes a title by its list entry, and is done when there is 
 	REQUIRE(web.sent.size() == 2);
 	CHECK(web.sent[1].find(R"("i":31)") != std::string::npos);
 
+	// AniList answers 404 for a title not on the list: gone already.
 	catalist::test::fakeWeb none;
+	none.respond("MediaList(mediaId:$m,userId:$u)", R"({"data":{"MediaList":null}})", 404);
 	catalist::anilist::tracker empty(none.link());
 	CHECK(empty.remove(mediaType::kAnime, 1, kLogin).has_value());
+	// Not reached: that is no answer.
+	catalist::test::fakeWeb offline;
+	catalist::anilist::tracker away(offline.link());
+	CHECK(away.remove(mediaType::kAnime, 1, kLogin).error().why ==
+	      catalist::web::failure::kind::kUnreachable);
 }
 
 TEST_CASE("mal sets the list status with the fields of the list") {

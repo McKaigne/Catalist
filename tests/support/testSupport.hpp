@@ -40,15 +40,17 @@ void makeUnwritable(const std::filesystem::path& file);
 // contain a registered fragment with its reply (the longest such fragment),
 // and fails every other request, as if offline. Records every request.
 struct fakeWeb {
-	void respond(const std::string& fragment, const std::string& body);
-	[[nodiscard]] std::optional<std::string> fetch(const web::request& sent);
+	// Requests that hold `fragment` get this reply; any other gets none, as
+	// when there is no connection.
+	void respond(const std::string& fragment, const std::string& body, int status = 200);
+	[[nodiscard]] std::optional<web::reply> fetch(const web::request& sent);
 	[[nodiscard]] web::link link();
 
 	// "POST url body" for each request, in the order sent.
 	std::vector<std::string> sent;
 	// The bodies of the requests that had one.
 	std::vector<std::string> posted;
-	std::map<std::string, std::string> bodies;
+	std::map<std::string, web::reply> bodies;
 	// Runs at each request, as the site is being asked.
 	std::function<void()> whileAsked;
 };

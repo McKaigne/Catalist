@@ -54,9 +54,13 @@ TEST_CASE_FIXTURE(cliFixture, "cli login says what went wrong, and keeps nothing
 	ids.anilist = "al-id";
 	CHECK(run({"login", "anilist"}) == 1);
 	CHECK(has(err, "Cancelled.\n"));
-	// A token AniList does not take.
+	// AniList cannot be reached.
 	CHECK(run({"login", "anilist"}, "bad\n") == 1);
-	CHECK(has(err, "error: AniList did not take the token, or could not be reached\n"));
+	CHECK(has(err, "error: could not reach AniList\n"));
+	// A token AniList does not take.
+	web.respond("Viewer", R"({"errors":[{"message":"Invalid token"}]})", 401);
+	CHECK(run({"login", "anilist"}, "bad\n") == 1);
+	CHECK(has(err, "error: AniList did not take the token\n"));
 	CHECK_FALSE(std::filesystem::exists("state/accounts"));
 }
 

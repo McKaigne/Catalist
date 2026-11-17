@@ -214,17 +214,17 @@ std::vector<std::string> tracker::asUser(const account& login) {
 	        web::bearer(login.token)};
 }
 
-std::optional<int> tracker::libraryEntry(mediaType type, int kitsuId, const account& login) const {
-	auto body = net_.fetch({"GET",
-	                        std::format("{}/library-entries?filter[userId]={}&filter[{}Id]={}"
-	                                    "&page[limit]=1",
-	                                    kApiUrl, login.userId, typeKey(type), kitsuId),
-	                        asUser(login), ""});
+web::answer<int> tracker::libraryEntry(mediaType type, int kitsuId, const account& login) const {
+	auto body = send({"GET",
+	                  std::format("{}/library-entries?filter[userId]={}&filter[{}Id]={}"
+	                              "&page[limit]=1",
+	                              kApiUrl, login.userId, typeKey(type), kitsuId),
+	                  asUser(login), ""});
 	if (not body)
-		return std::nullopt;
+		return std::unexpected(body.error());
 	auto reply = json::parse(*body);
 	if (not reply.has_value())
-		return std::nullopt;
+		return web::refused("unexpected reply from Kitsu");
 	for (const auto& found : reply.value()["data"].items())
 		return idOf(found["id"]);
 	return 0;
@@ -233,7 +233,7 @@ std::optional<int> tracker::libraryEntry(mediaType type, int kitsuId, const acco
 web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
 	auto people = get(std::format("{}/users?filter[name]={}", kApiUrl, web::urlEncoded(user)));
 	if (not people)
-		return web::unreachable("could not reach Kitsu");
+		return std::unexpected(people.error());
 	auto reply = json::parse(*people);
 	std::string userId;
 	if (reply.has_value() and not reply.value()["data"].items().empty())
@@ -245,7 +245,7 @@ web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string&
 		pause();
 		auto body = get(page);
 		if (not body)
-			return web::unreachable("could not reach Kitsu");
+			return std::unexpected(body.error());
 		auto entries = parseLibrary(*body, type, page);
 		if (not entries.has_value())
 			return entries;
@@ -259,49 +259,54 @@ web::answer<void> tracker::push(const entry& title, const account& login) {
 		return web::notLinked(provider::kKitsu);
 	auto existing = libraryEntry(title.type, title.kitsuId, login);
 	if (not existing)
-		return web::unreachable("could not reach Kitsu");
+		return std::unexpected(existing.error());
 	pause();
 	std::string kind = typeKey(title.type);
 	auto body =
 	    *existing > 0
-	        ? net_.fetch({"PATCH", std::format("{}/library-entries/{}", kApiUrl, *existing),
+	        ? send({"PATCH", std::format("{}/library-entries/{}", kApiUrl, *existing),
 	                      asUser(login),
 	                      std::format(R"({{"data":{{"id":"{}","type":"libraryEntries",)"
 	                                  R"("attributes":{}}}}})",
 	                                  *existing, libraryAttributes(title))})
-	        : net_.fetch(
+	        : send(
 	              {"POST", kApiUrl + "/library-entries", asUser(login),
 	               std::format(R"({{"data":{{"type":"libraryEntries","attributes":{},)"
 	                           R"("relationships":{{"user":{{"data":{{"type":"users",)"
 	                           R"("id":"{}"}}}},"{}":{{"data":{{"type":"{}","id":"{}"}}}}}}}}}})",
 	                           libraryAttributes(title), login.userId, kind, kind, title.kitsuId)});
 	if (not body)
-		return web::unreachable("could not reach Kitsu, or it did not take the change");
+		return std::unexpected(body.error());
 	return {};
 }
 
 web::answer<void> tracker::remove(mediaType type, int siteId, const account& login) {
 	auto existing = libraryEntry(type, siteId, login);
 	if (not existing)
-		return web::unreachable("could not reach Kitsu");
+		return std::unexpected(existing.error());
 	if (*existing == 0)
 		return {};
 	pause();
-	auto body = net_.fetch(
-	    {"DELETE", std::format("{}/library-entries/{}", kApiUrl, *existing), asUser(login), ""});
-	if (not body)
-		return web::unreachable("could not reach Kitsu, or it did not take the change");
+	auto body =
+	    send({"DELETE", std::format("{}/library-entries/{}", kApiUrl, *existing), asUser(login), ""});
+	// 404: gone already.
+	if (not body and body.error().status != 404)
+		return std::unexpected(body.error());
 	return {};
 }
 
-std::optional<std::string> tracker::get(const std::string& url) const {
-	return net_.fetch({"GET", url, {"Accept: application/vnd.api+json"}, ""});
+web::answer<std::string> tracker::send(const web::request& asked) const {
+	return web::checked(net_.fetch(asked), provider::kKitsu);
+}
+
+web::answer<std::string> tracker::get(const std::string& url) const {
+	return send({"GET", url, {"Accept: application/vnd.api+json"}, ""});
 }
 
 web::answer<std::vector<web::match>> tracker::search(mediaType type, const std::string& query) {
 	auto body = get(searchUrl(type, query));
 	if (not body)
-		return web::unreachable("could not reach Kitsu");
+		return std::unexpected(body.error());
 	return parseSearch(*body, type);
 }
 
@@ -310,7 +315,7 @@ web::answer<web::details> tracker::lookUp(const entry& known) {
 	if (id <= 0 and known.malId > 0) {
 		auto mapped = get(mappingUrl(known.type, known.malId));
 		if (not mapped)
-			return web::unreachable("could not reach Kitsu");
+			return std::unexpected(mapped.error());
 		id = parseMapping(*mapped);
 		if (id <= 0)
 			return web::refused("Kitsu does not know the title");
@@ -319,8 +324,10 @@ web::answer<web::details> tracker::lookUp(const entry& known) {
 	if (id <= 0)
 		return web::refused("the title has no id to look up");
 	auto body = get(titleUrl(known.type, id));
+	if (not body and body.error().status == 404)
+		return web::refused("Kitsu does not know the title");
 	if (not body)
-		return web::unreachable("could not reach Kitsu");
+		return std::unexpected(body.error());
 	return parseTitle(*body, known.type);
 }
 
@@ -337,18 +344,19 @@ web::answer<account> tracker::accountFor(std::vector<std::pair<std::string, std:
 		fields.emplace_back("client_id", net_.ids.kitsu);
 		fields.emplace_back("client_secret", net_.ids.kitsuSecret);
 	}
-	auto reply = net_.fetch({"POST",
-	                         kTokenUrl,
-	                         {"Content-Type: application/x-www-form-urlencoded"},
-	                         web::formEncoded(fields)});
+	auto reply = send({"POST",
+	                   kTokenUrl,
+	                   {"Content-Type: application/x-www-form-urlencoded"},
+	                   web::formEncoded(fields)});
+	if (not reply and reply.error().why == web::failure::kind::kUnreachable)
+		return std::unexpected(reply.error());
 	auto token = reply ? web::parseTokenReply(*reply) : std::nullopt;
 	if (not token)
-		return web::refused(
-		    "Kitsu did not take the login (is the email right?), or could not be reached");
-	auto body = net_.fetch({"GET",
-	                        kApiUrl + "/users?filter[self]=true",
-	                        {"Accept: application/vnd.api+json", web::bearer(token->token)},
-	                        ""});
+		return web::refused("Kitsu did not take the login (is the email right?)");
+	auto body = send({"GET",
+	                  kApiUrl + "/users?filter[self]=true",
+	                  {"Accept: application/vnd.api+json", web::bearer(token->token)},
+	                  ""});
 	auto me = body ? json::parse(*body) : std::unexpected("");
 	const json::value* user = nullptr;
 	if (me.has_value() and not me.value()["data"].items().empty())
@@ -371,9 +379,12 @@ web::answer<account> tracker::current(const account& login) {
 	if (not web::runningOut(login, net_.now()))
 		return login;
 	auto renewed = accountFor({{"grant_type", "refresh_token"}, {"refresh_token", login.renewal}});
-	if (not renewed.has_value())
-		return web::refused(
-		    "your Kitsu login has run out: log in again with 'catalist login kitsu'");
+	if (not renewed and renewed.error().why == web::failure::kind::kUnreachable)
+		return renewed;
+	if (not renewed)
+		return std::unexpected(
+		    web::failure{web::failure::kind::kLoginRefused,
+		                 "your Kitsu login has run out: log in again with 'catalist login kitsu'"});
 	return renewed;
 }
 

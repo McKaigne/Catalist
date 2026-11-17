@@ -122,6 +122,8 @@ TEST_CASE("kitsu logs in with email and password, for a token it renews") {
 	     {login.value().user, login.value().userId, login.value().token, login.value().renewal})
 		CHECK(field.find("p w") == std::string::npos);
 
+	fake.respond("grant_type=password&username=a%40b.c&password=wrong",
+	             R"({"error":"invalid_grant"})", 400);
 	CHECK(site.finishLogin({"a@b.c", "wrong"}).error().message.find("did not take") !=
 	      std::string::npos);
 }

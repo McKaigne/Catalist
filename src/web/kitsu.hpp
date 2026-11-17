@@ -63,8 +63,10 @@ protected:
 	void pause() const override { net_.pause(); }
 
 private:
-	// The reply to a GET; nothing when Kitsu cannot be reached.
-	[[nodiscard]] std::optional<std::string> get(const std::string& url) const;
+	// The reply to a request, or to a GET; the failure when Kitsu cannot be
+	// reached or said no.
+	[[nodiscard]] web::answer<std::string> send(const web::request& asked) const;
+	[[nodiscard]] web::answer<std::string> get(const std::string& url) const;
 
 	// The token request with these fields, and the program's id when it has
 	// one; the account it is for.
@@ -72,9 +74,9 @@ private:
 	    std::vector<std::pair<std::string, std::string>> fields);
 
 	// The id of the account's library entry for the title; 0 when it has
-	// none. Nothing when Kitsu cannot be reached.
-	[[nodiscard]] std::optional<int> libraryEntry(mediaType type, int kitsuId,
-	                                              const account& login) const;
+	// none.
+	[[nodiscard]] web::answer<int> libraryEntry(mediaType type, int kitsuId,
+	                                            const account& login) const;
 	// The headers of a request made as the account.
 	[[nodiscard]] static std::vector<std::string> asUser(const account& login);
 

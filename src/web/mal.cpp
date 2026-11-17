@@ -175,9 +175,10 @@ web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string&
 			pause();
 		auto body = get(page);
 		// MyAnimeList answers 403 or 404 for a private list or no such user.
+		if (not body and (body.error().status == 403 or body.error().status == 404))
+			return web::refused(std::format("MyAnimeList has no public list of {}", user));
 		if (not body)
-			return web::unreachable(
-			    std::format("could not reach MyAnimeList, or it has no public list of {}", user));
+			return std::unexpected(body.error());
 		auto entries = parseList(*body, type, page);
 		if (not entries.has_value())
 			return entries;
@@ -189,23 +190,26 @@ web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string&
 web::answer<void> tracker::push(const entry& title, const account& login) {
 	if (title.malId <= 0)
 		return web::notLinked(provider::kMyAnimeList);
-	auto body = net_.fetch(
+	auto body = web::checked(net_.fetch(
 	    {"PATCH",
 	     std::format("{}/{}/{}/my_list_status", kApiUrl, typeKey(title.type), title.malId),
 	     {"Content-Type: application/x-www-form-urlencoded", web::bearer(login.token)},
-	     listStatusForm(title)});
+	     listStatusForm(title)}), provider::kMyAnimeList);
 	if (not body)
-		return web::unreachable("could not reach MyAnimeList, or it did not take the change");
+		return std::unexpected(body.error());
 	return {};
 }
 
 web::answer<void> tracker::remove(mediaType type, int siteId, const account& login) {
-	auto body = net_.fetch({"DELETE",
-	                        std::format("{}/{}/{}/my_list_status", kApiUrl, typeKey(type), siteId),
-	                        {web::bearer(login.token)},
-	                        ""});
-	if (not body)
-		return web::unreachable("could not reach MyAnimeList, or it did not take the change");
+	auto body = web::checked(
+	    net_.fetch({"DELETE",
+	                std::format("{}/{}/{}/my_list_status", kApiUrl, typeKey(type), siteId),
+	                {web::bearer(login.token)},
+	                ""}),
+	    provider::kMyAnimeList);
+	// 404: not on the list, so gone already.
+	if (not body and body.error().status != 404)
+		return std::unexpected(body.error());
 	return {};
 }
 
@@ -216,8 +220,9 @@ std::string tracker::cannotAsk() const {
 	       "https://myanimelist.net/apiconfig and set CATALIST_MAL_CLIENT_ID";
 }
 
-std::optional<std::string> tracker::get(const std::string& url) const {
-	return net_.fetch({"GET", url, {"X-MAL-CLIENT-ID: " + net_.ids.mal}, ""});
+web::answer<std::string> tracker::get(const std::string& url) const {
+	return web::checked(net_.fetch({"GET", url, {"X-MAL-CLIENT-ID: " + net_.ids.mal}, ""}),
+	                    provider::kMyAnimeList);
 }
 
 web::answer<std::vector<web::match>> tracker::search(mediaType type, const std::string& query) {
@@ -225,7 +230,7 @@ web::answer<std::vector<web::match>> tracker::search(mediaType type, const std::
 		return web::refused(why);
 	auto body = get(searchUrl(type, query));
 	if (not body)
-		return web::unreachable("could not reach MyAnimeList");
+		return std::unexpected(body.error());
 	return parseSearch(*body, type);
 }
 
@@ -235,8 +240,10 @@ web::answer<web::details> tracker::lookUp(const entry& known) {
 	if (known.malId <= 0)
 		return web::refused("the title has no id to look up");
 	auto body = get(titleUrl(known.type, known.malId));
+	if (not body and body.error().status == 404)
+		return web::refused("MyAnimeList does not know the title");
 	if (not body)
-		return web::unreachable("could not reach MyAnimeList");
+		return std::unexpected(body.error());
 	return parseTitle(*body, known.type);
 }
 
@@ -254,12 +261,17 @@ web::answer<web::loginStart> tracker::startLogin() {
 	    {{"Address", false}}};
 }
 
-web::answer<account> tracker::accountFor(const std::optional<std::string>& reply) {
-	auto token = reply ? web::parseTokenReply(*reply) : std::nullopt;
+web::answer<account> tracker::accountFor(const std::optional<web::reply>& reply) {
+	auto body = web::checked(reply, provider::kMyAnimeList);
+	if (not body and body.error().why == web::failure::kind::kUnreachable)
+		return std::unexpected(body.error());
+	auto token = body ? web::parseTokenReply(*body) : std::nullopt;
 	if (not token)
-		return web::refused("MyAnimeList did not take the login, or could not be reached");
-	auto body = net_.fetch({"GET", kApiUrl + "/users/@me", {web::bearer(token->token)}, ""});
-	auto me = body ? json::parse(*body) : std::unexpected("");
+		return web::refused("MyAnimeList did not take the login");
+	auto user = web::checked(
+	    net_.fetch({"GET", kApiUrl + "/users/@me", {web::bearer(token->token)}, ""}),
+	    provider::kMyAnimeList);
+	auto me = user ? json::parse(*user) : std::unexpected("");
 	auto name = me.has_value() ? me.value()["name"].asString() : std::nullopt;
 	if (not name)
 		return web::refused("MyAnimeList did not say whose login it is");
@@ -292,9 +304,12 @@ web::answer<account> tracker::current(const account& login) {
 	                                      web::formEncoded({{"client_id", net_.ids.mal},
 	                                                        {"grant_type", "refresh_token"},
 	                                                        {"refresh_token", login.renewal}})}));
-	if (not renewed.has_value())
-		return web::refused(
-		    "your MyAnimeList login has run out: log in again with 'catalist login mal'");
+	if (not renewed and renewed.error().why == web::failure::kind::kUnreachable)
+		return renewed;
+	if (not renewed)
+		return std::unexpected(web::failure{
+		    web::failure::kind::kLoginRefused,
+		    "your MyAnimeList login has run out: log in again with 'catalist login mal'"});
 	return renewed;
 }
 

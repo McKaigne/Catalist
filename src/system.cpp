@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
@@ -151,15 +152,16 @@ std::optional<std::string> runProgram(const std::vector<std::string>& arguments,
 
 namespace {
 
-// -f turns an HTTP error into a failed exit; a server that does not answer
-// is given up on after four seconds, and the whole request after eight. -g
-// leaves the brackets of a URL (Kitsu's filter[text]) to the server.
-const std::vector<std::string> kCurl = {"curl", "-sfLg", "--connect-timeout", "4", "-m",
-                                        "8",    "-A",    "catalist"};
+// The status goes on a line of its own after the body (-w), so an error's
+// body is kept too; a server that does not answer is given up on after four
+// seconds, and the whole request after eight. -g leaves the brackets of a
+// URL (Kitsu's filter[text]) to the server.
+const std::vector<std::string> kCurl = {"curl", "-sLg", "--connect-timeout", "4", "-m",  "8",
+                                        "-A",   "catalist", "-w", "\n%{http_code}"};
 
 }  // namespace
 
-std::optional<std::string> httpFetch(const web::request& sent) {
+std::optional<web::reply> httpFetch(const web::request& sent) {
 	std::vector<std::string> arguments = kCurl;
 	if (sent.method != "GET")
 		arguments.insert(arguments.end(), {"-X", sent.method});
@@ -169,7 +171,18 @@ std::optional<std::string> httpFetch(const web::request& sent) {
 	if (not sent.body.empty())
 		arguments.insert(arguments.end(), {"--data-binary", "@-"});
 	arguments.push_back(sent.url);
-	return runProgram(arguments, sent.body);
+	auto output = runProgram(arguments, sent.body);
+	// No status line: curl got no answer, or wrote something else.
+	size_t lineEnd = output ? output->rfind('\n') : std::string::npos;
+	if (lineEnd == std::string::npos)
+		return std::nullopt;
+	int status = 0;
+	const char* first = output->data() + lineEnd + 1;
+	const char* last = output->data() + output->size();
+	auto [end, error] = std::from_chars(first, last, status);
+	if (error != std::errc() or end != last or status == 0)
+		return std::nullopt;
+	return web::reply{status, output->substr(0, lineEnd)};
 }
 
 std::tm localTime() {

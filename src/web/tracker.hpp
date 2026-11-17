@@ -76,15 +76,22 @@ struct match {
 // is what the person is told.
 struct failure {
 	enum class kind {
-		// No answer: no connection, a timeout, an error status.
+		// No answer worth acting on: no connection, a timeout, a site too
+		// busy (429) or failing (5xx). Trying again later may work.
 		kUnreachable,
 		// The title has no id on the site, so there is nothing to ask.
 		kNotLinked,
-		// The site answered, but not with what was asked.
+		// The site answered, but not with what was asked: it does not know
+		// the title, or did not take the request. Trying again will not help.
 		kRefused,
+		// The site did not take the login's token (401, 403): the person
+		// must log in again.
+		kLoginRefused,
 	};
 	kind why = kind::kRefused;
 	std::string message;
+	// The HTTP status when the site answered with one, else 0.
+	int status = 0;
 };
 
 // What a site answers: the value asked for, or why not.
@@ -96,6 +103,12 @@ using answer = std::expected<T, failure>;
 // "not linked to AniList".
 [[nodiscard]] std::unexpected<failure> notLinked(provider site);
 [[nodiscard]] std::unexpected<failure> refused(std::string message);
+
+// The body of a reply from `site` that is a success (2xx). Anything else is
+// the failure it is: no reply, 429 or 5xx unreachable; 401 or 403 a login
+// the site does not take; any other status refused. The failure keeps the
+// status, for an adapter to read a 404 its own way.
+[[nodiscard]] answer<std::string> checked(const std::optional<reply>& got, provider site);
 
 // What a site knows about one title.
 struct details {

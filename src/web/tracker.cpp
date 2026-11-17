@@ -1,5 +1,6 @@
 #include "web/tracker.hpp"
 
+#include <format>
 #include <utility>
 
 #include "web/json.hpp"
@@ -17,6 +18,27 @@ std::unexpected<failure> notLinked(provider site) {
 
 std::unexpected<failure> refused(std::string message) {
 	return std::unexpected(failure{failure::kind::kRefused, std::move(message)});
+}
+
+answer<std::string> checked(const std::optional<reply>& got, provider site) {
+	std::string name = providerName(site);
+	if (not got)
+		return unreachable("could not reach " + name);
+	int status = got->status;
+	if (status >= 200 and status < 300)
+		return got->body;
+	failure why{failure::kind::kRefused, std::format("{} said no (HTTP {})", name, status), status};
+	if (status == 429 or status >= 500) {
+		why.why = failure::kind::kUnreachable;
+		why.message = std::format("{} is busy or down (HTTP {})", name, status);
+	} else if (status == 401 or status == 403) {
+		why.why = failure::kind::kLoginRefused;
+		why.message = std::format("{} did not take your login; log in again with 'catalist login {}'",
+		                          name, providerKey(site));
+	} else if (status == 404) {
+		why.message = std::format("{} does not know it (HTTP 404)", name);
+	}
+	return std::unexpected(why);
 }
 
 std::vector<answer<details>> iTracker::lookUpMany(const std::vector<entry>& known) {

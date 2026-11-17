@@ -83,18 +83,18 @@ void makeUnwritable(const std::filesystem::path& file) {
 	std::filesystem::create_directories(file);
 }
 
-void fakeWeb::respond(const std::string& fragment, const std::string& body) {
-	bodies[fragment] = body;
+void fakeWeb::respond(const std::string& fragment, const std::string& body, int status) {
+	bodies[fragment] = {status, body};
 }
 
-std::optional<std::string> fakeWeb::fetch(const web::request& asked) {
+std::optional<web::reply> fakeWeb::fetch(const web::request& asked) {
 	std::string request = std::format("{} {} {}", asked.method, asked.url, asked.body);
 	sent.push_back(request);
 	if (whileAsked)
 		whileAsked();
 	if (not asked.body.empty())
 		posted.push_back(asked.body);
-	const std::string* answer = nullptr;
+	const web::reply* answer = nullptr;
 	size_t matched = 0;
 	for (const auto& [fragment, body] : bodies) {
 		if (request.find(fragment) != std::string::npos and fragment.size() >= matched) {
@@ -102,7 +102,7 @@ std::optional<std::string> fakeWeb::fetch(const web::request& asked) {
 			matched = fragment.size();
 		}
 	}
-	return answer ? std::optional<std::string>(*answer) : std::nullopt;
+	return answer ? std::optional<web::reply>(*answer) : std::nullopt;
 }
 
 web::link fakeWeb::link() {

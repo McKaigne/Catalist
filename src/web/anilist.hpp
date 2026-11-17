@@ -78,9 +78,9 @@ protected:
 
 private:
 	// The reply to a query, asked as the account of `token` when there is
-	// one; nothing when AniList cannot be reached or said no.
-	[[nodiscard]] std::optional<std::string> ask(const std::string& query,
-	                                             const std::string& token = "") const;
+	// one; the failure when AniList cannot be reached or said no.
+	[[nodiscard]] web::answer<std::string> ask(const std::string& query,
+	                                           const std::string& token = "") const;
 
 	web::link net_;
 };

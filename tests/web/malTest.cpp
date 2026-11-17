@@ -52,9 +52,34 @@ TEST_CASE("mal sends the client id, and asks nothing without one") {
 	std::vector<std::string> headers;
 	net.fetch = [&headers](const catalist::web::request& sent) {
 		headers = sent.headers;
-		return std::optional<std::string>(R"({"data":[]})");
+		return std::optional<catalist::web::reply>({200, R"({"data":[]})"});
 	};
 	mal::tracker with(net);
 	CHECK(with.search(mediaType::kAnime, "frieren").has_value());
 	CHECK(headers == std::vector<std::string>{"X-MAL-CLIENT-ID: abc"});
+}
+
+TEST_CASE("mal tells a title it does not know from one it cannot reach") {
+	catalist::test::fakeWeb web;
+	auto net = web.link();
+	net.ids.mal = "abc";
+	web.respond("anime/1?", R"({"error":"not_found","message":""})", 404);
+	web.respond("anime/52991?", R"({"id":52991,"title":"Sousou no Frieren","num_episodes":28,
+	  "status":"finished_airing"})");
+	mal::tracker site(net);
+	std::vector<catalist::entry> known(2);
+	known[0].malId = 1;
+	known[1].malId = 52991;
+	// A 404 is about that title only: the next one is still asked.
+	auto found = site.lookUpMany(known);
+	REQUIRE(found.size() == 2);
+	CHECK(found[0].error().why == catalist::web::failure::kind::kRefused);
+	CHECK(found[0].error().message == "MyAnimeList does not know the title");
+	REQUIRE(found[1].has_value());
+	CHECK(found[1].value().facts.totalUnits == 28);
+	// A site that is down is asked no more.
+	web.respond("anime/1?", "", 503);
+	found = site.lookUpMany(known);
+	CHECK(found[0].error().why == catalist::web::failure::kind::kUnreachable);
+	CHECK(found[1].error().why == catalist::web::failure::kind::kUnreachable);
 }

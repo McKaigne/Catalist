@@ -60,13 +60,13 @@ protected:
 	void pause() const override { net_.pause(); }
 
 private:
-	// The reply to a GET with the client id; nothing when MyAnimeList cannot
-	// be reached.
-	[[nodiscard]] std::optional<std::string> get(const std::string& url) const;
+	// The reply to a GET with the client id; the failure when MyAnimeList
+	// cannot be reached or said no.
+	[[nodiscard]] web::answer<std::string> get(const std::string& url) const;
 	// Why nothing can be asked: no client id. Empty when something can.
 	[[nodiscard]] std::string cannotAsk() const;
 	// The account a token reply is for; asks MyAnimeList the user's name.
-	[[nodiscard]] web::answer<account> accountFor(const std::optional<std::string>& reply);
+	[[nodiscard]] web::answer<account> accountFor(const std::optional<web::reply>& reply);
 
 	web::link net_;
 	// PKCE's verifier, from startLogin to finishLogin.

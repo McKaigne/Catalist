@@ -41,8 +41,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli keeps what it could not send, and sync sends 
 	// AniList cannot be reached.
 	CHECK(run({"done", "taxi"}) == 0);
 	CHECK(has(err,
-	          "note: could not tell AniList of a:2: could not reach AniList, or it did not "
-	          "take the change.\n"));
+	          "note: could not tell AniList of a:2: could not reach AniList.\n"));
 	CHECK(has(err, "note: 1 change waits to be sent to the sites; 'catalist sync' sends it.\n"));
 	REQUIRE(waiting().size() == 1);
 	CHECK(run({"sync"}) == 1);
@@ -136,6 +135,18 @@ TEST_CASE_FIXTURE(cliFixture, "cli rm leaves the sites' lists alone, unless --re
 	REQUIRE(web.sent.size() == before + 2);
 	CHECK(has(web.sent.back(), R"("i":31)"));
 	CHECK(waiting().empty());
+}
+
+TEST_CASE_FIXTURE(cliFixture, "cli a title a site refuses does not hold back the others") {
+	seed();
+	logIn(provider::kAniList);
+	web.respond("SaveMediaListEntry", kSaved);
+	web.respond(R"("variables":{"m":154587)", R"({"errors":[{"message":"validation"}]})", 400);
+	CHECK(run({"sync", "--all"}) == 1);
+	CHECK(has(err, "note: could not tell AniList of a:1: AniList said no (HTTP 400).\n"));
+	CHECK(has(err, "Told the sites of 3 changes.\n"));
+	REQUIRE(waiting().size() == 1);
+	CHECK(waiting()[0].id == 1);
 }
 
 TEST_CASE_FIXTURE(cliFixture, "cli sync --all sends every linked title") {

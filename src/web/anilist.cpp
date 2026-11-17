@@ -229,12 +229,12 @@ web::answer<std::vector<web::match>> parseSearch(const std::string& body, mediaT
 	return found;
 }
 
-std::optional<std::string> tracker::ask(const std::string& query, const std::string& token) const {
+web::answer<std::string> tracker::ask(const std::string& query, const std::string& token) const {
 	std::vector<std::string> headers = {"Content-Type: application/json",
 	                                    "Accept: application/json"};
 	if (not token.empty())
 		headers.push_back(web::bearer(token));
-	return net_.fetch({"POST", kApiUrl, headers, query});
+	return web::checked(net_.fetch({"POST", kApiUrl, headers, query}), provider::kAniList);
 }
 
 web::answer<web::loginStart> tracker::startLogin() {
@@ -255,11 +255,13 @@ web::answer<account> tracker::finishLogin(const std::vector<std::string>& answer
 	if (token.empty())
 		return web::refused("no token given");
 	auto body = ask(R"({"query":"query{Viewer{id name}}"})", token);
+	if (not body and body.error().why == web::failure::kind::kUnreachable)
+		return std::unexpected(body.error());
 	auto reply = body ? json::parse(*body) : std::unexpected("");
 	const json::value& viewer = reply.has_value() ? reply.value()["data"]["Viewer"] : json::value();
 	auto name = viewer["name"].asString();
 	if (not name)
-		return web::refused("AniList did not take the token, or could not be reached");
+		return web::refused("AniList did not take the token");
 	constexpr long long kYear = 365LL * 24 * 60 * 60;
 	return account{provider::kAniList, *name, std::to_string(viewer["id"].asCount()), token, "",
 	               net_.now() + kYear};
@@ -268,9 +270,10 @@ web::answer<account> tracker::finishLogin(const std::vector<std::string>& answer
 web::answer<std::vector<entry>> tracker::pull(mediaType type, const std::string& user) {
 	auto body = ask(listRequest(type, user));
 	// AniList answers 404 for a user it has not, and for a private list.
+	if (not body and body.error().status == 404)
+		return web::refused(std::format("AniList has no public list of {}", user));
 	if (not body)
-		return web::unreachable(
-		    std::format("could not reach AniList, or it has no public list of {}", user));
+		return std::unexpected(body.error());
 	return parseList(*body, type);
 }
 
@@ -279,7 +282,7 @@ web::answer<void> tracker::push(const entry& title, const account& login) {
 		return web::notLinked(provider::kAniList);
 	auto body = ask(saveRequest(title), login.token);
 	if (not body)
-		return web::unreachable("could not reach AniList, or it did not take the change");
+		return std::unexpected(body.error());
 	auto reply = json::parse(*body);
 	if (not reply.has_value() or reply.value()["data"]["SaveMediaListEntry"]["id"].isNull())
 		return web::refused("AniList did not take the change");
@@ -287,9 +290,11 @@ web::answer<void> tracker::push(const entry& title, const account& login) {
 }
 
 web::answer<void> tracker::remove(mediaType, int siteId, const account& login) {
-	// AniList answers an error, which curl -f makes nothing, for a title that
-	// is not on the list: it is gone already.
+	// AniList answers 404 for a title that is not on the list: it is gone
+	// already.
 	auto body = ask(listEntryRequest(siteId, login.userId), login.token);
+	if (not body and body.error().status != 404)
+		return std::unexpected(body.error());
 	auto reply = body ? json::parse(*body) : std::unexpected("");
 	int listId = reply.has_value() ? reply.value()["data"]["MediaList"]["id"].asCount() : 0;
 	if (listId == 0)
@@ -300,14 +305,15 @@ web::answer<void> tracker::remove(mediaType, int siteId, const account& login) {
 	                            listId),
 	                login.token);
 	if (not gone)
-		return web::unreachable("could not reach AniList, or it did not take the change");
+		return std::unexpected(gone.error());
 	return {};
 }
 
 web::answer<account> tracker::current(const account& login) {
 	if (web::runningOut(login, net_.now()))
-		return web::refused(
-		    "your AniList login has run out: log in again with 'catalist login anilist'");
+		return std::unexpected(
+		    web::failure{web::failure::kind::kLoginRefused,
+		                 "your AniList login has run out: log in again with 'catalist login anilist'"});
 	return login;
 }
 
@@ -315,8 +321,10 @@ web::answer<web::details> tracker::lookUp(const entry& known) {
 	if (known.anilistId <= 0 and known.malId <= 0)
 		return web::refused("the title has no id to look up");
 	auto body = ask(lookupRequest({known.type, known.anilistId, known.malId}));
+	if (not body and body.error().status == 404)
+		return web::refused("AniList does not know the title");
 	if (not body)
-		return web::unreachable("could not reach AniList");
+		return std::unexpected(body.error());
 	return parseLookup(*body, known.type);
 }
 
@@ -348,10 +356,13 @@ std::vector<web::answer<web::details>> tracker::lookUpMany(const std::vector<ent
 				if (asked and reached)
 					pause();
 				asked = true;
-				auto body = reached ? ask(batchRequest(type, ids, byMal)) : std::nullopt;
-				auto titles =
-				    body ? parseBatch(*body, type) : web::unreachable("could not reach AniList");
-				reached = reached and body.has_value();
+				auto body = reached ? ask(batchRequest(type, ids, byMal))
+				                    : web::unreachable("could not reach AniList");
+				auto titles = body ? parseBatch(*body, type)
+				                   : web::answer<std::vector<web::details>>(
+				                         std::unexpected(body.error()));
+				reached = reached and
+				          (body or body.error().why != web::failure::kind::kUnreachable);
 				for (size_t i : batch) {
 					if (not titles.has_value()) {
 						found[i] = std::unexpected(titles.error());
@@ -372,7 +383,7 @@ std::vector<web::answer<web::details>> tracker::lookUpMany(const std::vector<ent
 web::answer<std::vector<web::match>> tracker::search(mediaType type, const std::string& query) {
 	auto body = ask(searchRequest(type, query));
 	if (not body)
-		return web::unreachable("could not reach AniList");
+		return std::unexpected(body.error());
 	return parseSearch(*body, type);
 }
 

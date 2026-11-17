@@ -80,11 +80,16 @@ siteReport sendTo(cliContext& ctx, provider site, const std::vector<pending>& mi
 			report.told += sent ? 1 : 0;
 			continue;
 		}
-		// The site is not there, or said no: this one waits, and so does the
-		// rest for this site.
 		ctx.err << std::format("note: could not tell {} of {}: {}.\n", providerName(site),
 		                       refOf(each), sent.error().message);
-		report.left = mine.size() - i;
+		// The site said no to this title only: it waits, and the rest go on.
+		if (sent.error().why == web::failure::kind::kRefused) {
+			++report.left;
+			continue;
+		}
+		// The site is not there, or no longer takes the login: the rest wait
+		// too.
+		report.left += mine.size() - i;
 		break;
 	}
 	return report;

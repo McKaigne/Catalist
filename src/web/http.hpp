@@ -20,10 +20,15 @@ struct request {
 	std::string body{};
 };
 
-// Sends a request: the body of the reply, or nothing when it failed for any
-// reason (no connection, a timeout, an HTTP error status). The program
-// passes httpFetch; tests pass a fake.
-using fetcher = std::function<std::optional<std::string>(const request&)>;
+// What a site answered: the HTTP status and the body, whatever the status.
+struct reply {
+	int status = 200;
+	std::string body{};
+};
+
+// Sends a request: the reply, or nothing when there was none (no
+// connection, a timeout). The program passes httpFetch; tests pass a fake.
+using fetcher = std::function<std::optional<reply>(const request&)>;
 
 // Text as it may stand in a URL's query: letters, digits and -._~ as they
 // are, every other byte as %XX.

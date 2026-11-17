@@ -20,6 +20,18 @@ std::unexpected<failure> refused(std::string message) {
 	return std::unexpected(failure{failure::kind::kRefused, std::move(message)});
 }
 
+double outOfTen(provider site, int score) {
+	switch (site) {
+		case provider::kAniList:
+			return score / 10.0;
+		case provider::kKitsu:
+			return score / 2.0;
+		case provider::kMyAnimeList:
+			break;
+	}
+	return score;
+}
+
 answer<std::string> checked(const std::optional<reply>& got, provider site) {
 	std::string name = providerName(site);
 	if (not got)

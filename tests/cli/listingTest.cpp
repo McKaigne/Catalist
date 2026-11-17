@@ -139,21 +139,29 @@ TEST_CASE_FIXTURE(cliFixture, "cli ls keeps a tab or a quote in a title from bre
 
 TEST_CASE_FIXTURE(cliFixture, "cli ls draws a table at a terminal") {
 	seed();
+	// Scores are five stars, a half star a point: full, half and empty.
+	const std::string eight = "\U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04D2";
+	const std::string ten = "\U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04CE";
 	CHECK(run({"ls"}, "", 100) == 0);
-	CHECK(out ==
-	      "REF  TITLE              STATUS        SCORE  PROGRESS  NEW\n"
-	      "m:1  Berserk            Reading           -  364/?\n"
-	      "a:2  Odd Taxi           Watching          8  5/13      +8\n"
-	      "a:1  Sousou no Frieren  Completed        10  28/28\n"
-	      "m:2  Sousou no Frieren  Plan to Read      -  0/?\n");
+	CHECK(out == "REF  TITLE              STATUS        SCORE  PROGRESS  NEW\n"
+	             "m:1  Berserk            Reading       -      364/?\n"
+	             "a:2  Odd Taxi           Watching      " +
+	                 eight +
+	                 "  5/13      +8\n"
+	                 "a:1  Sousou no Frieren  Completed     " +
+	                 ten +
+	                 "  28/28\n"
+	                 "m:2  Sousou no Frieren  Plan to Read  -      0/?\n");
 	CHECK(err.empty());
 
 	// A narrow terminal cuts the titles, not the other columns.
 	CHECK(run({"ls", "-a"}, "", 40) == 0);
-	CHECK(out ==
-	      "REF  TITLE       STATUS     SCORE  PROGRESS  NEW\n"
-	      "a:2  Odd Taxi    Watching       8  5/13      +8\n"
-	      "a:1  Sousou no…  Completed     10  28/28\n");
+	CHECK(out == "REF  TITLE       STATUS     SCORE  PROGRESS  NEW\n"
+	             "a:2  Odd Taxi    Watching   " +
+	                 eight +
+	                 "  5/13      +8\n"
+	                 "a:1  Sousou no…  Completed  " +
+	                 ten + "  28/28\n");
 
 	CHECK(run({"ls", "nothing like it"}, "", 100) == 0);
 	CHECK(out.empty());
@@ -231,7 +239,7 @@ TEST_CASE_FIXTURE(cliFixture, "cli show draws a card at a terminal") {
 	      "  Kitsu        -\n"
 	      "  Page         https://anilist.co/anime/128547\n"
 	      "  Status       Watching\n"
-	      "  Score        8/10\n"
+	      "  Score        \U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04D2  8/10\n"
 	      "  Progress     5/13 episodes  (+8 new)\n"
 	      "  Rewatched    0\n"
 	      "  Started      2026-10-01\n"

@@ -178,7 +178,6 @@ web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body, m
 	                     : statusOf(mine["status"].asString().value_or(""))
 	                           .value_or(watchStatus::kPlanToWatch);
 	found.score = mine["score"].asCount();
-	found.rawScore = found.score;
 	found.progress = mine[anime ? "num_episodes_watched" : "num_chapters_read"].asCount();
 	found.volumes = mine["num_volumes_read"].asCount();
 	found.rewatched = mine[anime ? "num_times_rewatched" : "num_times_reread"].asCount();

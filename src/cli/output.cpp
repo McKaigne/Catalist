@@ -1,6 +1,7 @@
 #include "cli/output.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 
 #include "core/text.hpp"
@@ -166,6 +167,18 @@ std::string jsonLine(const std::vector<std::string>& names, const std::vector<ce
 		line += std::format("{}{}:{}", i > 0 ? "," : "", jsonString(names[i]), value);
 	}
 	return line + "}\n";
+}
+
+std::string stars(double outOfTen) {
+	int halves = std::clamp(static_cast<int>(std::lround(outOfTen)), 0, 10);
+	if (halves == 0)
+		return "-";
+	std::string row;
+	for (int star = 0; star < 5; ++star) {
+		int left = halves - star * 2;
+		row += left >= 2 ? "\U000F04CE" : left == 1 ? "\U000F04D0" : "\U000F04D2";
+	}
+	return row;
 }
 
 std::string paint(const std::string& value, const char* sgr, bool color) {

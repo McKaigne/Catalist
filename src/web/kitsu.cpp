@@ -224,9 +224,8 @@ web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body) {
 	found.status = again ? watchStatus::kRewatching
 	                     : statusOf(attributes["status"].asString().value_or(""))
 	                           .value_or(watchStatus::kPlanToWatch);
-	found.rawScore = attributes["ratingTwenty"].asCount();
 	// ratingTwenty runs from 2 to 20.
-	found.score = (attributes["ratingTwenty"].asCount() + 1) / 2;
+	found.score = attributes["ratingTwenty"].asCount();
 	found.progress = attributes["progress"].asCount();
 	found.rewatched = attributes["reconsumeCount"].asCount();
 	found.startDate = web::dayOf(attributes["startedAt"].asString().value_or(""));

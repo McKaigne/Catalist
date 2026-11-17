@@ -47,6 +47,12 @@ struct cell {
 [[nodiscard]] std::string jsonLine(const std::vector<std::string>& names,
                                    const std::vector<cell>& cells);
 
+// A score out of 10 as five Nerd Font stars (nf-md-star, nf-md-star_half_full
+// and nf-md-star_outline: full, a whole star half filled, and empty), each
+// half a point, rounded to the nearest: 7 is three full stars, a half filled
+// one and an empty one. "-" for no score.
+[[nodiscard]] std::string stars(double outOfTen);
+
 // The text in an SGR colour or style ("1", "32"...), or as it is when
 // `color` is off or there is no style.
 [[nodiscard]] std::string paint(const std::string& value, const char* sgr, bool color);
@@ -55,6 +61,7 @@ inline const char* const kBold = "1";
 inline const char* const kDim = "2";
 inline const char* const kRed = "31";
 inline const char* const kGreen = "32";
+inline const char* const kYellow = "33";
 inline const char* const kCyan = "36";
 
 struct tableColumn {

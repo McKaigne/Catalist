@@ -57,7 +57,6 @@ add_library(catalistLib STATIC
   src/web/json.cpp
   src/web/kitsu.cpp
   src/web/mal.cpp
-  src/web/scores.cpp
   src/web/sites.cpp
   src/web/tracker.cpp
   # The command line.
@@ -146,7 +145,6 @@ add_executable(catalistTests
   tests/web/pullTest.cpp
   tests/web/pushTest.cpp
   tests/web/malTest.cpp
-  tests/web/scoresTest.cpp
   tests/web/entryOfTest.cpp
   tests/cli/accountsTest.cpp
   tests/cli/argsTest.cpp

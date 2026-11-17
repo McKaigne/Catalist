@@ -25,14 +25,14 @@ const char* const kRowFormat =
 // The list as a table for a terminal.
 std::string listTable(const cliContext& ctx, const std::vector<entry>& shown) {
 	std::vector<output::tableColumn> columns = {{"REF"},         {"TITLE", false, true}, {"STATUS"},
-	                                            {"SCORE", true}, {"PROGRESS"},           {"NEW"}};
+	                                            {"SCORE"},       {"PROGRESS"},           {"NEW"}};
 	std::vector<std::vector<output::styled>> rows;
 	for (const auto& e : shown) {
 		int fresh = newReleases(e);
 		rows.push_back({{refs::of(e), output::kCyan},
 		                {e.title},
 		                {statusToString(e.status, e.type), statusColor(e.status)},
-		                {e.score > 0 ? std::to_string(e.score) : "-"},
+		                {output::stars(e.score), output::kYellow},
 		                {outOf(e.progress, e.totalUnits)},
 		                {fresh > 0 ? std::format("+{}", fresh) : "", output::kGreen}});
 	}
@@ -116,7 +116,10 @@ void printCard(cliContext& ctx, const entry& e) {
 	if (not page.empty())
 		row("Page", page);
 	row("Status", paint(statusToString(e.status, e.type), statusColor(e.status), ctx.color));
-	row("Score", e.score > 0 ? std::format("{}/10", e.score) : "-");
+	row("Score", e.score > 0 ? std::format("{}  {}/10", paint(output::stars(e.score), output::kYellow,
+	                                                          ctx.color),
+	                                    e.score)
+	                         : "-");
 	row("Progress",
 	    std::format("{} {}", outOf(e.progress, e.totalUnits), unitName(e.type)) +
 	        (fresh > 0 ? paint(std::format("  (+{} new)", fresh), output::kGreen, ctx.color) : ""));

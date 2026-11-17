@@ -26,8 +26,8 @@ TEST_CASE("anilist reads your entry of a title, or says it is not on your list")
 	REQUIRE(found.value().has_value());
 	const auto& mine = *found.value();
 	CHECK(mine.status == watchStatus::kRewatching);
-	CHECK(mine.rawScore == 85);
-	CHECK(mine.score == 9);
+	CHECK(mine.score == 85);
+	CHECK(catalist::web::outOfTen(catalist::provider::kAniList, mine.score) == doctest::Approx(8.5));
 	CHECK(mine.progress == 4);
 	CHECK(mine.rewatched == 1);
 	CHECK(mine.hidden);
@@ -75,8 +75,8 @@ TEST_CASE("kitsu reads your library entry of a title") {
 	REQUIRE(found.has_value());
 	REQUIRE(found.value().has_value());
 	CHECK(found.value()->status == watchStatus::kWatching);
-	CHECK(found.value()->rawScore == 17);
-	CHECK(found.value()->score == 9);
+	CHECK(found.value()->score == 17);
+	CHECK(catalist::web::outOfTen(catalist::provider::kKitsu, 17) == doctest::Approx(8.5));
 	CHECK(found.value()->hidden);
 	CHECK(catalist::formatDate(found.value()->startDate) == "2026-10-01");
 	auto none = catalist::kitsu::parseEntry(R"({"data":[]})");

@@ -113,9 +113,9 @@ using answer = std::expected<T, failure>;
 // Your own entry for a title on a site, as the site keeps it.
 struct siteEntry {
 	watchStatus status = watchStatus::kPlanToWatch;
-	// The score as the site keeps it (AniList out of 100, MyAnimeList out
-	// of 10, Kitsu's ratingTwenty from 2 to 20), 0 for none; and out of 10.
-	double rawScore = 0.0;
+	// The score as the site keeps it: AniList out of 100, Kitsu's
+	// ratingTwenty from 2 to 20, MyAnimeList out of 10; 0 for none. Only
+	// what shows it converts it (outOfTen).
 	int score = 0;
 	int progress = 0;
 	int volumes = 0;
@@ -125,6 +125,10 @@ struct siteEntry {
 	// Hidden from others, where the site has that (AniList, Kitsu).
 	bool hidden = false;
 };
+
+// A score as `site` keeps it, out of 10: AniList's 85 is 8.5, Kitsu's 17 is
+// 8.5. For showing it; what is stored and sent stays the site's own.
+[[nodiscard]] double outOfTen(provider site, int score);
 
 // What a site knows about one title.
 struct details {

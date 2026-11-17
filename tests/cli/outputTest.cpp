@@ -124,3 +124,15 @@ TEST_CASE("output paints a table's cells, the header dim") {
 	      "\x1b[2mREF\x1b[0m  \x1b[2mNEW\x1b[0m\n"
 	      "\x1b[36ma:1\x1b[0m  \x1b[32m+8\x1b[0m\n");
 }
+
+TEST_CASE("a score is five Nerd Font stars: full, half filled and empty") {
+	const std::string F = "\U000F04CE";
+	const std::string H = "\U000F04D0";
+	const std::string E = "\U000F04D2";
+	CHECK(catalist::output::stars(10) == F + F + F + F + F);
+	CHECK(catalist::output::stars(7) == F + F + F + H + E);
+	CHECK(catalist::output::stars(1) == H + E + E + E + E);
+	CHECK(catalist::output::stars(8.5) == F + F + F + F + H);
+	CHECK(catalist::output::stars(8.4) == F + F + F + F + E);
+	CHECK(catalist::output::stars(0) == "-");
+}

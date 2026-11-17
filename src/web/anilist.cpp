@@ -160,8 +160,8 @@ web::answer<std::optional<web::siteEntry>> parseEntry(const std::string& body) {
 	};
 	web::siteEntry mine;
 	mine.status = statusOf(item["status"].asString().value_or("")).value_or(watchStatus::kPlanToWatch);
-	mine.rawScore = item["score"].asNumber().value_or(0.0);
-	mine.score = static_cast<int>(mine.rawScore / 10.0 + 0.5);
+	// Asked as POINT_100: out of 100 whatever the person scores in.
+	mine.score = static_cast<int>(item["score"].asNumber().value_or(0.0) + 0.5);
 	mine.progress = item["progress"].asCount();
 	mine.volumes = item["progressVolumes"].asCount();
 	mine.rewatched = item["repeat"].asCount();

@@ -185,6 +185,23 @@ TEST_CASE_FIXTURE(cliFixture, "cli rm leaves the sites' lists alone, unless --re
 	CHECK(waiting().empty());
 }
 
+TEST_CASE_FIXTURE(cliFixture, "cli unlink --remote takes the title off the site's list") {
+	seed();
+	CHECK(run({"unlink", "--remote", "taxi", "anilist"}) == 1);
+	CHECK(has(err, "you are not logged in to AniList"));
+	// Unlinked all the same.
+	CHECK(savedTitle(mediaType::kAnime, "Odd Taxi").anilistId == 0);
+	CHECK(run({"link", "taxi", "anilist", "128547"}) == 0);
+
+	logIn(provider::kAniList);
+	web.respond("MediaList(mediaId:$m,userId:$u)", R"({"data":{"MediaList":{"id":31}}})");
+	web.respond("DeleteMediaListEntry", R"({"data":{"DeleteMediaListEntry":{"deleted":true}}})");
+	CHECK(run({"unlink", "--remote", "taxi", "anilist"}) == 0);
+	CHECK(err == "Unlinked Odd Taxi (a:2) from AniList; it comes off your list there.\n");
+	CHECK(has(web.sent.back(), R"("i":31)"));
+	CHECK(waiting().empty());
+}
+
 TEST_CASE_FIXTURE(cliFixture, "cli a title a site refuses does not hold back the others") {
 	seed();
 	logIn(provider::kAniList);

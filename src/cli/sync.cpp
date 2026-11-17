@@ -554,12 +554,30 @@ int runUnlink(const command& self, const args::parsed& line, cliContext& ctx) {
 		ctx.err << std::format("{} is not linked to {}.\n", refs::of(*title), name);
 		return 0;
 	}
+	int siteId = idOn(*title, request.site);
 	ctx.db.updateEntry(withSiteId(*title, request.site, 0));
 	if (not ctx.db.saveAll())
 		return saveFailed(ctx);
+	bool remote = line.has("remote");
 	if (not line.has("q"))
-		ctx.err << std::format("Unlinked {} ({}) from {}: it stays on your list there.\n",
-		                       title->title, refs::of(*title), name);
+		ctx.err << std::format("Unlinked {} ({}) from {}{}.\n", title->title, refs::of(*title),
+		                       name,
+		                       remote ? "; it comes off your list there"
+		                              : ": it stays on your list there");
+	if (not remote)
+		return 0;
+	if (not accounts::on(readAccounts(ctx), request.site))
+		return fail(ctx, std::format("you are not logged in to {}: log in to take it off "
+		                             "your list there",
+		                             name));
+	pending gone{.site = request.site,
+	             .type = title->type,
+	             .id = title->id,
+	             .removed = true,
+	             .siteId = siteId};
+	if (not ctx.db.queue({gone}))
+		return fail(ctx, "could not keep the changes to tell the sites of");
+	sendWaiting(ctx);
 	return 0;
 }
 
@@ -613,9 +631,11 @@ std::vector<command> syncCommands() {
 	    {.name = "unlink",
 	     .summary = "Stop telling a site of a title",
 	     .details = "Forgets the title's id on the site, so changes to it are no longer\n"
-	                "sent there. The site's entry stays as it is. Not a step for undo.\n",
+	                "sent there. The site's entry stays as it is, unless --remote takes it\n"
+	                "off your list there too. Not a step for undo.\n",
 	     .options = {{'a', "", "", "look in the anime list only"},
 	                 {'m', "", "", "look in the manga list only"},
+	                 {0, "remote", "", "take it off your list on the site as well"},
 	                 kQuiet},
 	     .operands = "REF anilist|mal|kitsu",
 	     .run = runUnlink,

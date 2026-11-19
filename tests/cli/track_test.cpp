@@ -95,3 +95,27 @@ TEST_CASE_FIXTURE(CliFixture, "cli track --pull takes the site's entry as the ti
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 5);
 	CHECK(Run({"track", "--pull", "kitsu", "taxi"}) == 1);
 }
+
+TEST_CASE_FIXTURE(CliFixture, "cli track saves a renewed login token") {
+	Seed();
+	web.Respond("filter[animeId]=43095", R"({"data":[]})");
+	web.Respond("POST https://kitsu.app/api/edge/library-entries", "{}");
+	REQUIRE(Run({"link", "taxi", "kitsu", "43095"}) == 0);
+
+	// An expired Kitsu login with a refresh token.
+	auto logins = catalist::accounts::With(
+	    {}, {Provider::kKitsu, "abel", "77", "old_tok", "old_rt", clock - 10});
+	catalist::test::WriteText("state/accounts", catalist::accounts::Format(logins));
+
+	web.Respond("grant_type=refresh_token&refresh_token=old_rt",
+	            R"({"access_token":"new_tok","refresh_token":"new_rt","expires_in":2592000})");
+	web.Respond("GET https://kitsu.app/api/edge/users?filter[self]=true",
+	            R"({"data":[{"id":"77","attributes":{"name":"abel"}}]})");
+	CHECK(Run({"track", "taxi"}) == 0);
+
+	auto after = catalist::accounts::Parse(catalist::test::ReadText("state/accounts"));
+	auto kitsu = catalist::accounts::On(after, Provider::kKitsu);
+	REQUIRE(kitsu.has_value());
+	CHECK(kitsu->token == "new_tok");
+	CHECK(kitsu->renewal == "new_rt");
+}

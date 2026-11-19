@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <format>
 #include <istream>
 #include <numeric>
@@ -176,6 +177,17 @@ std::optional<int> ParseCount(const std::string& text) {
 	    not std::all_of(text.begin(), text.end(), [](unsigned char c) { return std::isdigit(c); }))
 		return std::nullopt;
 	return std::stoi(text);
+}
+
+std::optional<int> ParseId(const std::string& text) {
+	if (text.empty() or
+	    not std::all_of(text.begin(), text.end(), [](unsigned char c) { return std::isdigit(c); }))
+		return std::nullopt;
+	int id = 0;
+	auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), id);
+	if (error != std::errc() or end != text.data() + text.size() or id <= 0)
+		return std::nullopt;
+	return id;
 }
 
 }  // namespace catalist::args

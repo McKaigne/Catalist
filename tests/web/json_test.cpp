@@ -41,3 +41,15 @@ TEST_CASE("json rejects malformed input") {
 	CHECK_FALSE(json::Parse("{} trailing").has_value());
 	CHECK_FALSE(json::Parse(std::string(100, '[') + std::string(100, ']')).has_value());
 }
+
+TEST_CASE("json rejects out-of-range numbers in AsInteger and AsCount") {
+	auto huge = json::Parse("[1e30, 1e15, -1e30, 9223372036854775808]");
+	REQUIRE(huge.has_value());
+	const auto& items = huge.value().Items();
+	CHECK_FALSE(items[0].AsInteger().has_value());
+	CHECK(items[0].AsCount() == 0);
+	CHECK(items[1].AsInteger() == 1000000000000000LL);
+	CHECK(items[1].AsCount() == 0);
+	CHECK_FALSE(items[2].AsInteger().has_value());
+	CHECK_FALSE(items[3].AsInteger().has_value());
+}

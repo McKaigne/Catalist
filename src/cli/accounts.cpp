@@ -39,9 +39,11 @@ std::string DayOf(long long seconds) {
 }
 
 std::string Trimmed(std::string text) {
-	text.erase(0, text.find_first_not_of(" \t\r"));
-	text.erase(text.find_last_not_of(" \t\r") + 1);
-	return text;
+	size_t first = text.find_first_not_of(" \t\r");
+	if (first == std::string::npos)
+		return "";
+	size_t last = text.find_last_not_of(" \t\r");
+	return text.substr(first, last - first + 1);
 }
 
 int RunLogin(const Command& self, const args::Parsed& line, CliContext& ctx) {

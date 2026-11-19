@@ -558,6 +558,7 @@ bool Catalogue::Commit(const std::function<bool()>& work) {
 bool Catalogue::WriteRows() {
 	auto insert = db_.Prepare(kInsertEntry);
 	auto remove = db_.Prepare("DELETE FROM entry WHERE type = ? AND id = ?");
+	bool has_outbox = HasTable(db_, "outbox");
 	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
 		const auto& now = GetList(type);
 		const auto& before = GetSaved(type);
@@ -569,7 +570,15 @@ bool Catalogue::WriteRows() {
 		}
 		for (const auto& row : before) {
 			bool gone = FindById(now, row.id) == nullptr;
-			if (gone and not remove.Bind(TypeKey(type)).Bind(row.id).Run())
+			if (not gone)
+				continue;
+			if (not remove.Bind(TypeKey(type)).Bind(row.id).Run())
+				return false;
+			if (has_outbox and
+			    not db_.Prepare("DELETE FROM outbox WHERE type = ? AND id = ? AND removed = 0")
+			            .Bind(TypeKey(type))
+			            .Bind(row.id)
+			            .Run())
 				return false;
 		}
 	}

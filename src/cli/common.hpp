@@ -190,6 +190,9 @@ extern const args::Option kFrom;
 [[nodiscard]] std::vector<Account> ReadAccounts(const CliContext& ctx);
 // Writes them, readable by their owner only; false when that failed.
 [[nodiscard]] bool SaveAccounts(const CliContext& ctx, const std::vector<Account>& logins);
+// Returns `login` with a current token, saving it when renewed.
+[[nodiscard]] web::Answer<Account> CurrentLogin(CliContext& ctx, web::Tracker& site,
+                                                const Account& login);
 
 // ---- Telling the sites (sync.cpp) ----
 

@@ -155,3 +155,10 @@ TEST_CASE("args reads a count of digits only") {
 	for (const char* bad : {"", "-1", "+1", "1.5", "3x", " 3", "1234567"})
 		CHECK_FALSE(catalist::args::ParseCount(bad).has_value());
 }
+
+TEST_CASE("args reads a site id beyond six digits") {
+	CHECK(catalist::args::ParseId("1") == 1);
+	CHECK(catalist::args::ParseId("1234567") == 1234567);
+	for (const char* bad : {"", "0", "-1", "+1", "1x", "99999999999"})
+		CHECK_FALSE(catalist::args::ParseId(bad).has_value());
+}

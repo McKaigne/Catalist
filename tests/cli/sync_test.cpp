@@ -296,3 +296,21 @@ TEST_CASE_FIXTURE(CliFixture, "cli sync --all sends every linked title") {
 	CHECK(Run({"sync", "--forget"}) == 0);
 	CHECK(err == "Forgot 0 changes the sites were not told of.\n");
 }
+
+TEST_CASE_FIXTURE(CliFixture, "cli link accepts large ids and rm drops stale outbox updates") {
+	Seed();
+	LogIn(Provider::kAniList);
+	CHECK(Run({"--offline", "+", "taxi"}) == 0);
+	REQUIRE(Waiting().size() == 1);
+
+	// Removing Odd Taxi drops its queued update so a new title reusing a:2 cannot inherit it.
+	CHECK(Run({"rm", "-f", "taxi"}) == 0);
+	CHECK(Waiting().empty());
+
+	CHECK(Run({"add", "--no-lookup", "Future Show"}) == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Future Show").id == 2);
+	web.Respond(kEntry, R"({"data":{"Page":{"mediaList":[]}}})");
+	web.Respond("SaveMediaListEntry", kSaved);
+	CHECK(Run({"link", "a:2", "anilist", "1234567"}) == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Future Show").anilist_id == 1234567);
+}

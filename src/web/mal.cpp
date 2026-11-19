@@ -215,8 +215,9 @@ web::Answer<std::vector<Entry>> Tracker::Pull(MediaType type, const std::string&
 	if (auto why = CannotAsk(); not why.empty())
 		return web::Refused(why);
 	std::vector<Entry> all;
-	for (std::string page = ListUrl(type, user); not page.empty();) {
-		if (not all.empty())
+	bool first = true;
+	for (std::string page = ListUrl(type, user); not page.empty(); first = false) {
+		if (not first)
 			Pause();
 		auto body = Get(page);
 		// MyAnimeList answers 403 or 404 for a private list or no such user.

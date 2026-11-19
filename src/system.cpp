@@ -20,6 +20,7 @@
 #include <fstream>
 #include <istream>
 #include <iterator>
+#include <random>
 #include <utility>
 
 namespace catalist {
@@ -87,6 +88,12 @@ std::optional<std::string> RunProgram(const std::vector<std::string>& arguments,
 	if (not to_child or not from_child or arguments.empty())
 		return std::nullopt;
 
+	std::vector<char*> argv;
+	argv.reserve(arguments.size() + 1);
+	for (const std::string& argument : arguments)
+		argv.push_back(const_cast<char*>(argument.c_str()));
+	argv.push_back(nullptr);
+
 	pid_t child = fork();
 	if (child == 0) {
 		// In the child: the pipes become standard input and output, errors go
@@ -96,11 +103,6 @@ std::optional<std::string> RunProgram(const std::vector<std::string>& arguments,
 		FileDescriptor dev_null(open("/dev/null", O_WRONLY | O_CLOEXEC));
 		if (dev_null.Get() >= 0)
 			dup2(dev_null.Get(), STDERR_FILENO);
-		std::vector<char*> argv;
-		std::transform(
-		    arguments.begin(), arguments.end(), std::back_inserter(argv),
-		    [](const std::string& argument) { return const_cast<char*>(argument.c_str()); });
-		argv.push_back(nullptr);
 		execvp(argv[0], argv.data());
 		_exit(127);
 	}
@@ -132,11 +134,13 @@ std::optional<std::string> RunProgram(const std::vector<std::string>& arguments,
 			ssize_t count = write(feed.Get(), input.data() + written, input.size() - written);
 			if (count > 0)
 				written += static_cast<size_t>(count);
-			if ((count < 0 and errno != EAGAIN) or written == input.size())
+			if ((count < 0 and errno != EAGAIN and errno != EINTR) or written == input.size())
 				feed.Reset();
 		}
 		if (ends[0].revents != 0) {
 			ssize_t count = read(from_child->read.Get(), buffer.data(), buffer.size());
+			if (count < 0 and errno == EINTR)
+				continue;
 			if (count <= 0)
 				break;
 			output.append(buffer.data(), static_cast<size_t>(count));
@@ -145,8 +149,11 @@ std::optional<std::string> RunProgram(const std::vector<std::string>& arguments,
 	feed.Reset();
 
 	int status = 0;
-	waitpid(child, &status, 0);
-	bool succeeded = WIFEXITED(status) and WEXITSTATUS(status) == 0;
+	pid_t waited = -1;
+	do {
+		waited = waitpid(child, &status, 0);
+	} while (waited < 0 and errno == EINTR);
+	bool succeeded = waited == child and WIFEXITED(status) and WEXITSTATUS(status) == 0;
 	return succeeded ? std::optional<std::string>(output) : std::nullopt;
 }
 
@@ -211,18 +218,32 @@ bool WritePrivateFile(const std::filesystem::path& file, const std::string& text
 	std::filesystem::path next = file;
 	next += ".new";
 	FileDescriptor out(open(next.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600));
-	if (out.Get() < 0 or fchmod(out.Get(), 0600) != 0)
+	auto cleanup = [&] { std::filesystem::remove(next, ec); };
+	if (out.Get() < 0 or fchmod(out.Get(), 0600) != 0) {
+		out.Reset();
+		cleanup();
 		return false;
+	}
 	for (size_t done = 0; done < text.size();) {
 		ssize_t count = write(out.Get(), text.data() + done, text.size() - done);
-		if (count <= 0)
+		if (count < 0 and errno == EINTR)
+			continue;
+		if (count <= 0) {
+			out.Reset();
+			cleanup();
 			return false;
+		}
 		done += static_cast<size_t>(count);
 	}
-	if (fsync(out.Get()) != 0)
+	if (fsync(out.Get()) != 0) {
+		out.Reset();
+		cleanup();
 		return false;
+	}
 	out.Reset();
 	std::filesystem::rename(next, file, ec);
+	if (ec)
+		cleanup();
 	return not ec;
 }
 
@@ -250,6 +271,12 @@ std::string RandomText(size_t length) {
 	std::string bytes(length, '\0');
 	std::ifstream source("/dev/urandom", std::ios::binary);
 	source.read(bytes.data(), static_cast<std::streamsize>(length));
+	size_t got = source ? length : static_cast<size_t>(source.gcount());
+	if (got < length) {
+		std::random_device fallback;
+		for (size_t i = got; i < length; ++i)
+			bytes[i] = static_cast<char>(fallback());
+	}
 	std::string text;
 	for (unsigned char c : bytes)
 		text += kLetters[c % (sizeof(kLetters) - 1)];

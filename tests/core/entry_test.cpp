@@ -419,3 +419,17 @@ TEST_CASE("linking keeps what you set, and takes what the site has beyond it") {
 	auto same = catalist::MergeLinked(kept, MakeEntry().Status(WatchStatus::kPlanToWatch), kToday);
 	CHECK(same == kept);
 }
+
+TEST_CASE("parseStatus and parseProvider handle UTF-8 safely and done finishes a rewatch") {
+	CHECK_FALSE(ParseStatus("葬送のフリーレン").has_value());
+	CHECK_FALSE(catalist::ParseProvider("葬送のフリーレン").has_value());
+	Entry again = MakeEntry()
+	                  .Status(WatchStatus::kRewatching)
+	                  .TotalUnits(12)
+	                  .Progress(4)
+	                  .StartDate("2026-01-01");
+	auto done = catalist::SetStatus(again, WatchStatus::kCompleted, kToday);
+	CHECK(done.status == WatchStatus::kCompleted);
+	CHECK(done.progress == 12);
+	CHECK(done.rewatched == 1);
+}

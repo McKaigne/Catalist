@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <format>
 
+#include "core/text.hpp"
+
 namespace catalist {
 
 std::string StatusToString(WatchStatus status, MediaType type) {
@@ -52,8 +54,7 @@ std::string StatusKey(WatchStatus status) {
 }
 
 std::optional<WatchStatus> ParseStatus(const std::string& str) {
-	std::string lower = str;
-	std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+	std::string lower = utf8::Lowercase(str);
 
 	if (lower.find("plan") != std::string::npos or lower == "5") {
 		return WatchStatus::kPlanToWatch;
@@ -99,8 +100,7 @@ std::string ProviderKey(Provider site) {
 }
 
 std::optional<Provider> ParseProvider(const std::string& name) {
-	std::string lower = name;
-	std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+	std::string lower = utf8::Lowercase(name);
 	if (lower == "anilist" or lower == "al")
 		return Provider::kAniList;
 	if (lower == "myanimelist" or lower == "mal")
@@ -200,6 +200,8 @@ Entry ApplyStatusDates(Entry target, WatchStatus previous, const IsoDate& today)
 			target.finish_date = today;
 			if (HasKnownTotal(target))
 				target.progress = std::max(target.progress, target.total_units);
+			if (previous == WatchStatus::kRewatching)
+				++target.rewatched;
 			break;
 		case WatchStatus::kOnHold:
 		case WatchStatus::kDropped:

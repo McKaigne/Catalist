@@ -199,21 +199,28 @@ int RunRemove(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	auto request = ReadRefs(self, line, ctx);
 	if (request.stop)
 		return *request.stop;
-	if (not LoadForWrite(ctx))
+	if (not Load(ctx))
 		return 1;
 	auto found = Resolve(ctx, request.refs, request.how);
 	if (not found)
 		return 1;
 	if (not line.Has("f") and not RemovalConfirmed(ctx, *found, request.how.ask))
 		return 1;
+	if (not LoadForWrite(ctx))
+		return 1;
 	std::vector<journal::Change> changes;
-	for (const auto& gone : *found) {
-		ctx.db.RemoveEntry(gone.type, gone.id);
-		changes.push_back({gone.type, gone.id, gone, std::nullopt});
+	std::vector<Entry> removed;
+	for (const auto& each : *found) {
+		auto current = ctx.db.GetById(each.type, each.id);
+		if (not current)
+			return Fail(ctx, std::format("{} was removed meanwhile", refs::Of(each)));
+		ctx.db.RemoveEntry(current->type, current->id);
+		changes.push_back({current->type, current->id, *current, std::nullopt});
+		removed.push_back(*current);
 	}
 	int code = SaveAndReport(ctx, line, changes);
 	if (code == 0 and line.Has("remote"))
-		TellSitesGone(ctx, *found);
+		TellSitesGone(ctx, removed);
 	return code;
 }
 

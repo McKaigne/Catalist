@@ -350,6 +350,8 @@ int RunSync(const Command& self, const args::Parsed& line, CliContext& ctx) {
 		ctx.err << "You are not logged in to any site. Log in with: catalist login SITE\n";
 		return waiting.empty() ? 0 : 1;
 	}
+	if (ctx.offline)
+		return Fail(ctx, "--offline: nothing is sent");
 	if (line.Has("all")) {
 		std::vector<Pending> every;
 		for (const auto& login : logins)
@@ -365,8 +367,6 @@ int RunSync(const Command& self, const args::Parsed& line, CliContext& ctx) {
 			    "each.\n",
 			    Titles(every.size()));
 	}
-	if (ctx.offline)
-		return Fail(ctx, "--offline: nothing is sent");
 	auto report = SendOutbox(ctx, true);
 	if (not line.Has("q")) {
 		if (report.told == 0 and report.left == 0 and report.gave_up == 0)
@@ -444,8 +444,8 @@ std::optional<Entry> ChosenIds(const Command& self, const args::Parsed& line, Cl
 	Entry chosen;
 	code = 1;
 	if (line.operands.size() == 3) {
-		auto id = args::ParseCount(line.operands[2]);
-		if (not id or *id == 0) {
+		auto id = args::ParseId(line.operands[2]);
+		if (not id) {
 			code = UsageError(ctx, self,
 			                  std::format("'{}' is not an id on {}", line.operands[2], name));
 			return std::nullopt;
@@ -495,7 +495,7 @@ int RunLink(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	std::optional<web::SiteEntry> theirs;
 	if (login and not ctx.offline) {
 		auto tracker = TrackerFor(ctx, site);
-		auto fresh = tracker->Current(*login);
+		auto fresh = CurrentLogin(ctx, *tracker, *login);
 		auto yours =
 		    fresh ? tracker->EntryOf(WithIds(*request.title, *chosen, site), *fresh)
 		          : web::Answer<std::optional<web::SiteEntry>>(std::unexpected(fresh.error()));

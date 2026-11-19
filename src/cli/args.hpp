@@ -62,6 +62,9 @@ struct Parsed {
 // A count: digits only, and few enough of them to fit an int.
 [[nodiscard]] std::optional<int> ParseCount(const std::string& text);
 
+// A positive site id: digits only, above 0, fitting an int.
+[[nodiscard]] std::optional<int> ParseId(const std::string& text);
+
 }  // namespace catalist::args
 
 #endif  // CATALIST_CLI_ARGS_HPP_

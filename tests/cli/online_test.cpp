@@ -412,3 +412,11 @@ TEST_CASE_FIXTURE(CliFixture, "cli searches by a site's id, and in your own list
 	CHECK(Run({"search", "my:taxi"}) == 0);
 	CHECK(out == "1\tanime\tOdd Taxi\t-\t13\t0\t128547\t44265\ta:2\t0\n");
 }
+
+TEST_CASE_FIXTURE(CliFixture, "cli search id: accepts ids of seven or more digits") {
+	web.Respond(
+	    R"({"id":1234567,"type":"ANIME")",
+	    R"({"data":{"Media":{"id":1234567,"idMal":null,"title":{"romaji":"Future Show"}}}})");
+	CHECK(Run({"search", "id:1234567"}) == 0);
+	CHECK(out == "1\tanime\tFuture Show\t-\t0\t0\t1234567\t0\t-\t0\n");
+}

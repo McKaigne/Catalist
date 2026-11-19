@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <format>
+#include <limits>
 
 namespace catalist::json {
 
@@ -287,14 +288,19 @@ std::optional<bool> Value::AsBool() const {
 
 std::optional<long long> Value::AsInteger() const {
 	auto number = AsNumber();
-	if (not number or std::trunc(*number) != *number)
+	constexpr double kMinInt64 = -9223372036854775808.0;
+	constexpr double kMaxInt64PlusOne = 9223372036854775808.0;
+	if (not number or not std::isfinite(*number) or std::trunc(*number) != *number or
+	    *number < kMinInt64 or *number >= kMaxInt64PlusOne)
 		return std::nullopt;
 	return static_cast<long long>(*number);
 }
 
 int Value::AsCount() const {
 	auto count = AsInteger();
-	return count and *count > 0 ? static_cast<int>(*count) : 0;
+	if (not count or *count <= 0 or *count > std::numeric_limits<int>::max())
+		return 0;
+	return static_cast<int>(*count);
 }
 
 std::optional<std::string> Value::AsString() const {

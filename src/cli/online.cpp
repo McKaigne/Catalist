@@ -355,8 +355,8 @@ web::Answer<std::vector<web::Match>> SearchSite(CliContext& ctx, web::Tracker& s
                                                 const std::string& query) {
 	Provider where = site.Site();
 	if (query.starts_with("id:")) {
-		auto id = args::ParseCount(query.substr(3));
-		if (not id or *id == 0)
+		auto id = args::ParseId(query.substr(3));
+		if (not id)
 			return web::Refused(std::format("'{}' is not id: and a number", query));
 		Entry probe;
 		probe.type = type;

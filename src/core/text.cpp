@@ -121,8 +121,10 @@ std::string Fit(const std::string& text, int columns) {
 }
 
 std::string Lowercase(std::string text) {
-	std::transform(text.begin(), text.end(), text.begin(),
-	               [](unsigned char c) { return std::tolower(c); });
+	for (char& c : text) {
+		if (c >= 'A' and c <= 'Z')
+			c = static_cast<char>(c + ('a' - 'A'));
+	}
 	return text;
 }
 

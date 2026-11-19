@@ -60,7 +60,7 @@ std::vector<SiteLine> ReadSites(CliContext& ctx, const Entry& title) {
 			line.state = "logged-out";
 		} else {
 			auto tracker = TrackerFor(ctx, site);
-			auto fresh = tracker->Current(*login);
+			auto fresh = CurrentLogin(ctx, *tracker, *login);
 			auto yours =
 			    fresh ? tracker->EntryOf(title, *fresh)
 			          : web::Answer<std::optional<web::SiteEntry>>(std::unexpected(fresh.error()));
@@ -207,7 +207,7 @@ int PullSite(const args::Parsed& line, CliContext& ctx, const Entry& title, Prov
 		return Fail(ctx, std::format("{} is not {} on {}", refs::Of(title),
 		                             login ? "linked" : "something you are logged in to", name));
 	auto tracker = TrackerFor(ctx, site);
-	auto fresh = tracker->Current(*login);
+	auto fresh = CurrentLogin(ctx, *tracker, *login);
 	auto yours = fresh ? tracker->EntryOf(title, *fresh)
 	                   : web::Answer<std::optional<web::SiteEntry>>(std::unexpected(fresh.error()));
 	if (not yours)

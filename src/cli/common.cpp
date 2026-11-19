@@ -449,6 +449,15 @@ bool SaveAccounts(const CliContext& ctx, const std::vector<Account>& logins) {
 	return WritePrivateFile(ctx.accounts_file, accounts::Format(logins));
 }
 
+web::Answer<Account> CurrentLogin(CliContext& ctx, web::Tracker& site, const Account& login) {
+	auto fresh = site.Current(login);
+	if (fresh and (fresh->token != login.token or fresh->renewal != login.renewal)) {
+		if (not SaveAccounts(ctx, accounts::With(ReadAccounts(ctx), *fresh)))
+			ctx.err << "note: could not save the renewed login.\n";
+	}
+	return fresh;
+}
+
 std::string WebError(const web::Failure& why) {
 	if (why.why == web::Failure::Kind::kUnreachable)
 		return why.message + "; check the connection and try again";

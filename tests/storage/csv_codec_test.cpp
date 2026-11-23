@@ -30,10 +30,10 @@ TEST_CASE("csvCodec splitFields handles escaped quotes and empty fields") {
 TEST_CASE("csvCodec decodeEntry rejects short rows and non numeric ids") {
 	CHECK_FALSE(csv_codec::DecodeEntry({"1", "2", "3"}));
 	CHECK_FALSE(csv_codec::DecodeEntry({"1", "0", "anime", "T", "Watching"}));
-	CHECK_FALSE(csv_codec::DecodeEntry(
-	    csv_codec::SplitFields("x,0,anime,T,Watching,0,0,0,0,0,0,,,,0")));
-	CHECK_FALSE(csv_codec::DecodeEntry(
-	    csv_codec::SplitFields("1,0,book,T,Watching,0,0,0,0,0,0,,,,0")));
+	CHECK_FALSE(
+	    csv_codec::DecodeEntry(csv_codec::SplitFields("x,0,anime,T,Watching,0,0,0,0,0,0,,,,0")));
+	CHECK_FALSE(
+	    csv_codec::DecodeEntry(csv_codec::SplitFields("1,0,book,T,Watching,0,0,0,0,0,0,,,,0")));
 }
 
 TEST_CASE("csvCodec writes a row and reads it back") {

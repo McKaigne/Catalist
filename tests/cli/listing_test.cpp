@@ -104,8 +104,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls keeps a tab or a quote in a title from bre
 		REQUIRE(db.SaveAll());
 	}
 	CHECK(Run({"ls"}) == 0);
-	CHECK(out ==
-	      "a:1\tanime\tTab here, \"quoted\"\twatching\t0\t0\t0\t0\t0\t2026-01-02\t-\t-\n");
+	CHECK(out == "a:1\tanime\tTab here, \"quoted\"\twatching\t0\t0\t0\t0\t0\t2026-01-02\t-\t-\n");
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {

@@ -35,7 +35,9 @@ sudo cmake --install build
 =nix develop= (or =direnv allow=) opens the =catalist-dev= shell: the
 compiler, CMake, Ninja, SQLite and its =sqlite3= tool, doctest and gdb. In
 that shell =CATALIST_DATA_DIR= is =build/dev-data=, so what you try out never
-touches your own lists.
+touches your own lists. GCC does the building; =.clang-format= and the
+=build/compile_commands.json= CMake writes are for the editor's clang-format
+and clangd.
 
 #+begin_src sh
 nix develop

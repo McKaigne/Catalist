@@ -9,6 +9,8 @@ include(GNUInstallDirs)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# clangd, the editor's language server, reads build/compile_commands.json.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # The lists are kept in an SQLite file.
 find_package(SQLite3 REQUIRED)

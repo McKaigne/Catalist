@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <format>
 #include <utility>
+
 #include "core/entry.hpp"
 
 namespace catalist {

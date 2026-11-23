@@ -20,8 +20,8 @@ int main(int argc, char* argv[]) {
 	catalist::DataDirEnv dirs{env("CATALIST_DATA_DIR"), env("XDG_DATA_HOME"), env("HOME")};
 	catalist::Catalogue db(catalist::DataDirFor(dirs));
 
-	catalist::CliContext ctx{db,        std::cin,            std::cout,
-	                         std::cerr, catalist::LocalTime, catalist::HttpFetch};
+	catalist::CliContext ctx{
+	    db, std::cin, std::cout, std::cerr, catalist::LocalTime, catalist::HttpFetch};
 	ctx.interactive = catalist::IsInteractive();
 	ctx.columns = catalist::TerminalColumns();
 	// https://no-color.org; a dumb terminal cannot show colours either.

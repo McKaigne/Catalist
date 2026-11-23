@@ -10,14 +10,7 @@
 // Pure: titles in, titles or numbers out.
 namespace catalist {
 
-enum class SortKey {
-	kUpdated,
-	kScore,
-	kStatus,
-	kTitle,
-	kProgress,
-	kDate
-};
+enum class SortKey { kUpdated, kScore, kStatus, kTitle, kProgress, kDate };
 
 // Each key has a natural order: last change, score, progress and date from
 // high to low, title and status from first to last.

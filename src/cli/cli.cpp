@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <format>
+
 #include "cli/common.hpp"
 #include "core/version.hpp"
 
@@ -112,9 +113,9 @@ int RunDefault(CliContext& ctx) {
 const std::vector<Command>& Commands() {
 	static const std::vector<Command> kAll = [] {
 		std::vector<Command> table;
-		for (const auto& group : {cli::ListingCommands(), cli::TrackingCommands(),
-		                          cli::OnlineCommands(), cli::TransferCommands(),
-		                          cli::HistoryCommands()})
+		for (const auto& group :
+		     {cli::ListingCommands(), cli::TrackingCommands(), cli::OnlineCommands(),
+		      cli::TransferCommands(), cli::HistoryCommands()})
 			table.insert(table.end(), group.begin(), group.end());
 		table.push_back({.name = "help",
 		                 .summary = "Show help for a command",

@@ -64,8 +64,8 @@ std::optional<anilist::Match> ChooseMatch(CliContext& ctx, MediaType type, const
 	if (matches.size() == 1)
 		return matches[0];
 
-	ctx.err << std::format("{}'{}' matches {} {} on AniList:\n", ctx.interactive ? "" : "error: ",
-	                       query, matches.size(), TypeKey(type));
+	ctx.err << std::format("{}'{}' matches {} {} on AniList:\n",
+	                       ctx.interactive ? "" : "error: ", query, matches.size(), TypeKey(type));
 	for (size_t i = 0; i < matches.size(); ++i)
 		ctx.err << std::format("  {:>2}  {:<4}  {}  ({})\n", i + 1,
 		                       matches[i].year.empty() ? "-" : matches[i].year, matches[i].name,
@@ -131,7 +131,8 @@ int RunAdd(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	}
 	bool by_hand = line.Has("no-lookup");
 	if (by_hand and pick)
-		return UsageError(ctx, self, "--pick chooses among AniList's matches; --no-lookup asks none");
+		return UsageError(ctx, self,
+		                  "--pick chooses among AniList's matches; --no-lookup asks none");
 
 	IsoDate today = ctx.Today();
 	Entry added;
@@ -231,8 +232,8 @@ int RunSearch(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	std::vector<std::vector<std::string>> rows;
 	for (size_t i = 0; i < matches.size(); ++i) {
 		const auto& match = matches[i];
-		rows.push_back({std::to_string(i + 1), TypeKey(*type), match.name, output::OrDash(match.year),
-		                std::to_string(match.total_units),
+		rows.push_back({std::to_string(i + 1), TypeKey(*type), match.name,
+		                output::OrDash(match.year), std::to_string(match.total_units),
 		                match.score > 0.0 ? std::format("{:.1f}", match.score) : "0",
 		                std::to_string(match.anilist_id), std::to_string(match.mal_id),
 		                output::OrDash(mine[i])});

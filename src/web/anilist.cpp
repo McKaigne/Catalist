@@ -38,8 +38,8 @@ Details DetailsOf(const json::Value& media, MediaType type) {
 
 // The body of AniList's reply to a query, or what to tell the person.
 Result<std::string> Ask(const web::Fetcher& fetch, const std::string& query) {
-	auto got =
-	    fetch({"POST", kApiUrl, {"Content-Type: application/json", "Accept: application/json"}, query});
+	auto got = fetch(
+	    {"POST", kApiUrl, {"Content-Type: application/json", "Accept: application/json"}, query});
 	if (not got)
 		return std::unexpected("could not reach AniList; check the connection and try again");
 	int status = got->status;

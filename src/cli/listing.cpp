@@ -38,9 +38,8 @@ std::string ListTable(const CliContext& ctx, const std::vector<Entry>& shown) {
 }
 
 const std::map<std::string, SortKey> kSortKeys = {
-    {"updated", SortKey::kUpdated}, {"score", SortKey::kScore},
-    {"status", SortKey::kStatus},   {"title", SortKey::kTitle},
-    {"progress", SortKey::kProgress}, {"date", SortKey::kDate}};
+    {"updated", SortKey::kUpdated}, {"score", SortKey::kScore},       {"status", SortKey::kStatus},
+    {"title", SortKey::kTitle},     {"progress", SortKey::kProgress}, {"date", SortKey::kDate}};
 
 int RunList(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	auto text = ReadText(self, line, ctx);

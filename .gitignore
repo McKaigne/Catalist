@@ -8,8 +8,9 @@ bin/
 *.xml
 result
 
-# Dev environments
+# Dev environments and clangd's index
 .direnv/
+.cache/
 
 # Local runtime data
 watchlist.tsv

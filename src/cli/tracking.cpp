@@ -103,8 +103,7 @@ Result<std::map<std::string, std::string>> ReadAssignments(const std::vector<std
 		std::string value = operands[i].substr(equals + 1);
 		const Settable* field = FindSettable(name);
 		if (not field)
-			return std::unexpected(
-			    std::format("unknown field '{}'", name));
+			return std::unexpected(std::format("unknown field '{}'", name));
 		if (not field->set(Entry{}, value, today))
 			return std::unexpected(
 			    std::format("{} '{}' is not {}", field->name, value, field->wants));

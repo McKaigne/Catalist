@@ -255,8 +255,7 @@ TEST_CASE("mergeImported refreshes totals and fills only what the user left empt
 }
 
 TEST_CASE("applyWebFacts keeps known values the check did not have") {
-	auto tracked =
-	    MakeEntry().TotalUnits(24).TotalVolumes(3).UpdatedAt("2026-01-01").Build();
+	auto tracked = MakeEntry().TotalUnits(24).TotalVolumes(3).UpdatedAt("2026-01-01").Build();
 	auto refreshed = catalist::ApplyWebFacts(tracked, {});
 	CHECK(refreshed.total_units == 24);
 	CHECK(refreshed.total_volumes == 3);

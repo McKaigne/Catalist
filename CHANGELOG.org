@@ -23,7 +23,8 @@ Entries below that describe them no longer apply.
 - The NEW column and =--sort=new=. The store moves to version 2: a version 1
   file is upgraded when first opened, keeping its lists and clearing its undo
   history.
-- The Clang tooling, the CI workflow and macOS from the flake.
+- The CI workflow, =.clangd=, and macOS from the flake. GCC builds Catalist;
+  clangd and clang-format stay as editor tools.
 
 *** Added
 - Tracking at parity with Mihon's: =catalist link= reads your entry on the

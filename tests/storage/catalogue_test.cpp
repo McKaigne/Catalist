@@ -590,7 +590,8 @@ TEST_CASE("catalogue data dir: CATALIST_DATA_DIR, then XDG_DATA_HOME, then ~/.lo
 	CHECK(db.StorePath() == "/data/catalist.db");
 }
 
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue brings a version 1 file up to date, keeping its lists") {
+TEST_CASE_FIXTURE(TempDirFixture,
+                  "catalogue brings a version 1 file up to date, keeping its lists") {
 	std::filesystem::create_directories(TempDir() / "data");
 	{
 		catalist::store::Database raw;

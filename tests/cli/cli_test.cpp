@@ -45,8 +45,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli help lists the commands, and each command has
 	CHECK(Has(
 	    out,
 	    "  -s STATUS         only watching, completed, on-hold, dropped, planned, rewatching, or a,b\n"));
-	CHECK(
-	    Has(out, "      --sort=KEY    updated, score, progress, date, status or title\n"));
+	CHECK(Has(out, "      --sort=KEY    updated, score, progress, date, status or title\n"));
 	CHECK(out.rfind("  -h, --help        show this help\n") + 35 == out.size());
 	CHECK(err.empty());
 	std::string from_help = out;
@@ -111,7 +110,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli help and version work with a broken catalogue
 	CHECK(Run({"set", "--help"}) == 0);
 }
 
-TEST_CASE_FIXTURE(CliFixture, "cli refuses a command or option it does not know, with exit code 2") {
+TEST_CASE_FIXTURE(CliFixture,
+                  "cli refuses a command or option it does not know, with exit code 2") {
 	CHECK(Run({"lst"}) == 2);
 	CHECK(err ==
 	      "error: unknown command 'lst'\n"
@@ -124,9 +124,9 @@ TEST_CASE_FIXTURE(CliFixture, "cli refuses a command or option it does not know,
 	CHECK(err.find("error: unknown option '--frobnicate'\nUsage: catalist [OPTION...] COMMAND") ==
 	      0);
 	// The names the earlier command line had are gone.
-	for (const char* gone : {"list", "info", "version", "next", "edit", "remove", "delete",
-	                         "login", "logout", "accounts", "sync", "link", "unlink", "track",
-	                         "refresh", "provider", "completion"})
+	for (const char* gone :
+	     {"list", "info", "version", "next", "edit", "remove", "delete", "login", "logout",
+	      "accounts", "sync", "link", "unlink", "track", "refresh", "provider", "completion"})
 		CHECK(Run({gone}) == 2);
 	CHECK(Run({"udno"}) == 2);
 	CHECK(err.find("error: unknown command 'udno'\n") == 0);
@@ -163,10 +163,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli refuses a command or option it does not know,
 TEST_CASE_FIXTURE(CliFixture, "cli stops quietly when nothing reads its output any more") {
 	Seed();
 	out_closed = true;
-	for (const auto& args : {std::vector<std::string>{"ls"},
-	                         {"ls", "-q"},
-	                         {"show", "taxi", "berserk"},
-	                         {"help"}}) {
+	for (const auto& args :
+	     {std::vector<std::string>{"ls"}, {"ls", "-q"}, {"show", "taxi", "berserk"}, {"help"}}) {
 		CHECK(Run(args) == 0);
 		CHECK(out.empty());
 		CHECK(err.empty());

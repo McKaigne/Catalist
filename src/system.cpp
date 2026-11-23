@@ -154,8 +154,8 @@ namespace {
 // The status goes on a line of its own after the body (-w), so an error's
 // body is kept too; a server that does not answer is given up on after four
 // seconds, and the whole request after eight.
-const std::vector<std::string> kCurl = {
-    "curl", "-sL", "--connect-timeout", "4", "-m", "8", "-A", "catalist", "-w", "\n%{http_code}"};
+const std::vector<std::string> kCurl = {"curl", "-sL", "--connect-timeout", "4",  "-m",
+                                        "8",    "-A",  "catalist",          "-w", "\n%{http_code}"};
 
 }  // namespace
 

@@ -310,6 +310,25 @@ TEST_CASE("mergeImported refreshes totals and fills only what the user left empt
 	CHECK_FALSE(catalist::MergeImported(mine, imported).finish_date.has_value());
 }
 
+TEST_CASE("takeImported puts the file's values in place of the user's") {
+	Entry mine = MakeEntry()
+	                 .MalId(5)
+	                 .Status(WatchStatus::kCompleted)
+	                 .Score(8)
+	                 .Progress(12)
+	                 .TotalUnits(12)
+	                 .StartDate("2026-01-01")
+	                 .FinishDate("2026-02-02");
+	Entry file = MakeEntry().MalId(5).Status(WatchStatus::kWatching).Progress(3);
+	auto taken = catalist::TakeImported(mine, file);
+	CHECK(taken.status == WatchStatus::kWatching);
+	CHECK(taken.progress == 3);
+	// What the file does not hold stays, but a title in progress has no finish date.
+	CHECK(taken.score == 8);
+	CHECK(FormatDate(taken.start_date) == "2026-01-01");
+	CHECK_FALSE(taken.finish_date.has_value());
+}
+
 TEST_CASE("setStatus fills the dates like the cycle and ignores no change") {
 	Entry planned = MakeEntry().Status(WatchStatus::kPlanToWatch).TotalUnits(12).Progress(3);
 	auto done = catalist::SetStatus(planned, WatchStatus::kCompleted, kToday);

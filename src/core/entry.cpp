@@ -321,4 +321,20 @@ Entry MergeImported(Entry existing, const Entry& incoming) {
 	return existing;
 }
 
+Entry TakeImported(Entry existing, const Entry& incoming) {
+	existing = MergeImported(existing, incoming);
+	existing.status = incoming.status;
+	for (int Entry::* count :
+	     {&Entry::score, &Entry::progress, &Entry::volumes, &Entry::rewatched})
+		if (incoming.*count > 0)
+			existing.*count = incoming.*count;
+	if (incoming.start_date)
+		existing.start_date = incoming.start_date;
+	if (incoming.finish_date)
+		existing.finish_date = incoming.finish_date;
+	if (incoming.status != WatchStatus::kCompleted and incoming.status != WatchStatus::kRewatching)
+		existing.finish_date.reset();
+	return existing;
+}
+
 }  // namespace catalist

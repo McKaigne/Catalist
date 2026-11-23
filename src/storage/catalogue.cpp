@@ -197,17 +197,23 @@ int Catalogue::AddEntry(Entry added) {
 }
 
 int Catalogue::ImportEntry(Entry incoming) {
-	if (incoming.anilist_id > 0 or incoming.mal_id > 0)
+	auto existing = FindImported(incoming);
+	if (not existing)
 		return AddEntry(std::move(incoming));
+	UpdateEntry(MergeImported(*existing, incoming));
+	return existing->id;
+}
+
+std::optional<Entry> Catalogue::FindImported(const Entry& incoming) const {
+	if (incoming.anilist_id > 0 or incoming.mal_id > 0)
+		return FindByIds(incoming.type, incoming.anilist_id, incoming.mal_id);
 	std::string name = utf8::Lowercase(incoming.title);
-	for (auto& existing : GetList(incoming.type)) {
+	for (const auto& existing : GetList(incoming.type)) {
 		bool has_id = existing.anilist_id > 0 or existing.mal_id > 0;
-		if (has_id or utf8::Lowercase(existing.title) != name)
-			continue;
-		existing = MergeImported(existing, incoming);
-		return existing.id;
+		if (not has_id and utf8::Lowercase(existing.title) == name)
+			return existing;
 	}
-	return AddEntry(std::move(incoming));
+	return std::nullopt;
 }
 
 const std::vector<Entry>& Catalogue::GetEntries(MediaType type) const {

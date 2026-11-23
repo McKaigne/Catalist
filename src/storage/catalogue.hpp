@@ -71,6 +71,8 @@ public:
 	// nothing: one without a site id is known by its name alone, and merges
 	// into a stored title of that name that has no site id either.
 	int ImportEntry(Entry incoming);
+	// The stored title ImportEntry would merge this one into.
+	[[nodiscard]] std::optional<Entry> FindImported(const Entry& incoming) const;
 	[[nodiscard]] const std::vector<Entry>& GetEntries(MediaType type) const;
 	[[nodiscard]] std::optional<Entry> GetById(MediaType type, int id) const;
 	// The entry with any of the ids (0 matches nothing).

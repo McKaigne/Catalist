@@ -1,7 +1,10 @@
+#include <algorithm>
 #include <format>
 #include <istream>
 #include <iterator>
 #include <ostream>
+#include <set>
+#include <string_view>
 
 #include "cli/common.hpp"
 #include "storage/mal_xml.hpp"
@@ -38,9 +41,95 @@ struct Source {
 	std::vector<Entry> titles;
 };
 
+struct Clash {
+	std::string field;
+	std::string yours;
+	std::string file;
+};
+
+// Where both hold a value and the values differ. A value only one of them has
+// is no clash: an import fills in what is empty.
+std::vector<Clash> ClashesOf(const Entry& mine, const Entry& file) {
+	std::vector<Clash> clashes;
+	int total = file.total_units > 0 ? file.total_units : mine.total_units;
+	if (mine.status != file.status)
+		clashes.push_back({"status", StatusKey(mine.status), StatusKey(file.status)});
+	auto count = [&](const char* field, int Entry::* value, bool out_of_total = false) {
+		if (mine.*value == 0 or file.*value == 0 or mine.*value == file.*value)
+			return;
+		clashes.push_back({field,
+		                   out_of_total ? OutOf(mine.*value, total) : std::to_string(mine.*value),
+		                   out_of_total ? OutOf(file.*value, total) : std::to_string(file.*value)});
+	};
+	auto date = [&](const char* field, std::optional<IsoDate> Entry::* value) {
+		if (mine.*value and file.*value and mine.*value != file.*value)
+			clashes.push_back({field, FormatDate(mine.*value), FormatDate(file.*value)});
+	};
+	count("score", &Entry::score);
+	count("progress", &Entry::progress, true);
+	count("volumes", &Entry::volumes);
+	count("rewatched", &Entry::rewatched);
+	date("started", &Entry::start_date);
+	date("finished", &Entry::finish_date);
+	return clashes;
+}
+
+void PrintClashes(CliContext& ctx, const Entry& mine, const std::vector<Clash>& clashes) {
+	size_t width = 0;
+	for (const auto& each : clashes)
+		width = std::max(width, each.yours.size());
+	ctx.err << std::format("{} ({})\n", DisplayName(mine), TypeKey(mine.type));
+	for (const auto& each : clashes)
+		ctx.err << std::format("  {:<9} yours {:<{}}   file {}\n", each.field, each.yours, width,
+		                       each.file);
+	ctx.err << "\n";
+}
+
+// k, f, K, F or q; q too when the input ends.
+char AskClash(CliContext& ctx) {
+	while (true) {
+		ctx.err << "[k]eep  [f]ile  [K]eep rest  [F]ile rest  [q]uit: " << std::flush;
+		std::string answer;
+		if (not std::getline(ctx.in, answer))
+			return 'q';
+		if (answer.size() == 1 and std::string_view("kfKFq").contains(answer[0]))
+			return answer[0];
+	}
+}
+
+// The titles of the files whose values are to replace the person's. Nothing
+// when the person quit.
+std::optional<std::set<const Entry*>> AskClashes(CliContext& ctx,
+                                                 const std::vector<Source>& sources) {
+	std::set<const Entry*> take_file;
+	std::optional<char> rest;
+	for (const auto& source : sources) {
+		for (const auto& title : source.titles) {
+			auto mine = ctx.db.FindImported(title);
+			auto clashes = mine ? ClashesOf(*mine, title) : std::vector<Clash>{};
+			if (clashes.empty())
+				continue;
+			char answer = rest.value_or('\0');
+			if (not rest) {
+				PrintClashes(ctx, *mine, clashes);
+				answer = AskClash(ctx);
+			}
+			if (answer == 'q')
+				return std::nullopt;
+			if (answer == 'K' or answer == 'F')
+				rest = answer;
+			if (answer == 'f' or answer == 'F')
+				take_file.insert(&title);
+		}
+	}
+	return take_file;
+}
+
 // Adds the titles of each source to the lists: a title there already keeps
-// what the person gave it, and gets only what it lacks. One step for undo.
-int AddSources(CliContext& ctx, const args::Parsed& line, const std::vector<Source>& sources) {
+// what the person gave it and gets only what it lacks, unless it is one of
+// `take_file`. One step for undo.
+int AddSources(CliContext& ctx, const args::Parsed& line, const std::vector<Source>& sources,
+               const std::set<const Entry*>& take_file) {
 	if (not LoadForWrite(ctx))
 		return 1;
 	std::vector<Entry> anime_before = ctx.db.GetEntries(MediaType::kAnime);
@@ -49,7 +138,9 @@ int AddSources(CliContext& ctx, const args::Parsed& line, const std::vector<Sour
 		size_t added = 0;
 		for (const auto& title : each.titles) {
 			size_t before = ctx.db.GetEntries(title.type).size();
-			ctx.db.ImportEntry(title);
+			int id = ctx.db.ImportEntry(title);
+			if (take_file.contains(&title))
+				ctx.db.UpdateEntry(TakeImported(*ctx.db.GetById(title.type, id), title));
 			added += ctx.db.GetEntries(title.type).size() - before;
 		}
 		if (not line.Has("q"))
@@ -77,7 +168,20 @@ int RunImport(const Command& self, const args::Parsed& line, CliContext& ctx) {
 			return Fail(ctx, read.error());
 		sources.push_back({file == "-" ? "standard input" : file, read.value()});
 	}
-	return AddSources(ctx, line, sources);
+	std::set<const Entry*> take_file;
+	if (ctx.interactive and not line.Has("q")) {
+		// Asked before the catalogue is taken for writing: no other program
+		// waits while the person chooses.
+		if (not Load(ctx))
+			return 1;
+		auto chosen = AskClashes(ctx, sources);
+		if (not chosen) {
+			ctx.err << "Cancelled.\n";
+			return 1;
+		}
+		take_file = std::move(*chosen);
+	}
+	return AddSources(ctx, line, sources, take_file);
 }
 
 int RunExport(const Command& self, const args::Parsed& line, CliContext& ctx) {
@@ -105,10 +209,11 @@ std::vector<Command> TransferCommands() {
 	     .details =
 	         std::string("A FILE is a MyAnimeList XML export; - is standard input. MyAnimeList\n"
 	                     "gzips its exports: unpack them first (gunzip).\n\n"
-	                     "A title already in your lists keeps the score, progress and dates you\n"
-	                     "gave it; the import fills in only those still empty, and refreshes its\n"
-	                     "totals and ids. Everything is read before anything is added: when one\n"
-	                     "file is bad, nothing is changed.\n\n") +
+	                     "An import fills in what a title in your lists lacks, and refreshes its\n"
+	                     "totals and ids. Where the file and your lists differ, a terminal asks\n"
+	                     "which to keep, title by title; elsewhere, and with -q, yours stay.\n"
+	                     "Everything is read before anything is added: when one file is bad, or\n"
+	                     "you quit, nothing is changed.\n\n") +
 	         kChangeFormat,
 	     .options = {kQuiet},
 	     .operands = "FILE...",

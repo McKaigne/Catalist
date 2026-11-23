@@ -219,3 +219,49 @@ TEST_CASE_FIXTURE(CliFixture, "cli export of an empty catalogue is an empty list
 	CHECK(catalist::mal_xml::Parse(out).empty());
 	CHECK_FALSE(std::filesystem::exists("data"));
 }
+
+TEST_CASE_FIXTURE(CliFixture, "cli import asks title by title where the file differs") {
+	Put("lists/anime.xml", kAnimeXml);
+	REQUIRE(Run({"import", "-q", "lists/anime.xml"}) == 0);
+	REQUIRE(Run({"set", "-q", "taxi", "score=3", "progress=9"}) == 0);
+	REQUIRE(Run({"set", "-q", "frieren", "score=4"}) == 0);
+	size_t steps = Steps().size();
+
+	// In a script, and with -q, yours stay and nobody is asked.
+	CHECK(Run({"import", "lists/anime.xml"}) == 0);
+	CHECK_FALSE(Has(err, "[k]eep"));
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").score == 3);
+	CHECK(Run({"import", "-q", "lists/anime.xml"}, "f\n") == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").score == 3);
+
+	// Quit changes nothing, and so does the input ending.
+	CHECK(Run({"import", "lists/anime.xml"}, "f\nq\n") == 1);
+	CHECK(Has(err, "Cancelled.\n"));
+	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").score == 4);
+	CHECK(Run({"import", "lists/anime.xml"}, "f\n") == 1);
+	CHECK(Steps().size() == steps);
+
+	// An answer that is none of them is asked again.
+	CHECK(Run({"import", "lists/anime.xml"}, "x\nk\nf\n") == 0);
+	CHECK(Has(err, "Sousou no Frieren (anime)\n  score     yours 4   file 10\n\n[k]eep"));
+	CHECK(Has(err, "Odd Taxi (anime)\n  score     yours 3      file 8\n"
+	               "  progress  yours 9/13   file 5/13\n"));
+	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").score == 4);
+	auto taxi = SavedTitle(MediaType::kAnime, "Odd Taxi");
+	CHECK(taxi.score == 8);
+	CHECK(taxi.progress == 5);
+	CHECK(Steps().size() == steps + 1);
+
+	// One step for undo.
+	CHECK(Run({"undo", "-q"}) == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").score == 3);
+
+	CHECK(Run({"import", "-q", "lists/anime.xml"}) == 0);
+	CHECK(Run({"import", "lists/anime.xml"}, "F\n") == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").score == 10);
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").score == 8);
+	CHECK(Run({"undo", "-q"}) == 0);
+	CHECK(Run({"import", "lists/anime.xml"}, "K\n") == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").score == 4);
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").score == 3);
+}

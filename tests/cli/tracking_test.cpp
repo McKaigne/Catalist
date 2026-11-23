@@ -333,6 +333,27 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm removes nothing when a REF is wrong") {
 	CHECK(out.empty());
 }
 
+TEST_CASE_FIXTURE(CliFixture, "cli takes a lone - for no title, though titles hold hyphens") {
+	Seed();
+	CHECK(Run({"add", "-q", "--no-lookup", "Re-Zero"}) == 0);
+	const std::string said =
+	    "error: '-' is not a REF: give a ref such as a:12, or part of a title\n";
+	for (const std::vector<std::string>& line : {std::vector<std::string>{"rm", "-f", "-"},
+	                                             {"done", "-"},
+	                                             {"+", "a:2", "-"},
+	                                             {"show", "-"},
+	                                             {"set", "-", "score=5"}}) {
+		CHECK(Run(line) == 2);
+		CHECK(err.find(said) == 0);
+	}
+	CHECK(SavedTitle(MediaType::kAnime, "Re-Zero").status == WatchStatus::kPlanToWatch);
+	CHECK(Saved(MediaType::kAnime).size() == 3);
+	CHECK(Steps().size() == 1);
+	// Part of a title may still hold one.
+	CHECK(Run({"done", "-q", "re-z"}) == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Re-Zero").status == WatchStatus::kCompleted);
+}
+
 TEST_CASE_FIXTURE(CliFixture, "cli set takes today for a date") {
 	Seed();
 	CHECK(Run({"set", "a:1", "start=today", "finish=today"}) == 0);

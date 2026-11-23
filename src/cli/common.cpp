@@ -220,6 +220,8 @@ RefRequest ReadRefs(const Command& cmd, const args::Parsed& line, CliContext& ct
 	                             [](const std::string& ref) { return ref.empty(); });
 	if (any_empty)
 		request.stop = UsageError(ctx, cmd, "a REF cannot be empty");
+	else if (std::find(request.refs.begin(), request.refs.end(), "-") != request.refs.end())
+		request.stop = UsageError(ctx, cmd, kDashNotRef);
 	return request;
 }
 
@@ -348,6 +350,10 @@ extern const args::Option kQuiet{'q', "", "", "print nothing"};
 extern const char* const kRefsHelp =
     "A REF is a ref such as a:12, or part of a title. Every REF is looked up\n"
     "before anything changes: when one of them fails, nothing is changed.\n";
+
+// Alone, - would match every title with a hyphen in it.
+extern const char* const kDashNotRef =
+    "'-' is not a REF: give a ref such as a:12, or part of a title";
 
 extern const char* const kChangeFormat =
     "Each field that changed is printed. Into a pipe that is one line of\n"

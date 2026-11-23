@@ -138,6 +138,7 @@ int ChangeTitles(const Command& self, const args::Parsed& line, CliContext& ctx,
 // What the helps share.
 extern const args::Option kQuiet;
 extern const char* const kRefsHelp;
+extern const char* const kDashNotRef;
 extern const char* const kChangeFormat;
 
 // ---- The commands, by file ----

@@ -135,6 +135,8 @@ int RunStep(const Command& self, const args::Parsed& line, CliContext& ctx) {
 int RunSet(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	if (line.operands.empty() or line.operands[0].empty())
 		return UsageError(ctx, self, "name a title: a ref such as a:12, or part of it");
+	if (line.operands[0] == "-")
+		return UsageError(ctx, self, kDashNotRef);
 	if (line.operands.size() < 2)
 		return UsageError(ctx, self, "nothing to change: give a FIELD=VALUE such as score=8");
 	IsoDate today = ctx.Today();

@@ -55,11 +55,11 @@ expect "no command: exit" "$?" 2
 expect "no command: output" "$(cat "$work/out")" ""
 grep -q 'no command given' "$work/err" || fail "no command: no note"
 
-# add --pick takes one of AniList's matches; --no-lookup stays offline.
+# add --pick takes one of AniList's matches.
 added=$(catalist add --pick=2 fullmetal)
 expect "add --pick" "$added" "$(printf 'a:1\tFullmetal Alchemist\tadded\t-\tplanned')"
-catalist add -q --no-lookup --status=watching "Odd Taxi"
-catalist add -q --no-lookup --status=watching Dandadan
+catalist add -q --status=watching "Odd Taxi"
+catalist add -q --status=watching Dandadan
 expect "add: the titles" "$(catalist ls -q | tr '\n' ' ')" "a:3 a:1 a:2 "
 
 # The refs of one command feed another.
@@ -90,12 +90,11 @@ expect "rm -f" "$(catalist ls -q | tr '\n' ' ')" "a:1 a:2 "
 catalist undo -q
 expect "rm -f, undo" "$(field a:3 3)" Dandadan
 
-# export | import: what one list holds, another reads. The titles added by
-# hand have no MyAnimeList id, so XML leaves them out.
+# export | import: what one list holds, another reads.
 catalist export anime 2>/dev/null |
 	CATALIST_DATA_DIR=$work/other "$program" import -q -
 expect "export | import" "$(CATALIST_DATA_DIR=$work/other "$program" ls | cut -f 1,3)" \
-	"$(printf 'a:1\tFullmetal Alchemist')"
+	"$(printf 'a:3\tDandadan\na:1\tFullmetal Alchemist\na:2\tOdd Taxi')"
 
 # import reads a named pipe, as process substitution hands it one.
 catalist export anime >"$work/anime.xml" 2>/dev/null
@@ -105,7 +104,7 @@ CATALIST_DATA_DIR=$work/piped "$program" import -q "$work/fifo"
 expect "import from a pipe: exit" "$?" 0
 wait
 expect "import from a pipe" "$(CATALIST_DATA_DIR=$work/piped "$program" ls | cut -f 1,3)" \
-	"$(printf 'a:1\tFullmetal Alchemist')"
+	"$(printf 'a:3\tDandadan\na:1\tFullmetal Alchemist\na:2\tOdd Taxi')"
 
 # A reader that stops early is no error.
 awk 'BEGIN {

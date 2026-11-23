@@ -215,7 +215,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli set checks every value before touching anythi
 	CHECK(err.find("error: unknown status 'rewatched'") == 0);
 	CHECK(Run({"ls", "-s", "watchng"}) == 2);
 	CHECK(err.find("error: unknown status 'watchng'\n") == 0);
-	CHECK(Run({"add", "--no-lookup", "--status=plan", "Some OVA"}) == 2);
+	CHECK(Run({"add", "--status=plan", "Some OVA"}) == 2);
 	CHECK(Run({"ls", "-q", "-s", "Reading,ON-HOLD"}) == 0);
 	CHECK(Run({"set", "taxi", "progress=lots"}) == 2);
 	CHECK(err.find("error: progress 'lots' is not a count\n") == 0);
@@ -349,10 +349,11 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm removes nothing when a REF is wrong") {
 
 TEST_CASE_FIXTURE(CliFixture, "cli rm removes only the title the person confirmed") {
 	Seed();
+	KnowTitle("Newcomer", 900);
 	// The ref passes to a new title while the question is open.
 	CHECK(RunAsked({"rm", "a:2"}, "y\n", [this] {
 		      CHECK(Run({"rm", "-fq", "a:2"}) == 0);
-		      CHECK(Run({"add", "-q", "--no-lookup", "Newcomer"}) == 0);
+		      CHECK(Run({"add", "-q", "Newcomer"}) == 0);
 	      }) == 1);
 	CHECK(Has(err, "error: Odd Taxi (anime) was removed or replaced meanwhile; nothing was changed\n"));
 	CHECK(SavedTitle(MediaType::kAnime, "Newcomer").id == 2);
@@ -383,7 +384,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli holds no lock while the person chooses a titl
 
 TEST_CASE_FIXTURE(CliFixture, "cli takes a lone - for no title, though titles hold hyphens") {
 	Seed();
-	CHECK(Run({"add", "-q", "--no-lookup", "Re-Zero"}) == 0);
+	KnowTitle("Re-Zero", 900);
+	CHECK(Run({"add", "-q", "Re-Zero"}) == 0);
 	const std::string said =
 	    "error: punctuation alone is not a title: give part of its name\n";
 	for (const std::vector<std::string>& line : {std::vector<std::string>{"rm", "-f", "-"},

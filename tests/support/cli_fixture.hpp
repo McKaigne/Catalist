@@ -4,6 +4,7 @@
 #include <doctest/doctest.h>
 
 #include <filesystem>
+#include <format>
 #include <functional>
 #include <sstream>
 #include <streambuf>
@@ -115,6 +116,14 @@ struct CliFixture : catalist::test::TempDirFixture {
 		catalist::Catalogue db("data");
 		REQUIRE(db.LoadAll().has_value());
 		return catalist::test::FindTitle(db, type, title);
+	}
+
+	// Teaches the fake AniList one anime of this name.
+	void KnowTitle(const std::string& name, int id) {
+		web.Respond(std::format(R"("search":"{}")", name),
+		            std::format(R"({{"data":{{"anime":{{"media":[{{"id":{0},"idMal":{0},)"
+		                        R"("title":{{"romaji":"{1}"}}}}]}},"manga":{{"media":[]}}}}}})",
+		                        id, name));
 	}
 
 	void Put(const std::string& path, const std::string& content) {

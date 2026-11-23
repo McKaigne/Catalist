@@ -75,12 +75,11 @@ TEST_CASE_FIXTURE(CliFixture, "cli help lists the commands, and each command has
 	CHECK(Run({"help", "add"}) == 0);
 	CHECK(Has(out,
 	          "Usage: catalist add [-amq] [--pick=N] [--status=STATUS] "
-	          "[--score=N] [--progress=N] [--no-lookup] TITLE...\n"));
+	          "[--score=N] [--progress=N] TITLE...\n"));
 	// The helps line up past the longest option.
 	CHECK(Has(
 	    out,
 	    "      --status=STATUS  watching, completed, on-hold, dropped, planned or rewatching\n"));
-	CHECK(Has(out, "      --no-lookup      add TITLE as written, without asking a site\n"));
 	CHECK(Has(out, "  -q                   print nothing\n"));
 	CHECK(Run({"help", "rm"}) == 0);
 	CHECK(Has(out, "Usage: catalist rm [-amfq] [--all] TITLE...\n"));
@@ -341,7 +340,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli refuses to work on a catalogue it cannot read
 		CHECK(Run({command}) == 1);
 	CHECK(Run({"export", "anime"}) == 1);
 	CHECK(Run({"rm", "-f", "taxi"}) == 1);
-	CHECK(Run({"add", "--no-lookup", "Home Video"}) == 1);
+	KnowTitle("Home Video", 900);
+	CHECK(Run({"add", "Home Video"}) == 1);
 	CHECK(out.empty());
 	CHECK(catalist::test::ReadText("data/catalist.db") == "this is not a catalogue\n");
 }

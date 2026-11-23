@@ -160,7 +160,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli import exits 1 when the catalogue cannot be s
 	catalist::test::MakeUnwritable("data/catalist.db");
 	CHECK(Run({"import", "lists/anime.xml"}) == 1);
 	CHECK(err.find("error: cannot open data/catalist.db: ") == 0);
-	CHECK(Run({"add", "--no-lookup", "Home Video"}) == 1);
+	KnowTitle("Home Video", 900);
+	CHECK(Run({"add", "Home Video"}) == 1);
 	CHECK(err.find("error: cannot open data/catalist.db: ") == 0);
 	CHECK(out.empty());
 }

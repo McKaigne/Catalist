@@ -43,45 +43,63 @@ Result<std::string> Ask(const web::Fetcher& fetch, const std::string& query) {
 
 }  // namespace
 
-std::string SearchRequest(MediaType type, const std::string& query) {
-	return std::format(
-	    R"({{"query":"query($search:String,$type:MediaType){{Page(perPage:10){{)"
-	    R"(media(search:$search,type:$type,sort:SEARCH_MATCH){{id idMal title{{romaji}} )"
-	    R"(episodes chapters volumes averageScore startDate{{year}}}}}}}}",)"
-	    R"("variables":{{"search":{},"type":"{}"}}}})",
-	    JsonString(query), TypeName(type));
+std::string SearchRequest(std::optional<MediaType> only, const std::string& query) {
+	constexpr int kEachOfBoth = 5;
+	constexpr int kOfOne = 10;
+	std::string pages;
+	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
+		if (only and *only != type)
+			continue;
+		pages += std::format(
+		    "{}:Page(perPage:{}){{media(search:$search,type:{},isAdult:false,sort:SEARCH_MATCH){{"
+		    "id idMal title{{romaji english}} episodes chapters volumes averageScore "
+		    "startDate{{year}}}}}} ",
+		    TypeKey(type), only ? kOfOne : kEachOfBoth, TypeName(type));
+	}
+	return std::format(R"({{"query":"query($search:String){{{}}}","variables":{{"search":{}}}}})",
+	                   pages, JsonString(query));
 }
 
-Result<std::vector<Match>> ParseSearch(const std::string& body, MediaType type) {
+Result<std::vector<Match>> ParseSearch(const std::string& body) {
 	auto reply = json::Parse(body);
-	const json::Value& media =
-	    reply.has_value() ? reply.value()["data"]["Page"]["media"] : json::Value();
-	if (not media.IsArray())
+	if (not reply.has_value())
 		return std::unexpected("unexpected reply from AniList");
+	const json::Value& data = reply.value()["data"];
+	bool answered = false;
 	std::vector<Match> found;
-	for (const auto& item : media.Items()) {
-		Match match;
-		match.anilist_id = item["id"].AsCount();
-		match.mal_id = item["idMal"].AsCount();
-		match.name = item["title"]["romaji"].AsString().value_or("");
-		if (match.anilist_id == 0 or match.name.empty())
+	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
+		const json::Value& media = data[TypeKey(type)]["media"];
+		if (not media.IsArray())
 			continue;
-		match.total_units = item[type == MediaType::kAnime ? "episodes" : "chapters"].AsCount();
-		match.total_volumes = item["volumes"].AsCount();
-		int year = item["startDate"]["year"].AsCount();
-		match.year = year > 0 ? std::to_string(year) : "";
-		match.score = item["averageScore"].AsNumber().value_or(0.0) / 10.0;
-		found.push_back(std::move(match));
+		answered = true;
+		for (const auto& item : media.Items()) {
+			Match match;
+			match.type = type;
+			match.anilist_id = item["id"].AsCount();
+			match.mal_id = item["idMal"].AsCount();
+			match.name = item["title"]["romaji"].AsString().value_or("");
+			match.english = item["title"]["english"].AsString().value_or("");
+			if (match.anilist_id == 0 or match.name.empty())
+				continue;
+			match.total_units = item[type == MediaType::kAnime ? "episodes" : "chapters"].AsCount();
+			match.total_volumes = item["volumes"].AsCount();
+			int year = item["startDate"]["year"].AsCount();
+			match.year = year > 0 ? std::to_string(year) : "";
+			match.score = item["averageScore"].AsNumber().value_or(0.0) / 10.0;
+			found.push_back(std::move(match));
+		}
 	}
+	if (not answered)
+		return std::unexpected("unexpected reply from AniList");
 	return found;
 }
 
-Result<std::vector<Match>> Search(const web::Fetcher& fetch, MediaType type,
+Result<std::vector<Match>> Search(const web::Fetcher& fetch, std::optional<MediaType> only,
                                   const std::string& query) {
-	auto body = Ask(fetch, SearchRequest(type, query));
+	auto body = Ask(fetch, SearchRequest(only, query));
 	if (not body)
 		return std::unexpected(body.error());
-	return ParseSearch(*body, type);
+	return ParseSearch(*body);
 }
 
 }  // namespace catalist::anilist

@@ -134,6 +134,12 @@ lists, because XML export leaves out titles with no MyAnimeList id.
 A file from an earlier version is upgraded the first time it is opened. Its
 lists are kept and its undo history is cleared.
 
+A development build with =login= kept site tokens in
+=~/.local/state/catalist/accounts= (or =$XDG_STATE_HOME/catalist/accounts=,
+or =accounts= in =CATALIST_DATA_DIR=). Catalist no longer reads or removes
+that file. If you have one, revoke Catalist's access in each site's account
+settings, then delete it.
+
 ** Source layout
 #+begin_example
 src/main.cpp      reads the environment and runs the command line

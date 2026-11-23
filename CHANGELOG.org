@@ -14,7 +14,9 @@ interface is now a separate program, Catalist-TUI, kept as an archive.
 These were built during this cycle and taken out to keep the program simple.
 Entries below that describe them no longer apply.
 - Account tracking: =login=, =logout=, =accounts=, =sync=, =link=, =unlink=,
-  =track=, =rm --remote= and =ls --linked=/=--unlinked=.
+  =track=, =rm --remote= and =ls --linked=/=--unlinked=. Tokens saved by a
+  development build stay on disk until you delete them; the README says
+  where they are.
 - Kitsu, the MyAnimeList API, =provider=, =--from=, =refresh=, and the =id:=
   and =my:= search forms.
 - CSV and JSON import and export, =import --user= and =export --format=.

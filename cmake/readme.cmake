@@ -1,7 +1,7 @@
 # Puts the command list the built program writes (`catalist __readme`)
-# between README.md's markers, or checks that it is there:
+# between README.org's markers, or checks that it is there:
 #
-#   cmake -DPROGRAM=build/catalist -DREADME=README.md -DMODE=write
+#   cmake -DPROGRAM=build/catalist -DREADME=README.org -DMODE=write
 #         -P cmake/readme.cmake
 #
 # MODE=write rewrites the README when its list is not the program's
@@ -17,8 +17,9 @@ if(NOT MODE MATCHES "^(write|check)$")
   message(FATAL_ERROR "readme.cmake: MODE is write or check, not ${MODE}")
 endif()
 
-set(begin "<!-- commands: written by `cmake --build build --target readme`; do not edit -->\n")
-set(end "<!-- end of commands -->")
+# Org comment lines, so they don't show in the rendered README.
+set(begin "# commands: written by `cmake --build build --target readme`; do not edit\n")
+set(end "# end of commands")
 
 # None of this reads the lists; a directory that is not there makes sure of it.
 set(ENV{CATALIST_DATA_DIR} "${CMAKE_CURRENT_BINARY_DIR}/readme-no-data")
@@ -48,7 +49,7 @@ if(new STREQUAL old)
 endif()
 if(MODE STREQUAL "check")
   message(FATAL_ERROR
-    "README.md's command list is not the program's: "
+    "README.org's command list is not the program's: "
     "run cmake --build build --target readme")
 endif()
 file(WRITE "${README}" "${new}")

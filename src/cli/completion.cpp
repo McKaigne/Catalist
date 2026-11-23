@@ -430,24 +430,14 @@ std::string RoffCommand(const Command& of) {
 
 // ---- The README ----
 
-// Text as Markdown prints it: the characters that would start a code span,
-// emphasis, a link or HTML are written out.
-std::string MarkdownText(const std::string& text) {
-	std::string safe;
-	for (char c : text) {
-		if (std::string("\\`*_[]<").find(c) != std::string::npos)
-			safe += '\\';
-		safe += c;
-	}
-	return safe;
-}
-
-std::string MarkdownCommand(const Command& of) {
-	std::string text = std::format("- `catalist {}`: {}.", UsageLine(of), MarkdownText(of.summary));
+// Org has no escapes; the summaries are plain prose, and code goes in ~...~,
+// which no usage line contains.
+std::string OrgCommand(const Command& of) {
+	std::string text = std::format("- ~catalist {}~: {}.", UsageLine(of), of.summary);
 	if (not of.aliases.empty()) {
 		std::vector<std::string> also;
 		for (const auto& alias : of.aliases)
-			also.push_back(std::format("`{}`", alias));
+			also.push_back(std::format("~{}~", alias));
 		text += std::format(" Also {}.", Joined(also, ", "));
 	}
 	return text + "\n";
@@ -531,10 +521,10 @@ std::string Manual(const std::vector<Command>& table) {
 std::string Readme(const std::vector<Command>& table) {
 	std::string text;
 	for (const Command* each : ShownOf(table))
-		text += MarkdownCommand(*each);
+		text += OrgCommand(*each);
 	text += "\nOptions, before the command:\n\n";
 	for (const auto& option : GlobalOptions())
-		text += std::format("- `{}`: {}\n", OptionSyntax(option), MarkdownText(option.help));
+		text += std::format("- ~{}~: {}\n", OptionSyntax(option), option.help);
 	return text;
 }
 

@@ -151,14 +151,14 @@ TEST_CASE("completion manual sets each command in roff") {
 	CHECK_FALSE(Has(page, "secret"));
 }
 
-TEST_CASE("completion readme lists each command in Markdown") {
+TEST_CASE("completion readme lists each command in Org") {
 	std::string list = completion::Readme(SampleTable());
-	CHECK(list.rfind("- `catalist ls [-q] [-s STATUS] [--sort=KEY] [QUERY]`: List your titles.\n",
+	CHECK(list.rfind("- ~catalist ls [-q] [-s STATUS] [--sort=KEY] [QUERY]~: List your titles.\n",
 	                 0) == 0);
-	CHECK(Has(list, "- `catalist + [-n N] REF...`: Count one more. Also `inc`.\n"));
-	CHECK(Has(list, "- `catalist completion zsh|fish`: Print a script.\n"));
-	// The program's own options follow, their help as Markdown prints it.
-	CHECK(Has(list, "\nOptions, before the command:\n\n- `--color=WHEN`: colours: "));
-	CHECK(Has(list, "- `-V, --version`: print the version\n"));
+	CHECK(Has(list, "- ~catalist + [-n N] REF...~: Count one more. Also ~inc~.\n"));
+	CHECK(Has(list, "- ~catalist completion zsh|fish~: Print a script.\n"));
+	// The program's own options follow, their help as it is.
+	CHECK(Has(list, "\nOptions, before the command:\n\n- ~--color=WHEN~: colours: "));
+	CHECK(Has(list, "- ~-V, --version~: print the version\n"));
 	CHECK_FALSE(Has(list, "secret"));
 }

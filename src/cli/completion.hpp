@@ -26,7 +26,7 @@ namespace catalist::completion {
 // usage line, what it does and its options.
 [[nodiscard]] std::string Manual(const std::vector<Command>& table);
 
-// The command list of README.md, in Markdown: each command's usage line
+// The command list of README.org, in Org: each command's usage line
 // and what it does, then the program's own options.
 [[nodiscard]] std::string Readme(const std::vector<Command>& table);
 

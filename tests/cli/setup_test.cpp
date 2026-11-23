@@ -121,9 +121,9 @@ TEST_CASE_FIXTURE(CliFixture, "cli __man prints the commands for the manual page
 
 TEST_CASE_FIXTURE(CliFixture, "cli __readme prints the commands for the README") {
 	CHECK(Run({"__readme"}) == 0);
-	CHECK(out.rfind("- `catalist ls ", 0) == 0);
+	CHECK(out.rfind("- ~catalist ls ", 0) == 0);
 	CHECK(
-	    Has(out, "\n- `catalist completion zsh|fish`: Print the completion script of a shell.\n"));
+	    Has(out, "\n- ~catalist completion zsh|fish~: Print the completion script of a shell.\n"));
 	CHECK_FALSE(Has(out, "__complete"));
 	CHECK(err.empty());
 }

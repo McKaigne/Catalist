@@ -77,7 +77,7 @@ int RunManual(const Command&, const args::Parsed&, CliContext& ctx) {
 	return 0;
 }
 
-// The build's own command: the command list of README.md, which
+// The build's own command: the command list of README.org, which
 // cmake/readme.cmake puts between its markers.
 int RunReadme(const Command&, const args::Parsed&, CliContext& ctx) {
 	ctx.out << completion::Readme(Commands());
@@ -123,7 +123,7 @@ std::vector<Command> SetupCommands() {
 	     .run = RunManual,
 	     .hidden = true},
 	    {.name = "__readme",
-	     .summary = "Print the commands as README.md lists them",
+	     .summary = "Print the commands as README.org lists them",
 	     .run = RunReadme,
 	     .hidden = true},
 	};

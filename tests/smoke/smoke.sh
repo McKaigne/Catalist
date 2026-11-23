@@ -97,6 +97,16 @@ catalist export anime 2>/dev/null |
 expect "export | import" "$(CATALIST_DATA_DIR=$work/other "$program" ls | cut -f 1,3)" \
 	"$(printf 'a:1\tFullmetal Alchemist')"
 
+# import reads a named pipe, as process substitution hands it one.
+catalist export anime >"$work/anime.xml" 2>/dev/null
+mkfifo "$work/fifo"
+cat "$work/anime.xml" >"$work/fifo" &
+CATALIST_DATA_DIR=$work/piped "$program" import -q "$work/fifo"
+expect "import from a pipe: exit" "$?" 0
+wait
+expect "import from a pipe" "$(CATALIST_DATA_DIR=$work/piped "$program" ls | cut -f 1,3)" \
+	"$(printf 'a:1\tFullmetal Alchemist')"
+
 # A reader that stops early is no error.
 awk 'BEGIN {
 	print "<myanimelist>"

@@ -21,7 +21,7 @@ namespace catalist {
 std::optional<std::string> ReadFile(const std::filesystem::path& file) {
 	// A directory opens as a stream on Linux but throws when read.
 	std::error_code ec;
-	if (not std::filesystem::is_regular_file(file, ec))
+	if (std::filesystem::is_directory(file, ec))
 		return std::nullopt;
 	std::ifstream stream(file, std::ios::binary);
 	if (not stream.is_open())

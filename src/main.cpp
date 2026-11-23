@@ -26,5 +26,11 @@ int main(int argc, char* argv[]) {
 	ctx.columns = catalist::TerminalColumns();
 	// https://no-color.org; a dumb terminal cannot show colours either.
 	ctx.color = ctx.columns > 0 and std::getenv("NO_COLOR") == nullptr and env("TERM") != "dumb";
-	return catalist::RunCli({argv + 1, argv + argc}, ctx);
+	int code = catalist::RunCli({argv + 1, argv + argc}, ctx);
+	// A reader that stopped early is no error; a full disk is.
+	std::cout.flush();
+	if (std::cout or catalist::OutputIsPipe())
+		return code;
+	std::cerr << "error: could not write to standard output\n";
+	return code != 0 ? code : 1;
 }

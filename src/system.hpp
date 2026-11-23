@@ -36,6 +36,9 @@ namespace catalist {
 // (0 when it is not one).
 [[nodiscard]] bool IsInteractive();
 [[nodiscard]] int TerminalColumns();
+// Whether standard output is a pipe or a socket, where a failed write means
+// the reader has gone.
+[[nodiscard]] bool OutputIsPipe();
 
 }  // namespace catalist
 

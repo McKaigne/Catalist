@@ -109,6 +109,16 @@ first=$(CATALIST_DATA_DIR=$work/many "$program" ls 2>"$work/err" | head -n 1 | c
 expect "ls | head -n 1" "$first" a:1
 expect "ls | head -n 1: standard error" "$(cat "$work/err")" ""
 
+# Output that cannot be written, as on a full disk, is a failure.
+if [ -w /dev/full ]; then
+	catalist export anime >/dev/full 2>"$work/err"
+	expect "export > full disk: exit" "$?" 1
+	grep -q 'could not write to standard output' "$work/err" ||
+		fail "export > full disk: no message"
+	catalist ls >/dev/full 2>/dev/null
+	expect "ls > full disk: exit" "$?" 1
+fi
+
 if [ "$failures" -ne 0 ]; then
 	printf '%s: %d failed\n' "$0" "$failures" >&2
 	exit 1

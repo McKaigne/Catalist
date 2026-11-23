@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -199,6 +200,12 @@ int TerminalColumns() {
 	if (not isatty(STDOUT_FILENO) or ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) != 0)
 		return 0;
 	return window.ws_col;
+}
+
+bool OutputIsPipe() {
+	struct stat output {};
+	return fstat(STDOUT_FILENO, &output) == 0 and
+	       (S_ISFIFO(output.st_mode) or S_ISSOCK(output.st_mode));
 }
 
 }  // namespace catalist

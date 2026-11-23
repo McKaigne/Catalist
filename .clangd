@@ -1,4 +1,0 @@
-# The include paths and flags come from CMake: configure once with
-# `cmake -B build -G Ninja` and clangd picks them up from build/.
-CompileFlags:
-  CompilationDatabase: build

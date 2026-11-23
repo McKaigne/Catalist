@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <format>
-#include <ostream>
-
 #include "cli/common.hpp"
 #include "core/version.hpp"
 

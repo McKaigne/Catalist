@@ -8,10 +8,8 @@ bin/
 *.xml
 result
 
-# Dev environments & caches
-.cache/
+# Dev environments
 .direnv/
-compile_commands.json
 
 # Local runtime data
 watchlist.tsv

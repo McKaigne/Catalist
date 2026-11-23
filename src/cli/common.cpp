@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
-#include <istream>
 #include <ostream>
 
 #include "cli/refs.hpp"

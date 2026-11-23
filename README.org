@@ -24,7 +24,7 @@ nix run . -- help
 #+end_src
 
 *** CMake
-You need a C++23 compiler (GCC 13 or Clang 17 and later), CMake 3.20 or
+You need GCC 13 or later for C++23, CMake 3.20 or
 later, Ninja or Make, and SQLite 3 (=libsqlite3-dev= on Debian and Ubuntu),
 and doctest for the tests (=doctest-dev=; =-DBUILD_TESTING=OFF= builds
 without them).
@@ -40,15 +40,12 @@ ctest --test-dir build --output-on-failure
 sudo cmake --install build
 #+end_src
 
-The build also writes the manual page and the completions for zsh and
-fish, and =cmake --install= puts them where =man= and the shells look.
-=ctest= also runs the command line from =sh=, and checks that the zsh and
-fish scripts parse when those shells are installed.
+=ctest= also runs the command line from =sh=.
 
 *** Development
 =nix develop= (or =direnv allow=, which reads =.envrc=) opens the
 =catalist-dev= shell: the compiler, CMake, Ninja, SQLite and its =sqlite3=
-tool, doctest, gdb, clangd and the two shells the completion checks run.
+tool, doctest and gdb.
 
 #+begin_src sh
 nix develop
@@ -57,10 +54,6 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ./build/catalist ls
 #+end_src
-
-The list under Commands below is written by the program from its table of
-commands: after changing a command, =cmake --build build --target readme=
-writes it again, and the =readme= test fails until it does.
 
 In that shell =CATALIST_DATA_DIR= is =build/dev-data=, so what you try out
 never touches your own lists in =~/.local/share/catalist=.

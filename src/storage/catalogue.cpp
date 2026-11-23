@@ -1,10 +1,8 @@
 #include "storage/catalogue.hpp"
 
 #include <algorithm>
-#include <cstdlib>
 #include <format>
 #include <utility>
-
 #include "core/entry.hpp"
 
 namespace catalist {

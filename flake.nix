@@ -11,8 +11,6 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
     in
@@ -50,7 +48,7 @@
               description = "Anime and manga tracker for the command line";
               homepage = "https://github.com/McKaigne/Catalist";
               license = pkgs.lib.licenses.mit;
-              platforms = pkgs.lib.platforms.unix;
+              platforms = pkgs.lib.platforms.linux;
               mainProgram = "catalist";
             };
           };
@@ -69,14 +67,10 @@
             packages = with pkgs; [
               doctest
               gdb
-              clang-tools
               # sqlite3, to look inside catalist.db.
               sqlite
               curl
               git
-              # ctest checks that the completion scripts parse.
-              zsh
-              fish
             ];
             # Runs of ./build/catalist from this shell keep their lists in
             # build/, never in ~/.local/share/catalist.

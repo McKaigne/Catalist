@@ -9,9 +9,6 @@ include(GNUInstallDirs)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# clangd reads build/compile_commands.json (see .clangd); without it every
-# project include shows up as an error in the editor.
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # The lists are kept in an SQLite file.
 find_package(SQLite3 REQUIRED)
@@ -86,49 +83,7 @@ add_executable(catalist src/main.cpp)
 target_link_libraries(catalist PRIVATE catalistLib)
 target_compile_options(catalist PRIVATE ${CATALIST_WARNING_FLAGS})
 
-# The program writes its manual page and its completion scripts from its
-# own table of commands (see cmake/shell_support.cmake).
-set(CATALIST_SHARE_DIR "${CMAKE_CURRENT_BINARY_DIR}/share")
-set(CATALIST_SHELL_FILES
-  "${CATALIST_SHARE_DIR}/man/man1/catalist.1"
-  "${CATALIST_SHARE_DIR}/zsh/_catalist"
-  "${CATALIST_SHARE_DIR}/fish/catalist.fish"
-)
-add_custom_command(
-  OUTPUT ${CATALIST_SHELL_FILES}
-  COMMAND ${CMAKE_COMMAND}
-    "-DPROGRAM=$<TARGET_FILE:catalist>"
-    "-DVERSION=${PROJECT_VERSION}"
-    "-DTEMPLATE=${CMAKE_CURRENT_SOURCE_DIR}/docs/catalist.1.in"
-    "-DOUT_DIR=${CATALIST_SHARE_DIR}"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/shell_support.cmake"
-  DEPENDS catalist docs/catalist.1.in cmake/shell_support.cmake
-  COMMENT "Writing the manual page and the completions"
-  VERBATIM
-)
-add_custom_target(catalistShellSupport ALL DEPENDS ${CATALIST_SHELL_FILES})
-
-# README.org's command list, from the same table: `cmake --build build
-# --target readme` writes it, and the `readme` test fails when it is behind.
-set(CATALIST_README_ARGS
-  "-DPROGRAM=$<TARGET_FILE:catalist>"
-  "-DREADME=${CMAKE_CURRENT_SOURCE_DIR}/README.org"
-)
-add_custom_target(readme
-  COMMAND ${CMAKE_COMMAND} ${CATALIST_README_ARGS} -DMODE=write
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/readme.cmake"
-  DEPENDS catalist
-  COMMENT "Writing the command list of README.org"
-  VERBATIM
-)
-
 install(TARGETS catalist DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES "${CATALIST_SHARE_DIR}/man/man1/catalist.1"
-  DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
-install(FILES "${CATALIST_SHARE_DIR}/zsh/_catalist"
-  DESTINATION ${CMAKE_INSTALL_DATADIR}/zsh/site-functions)
-install(FILES "${CATALIST_SHARE_DIR}/fish/catalist.fish"
-  DESTINATION ${CMAKE_INSTALL_DATADIR}/fish/vendor_completions.d)
 
 option(BUILD_TESTING "Build the tests (needs doctest)" ON)
 if(NOT BUILD_TESTING)
@@ -184,18 +139,6 @@ target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 doctest_discover_tests(catalistTests)
 
 # The command line from a POSIX shell, as scripts use it; a stub curl
-# stands in for the sites. README.org must list the commands the program
-# has, and the completion scripts must parse.
+# stands in for the site.
 add_test(NAME smoke COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke/smoke.sh"
   $<TARGET_FILE:catalist>)
-add_test(NAME readme COMMAND ${CMAKE_COMMAND} ${CATALIST_README_ARGS} -DMODE=check
-  -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/readme.cmake")
-find_program(CATALIST_ZSH zsh)
-find_program(CATALIST_FISH fish)
-if(CATALIST_ZSH)
-  add_test(NAME completion.zsh COMMAND "${CATALIST_ZSH}" -n "${CATALIST_SHARE_DIR}/zsh/_catalist")
-endif()
-if(CATALIST_FISH)
-  add_test(NAME completion.fish
-    COMMAND "${CATALIST_FISH}" --no-config -n "${CATALIST_SHARE_DIR}/fish/catalist.fish")
-endif()

@@ -65,6 +65,10 @@ std::optional<WatchStatus> ParseStatus(const std::string& str) {
 	return std::nullopt;
 }
 
+const std::string& DisplayName(const Entry& shown) {
+	return shown.english_title.empty() ? shown.title : shown.english_title;
+}
+
 std::string PageOf(const Entry& shown) {
 	if (shown.anilist_id <= 0)
 		return "";
@@ -250,9 +254,9 @@ Entry SetCount(Entry target, CountField field, int value, const IsoDate& today) 
 }
 
 Entry SetTitle(Entry target, const std::string& title, const IsoDate& today) {
-	if (title == target.title)
+	if (title == DisplayName(target))
 		return target;
-	target.title = title;
+	target.english_title = title;
 	target.updated_at = today;
 	return target;
 }

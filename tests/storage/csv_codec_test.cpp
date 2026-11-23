@@ -55,7 +55,7 @@ TEST_CASE("csvCodec writes a row and reads it back") {
 	auto row = csv_codec::EncodeEntry(original);
 	CHECK(row ==
 	      "5,6,manga,\"R, \"\"t\"\"\",On-Hold,4,3,9,1,2,1,2024-01-02,,"
-	      "2024-02-03,306");
+	      "2024-02-03,306,,");
 	auto copy = csv_codec::DecodeEntry(csv_codec::SplitFields(row));
 	REQUIRE(copy.has_value());
 	CHECK(*copy == original);

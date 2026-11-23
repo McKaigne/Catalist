@@ -14,7 +14,7 @@ namespace {
 const char* kStoreFile = "catalist.db";
 
 // PRAGMA user_version of a store this code set up; 0 is a new, empty file.
-constexpr int kStoreVersion = 2;
+constexpr int kStoreVersion = 3;
 
 // `entry` holds both lists. `tx` and `change` are the undo history: one
 // row per command that changed something, and under it each entry before
@@ -26,7 +26,9 @@ const char* kSchema =
     " progress INTEGER NOT NULL, total_units INTEGER NOT NULL,"
     " volumes INTEGER NOT NULL, total_volumes INTEGER NOT NULL,"
     " rewatched INTEGER NOT NULL, start_date TEXT, finish_date TEXT,"
-    " updated_at TEXT, anilist_id INTEGER NOT NULL, PRIMARY KEY (type, id));"
+    " updated_at TEXT, anilist_id INTEGER NOT NULL,"
+    " english_title TEXT NOT NULL DEFAULT '', changed_at TEXT NOT NULL DEFAULT '',"
+    " PRIMARY KEY (type, id));"
     "CREATE TABLE tx ("
     " id INTEGER PRIMARY KEY AUTOINCREMENT, stamp TEXT NOT NULL,"
     " label TEXT NOT NULL, undone INTEGER NOT NULL DEFAULT 0);"
@@ -34,7 +36,7 @@ const char* kSchema =
     " tx INTEGER NOT NULL, seq INTEGER NOT NULL, type TEXT NOT NULL,"
     " id INTEGER NOT NULL, before TEXT NOT NULL, after TEXT NOT NULL,"
     " PRIMARY KEY (tx, seq));"
-    "PRAGMA user_version = 2;";
+    "PRAGMA user_version = 3;";
 
 // From version 1, which also kept what the sites were to be told and how far
 // each title had aired. Its undo rows have those columns too, so they go.
@@ -49,12 +51,19 @@ const char* kUpgradeFromV1 =
     "DELETE FROM tx;"
     "PRAGMA user_version = 2;";
 
+const char* kUpgradeFromV2 =
+    "ALTER TABLE entry ADD COLUMN english_title TEXT NOT NULL DEFAULT '';"
+    "ALTER TABLE entry ADD COLUMN changed_at TEXT NOT NULL DEFAULT '';"
+    "UPDATE entry SET finish_date = NULL"
+    " WHERE lower(status) NOT IN ('completed', 'rewatching');"
+    "PRAGMA user_version = 3;";
+
 const char* kSelectEntries =
     "SELECT type, id, mal_id, title, status, score, progress, total_units,"
     " volumes, total_volumes, rewatched, start_date, finish_date, updated_at,"
-    " anilist_id FROM entry ORDER BY type, id";
+    " anilist_id, english_title, changed_at FROM entry ORDER BY type, id";
 const char* kInsertEntry =
-    "INSERT OR REPLACE INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    "INSERT OR REPLACE INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 int StoreVersion(const store::Database& db) {
 	auto version = db.Prepare("PRAGMA user_version");
@@ -76,7 +85,7 @@ store::Statement& BindEntry(store::Statement& into, const Entry& row) {
 	BindDate(into, row.start_date);
 	BindDate(into, row.finish_date);
 	BindDate(into, row.updated_at);
-	return into.Bind(row.anilist_id);
+	return into.Bind(row.anilist_id).Bind(row.english_title).Bind(row.changed_at);
 }
 
 Entry ReadEntry(const store::Statement& from) {
@@ -97,6 +106,8 @@ Entry ReadEntry(const store::Statement& from) {
 	row.finish_date = IsoDate::Parse(from.TextAt(12));
 	row.updated_at = IsoDate::Parse(from.TextAt(13));
 	row.anilist_id = number(14);
+	row.english_title = from.TextAt(15);
+	row.changed_at = from.TextAt(16);
 	return row;
 }
 
@@ -104,6 +115,23 @@ const Entry* FindById(const std::vector<Entry>& list, int id) {
 	auto found =
 	    std::find_if(list.begin(), list.end(), [id](const Entry& e) { return e.id == id; });
 	return found == list.end() ? nullptr : &*found;
+}
+
+Done BackUpStore(store::Database& db, const std::filesystem::path& file, int version) {
+	auto copy = file;
+	{
+		// VACUUM fails while another statement is still open.
+		auto now = db.Prepare("SELECT strftime('%Y%m%d-%H%M%S', 'now', 'localtime')");
+		if (not now.Step())
+			return std::unexpected(
+			    std::format("cannot back up {}: {}", file.string(), db.LastError()));
+		copy.replace_filename(std::format("catalist-v{}-{}.db", version, now.TextAt(0)));
+	}
+	auto vacuum = db.Prepare("VACUUM INTO ?");
+	if (not vacuum.Bind(copy.string()).Run())
+		return std::unexpected(std::format("cannot back up {} to {}: {}; it was not upgraded",
+		                                   file.string(), copy.string(), db.LastError()));
+	return Done{};
 }
 
 // A local id only numbers a title, so two titles are the same only when a
@@ -253,8 +281,17 @@ Done Catalogue::OpenStore() {
 // A new file gets its tables and an older one is brought up to date, in one
 // transaction: two programs starting at the same moment cannot both do it.
 Done Catalogue::SetUpStore() {
-	if (StoreVersion(db_) == kStoreVersion)
+	int found = StoreVersion(db_);
+	if (found == kStoreVersion)
 		return Done{};
+	if (found > kStoreVersion or found < 0)
+		return std::unexpected(
+		    std::format("{} was written by a newer Catalist", StorePath().string()));
+	if (found != 0) {
+		auto saved = BackUpStore(db_, StorePath(), found);
+		if (not saved.has_value())
+			return saved;
+	}
 
 	store::Transaction setup(db_);
 	if (not setup.Active())
@@ -263,11 +300,10 @@ Done Catalogue::SetUpStore() {
 	int version = StoreVersion(db_);
 	if (version == kStoreVersion)
 		return Done{};
-	if (version != 0 and version != 1)
-		return std::unexpected(
-		    std::format("{} was written by a newer Catalist", StorePath().string()));
-
-	if (not db_.Run(version == 0 ? kSchema : kUpgradeFromV1))
+	bool ready = version == 0
+	                 ? db_.Run(kSchema)
+	                 : (version > 1 or db_.Run(kUpgradeFromV1)) and db_.Run(kUpgradeFromV2);
+	if (not ready)
 		return std::unexpected(
 		    std::format("cannot set up {}: {}", StorePath().string(), db_.LastError()));
 	if (not setup.Commit())

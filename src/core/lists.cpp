@@ -14,13 +14,17 @@ int SumOf(const std::vector<Entry>& list, int Entry::* count) {
 	return total;
 }
 
+std::string LastChange(const Entry& e) {
+	return e.changed_at.empty() ? FormatDate(e.updated_at) : e.changed_at;
+}
+
 // True when `a` comes before `b` in the natural order of `key`; ties fall
 // back to the title so the order never depends on how the list was stored.
 bool ComesBefore(const Entry& a, const Entry& b, SortKey key) {
 	switch (key) {
 		case SortKey::kUpdated:
-			if (a.updated_at != b.updated_at)
-				return a.updated_at > b.updated_at;
+			if (LastChange(a) != LastChange(b))
+				return LastChange(a) > LastChange(b);
 			break;
 		case SortKey::kScore:
 			if (a.score != b.score)
@@ -41,7 +45,7 @@ bool ComesBefore(const Entry& a, const Entry& b, SortKey key) {
 		case SortKey::kTitle:
 			break;
 	}
-	return a.title < b.title;
+	return DisplayName(a) < DisplayName(b);
 }
 
 }  // namespace

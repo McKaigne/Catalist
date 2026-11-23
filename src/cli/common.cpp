@@ -45,7 +45,7 @@ std::optional<std::vector<Entry>> Named(CliContext& ctx, const std::string& ref,
 	                       found.size());
 	for (size_t i = 0; i < found.size(); ++i)
 		ctx.err << (how.ask ? std::format("  {:>2}", i + 1) : "") << "  " << refs::Of(found[i])
-		        << "  " << found[i].title << "\n";
+		        << "  " << DisplayName(found[i]) << "\n";
 	if (not how.ask) {
 		ctx.err << "Name one by its ref (-a and -m keep to one list), or pass --all for all of "
 		           "them.\n";
@@ -63,7 +63,7 @@ std::optional<std::vector<Entry>> Named(CliContext& ctx, const std::string& ref,
 // progress, "Odd Taxi  score 8 → 9" for the rest.
 std::string ChangeText(const CliContext& ctx, const Entry& shown,
                        const journal::FieldChange& field) {
-	std::string title = Paint(shown.title, output::kBold, ctx.color);
+	std::string title = Paint(DisplayName(shown), output::kBold, ctx.color);
 	if (field.field == "added")
 		return std::format("{}  added as {} ({})\n", title, field.after, refs::Of(shown));
 	if (field.field == "removed")
@@ -95,7 +95,7 @@ int SaveFailed(CliContext& ctx) {
 std::vector<std::string> RowOf(const Entry& e) {
 	return {refs::Of(e),
 	        TypeKey(e.type),
-	        e.title,
+	        DisplayName(e),
 	        StatusKey(e.status),
 	        std::to_string(e.score),
 	        std::to_string(e.progress),
@@ -288,7 +288,7 @@ std::optional<std::vector<Entry>> TakeForWrite(CliContext& ctx, const std::vecto
 		            now->mal_id == each.mal_id;
 		if (not same) {
 			Fail(ctx, std::format("{} ({}) was removed or replaced meanwhile; nothing was changed",
-			                      each.title, refs::Of(each)));
+			                      DisplayName(each), refs::Of(each)));
 			return std::nullopt;
 		}
 		current.push_back(*now);
@@ -306,7 +306,7 @@ void PrintChanges(CliContext& ctx, const std::vector<journal::Change>& changes) 
 				return;
 			ctx.out << (ctx.columns > 0
 			                ? ChangeText(ctx, shown, field)
-			                : output::TsvLine({refs::Of(shown), shown.title, field.field,
+			                : output::TsvLine({refs::Of(shown), DisplayName(shown), field.field,
 			                                   field.before, field.after}));
 		}
 	}

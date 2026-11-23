@@ -37,8 +37,11 @@ const std::vector<Column>& Columns() {
 	     [](Entry& into, const Entry& from) { into.start_date = from.start_date; }},
 	    {"finished", [](const Entry& e) { return DateText(e.finish_date); },
 	     [](Entry& into, const Entry& from) { into.finish_date = from.finish_date; }},
-	    {"title", [](const Entry& e) { return e.title; },
-	     [](Entry& into, const Entry& from) { into.title = from.title; }},
+	    {"title", [](const Entry& e) { return DisplayName(e); },
+	     [](Entry& into, const Entry& from) {
+		     into.title = from.title;
+		     into.english_title = from.english_title;
+	     }},
 	};
 	return kAll;
 }
@@ -57,7 +60,7 @@ const Entry* FindById(const std::vector<Entry>& list, int id) {
 
 // The entry's title and ref, as refs::Of writes it: "Odd Taxi (a:2)".
 std::string NameOf(const Entry& named) {
-	return std::format("{} ({}:{})", named.title, named.type == MediaType::kAnime ? 'a' : 'm',
+	return std::format("{} ({}:{})", DisplayName(named), named.type == MediaType::kAnime ? 'a' : 'm',
 	                   named.id);
 }
 
@@ -68,12 +71,12 @@ Outcome ComeBack(const std::vector<Entry>& list, const Entry& back) {
 	for (const auto& other : list) {
 		if (other.id == back.id)
 			return std::unexpected(std::format("{} cannot come back: its ref is now that of {}",
-			                                   NameOf(back), other.title));
+			                                   NameOf(back), DisplayName(other)));
 		bool same = (back.anilist_id > 0 and other.anilist_id == back.anilist_id) or
 		            (back.mal_id > 0 and other.mal_id == back.mal_id);
 		if (same)
 			return std::unexpected(
-			    std::format("{} is in your lists again, as {}", back.title, NameOf(other)));
+			    std::format("{} is in your lists again, as {}", DisplayName(back), NameOf(other)));
 	}
 	return back;
 }
@@ -147,6 +150,7 @@ Result<std::optional<Entry>> Transition(const std::vector<Entry>& list,
 		if (each.text(*from) != each.text(*to))
 			each.copy(next, *to);
 	next.updated_at = to->updated_at;
+	next.changed_at = to->changed_at;
 	return next;
 }
 

@@ -210,9 +210,9 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue saves both lists and reloads them")
 	REQUIRE(reloaded.LoadAll().value());
 	CHECK(csv_codec::EncodeEntry(*reloaded.GetById(MediaType::kAnime, id)) ==
 	      "1,7,anime,\"Kept, \"\"quoted\"\"\",On-Hold,6,3,12,0,0,2,2026-01-02,2026-02-03,"
-	      "2026-03-04,70");
+	      "2026-03-04,70,,");
 	CHECK(csv_codec::EncodeEntry(reloaded.GetEntries(MediaType::kManga)[0]) ==
-	      "1,0,manga,Paper,Reading,0,0,0,3,9,0,,,,0");
+	      "1,0,manga,Paper,Reading,0,0,0,3,9,0,,,,0,,");
 }
 
 TEST_CASE_FIXTURE(TempDirFixture, "catalogue writes only the rows it changed") {
@@ -639,10 +639,10 @@ TEST_CASE_FIXTURE(TempDirFixture,
 	REQUIRE(raw.Open(TempDir() / "data/catalist.db"));
 	auto version = raw.Prepare("PRAGMA user_version");
 	REQUIRE(version.Step());
-	CHECK(version.IntAt(0) == 2);
+	CHECK(version.IntAt(0) == 3);
 	auto columns = raw.Prepare("SELECT COUNT(*) FROM pragma_table_info('entry')");
 	REQUIRE(columns.Step());
-	CHECK(columns.IntAt(0) == 15);
+	CHECK(columns.IntAt(0) == 17);
 	auto gone = raw.Prepare(
 	    "SELECT COUNT(*) FROM sqlite_master WHERE name IN"
 	    " ('setting', 'entry_id', 'outbox', 'track_option')");
@@ -650,12 +650,122 @@ TEST_CASE_FIXTURE(TempDirFixture,
 	CHECK(gone.IntAt(0) == 0);
 }
 
+namespace {
+
+void WriteVersionTwo(const std::filesystem::path& file) {
+	catalist::store::Database raw;
+	REQUIRE(raw.Open(file));
+	REQUIRE(raw.Run(
+	    "CREATE TABLE entry (type TEXT NOT NULL, id INTEGER NOT NULL, mal_id INTEGER NOT NULL,"
+	    " title TEXT NOT NULL, status TEXT NOT NULL, score INTEGER NOT NULL,"
+	    " progress INTEGER NOT NULL, total_units INTEGER NOT NULL, volumes INTEGER NOT NULL,"
+	    " total_volumes INTEGER NOT NULL, rewatched INTEGER NOT NULL, start_date TEXT,"
+	    " finish_date TEXT, updated_at TEXT, anilist_id INTEGER NOT NULL,"
+	    " PRIMARY KEY (type, id));"
+	    "CREATE TABLE tx (id INTEGER PRIMARY KEY AUTOINCREMENT, stamp TEXT NOT NULL,"
+	    " label TEXT NOT NULL, undone INTEGER NOT NULL DEFAULT 0);"
+	    "CREATE TABLE change (tx INTEGER NOT NULL, seq INTEGER NOT NULL, type TEXT NOT NULL,"
+	    " id INTEGER NOT NULL, before TEXT NOT NULL, after TEXT NOT NULL,"
+	    " PRIMARY KEY (tx, seq));"
+	    "INSERT INTO entry VALUES ('anime', 1, 1, 'Paused', 'on-hold', 0, 3, 12, 0, 0, 0,"
+	    " '2026-01-01', '2026-02-01', '2026-02-01', 0);"
+	    "INSERT INTO entry VALUES ('anime', 2, 2, 'Finished', 'completed', 0, 12, 12, 0, 0, 0,"
+	    " '2026-01-01', '2026-02-02', '2026-02-02', 0);"
+	    "INSERT INTO entry VALUES ('anime', 3, 3, 'Again', 'rewatching', 0, 1, 12, 0, 0, 0,"
+	    " '2026-01-01', '2026-02-03', '2026-02-03', 0);"
+	    "INSERT INTO tx (stamp, label) VALUES ('2026-02-03 10:00:00', 'set');"
+	    "PRAGMA user_version = 2;"));
+}
+
+std::vector<std::filesystem::path> BackupsIn(const std::filesystem::path& dir) {
+	std::vector<std::filesystem::path> found;
+	for (const auto& each : std::filesystem::directory_iterator(dir))
+		if (each.path().filename().string().starts_with("catalist-v"))
+			found.push_back(each.path());
+	return found;
+}
+
+}  // namespace
+
+TEST_CASE_FIXTURE(TempDirFixture,
+                  "catalogue upgrades version 2, backing it up and clearing stray finish dates") {
+	auto dir = TempDir() / "data";
+	std::filesystem::create_directories(dir);
+	WriteVersionTwo(dir / "catalist.db");
+
+	Catalogue db(dir);
+	REQUIRE(db.LoadAll().value());
+	CHECK_FALSE(db.GetById(MediaType::kAnime, 1)->finish_date.has_value());
+	CHECK(FormatDate(db.GetById(MediaType::kAnime, 2)->finish_date) == "2026-02-02");
+	CHECK(FormatDate(db.GetById(MediaType::kAnime, 3)->finish_date) == "2026-02-03");
+	CHECK(db.History(0).value().size() == 1);
+
+	auto backups = BackupsIn(dir);
+	REQUIRE(backups.size() == 1);
+	CHECK(backups[0].filename().string().starts_with("catalist-v2-"));
+	catalist::store::Database copy;
+	REQUIRE(copy.Open(backups[0]));
+	auto version = copy.Prepare("PRAGMA user_version");
+	REQUIRE(version.Step());
+	CHECK(version.IntAt(0) == 2);
+	auto kept = copy.Prepare("SELECT finish_date FROM entry WHERE id = 1");
+	REQUIRE(kept.Step());
+	CHECK(kept.TextAt(0) == "2026-02-01");
+
+	Catalogue again(dir);
+	REQUIRE(again.LoadAll().value());
+	CHECK(BackupsIn(dir).size() == 1);
+}
+
+TEST_CASE_FIXTURE(TempDirFixture, "catalogue leaves a store alone when its backup fails") {
+	auto dir = TempDir() / "data";
+	std::filesystem::create_directories(dir);
+	WriteVersionTwo(dir / "catalist.db");
+	std::filesystem::permissions(dir, std::filesystem::perms::owner_write,
+	                             std::filesystem::perm_options::remove);
+	{
+		Catalogue db(dir);
+		auto loaded = db.LoadAll();
+		REQUIRE_FALSE(loaded.has_value());
+		CHECK(loaded.error().find("cannot back up") != std::string::npos);
+	}
+	std::filesystem::permissions(dir, std::filesystem::perms::owner_write,
+	                             std::filesystem::perm_options::add);
+	catalist::store::Database raw;
+	REQUIRE(raw.Open(dir / "catalist.db"));
+	auto version = raw.Prepare("PRAGMA user_version");
+	REQUIRE(version.Step());
+	CHECK(version.IntAt(0) == 2);
+}
+
+TEST_CASE_FIXTURE(TempDirFixture,
+                  "catalogue stamps the exact time of a change, and undo restores it") {
+	Catalogue db(TempDir() / "data");
+	int id = db.AddEntry(MakeEntry().Title("Taxi").EnglishTitle("Odd Taxi"));
+	REQUIRE(db.SaveAll(catalist::TxNote{"add", "2026-11-23 10:00:00"}));
+	CHECK(db.GetById(MediaType::kAnime, id)->changed_at == "2026-11-23 10:00:00");
+
+	auto next = *db.GetById(MediaType::kAnime, id);
+	next.score = 7;
+	db.UpdateEntry(next);
+	REQUIRE(db.SaveAll(catalist::TxNote{"set", "2026-11-23 11:30:00"}));
+	CHECK(db.GetById(MediaType::kAnime, id)->changed_at == "2026-11-23 11:30:00");
+
+	REQUIRE(db.Undo(1, false).has_value());
+	CHECK(db.GetById(MediaType::kAnime, id)->changed_at == "2026-11-23 10:00:00");
+
+	Catalogue reloaded(TempDir() / "data");
+	REQUIRE(reloaded.LoadAll().value());
+	CHECK(DisplayName(*reloaded.GetById(MediaType::kAnime, id)) == "Odd Taxi");
+	CHECK(reloaded.GetById(MediaType::kAnime, id)->title == "Taxi");
+}
+
 TEST_CASE_FIXTURE(TempDirFixture, "catalogue refuses a file from a newer version") {
 	std::filesystem::create_directories(TempDir() / "data");
 	{
 		catalist::store::Database raw;
 		REQUIRE(raw.Open(TempDir() / "data/catalist.db"));
-		REQUIRE(raw.Run("PRAGMA user_version = 3;"));
+		REQUIRE(raw.Run("PRAGMA user_version = 4;"));
 	}
 	Catalogue db(TempDir() / "data");
 	auto loaded = db.LoadAll();

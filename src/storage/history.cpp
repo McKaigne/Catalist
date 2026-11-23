@@ -86,6 +86,12 @@ bool Catalogue::SaveAll(const TxNote& note) {
 	changes.insert(changes.end(), manga.begin(), manga.end());
 	if (changes.empty())
 		return SaveAll();
+	for (auto& made : changes) {
+		if (not made.after)
+			continue;
+		made.after->changed_at = note.stamp;
+		UpdateEntry(*made.after);
+	}
 	bool done = Commit([&] { return WriteRows() and WriteJournal(db_, note, changes); });
 	if (done)
 		RememberSaved();

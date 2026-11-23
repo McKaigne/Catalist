@@ -28,7 +28,9 @@ std::string Of(MediaType type, int id) {
 }
 
 bool TitleHolds(const Entry& shown, const std::string& text) {
-	return utf8::Lowercase(shown.title).find(utf8::Lowercase(text)) != std::string::npos;
+	std::string wanted = utf8::Lowercase(text);
+	return utf8::Lowercase(shown.title).find(wanted) != std::string::npos or
+	       utf8::Lowercase(shown.english_title).find(wanted) != std::string::npos;
 }
 
 std::vector<Entry> Find(const Catalogue& db, const std::string& text,
@@ -44,7 +46,8 @@ std::vector<Entry> Find(const Catalogue& db, const std::string& text,
 		if (only and *only != type)
 			continue;
 		for (const auto& each : db.GetEntries(type)) {
-			if (utf8::Lowercase(each.title) == wanted)
+			if (utf8::Lowercase(each.title) == wanted or
+			    utf8::Lowercase(each.english_title) == wanted)
 				exact.push_back(each);
 			else if (TitleHolds(each, text))
 				holding.push_back(each);

@@ -159,7 +159,7 @@ int RunAdd(const Command& self, const args::Parsed& line, CliContext& ctx) {
 		return 1;
 	if (auto mine = ctx.db.FindByIds(*type, added.anilist_id, added.mal_id)) {
 		ctx.err << std::format("{} is in your {} list already, as {} ({}).\nNothing changed.\n",
-		                       mine->title, TypeKey(*type), refs::Of(*mine),
+		                       DisplayName(*mine), TypeKey(*type), refs::Of(*mine),
 		                       StatusKey(mine->status));
 		return 0;
 	}

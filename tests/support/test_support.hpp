@@ -73,6 +73,10 @@ public:
 		built_.anilist_id = value;
 		return *this;
 	}
+	EntryBuilder& EnglishTitle(std::string value) {
+		built_.english_title = std::move(value);
+		return *this;
+	}
 	EntryBuilder& Title(std::string value) {
 		built_.title = std::move(value);
 		return *this;

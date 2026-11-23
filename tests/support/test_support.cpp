@@ -111,7 +111,7 @@ web::Fetcher FakeWeb::Link() {
 
 Entry FindTitle(const Catalogue& db, MediaType type, const std::string& title) {
 	for (const auto& e : db.GetEntries(type)) {
-		if (e.title == title)
+		if (DisplayName(e) == title)
 			return e;
 	}
 	throw std::runtime_error("no entry titled " + title);

@@ -29,7 +29,7 @@ std::string ListTable(const CliContext& ctx, const std::vector<Entry>& shown) {
 	std::vector<std::vector<output::Styled>> rows;
 	for (const auto& e : shown) {
 		rows.push_back({{refs::Of(e), output::kCyan},
-		                {e.title},
+		                {DisplayName(e)},
 		                {StatusToString(e.status, e.type), StatusColor(e.status)},
 		                {output::Stars(e.score), output::kYellow},
 		                {OutOf(e.progress, e.total_units)}});
@@ -82,7 +82,7 @@ void PrintCard(CliContext& ctx, const Entry& e) {
 	auto id_text = [](int id) { return id > 0 ? std::to_string(id) : std::string("-"); };
 	std::string page = PageOf(e);
 
-	ctx.out << Paint(e.title, output::kBold, ctx.color) << "\n";
+	ctx.out << Paint(DisplayName(e), output::kBold, ctx.color) << "\n";
 	row("Ref", Paint(refs::Of(e), output::kCyan, ctx.color));
 	row("Type", TypeToString(e.type));
 	row("AniList", id_text(e.anilist_id));

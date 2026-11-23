@@ -308,7 +308,8 @@ TEST_CASE("setTitle and the date setters stamp the entry only when they change i
 	                             .UpdatedAt("2026-10-02");
 
 	auto renamed = catalist::SetTitle(before, "ODDTAXI", today);
-	CHECK(renamed.title == "ODDTAXI");
+	CHECK(DisplayName(renamed) == "ODDTAXI");
+	CHECK(renamed.title == "Odd Taxi");
 	CHECK(renamed.updated_at == today);
 	CHECK(catalist::SetTitle(before, "Odd Taxi", today).updated_at == before.updated_at);
 

@@ -22,6 +22,7 @@ struct Entry {
 	int anilist_id = 0;
 	int mal_id = 0;
 	std::string title;
+	std::string english_title;
 	MediaType type = MediaType::kAnime;
 	WatchStatus status = WatchStatus::kWatching;
 	int score = 0;
@@ -33,6 +34,7 @@ struct Entry {
 	std::optional<IsoDate> start_date;
 	std::optional<IsoDate> finish_date;
 	std::optional<IsoDate> updated_at;
+	std::string changed_at;
 
 	bool operator==(const Entry&) const = default;
 };
@@ -50,6 +52,8 @@ std::string StatusToString(WatchStatus status, MediaType type = MediaType::kAnim
 std::string TypeToString(MediaType type);
 // "anime" or "manga".
 [[nodiscard]] std::string TypeKey(MediaType type);
+
+[[nodiscard]] const std::string& DisplayName(const Entry& shown);
 
 // The title's page on AniList; empty without an AniList id.
 [[nodiscard]] std::string PageOf(const Entry& shown);
@@ -94,7 +98,6 @@ enum class CountField { kProgress, kTotalUnits, kVolumes, kRewatched };
 // stay within a known volume total.
 [[nodiscard]] Entry SetCount(Entry target, CountField field, int value, const IsoDate& today);
 
-// Renames the entry.
 [[nodiscard]] Entry SetTitle(Entry target, const std::string& title, const IsoDate& today);
 
 // Sets the day the entry was started or finished, or clears it. The status

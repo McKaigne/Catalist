@@ -7,6 +7,7 @@ namespace catalist::csv_codec {
 namespace {
 
 constexpr size_t kCatalogFields = 15;
+constexpr size_t kAllFields = 17;
 
 std::optional<int> ParseInt(const std::string& field) {
 	try {
@@ -96,15 +97,20 @@ std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields) {
 	decoded.finish_date = IsoDate::Parse(fields[12]);
 	decoded.updated_at = IsoDate::Parse(fields[13]);
 	decoded.anilist_id = IntOrZero(fields[14]);
+	if (fields.size() >= kAllFields) {
+		decoded.english_title = fields[15];
+		decoded.changed_at = fields[16];
+	}
 	return decoded;
 }
 
 std::string EncodeEntry(const Entry& e) {
 	return std::format(
-	    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, e.mal_id, TypeKey(e.type),
+	    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, e.mal_id, TypeKey(e.type),
 	    EscapeField(e.title), EscapeField(StatusToString(e.status, e.type)), e.score, e.progress,
 	    e.total_units, e.volumes, e.total_volumes, e.rewatched, FormatDate(e.start_date),
-	    FormatDate(e.finish_date), FormatDate(e.updated_at), e.anilist_id);
+	    FormatDate(e.finish_date), FormatDate(e.updated_at), e.anilist_id,
+	    EscapeField(e.english_title), e.changed_at);
 }
 
 }  // namespace catalist::csv_codec

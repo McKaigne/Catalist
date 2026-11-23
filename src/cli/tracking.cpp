@@ -182,8 +182,8 @@ int RunStatus(const Command& self, const args::Parsed& line, CliContext& ctx) {
 // when the answer is not yes or when there is nobody to ask.
 bool RemovalConfirmed(CliContext& ctx, const std::vector<Entry>& gone, bool ask) {
 	for (size_t i = 0; gone.size() > 1 and i < gone.size(); ++i)
-		ctx.err << "  " << refs::Of(gone[i]) << "  " << gone[i].title << "\n";
-	std::string what = gone.size() == 1 ? std::format("{} ({})", gone[0].title, refs::Of(gone[0]))
+		ctx.err << "  " << refs::Of(gone[i]) << "  " << DisplayName(gone[i]) << "\n";
+	std::string what = gone.size() == 1 ? std::format("{} ({})", DisplayName(gone[0]), refs::Of(gone[0]))
 	                                    : std::format("these {} titles", gone.size());
 	if (not ask) {
 		Fail(ctx, std::format("nobody to ask here: pass -f to remove {}", what));

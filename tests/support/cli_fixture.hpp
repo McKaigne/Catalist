@@ -96,6 +96,8 @@ struct CliFixture : catalist::test::TempDirFixture {
 		catalist::CliContext ctx{db, in_stream, out_stream, err_stream, TestClock, web.Link()};
 		ctx.interactive = interactive;
 		ctx.columns = columns;
+		ctx.rows = rows;
+		ctx.pager = pager;
 		ctx.color = color;
 		int exit_code = catalist::RunCli(args, ctx);
 		out = out_stream.str();
@@ -180,6 +182,8 @@ struct CliFixture : catalist::test::TempDirFixture {
 	// reader has gone.
 	bool color = false;
 	bool out_closed = false;
+	int rows = 0;
+	std::function<bool(const std::string&)> pager;
 	std::string out;
 	std::string err;
 };

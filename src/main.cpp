@@ -24,6 +24,8 @@ int main(int argc, char* argv[]) {
 	    db, std::cin, std::cout, std::cerr, catalist::LocalTime, catalist::HttpFetch};
 	ctx.interactive = catalist::IsInteractive();
 	ctx.columns = catalist::TerminalColumns();
+	ctx.rows = catalist::TerminalRows();
+	ctx.pager = catalist::ShowInPager;
 	// https://no-color.org; a dumb terminal cannot show colours either.
 	ctx.color = ctx.columns > 0 and std::getenv("NO_COLOR") == nullptr and env("TERM") != "dumb";
 	int code = catalist::RunCli({argv + 1, argv + argc}, ctx);

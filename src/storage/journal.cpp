@@ -58,10 +58,8 @@ const Entry* FindById(const std::vector<Entry>& list, int id) {
 	return found == list.end() ? nullptr : &*found;
 }
 
-// The entry's title and ref, as refs::Of writes it: "Odd Taxi (a:2)".
 std::string NameOf(const Entry& named) {
-	return std::format("{} ({}:{})", DisplayName(named), named.type == MediaType::kAnime ? 'a' : 'm',
-	                   named.id);
+	return std::format("{} ({})", DisplayName(named), TypeKey(named.type));
 }
 
 using Outcome = Result<std::optional<Entry>>;
@@ -70,7 +68,7 @@ using Outcome = Result<std::optional<Entry>>;
 Outcome ComeBack(const std::vector<Entry>& list, const Entry& back) {
 	for (const auto& other : list) {
 		if (other.id == back.id)
-			return std::unexpected(std::format("{} cannot come back: its ref is now that of {}",
+			return std::unexpected(std::format("{} cannot come back: {} has its place now",
 			                                   NameOf(back), DisplayName(other)));
 		bool same = (back.anilist_id > 0 and other.anilist_id == back.anilist_id) or
 		            (back.mal_id > 0 and other.mal_id == back.mal_id);

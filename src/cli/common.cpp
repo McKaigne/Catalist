@@ -71,7 +71,7 @@ std::optional<std::vector<Entry>> PickTitle(CliContext& ctx, const Naming& how) 
 	return std::vector<Entry>{offered[*picked]};
 }
 
-// The titles one REF names: one, or all it matches with --all. Nothing,
+// The titles one name names: one, or all it matches with --all. Nothing,
 // with the reason on standard error, when it matches none or when the
 // choice among several is not made.
 std::optional<std::vector<Entry>> Named(CliContext& ctx, const std::string& ref,
@@ -116,7 +116,7 @@ std::string ChangeText(const CliContext& ctx, const Entry& shown,
                        const journal::FieldChange& field) {
 	std::string title = Paint(DisplayName(shown), output::kBold, ctx.color);
 	if (field.field == "added")
-		return std::format("{}  added as {} ({})\n", title, field.after, refs::Of(shown));
+		return std::format("{}  added as {}\n", title, field.after);
 	if (field.field == "removed")
 		return std::format("{}  removed\n", title);
 	if (field.field == "progress")
@@ -161,7 +161,7 @@ std::vector<std::string> RowOf(const Entry& e) {
 std::vector<std::string> FullRowOf(const Entry& e) {
 	auto row = RowOf(e);
 	for (const auto& more : {std::to_string(e.total_volumes), std::to_string(e.anilist_id),
-	                         std::to_string(e.mal_id), output::OrDash(PageOf(e))})
+	                         std::to_string(e.mal_id), output::OrDash(PageOf(e)), e.title})
 		row.push_back(more);
 	return row;
 }
@@ -277,11 +277,10 @@ std::optional<MediaType> OnlyType(const args::Parsed& line) {
 	return line.Has("a") ? MediaType::kAnime : MediaType::kManga;
 }
 
-// The options of every command that takes REFs.
 std::vector<args::Option> WithRefOptions(std::vector<args::Option> options) {
 	options.insert(options.begin(), {{'a', "", "", "look in the anime list only"},
 	                                 {'m', "", "", "look in the manga list only"},
-	                                 {0, "all", "", "take every title a REF matches"}});
+	                                 {0, "all", "", "take every title a name matches"}});
 	return options;
 }
 
@@ -300,7 +299,7 @@ RefRequest ReadRefsIn(const Command& cmd, const args::Parsed& line, CliContext& 
 	if (std::ranges::contains(words, std::string()))
 		request.stop = UsageError(ctx, cmd, "a title cannot be empty");
 	else if (request.refs.empty() and (cmd.pick_from.empty() or not ctx.interactive))
-		request.stop = UsageError(ctx, cmd, "name a title: a ref such as a:12, or part of it");
+		request.stop = UsageError(ctx, cmd, "name a title: any part of its name");
 	else if (std::ranges::any_of(request.refs, [](const std::string& name) {
 		         return not refs::Parse(name) and utf8::Folded(name).empty();
 	         }))
@@ -321,8 +320,6 @@ std::optional<size_t> AskWhich(CliContext& ctx, size_t count) {
 	return static_cast<size_t>(*picked - 1);
 }
 
-// Every title the REFs name, each once, in the order named. Nothing when
-// any REF fails: a command works on all it was given, or on none.
 std::optional<std::vector<Entry>> Resolve(CliContext& ctx, const std::vector<std::string>& given,
                                           const Naming& how) {
 	if (given.empty())
@@ -373,7 +370,7 @@ std::optional<std::vector<Entry>> TakeForWrite(CliContext& ctx, const std::vecto
 		            now->mal_id == each.mal_id;
 		if (not same) {
 			Fail(ctx, std::format("{} ({}) was removed or replaced meanwhile; nothing was changed",
-			                      DisplayName(each), refs::Of(each)));
+			                      DisplayName(each), TypeKey(each.type)));
 			return std::nullopt;
 		}
 		current.push_back(*now);
@@ -427,9 +424,8 @@ int ApplyTo(CliContext& ctx, const args::Parsed& line, const std::vector<Entry>&
 	return SaveAndReport(ctx, line, changes);
 }
 
-// Makes one change to every title the REFs name; every REF is resolved
-// before any title changes, and before the catalogue is taken for writing:
-// no other program waits while the person chooses.
+// Every name is resolved before the catalogue is taken for writing: no other
+// program waits while the person chooses.
 int ChangeTitles(const Command& self, const args::Parsed& line, CliContext& ctx,
                  const TitleChange& change, const TitleRefusal& refuse) {
 	auto request = ReadRefs(self, line, ctx);
@@ -464,11 +460,12 @@ Result<int> CountGiven(const args::Parsed& line, int otherwise) {
 extern const args::Option kQuiet{'q', "", "", "print nothing"};
 
 extern const char* const kRefsHelp =
-    "A REF is a ref such as a:12, or part of a title. Every REF is looked up\n"
-    "before anything changes: when one of them fails, nothing is changed.\n";
+    "A TITLE is any part of its English or romaji name, the words in any order.\n"
+    "Commas separate several. All are looked up before anything changes: when\n"
+    "one of them fails, nothing is changed.\n";
 
 extern const char* const kDashNotRef =
-    "punctuation alone is not a title: give a ref such as a:12, or part of a title";
+    "punctuation alone is not a title: give part of its name";
 
 extern const char* const kChangeFormat =
     "Each field that changed is printed. Into a pipe that is one line of\n"

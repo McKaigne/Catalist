@@ -226,9 +226,10 @@ int RunStatus(const Command& self, const args::Parsed& line, CliContext& ctx) {
 // when the answer is not yes or when there is nobody to ask.
 bool RemovalConfirmed(CliContext& ctx, const std::vector<Entry>& gone, bool ask) {
 	for (size_t i = 0; gone.size() > 1 and i < gone.size(); ++i)
-		ctx.err << "  " << refs::Of(gone[i]) << "  " << DisplayName(gone[i]) << "\n";
-	std::string what = gone.size() == 1 ? std::format("{} ({})", DisplayName(gone[0]), refs::Of(gone[0]))
-	                                    : std::format("these {} titles", gone.size());
+		ctx.err << "  " << TypeKey(gone[i].type) << "  " << DisplayName(gone[i]) << "\n";
+	std::string what = gone.size() == 1
+	                       ? std::format("{} ({})", DisplayName(gone[0]), TypeKey(gone[0].type))
+	                       : std::format("these {} titles", gone.size());
 	if (not ask) {
 		Fail(ctx, std::format("nobody to ask here: pass -f to remove {}", what));
 		return false;
@@ -266,6 +267,7 @@ int RunRemove(const Command& self, const args::Parsed& line, CliContext& ctx) {
 }
 
 const std::vector<WatchStatus> kInProgress = {WatchStatus::kWatching, WatchStatus::kRewatching};
+const char* const kPickHelp = "With no TITLE at a terminal, you choose from a list.\n";
 
 // done, hold, drop, plan and resume differ in their name and their words.
 Command StatusCommand(const std::string& name, const std::string& summary,
@@ -282,9 +284,10 @@ Command StatusCommand(const std::string& name, const std::string& summary,
 		options.insert(options.begin(), {0, "score", "N", "give it a score as well, 0 to 10"});
 	return {.name = name,
 	        .summary = summary,
-	        .details = details + "\n" + kRefsHelp + "\n" + kChangeFormat,
+	        .details = details + "\n" + kRefsHelp + (pick_from.empty() ? "" : kPickHelp) + "\n" +
+	                   kChangeFormat,
 	        .options = WithRefOptions(options),
-	        .operands = pick_from.empty() ? "REF..." : "[REF...]",
+	        .operands = pick_from.empty() ? "TITLE..." : "[TITLE...]",
 	        .pick_from = pick_from,
 	        .run = RunStatus};
 }
@@ -294,9 +297,9 @@ Command StepCommand(const std::string& name, const std::string& alias, const std
 	return {.name = name,
 	        .aliases = {alias},
 	        .summary = summary,
-	        .details = details + "\n" + kRefsHelp + "\n" + kChangeFormat,
+	        .details = details + "\n" + kRefsHelp + kPickHelp + "\n" + kChangeFormat,
 	        .options = WithRefOptions({{'n', "", "N", "count N instead of one"}, kQuiet}),
-	        .operands = "[REF...]",
+	        .operands = "[TITLE...]",
 	        .pick_from = kInProgress,
 	        .run = RunStep};
 }
@@ -317,10 +320,10 @@ std::vector<Command> TrackingCommands() {
 	             "volumes, rewatched, start and finish (dates such as 2026-10-20, or\n"
 	             "today; an empty value, as in finish=, clears one). Reaching the total completes a\n"
 	             "title, as + does. All values are checked before anything changes.\n\n"
-	             "The REF is a ref such as a:12, or part of a title.\n\n") +
+	             "The TITLE is any part of its name; commas separate several.\n\n") +
 	         kChangeFormat,
 	     .options = WithRefOptions({kQuiet}),
-	     .operands = "REF FIELD=VALUE...",
+	     .operands = "TITLE FIELD=VALUE...",
 	     .run = RunSet},
 	    StatusCommand("done", "Mark titles completed",
 	                  "Sets the finish date, and the progress to the total when it is known.\n"),
@@ -340,11 +343,10 @@ std::vector<Command> TrackingCommands() {
 	     .summary = "Remove titles",
 	     .details =
 	         std::string("At a terminal rm asks first. Where nobody can be asked, in a script,\n"
-	                     "it removes nothing without -f. 'undo' brings a removed title back\n"
-	                     "under its ref.\n\n") +
+	                     "it removes nothing without -f. 'undo' brings a removed title back.\n\n") +
 	         kRefsHelp + "\n" + kChangeFormat,
 	     .options = WithRefOptions({{'f', "", "", "remove without asking"}, kQuiet}),
-	     .operands = "REF...",
+	     .operands = "TITLE...",
 	     .run = RunRemove},
 	};
 }

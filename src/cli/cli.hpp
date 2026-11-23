@@ -33,6 +33,9 @@ struct CliContext {
 	// The terminal's width, for tables; 0 when output goes to a pipe or a
 	// file, which gets tab-separated lines instead.
 	int columns = 0;
+	int rows = 0;
+	// Shows a long list; false when it could not, and it is printed instead.
+	std::function<bool(const std::string&)> pager{};
 	// The command line as it was typed; RunCli sets it. It names the undo
 	// step of what the command changes.
 	std::string typed{};
@@ -50,7 +53,7 @@ struct Command {
 	std::string summary{};
 	std::string details{};
 	std::vector<args::Option> options{};
-	// The operands as the usage line shows them: "REF...".
+	// The operands as the usage line shows them: "TITLE...".
 	std::string operands{};
 	// What a terminal is offered when no title is named; empty: one must be.
 	std::vector<WatchStatus> pick_from{};

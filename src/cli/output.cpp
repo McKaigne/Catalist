@@ -114,4 +114,22 @@ std::string Table(const std::vector<TableColumn>& columns,
 	return drawn;
 }
 
+std::string Sections(const std::vector<TableColumn>& columns, const std::vector<Section>& sections,
+                     int width, bool color) {
+	std::vector<std::vector<Styled>> all;
+	for (const auto& section : sections)
+		all.insert(all.end(), section.rows.begin(), section.rows.end());
+	auto widths = ColumnWidths(columns, all, width);
+	std::string drawn;
+	for (const auto& section : sections) {
+		if (section.rows.empty())
+			continue;
+		drawn += drawn.empty() ? "" : "\n";
+		drawn += Paint(section.heading, kBold, color) + "\n";
+		for (const auto& row : section.rows)
+			drawn += TableLine(columns, widths, row, color);
+	}
+	return drawn;
+}
+
 }  // namespace catalist::output

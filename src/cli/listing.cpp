@@ -22,19 +22,40 @@ const char* const kRowFormat =
     "  started finished updated\n"
     "A date that is not set is '-' there, and a total that is not known is 0.\n";
 
-// The list as a table for a terminal.
 std::string ListTable(const CliContext& ctx, const std::vector<Entry>& shown) {
-	std::vector<output::TableColumn> columns = {
-	    {"REF"}, {"TITLE", false, true}, {"STATUS"}, {"SCORE"}, {"PROGRESS"}};
-	std::vector<std::vector<output::Styled>> rows;
+	std::vector<output::TableColumn> columns = {{"", false, true}, {""}, {""}, {""}};
+	std::vector<output::Section> sections = {{"ANIME", {}}, {"MANGA", {}}};
 	for (const auto& e : shown) {
-		rows.push_back({{refs::Of(e), output::kCyan},
-		                {DisplayName(e)},
-		                {StatusToString(e.status, e.type), StatusColor(e.status)},
-		                {output::Stars(e.score), output::kYellow},
-		                {OutOf(e.progress, e.total_units)}});
+		sections[e.type == MediaType::kAnime ? 0 : 1].rows.push_back(
+		    {{DisplayName(e)},
+		     {StatusToString(e.status, e.type), StatusColor(e.status)},
+		     {output::Stars(e.score), output::kYellow},
+		     {OutOf(e.progress, e.total_units)}});
 	}
-	return output::Table(columns, rows, ctx.columns, ctx.color);
+	return output::Sections(columns, sections, ctx.columns, ctx.color);
+}
+
+void ShowTable(CliContext& ctx, const std::string& table) {
+	auto lines = static_cast<int>(std::ranges::count(table, '\n'));
+	if (ctx.pager and ctx.rows > 0 and lines >= ctx.rows) {
+		ctx.out.flush();
+		if (ctx.pager(table))
+			return;
+	}
+	ctx.out << table;
+}
+
+void SayNothingToList(CliContext& ctx, const ListQuery& query) {
+	bool empty = ctx.db.GetEntries(MediaType::kAnime).empty() and
+	             ctx.db.GetEntries(MediaType::kManga).empty();
+	if (not query.is_home)
+		ctx.err << "No titles to list.\n";
+	else if (empty)
+		ctx.err << "Nothing here yet. Add a title with 'catalist add NAME', or bring in a list\n"
+		           "with 'catalist import FILE'.\n";
+	else
+		ctx.err << "Nothing in progress. See your lists with 'catalist ls', or pick one up with\n"
+		           "'catalist resume'.\n";
 }
 
 const std::map<std::string, SortKey> kSortKeys = {
@@ -80,7 +101,8 @@ void PrintCard(CliContext& ctx, const Entry& e) {
 	std::string page = PageOf(e);
 
 	ctx.out << Paint(DisplayName(e), output::kBold, ctx.color) << "\n";
-	row("Ref", Paint(refs::Of(e), output::kCyan, ctx.color));
+	if (not e.english_title.empty())
+		row("Romaji", e.title);
 	row("Type", TypeToString(e.type));
 	row("AniList", id_text(e.anilist_id));
 	row("MyAnimeList", id_text(e.mal_id));
@@ -213,9 +235,9 @@ int PrintList(CliContext& ctx, const ListQuery& query) {
 	}
 	if (ctx.columns > 0) {
 		if (shown.empty())
-			ctx.err << "No titles to list.\n";
+			SayNothingToList(ctx, query);
 		else
-			ctx.out << ListTable(ctx, shown);
+			ShowTable(ctx, ListTable(ctx, shown));
 		return 0;
 	}
 	std::vector<std::vector<std::string>> rows;
@@ -230,8 +252,8 @@ std::vector<Command> ListingCommands() {
 	    {.name = "ls",
 	     .summary = "List your titles",
 	     .details =
-	         std::string("Lists both lists in title order. QUERY keeps the titles that hold its\n"
-	                     "words, in capitals or not; they need no quotes. -s takes several\n"
+	         std::string("Lists both lists in title order. QUERY keeps the titles whose\n"
+	                     "English or romaji name holds all its words. -s takes several\n"
 	                     "statuses with commas between them: -s watching,on-hold.\n\n") +
 	         kRowFormat,
 	     .options = {{'a', "", "", "list anime only"},
@@ -245,11 +267,11 @@ std::vector<Command> ListingCommands() {
 	     .run = RunList},
 	    {.name = "show",
 	     .summary = "Show titles in full",
-	     .details = "A REF is a ref such as a:12, or part of a title. Into a pipe a title is\n"
-	                "one line: the fields of ls, then total_volumes, anilist_id, mal_id and\n"
-	                "url, the title's page on AniList.\n",
+	     .details = "A TITLE is any part of its name. Into a pipe a title is one line: the\n"
+	                "fields of ls, then total_volumes, anilist_id, mal_id, url (the title's\n"
+	                "page on AniList) and romaji.\n",
 	     .options = WithRefOptions({}),
-	     .operands = "REF...",
+	     .operands = "TITLE...",
 	     .run = RunShow},
 	    {.name = "stats",
 	     .summary = "Show the numbers of your lists",

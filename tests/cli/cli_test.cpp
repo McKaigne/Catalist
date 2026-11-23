@@ -35,7 +35,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli help lists the commands, and each command has
 		CHECK(Has(out, "  undo        Take back what the last command changed\n"));
 		CHECK(Has(out, "  help        Show help for a command\n"));
 		CHECK(Has(out, "  add         Add a title found on AniList\n"));
-		CHECK(Has(out, "  catalist show a:12\n"));
+		CHECK(Has(out, "  catalist show frieren\n"));
 		CHECK(Has(out, "kept in\ndata.\n"));
 		CHECK(err.empty());
 	}
@@ -59,17 +59,17 @@ TEST_CASE_FIXTURE(CliFixture, "cli help lists the commands, and each command has
 	CHECK(Run({"ls", "-qh", "--sort=title"}) == 0);
 	CHECK(out == from_help);
 	CHECK(Run({"help", "show"}) == 0);
-	CHECK(Has(out, "Usage: catalist show [-am] [--all] REF...\n"));
+	CHECK(Has(out, "Usage: catalist show [-am] [--all] TITLE...\n"));
 	CHECK(Run({"help", "+"}) == 0);
-	CHECK(Has(out, "Usage: catalist + [-amq] [--all] [-n N] [REF...]\nAlso:  catalist inc\n"));
+	CHECK(Has(out, "Usage: catalist + [-amq] [--all] [-n N] [TITLE...]\nAlso:  catalist inc\n"));
 	CHECK(Run({"-", "--help"}) == 0);
-	CHECK(Has(out, "Usage: catalist - [-amq] [--all] [-n N] [REF...]\nAlso:  catalist dec\n"));
+	CHECK(Has(out, "Usage: catalist - [-amq] [--all] [-n N] [TITLE...]\nAlso:  catalist dec\n"));
 	CHECK(Run({"help", "set"}) == 0);
-	CHECK(Has(out, "Usage: catalist set [-amq] [--all] REF FIELD=VALUE...\n"));
+	CHECK(Has(out, "Usage: catalist set [-amq] [--all] TITLE FIELD=VALUE...\n"));
 	CHECK(Run({"help", "done"}) == 0);
-	CHECK(Has(out, "Usage: catalist done [-amq] [--all] [--score=N] [REF...]\n"));
+	CHECK(Has(out, "Usage: catalist done [-amq] [--all] [--score=N] [TITLE...]\n"));
 	CHECK(Run({"help", "hold"}) == 0);
-	CHECK(Has(out, "Usage: catalist hold [-amq] [--all] [REF...]\n"));
+	CHECK(Has(out, "Usage: catalist hold [-amq] [--all] [TITLE...]\n"));
 	CHECK(Run({"help", "undo"}) == 0);
 	CHECK(Has(out, "Usage: catalist undo [-fq] [-n N]\n"));
 	CHECK(Run({"help", "add"}) == 0);
@@ -83,7 +83,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli help lists the commands, and each command has
 	CHECK(Has(out, "      --no-lookup      add TITLE as written, without asking a site\n"));
 	CHECK(Has(out, "  -q                   print nothing\n"));
 	CHECK(Run({"help", "rm"}) == 0);
-	CHECK(Has(out, "Usage: catalist rm [-amfq] [--all] REF...\n"));
+	CHECK(Has(out, "Usage: catalist rm [-amfq] [--all] TITLE...\n"));
 	CHECK(Run({"help", "search"}) == 0);
 	CHECK(Has(out, "Usage: catalist search [-am] QUERY...\n"));
 	CHECK(Has(out, "  pick type title year total score anilist_id mal_id ref\n"));
@@ -353,11 +353,11 @@ TEST_CASE_FIXTURE(CliFixture, "cli alone at a terminal lists what is being watch
 	CHECK(Has(out, "Berserk"));
 	CHECK_FALSE(Has(out, "Frieren"));
 	CHECK(err.empty());
-	// The title changed last comes first.
-	CHECK(out.find("Berserk") < out.find("Odd Taxi"));
-	CHECK(Run({"+", "-q", "taxi"}) == 0);
+	// The title changed last comes first within its section.
+	CHECK(Run({"resume", "-q", "a:1"}) == 1);
+	CHECK(Run({"-", "-q", "a:1"}) == 0);
 	CHECK(Run({}, "", 100) == 0);
-	CHECK(out.find("Odd Taxi") < out.find("Berserk"));
+	CHECK(out.find("Odd Taxi") > out.find("Sousou no Frieren"));
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli without a command says how to give one, with exit code 2") {

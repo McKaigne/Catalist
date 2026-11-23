@@ -79,7 +79,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli undo brings a removed title back under its re
 	CHECK(out == "Odd Taxi  removed\n");
 	CHECK(Saved(MediaType::kAnime).size() == 1);
 	CHECK(Run({"undo"}, "", 100) == 0);
-	CHECK(out == "Odd Taxi  added as watching (a:2)\n");
+	CHECK(out == "Odd Taxi  added as watching\n");
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli undo changes nothing when a title has changed since") {
@@ -90,7 +90,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli undo changes nothing when a title has changed
 
 	CHECK(Run({"undo", "-n", "2"}) == 1);
 	CHECK(err ==
-	      "error: cannot undo '+ taxi' (2026-10-20 21:30:00): Odd Taxi (a:2) has changed since: "
+	      "error: cannot undo '+ taxi' (2026-10-20 21:30:00): Odd Taxi (anime) has changed since: "
 	      "progress is now 9, not 6\n"
 	      "Nothing was changed. With -f the step is taken all the same, where it still can "
 	      "be.\n");
@@ -107,7 +107,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli undo changes nothing when a title has changed
 	// The step undone last is the first to be made again.
 	ChangeBehindTheHistory(MediaType::kAnime, "Odd Taxi", 1);
 	CHECK(Run({"redo"}) == 1);
-	CHECK(err.find("error: cannot redo '+ taxi' (2026-10-20 21:30:00): Odd Taxi (a:2) has "
+	CHECK(err.find("error: cannot redo '+ taxi' (2026-10-20 21:30:00): Odd Taxi (anime) has "
 	               "changed since: progress is now 1, not 5\n") == 0);
 	CHECK(Run({"redo", "-f"}) == 0);
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 6);

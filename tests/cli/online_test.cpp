@@ -29,7 +29,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli add finds the title on AniList and adds it") 
 
 	// Once is enough.
 	CHECK(Run({"add", "dandadan"}) == 0);
-	CHECK(err == "Dandadan is in your anime list already, as a:3 (watching).\nNothing changed.\n");
+	CHECK(err == "Dandadan is in your anime list already (watching).\nNothing changed.\n");
 	CHECK(out.empty());
 	CHECK(Saved(MediaType::kAnime).size() == 3);
 
@@ -51,7 +51,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli add -m adds a manga, planned unless told othe
 	  {"id":30656,"idMal":656,"title":{"romaji":"Vagabond"},"chapters":327,"volumes":37,
 	   "startDate":{"year":1998}}]}}})");
 	CHECK(Run({"add", "-m", "vagabond"}, "", 100) == 0);
-	CHECK(out == "Vagabond  added as planned (m:1)\n");
+	CHECK(out == "Vagabond  added as planned\n");
 	auto added = SavedTitle(MediaType::kManga, "Vagabond");
 	CHECK(added.status == WatchStatus::kPlanToWatch);
 	CHECK(added.total_units == 327);
@@ -91,7 +91,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli add with several matches asks, or wants --pic
 	CHECK(Saved(MediaType::kAnime).size() == 4);
 	// --pick wins over the question.
 	CHECK(Run({"add", "--pick", "2", "fullmetal"}, "1\n") == 0);
-	CHECK(Has(err, "Fullmetal Alchemist is in your anime list already, as a:3 (planned).\n"));
+	CHECK(Has(err, "Fullmetal Alchemist is in your anime list already (planned).\n"));
 
 	CHECK(Run({"add", "--pick=3", "fullmetal"}) == 1);
 	CHECK(err == "error: --pick=3, but AniList has only 2 matches for 'fullmetal'\n");
@@ -143,7 +143,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli add --no-lookup adds a title as written, with
 
 	// Nothing but the name tells two such titles apart: said, and added.
 	CHECK(Run({"add", "--no-lookup", "home video"}) == 0);
-	CHECK(err == "note: your anime list has a title of that name already, a:1.\n");
+	CHECK(err == "note: your anime list has a title of that name already.\n");
 	CHECK(out == "a:2\thome video\tadded\t-\tplanned\n");
 	CHECK(Saved(MediaType::kAnime).size() == 2);
 	CHECK(web.posted.empty());
@@ -167,7 +167,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli search prints the matches and which are yours
 	CHECK(out ==
 	      "#  YEAR  TITLE                         EPISODES  SCORE  YOURS\n"
 	      "1  2023  Sousou no Frieren                   28  "
-	      "\U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04D0  a:1\n"
+	      "\U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04D0  Completed\n"
 	      "2  2026  Sousou no Frieren 2nd Season         ?      -\n");
 	CHECK(err == "Add one with: catalist add --pick=N QUERY\n");
 	// Nothing is added, and no step is made.

@@ -451,7 +451,7 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo changes nothing when a title h
 	auto refused = db.Undo(2, false);
 	REQUIRE_FALSE(refused.has_value());
 	CHECK(refused.error() ==
-	      "cannot undo 'older' (2026-10-20 21:30:00): Odd Taxi (a:2) has changed since: "
+	      "cannot undo 'older' (2026-10-20 21:30:00): Odd Taxi (anime) has changed since: "
 	      "progress is now 9, not 6");
 	CHECK(ProgressOf(db, 1) == 4);
 	CHECK(ProgressOf(db, 2) == 9);
@@ -479,7 +479,7 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo changes nothing when a title h
 	auto again = db.Redo(1, false);
 	REQUIRE_FALSE(again.has_value());
 	CHECK(again.error() ==
-	      "cannot redo 'older' (2026-10-20 21:30:00): Odd Taxi (a:2) has changed since: "
+	      "cannot redo 'older' (2026-10-20 21:30:00): Odd Taxi (anime) has changed since: "
 	      "progress is now 1, not 5");
 	CHECK(ProgressOf(db, 2) == 1);
 }
@@ -530,8 +530,8 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo cannot bring a title back to a
 		auto refused = db.Undo(1, force);
 		REQUIRE_FALSE(refused.has_value());
 		CHECK(refused.error() ==
-		      "cannot undo 'rm taxi' (2026-10-20 21:30:00): Odd Taxi (a:2) cannot come back: "
-		      "its ref is now that of Mushishi");
+		      "cannot undo 'rm taxi' (2026-10-20 21:30:00): Odd Taxi (anime) cannot come back: "
+		      "Mushishi has its place now");
 	}
 	CHECK(db.GetById(MediaType::kAnime, 2)->title == "Mushishi");
 	CHECK_FALSE(db.History(0).value()[0].undone);

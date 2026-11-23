@@ -34,7 +34,7 @@ int SaveFailed(CliContext& ctx);
 // new field goes at the end: scripts count on the order.
 [[nodiscard]] std::vector<std::string> RowOf(const Entry& e);
 // Everything about a title: the fields of RowOf, then total_volumes,
-// anilist_id, mal_id and its AniList page, as show prints it.
+// anilist_id, mal_id, its AniList page and its romaji name, as show prints it.
 [[nodiscard]] std::vector<std::string> FullRowOf(const Entry& e);
 // The terminal's colour for each status.
 [[nodiscard]] const char* StatusColor(WatchStatus status);
@@ -71,7 +71,7 @@ extern const std::vector<WatchStatus> kStatuses;
 // -a and -m: the one list a command is kept to, or both.
 [[nodiscard]] std::optional<MediaType> OnlyType(const args::Parsed& line);
 
-// How the REFs of a command are matched: in which list, whether a REF may
+// How the titles of a command are matched: in which list, whether a name may
 // stand for several titles, and whether the person can be asked which.
 struct Naming {
 	std::optional<MediaType> only;
@@ -83,10 +83,10 @@ struct Naming {
 	std::vector<WatchStatus> pick_from{};
 };
 
-// The options of every command that takes REFs: -a, -m and --all first.
+// The options of every command that takes titles: -a, -m and --all first.
 [[nodiscard]] std::vector<args::Option> WithRefOptions(std::vector<args::Option> options);
 
-// The REFs given, or the exit code when there is nothing to go on with.
+// The names given, or the exit code when there is nothing to go on with.
 struct RefRequest {
 	std::vector<std::string> refs;
 	Naming how;
@@ -103,8 +103,8 @@ struct RefRequest {
 // empty or not one of them.
 [[nodiscard]] std::optional<size_t> AskWhich(CliContext& ctx, size_t count);
 
-// Every title the REFs name, each once, in the order named. Nothing, with
-// the reason on standard error, when any REF fails: a command works on all
+// Every title the names name, each once, in the order named. Nothing, with
+// the reason on standard error, when any fails: a command works on all
 // it was given, or on none.
 [[nodiscard]] std::optional<std::vector<Entry>> Resolve(CliContext& ctx,
                                                         const std::vector<std::string>& given,
@@ -140,7 +140,7 @@ using TitleRefusal = std::function<std::optional<std::string>(const Entry&)>;
 int ApplyTo(CliContext& ctx, const args::Parsed& line, const std::vector<Entry>& titles,
             const TitleChange& change);
 
-// Makes one change to every title the REFs name; every REF is resolved
+// Makes one change to every title named; every name is resolved
 // before any title changes.
 int ChangeTitles(const Command& self, const args::Parsed& line, CliContext& ctx,
                  const TitleChange& change, const TitleRefusal& refuse = nullptr);
@@ -169,6 +169,8 @@ struct ListQuery {
 	bool reverse = false;
 	// The refs alone, one a line.
 	bool refs_only = false;
+	// Bare `catalist`, which says what to do next when it has nothing to show.
+	bool is_home = false;
 };
 // Lists the titles the query asks for: a table at a terminal, else lines.
 // The exit code: 1 when the lists cannot be read.

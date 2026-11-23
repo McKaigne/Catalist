@@ -116,7 +116,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli + changes nothing when one title cannot be fo
 
 	CHECK(Run({"+"}) == 2);
 	CHECK(err.find("error: ") == 0);
-	CHECK(Has(err, "Usage: catalist + [-amq] [--all] [-n N] [REF...]\n"));
+	CHECK(Has(err, "Usage: catalist + [-amq] [--all] [-n N] [TITLE...]\n"));
 	CHECK(Run({"+", "-n", "0", "taxi"}) == 2);
 	CHECK(err.find("error: -n '0' is not a count of one or more\n") == 0);
 	CHECK(Run({"+", "-n", "x", "taxi"}) == 2);
@@ -201,7 +201,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli set checks every value before touching anythi
 	CHECK(Run({"set", "taxi"}) == 2);
 	CHECK(err ==
 	      "error: nothing to change: give a FIELD=VALUE such as score=8\n"
-	      "Usage: catalist set [-amq] [--all] REF FIELD=VALUE...\n"
+	      "Usage: catalist set [-amq] [--all] TITLE FIELD=VALUE...\n"
 	      "Run 'catalist help set' for more.\n");
 	CHECK(Run({"set", "taxi", "progress=6", "score=11"}) == 2);
 	CHECK(err.find("error: score '11' is not 0 to 10\n") == 0);
@@ -295,9 +295,9 @@ TEST_CASE_FIXTURE(CliFixture, "cli done, hold, drop, plan and resume set the sta
 TEST_CASE_FIXTURE(CliFixture, "cli rm asks first, and wants -f where nobody can be asked") {
 	Seed();
 	CHECK(Run({"rm", "taxi"}) == 1);
-	CHECK(err == "error: nobody to ask here: pass -f to remove Odd Taxi (a:2)\n");
+	CHECK(err == "error: nobody to ask here: pass -f to remove Odd Taxi (anime)\n");
 	CHECK(Run({"rm", "taxi"}, "n\n") == 1);
-	CHECK(err == "Remove Odd Taxi (a:2) from your lists? [y/N]: Cancelled.\n");
+	CHECK(err == "Remove Odd Taxi (anime) from your lists? [y/N]: Cancelled.\n");
 	CHECK(out.empty());
 	CHECK(Saved(MediaType::kAnime).size() == 2);
 	CHECK(Steps().empty());
@@ -315,8 +315,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm removes several titles as one step") {
 	Seed();
 	// One question for all of them.
 	CHECK(Run({"rm", "--all", "frieren"}, "yes\n") == 0);
-	CHECK(Has(err, "  a:1  Sousou no Frieren\n"));
-	CHECK(Has(err, "  m:2  Sousou no Frieren\n"));
+	CHECK(Has(err, "  anime  Sousou no Frieren\n"));
+	CHECK(Has(err, "  manga  Sousou no Frieren\n"));
 	CHECK(Has(err, "Remove these 2 titles from your lists? [y/N]: "));
 	CHECK(Saved(MediaType::kAnime).size() == 1);
 	CHECK(Saved(MediaType::kManga).size() == 1);
@@ -354,7 +354,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm removes only the title the person confirme
 		      CHECK(Run({"rm", "-fq", "a:2"}) == 0);
 		      CHECK(Run({"add", "-q", "--no-lookup", "Newcomer"}) == 0);
 	      }) == 1);
-	CHECK(Has(err, "error: Odd Taxi (a:2) was removed or replaced meanwhile; nothing was changed\n"));
+	CHECK(Has(err, "error: Odd Taxi (anime) was removed or replaced meanwhile; nothing was changed\n"));
 	CHECK(SavedTitle(MediaType::kAnime, "Newcomer").id == 2);
 
 	// New progress on the same title is no reason to refuse, and undo brings
@@ -385,7 +385,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli takes a lone - for no title, though titles ho
 	Seed();
 	CHECK(Run({"add", "-q", "--no-lookup", "Re-Zero"}) == 0);
 	const std::string said =
-	    "error: punctuation alone is not a title: give a ref such as a:12, or part of a title\n";
+	    "error: punctuation alone is not a title: give part of its name\n";
 	for (const std::vector<std::string>& line : {std::vector<std::string>{"rm", "-f", "-"},
 	                                             {"done", "-"},
 	                                             {"+", "a:2", "-"},

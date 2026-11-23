@@ -36,6 +36,9 @@ namespace catalist {
 // (0 when it is not one).
 [[nodiscard]] bool IsInteractive();
 [[nodiscard]] int TerminalColumns();
+[[nodiscard]] int TerminalRows();
+// Shows the text in $PAGER, or less; false when no pager could be started.
+[[nodiscard]] bool ShowInPager(const std::string& text);
 // Whether standard output is a pipe or a socket, where a failed write means
 // the reader has gone.
 [[nodiscard]] bool OutputIsPipe();

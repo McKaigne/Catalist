@@ -112,25 +112,27 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {
 	const std::string ten = "\U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04CE";
 	CHECK(Run({"ls"}, "", 100) == 0);
 	CHECK(out ==
-	      "REF  TITLE              STATUS        SCORE  PROGRESS\n"
-	      "m:1  Berserk            Reading       -      364/?\n"
-	      "a:2  Odd Taxi           Watching      " +
+	      "ANIME\n"
+	      "Odd Taxi           Watching      " +
 	          eight +
 	          "  5/13\n"
-	          "a:1  Sousou no Frieren  Completed     " +
+	          "Sousou no Frieren  Completed     " +
 	          ten +
 	          "  28/28\n"
-	          "m:2  Sousou no Frieren  Plan to Read  -      0/?\n");
+	          "\n"
+	          "MANGA\n"
+	          "Berserk            Reading       -      364/?\n"
+	          "Sousou no Frieren  Plan to Read  -      0/?\n");
 	CHECK(err.empty());
 
 	// A narrow terminal cuts the titles, not the other columns.
 	CHECK(Run({"ls", "-a"}, "", 40) == 0);
 	CHECK(out ==
-	      "REF  TITLE       STATUS     SCORE  PROGRESS\n"
-	      "a:2  Odd Taxi    Watching   " +
+	      "ANIME\n"
+	      "Odd Taxi         Watching   " +
 	          eight +
 	          "  5/13\n"
-	          "a:1  Sousou no…  Completed  " +
+	          "Sousou no Frie…  Completed  " +
 	          ten + "  28/28\n");
 
 	CHECK(Run({"ls", "nothing like it"}, "", 100) == 0);
@@ -141,8 +143,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {
 
 	color = true;
 	CHECK(Run({"ls", "taxi"}, "", 100) == 0);
-	CHECK(Has(out, "\x1b[2mREF\x1b[0m  "));
-	CHECK(Has(out, "\x1b[36ma:2\x1b[0m  Odd Taxi  \x1b[32mWatching\x1b[0m  "));
+	CHECK(Has(out, "\x1b[1mANIME\x1b[0m\n"));
+	CHECK(Has(out, "Odd Taxi  \x1b[32mWatching\x1b[0m  "));
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli show prints a title's line into a pipe") {
@@ -150,7 +152,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli show prints a title's line into a pipe") {
 	CHECK(Run({"show", "taxi"}) == 0);
 	CHECK(out ==
 	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t0\t128547\t"
-	      "44265\thttps://anilist.co/anime/128547\n");
+	      "44265\thttps://anilist.co/anime/128547\tOdd Taxi\n");
 	CHECK(err.empty());
 }
 
@@ -166,7 +168,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli show takes several titles, by ref or by title
 	CHECK(Has(err, "error: nothing in your lists matches '-zq'\n"));
 
 	CHECK(Run({"show"}) == 2);
-	CHECK(err.find("error: name a title: a ref such as a:12, or part of it\n") == 0);
+	CHECK(err.find("error: name a title: any part of its name\n") == 0);
 	CHECK(Run({"show", "taxi", ""}) == 2);
 	CHECK(err.find("error: a title cannot be empty\n") == 0);
 	CHECK(out.empty());
@@ -177,7 +179,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli show draws a card at a terminal") {
 	CHECK(Run({"show", "taxi"}, "", 100) == 0);
 	CHECK(out ==
 	      "Odd Taxi\n"
-	      "  Ref          a:2\n"
 	      "  Type         Anime\n"
 	      "  AniList      128547\n"
 	      "  MyAnimeList  44265\n"
@@ -190,7 +191,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli show draws a card at a terminal") {
 	      "  Finished     -\n"
 	      "  Updated      -\n");
 	CHECK(Run({"show", "m:2", "berserk"}, "", 100) == 0);
-	CHECK(out.find("Sousou no Frieren\n  Ref          m:2\n  Type         Manga\n") == 0);
+	CHECK(out.find("Sousou no Frieren\n  Type         Manga\n") == 0);
 	CHECK(Has(out, "  Status       Plan to Read\n  Score        -\n"));
 	CHECK(Has(out, "  Progress     0/? chapters\n  Volumes      0/?\n  Reread       0\n"));
 	// A blank line between two cards.
@@ -250,4 +251,64 @@ TEST_CASE_FIXTURE(CliFixture, "cli stats of an empty catalogue is all zeros, and
 	      "anime\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0.0\t0\n"
 	      "manga\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0.0\t0\n");
 	CHECK_FALSE(std::filesystem::exists("data"));
+}
+
+TEST_CASE_FIXTURE(CliFixture, "cli shows the English name, and romaji only on show") {
+	Seed();
+	{
+		catalist::Catalogue db("data");
+		REQUIRE(db.LoadAll().value());
+		auto frieren = *db.GetById(catalist::MediaType::kAnime, 1);
+		frieren.english_title = "Frieren: Beyond Journey's End";
+		REQUIRE(db.UpdateEntry(frieren));
+		REQUIRE(db.SaveAll());
+	}
+	CHECK(Run({"ls", "-a"}, "", 100) == 0);
+	CHECK(Has(out, "Frieren: Beyond Journey's End"));
+	CHECK_FALSE(Has(out, "Sousou"));
+	CHECK(Run({"ls", "-q", "sousou", "-a"}) == 0);
+	CHECK(out == "a:1\n");
+	CHECK(Run({"show", "a:1"}, "", 100) == 0);
+	CHECK(out.find("Frieren: Beyond Journey's End\n  Romaji       Sousou no Frieren\n") == 0);
+	CHECK(Run({"show", "a:1"}) == 0);
+	CHECK(out.find("a:1\tanime\tFrieren: Beyond Journey's End\t") == 0);
+	CHECK(Has(out, "\tSousou no Frieren\n"));
+}
+
+TEST_CASE_FIXTURE(CliFixture, "cli home view says what to do when it is empty") {
+	CHECK(Run({}, "", 100) == 0);
+	CHECK(Has(err, "Nothing here yet."));
+	CHECK(Has(err, "catalist import FILE"));
+	Seed();
+	REQUIRE(Run({"hold", "-q", "taxi,", "berserk"}) == 0);
+	CHECK(Run({}, "", 100) == 0);
+	CHECK(Has(err, "Nothing in progress."));
+	CHECK(Has(err, "catalist resume"));
+}
+
+TEST_CASE_FIXTURE(CliFixture, "cli pages a list taller than the terminal") {
+	Seed();
+	std::string paged;
+	pager = [&paged](const std::string& text) {
+		paged = text;
+		return true;
+	};
+	rows = 40;
+	CHECK(Run({"ls"}, "", 100) == 0);
+	CHECK(paged.empty());
+	CHECK(Has(out, "Odd Taxi"));
+
+	rows = 4;
+	CHECK(Run({"ls"}, "", 100) == 0);
+	CHECK(Has(paged, "Odd Taxi"));
+	CHECK(out.empty());
+
+	paged.clear();
+	CHECK(Run({"ls"}) == 0);
+	CHECK(paged.empty());
+	CHECK(Has(out, "a:2\t"));
+
+	pager = [](const std::string&) { return false; };
+	CHECK(Run({"ls"}, "", 100) == 0);
+	CHECK(Has(out, "Odd Taxi"));
 }

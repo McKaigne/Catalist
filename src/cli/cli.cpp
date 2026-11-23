@@ -63,15 +63,16 @@ void PrintHelp(CliContext& ctx) {
 	for (const auto& each : GlobalOptions())
 		ctx.out << std::format("  {:<18}{}\n", OptionLabel(each), each.help);
 	ctx.out << std::format(
-	    "\nName a title by its ref, the first column of 'catalist ls' (a:12 is an anime,\n"
-	    "m:3 a manga), or by part of its title:\n"
-	    "  catalist show a:12\n"
-	    "  catalist + frieren\n"
-	    "  catalist set a:12 score=9\n"
+	    "\nName a title by any part of its English or romaji name, and separate several\n"
+	    "with commas:\n"
+	    "  catalist show frieren\n"
+	    "  catalist + odd taxi\n"
+	    "  catalist + odd taxi, frieren\n"
+	    "  catalist set frieren score=9\n"
 	    "  catalist undo\n"
-	    "\nOptions come before the titles. Run 'catalist help COMMAND' for the options of\n"
-	    "a command. 'catalist' alone lists what you are watching or reading, the\n"
-	    "latest changed first. Your lists are kept in\n{}.\n",
+	    "\nRun 'catalist help COMMAND' for the options of a command. 'catalist' alone\n"
+	    "lists what you are watching or reading, the latest changed first. Your lists\n"
+	    "are kept in\n{}.\n",
 	    ctx.db.data_dir().string());
 }
 
@@ -103,7 +104,8 @@ int CommandError(CliContext& ctx, const std::string& what) {
 // title changed last first.
 int RunDefault(CliContext& ctx) {
 	return cli::PrintList(ctx, {.statuses = {WatchStatus::kWatching, WatchStatus::kRewatching},
-	                            .key = SortKey::kUpdated});
+	                            .key = SortKey::kUpdated,
+	                            .is_home = true});
 }
 
 }  // namespace

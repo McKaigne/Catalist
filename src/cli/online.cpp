@@ -87,8 +87,8 @@ void NoteSameName(CliContext& ctx, const Entry& added) {
 	for (const auto& e : ctx.db.GetEntries(added.type)) {
 		if (utf8::Lowercase(e.title) != name)
 			continue;
-		ctx.err << std::format("note: your {} list has a title of that name already, {}.\n",
-		                       TypeKey(added.type), refs::Of(e));
+		ctx.err << std::format("note: your {} list has a title of that name already.\n",
+		                       TypeKey(added.type));
 		return;
 	}
 }
@@ -156,9 +156,8 @@ int RunAdd(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	if (not LoadForWrite(ctx))
 		return 1;
 	if (auto mine = ctx.db.FindByIds(*type, added.anilist_id, added.mal_id)) {
-		ctx.err << std::format("{} is in your {} list already, as {} ({}).\nNothing changed.\n",
-		                       DisplayName(*mine), TypeKey(*type), refs::Of(*mine),
-		                       StatusKey(mine->status));
+		ctx.err << std::format("{} is in your {} list already ({}).\nNothing changed.\n",
+		                       DisplayName(*mine), TypeKey(*type), StatusKey(mine->status));
 		return 0;
 	}
 	if (by_hand)
@@ -207,7 +206,10 @@ int RunSearch(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	std::vector<std::string> mine;
 	for (const auto& match : matches) {
 		auto tracked = ctx.db.FindByIds(*type, match.anilist_id, match.mal_id);
-		mine.push_back(tracked ? refs::Of(*tracked) : "");
+		std::string yours = ctx.columns > 0 ? "" : "-";
+		if (tracked)
+			yours = ctx.columns > 0 ? StatusToString(tracked->status, *type) : refs::Of(*tracked);
+		mine.push_back(yours);
 	}
 
 	if (ctx.columns > 0) {
@@ -227,7 +229,7 @@ int RunSearch(const Command& self, const args::Parsed& line, CliContext& ctx) {
 		                output::OrDash(match.year), std::to_string(match.total_units),
 		                match.score > 0.0 ? std::format("{:.1f}", match.score) : "0",
 		                std::to_string(match.anilist_id), std::to_string(match.mal_id),
-		                output::OrDash(mine[i])});
+		                mine[i]});
 	}
 	WriteRows(ctx, rows);
 	return 0;

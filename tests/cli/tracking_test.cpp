@@ -333,6 +333,40 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm removes nothing when a REF is wrong") {
 	CHECK(out.empty());
 }
 
+TEST_CASE_FIXTURE(CliFixture, "cli rm removes only the title the person confirmed") {
+	Seed();
+	// The ref passes to a new title while the question is open.
+	CHECK(RunAsked({"rm", "a:2"}, "y\n", [this] {
+		      CHECK(Run({"rm", "-fq", "a:2"}) == 0);
+		      CHECK(Run({"add", "-q", "--no-lookup", "Newcomer"}) == 0);
+	      }) == 1);
+	CHECK(Has(err, "error: Odd Taxi (a:2) was removed or replaced meanwhile; nothing was changed\n"));
+	CHECK(SavedTitle(MediaType::kAnime, "Newcomer").id == 2);
+
+	// New progress on the same title is no reason to refuse, and undo brings
+	// it back as it was when it went.
+	CHECK(RunAsked({"rm", "a:2"}, "y\n",
+	               [this] { CHECK(Run({"set", "-q", "a:2", "progress=4"}) == 0); }) == 0);
+	CHECK(Saved(MediaType::kAnime).size() == 1);
+	CHECK(Run({"undo", "-q"}) == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Newcomer").progress == 4);
+}
+
+TEST_CASE_FIXTURE(CliFixture, "cli holds no lock while the person chooses a title") {
+	Seed();
+	CHECK(RunAsked({"hold", "frieren"}, "1\n",
+	               [this] { CHECK(Run({"+", "-q", "taxi"}) == 0); }) == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 6);
+	CHECK(Saved(MediaType::kAnime)[0].status == WatchStatus::kOnHold);
+
+	// What another program changed meanwhile is kept.
+	CHECK(RunAsked({"set", "frieren", "score=9"}, "2\n",
+	               [this] { CHECK(Run({"set", "-q", "m:2", "progress=4"}) == 0); }) == 0);
+	auto manga = Saved(MediaType::kManga)[1];
+	CHECK(manga.score == 9);
+	CHECK(manga.progress == 4);
+}
+
 TEST_CASE_FIXTURE(CliFixture, "cli takes a lone - for no title, though titles hold hyphens") {
 	Seed();
 	CHECK(Run({"add", "-q", "--no-lookup", "Re-Zero"}) == 0);

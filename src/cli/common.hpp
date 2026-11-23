@@ -109,6 +109,11 @@ struct RefRequest {
 // Takes the catalogue for writing, then reads it: nothing another program
 // does can come between what the command reads and what it saves.
 [[nodiscard]] bool LoadForWrite(CliContext& ctx);
+// Takes the catalogue for writing and returns the titles chosen before it
+// was taken, as they are now. Nothing, with the reason on standard error,
+// when one of them has been removed or its ref now names another title.
+[[nodiscard]] std::optional<std::vector<Entry>> TakeForWrite(CliContext& ctx,
+                                                             const std::vector<Entry>& chosen);
 
 // ---- Changing titles ----
 

@@ -4,8 +4,11 @@
 #include <doctest/doctest.h>
 
 #include <filesystem>
+#include <functional>
 #include <sstream>
+#include <streambuf>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "cli/cli.hpp"
@@ -37,6 +40,27 @@ inline const char* const kMangaXml =
     "<my_status>Reading</my_status></manga>"
     "</myanimelist>";
 
+// Standard input that does `meanwhile` when it is first read, then gives the
+// answer.
+class AnswerAfter : public std::streambuf {
+public:
+	AnswerAfter(std::string answer, std::function<void()> meanwhile)
+	    : answer_(std::move(answer)), meanwhile_(std::move(meanwhile)) {}
+
+protected:
+	int_type underflow() override {
+		if (meanwhile_) {
+			std::exchange(meanwhile_, nullptr)();
+			setg(answer_.data(), answer_.data(), answer_.data() + answer_.size());
+		}
+		return gptr() < egptr() ? traits_type::to_int_type(*gptr()) : traits_type::eof();
+	}
+
+private:
+	std::string answer_;
+	std::function<void()> meanwhile_;
+};
+
 // One `catalist ...` run with the data in data/ of a temporary directory,
 // which is the working directory while the test runs, so file names in the
 // output stay short. Each run gets a fresh catalogue, as each real
@@ -49,14 +73,28 @@ struct CliFixture : catalist::test::TempDirFixture {
 
 	// `input` is what the person types when asked; `columns` 0 is a pipe.
 	int Run(const std::vector<std::string>& args, const std::string& input = "", int columns = 0) {
-		catalist::Catalogue db("data");
 		std::istringstream in_stream(input);
+		return RunOn(args, in_stream, not input.empty(), columns);
+	}
+
+	// A run at a terminal during which another program does `meanwhile`,
+	// while the person thinks about the question.
+	int RunAsked(const std::vector<std::string>& args, const std::string& answer,
+	             std::function<void()> meanwhile) {
+		AnswerAfter typed(answer, std::move(meanwhile));
+		std::istream in_stream(&typed);
+		return RunOn(args, in_stream, true, 0);
+	}
+
+	int RunOn(const std::vector<std::string>& args, std::istream& in_stream, bool interactive,
+	          int columns) {
+		catalist::Catalogue db("data");
 		std::ostringstream out_stream;
 		std::ostringstream err_stream;
 		if (out_closed)
 			out_stream.setstate(std::ios::badbit);
 		catalist::CliContext ctx{db, in_stream, out_stream, err_stream, TestClock, web.Link()};
-		ctx.interactive = not input.empty();
+		ctx.interactive = interactive;
 		ctx.columns = columns;
 		ctx.color = color;
 		int exit_code = catalist::RunCli(args, ctx);

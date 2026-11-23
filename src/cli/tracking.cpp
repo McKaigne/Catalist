@@ -143,13 +143,16 @@ int RunSet(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	auto values = ReadAssignments(line.operands, today);
 	if (not values.has_value())
 		return UsageError(ctx, self, values.error());
-	if (not LoadForWrite(ctx))
+	if (not Load(ctx))
 		return 1;
 	auto found =
 	    Resolve(ctx, {line.operands[0]}, {OnlyType(line), line.Has("all"), ctx.interactive});
 	if (not found)
 		return 1;
-	return ApplyTo(ctx, line, *found,
+	auto current = TakeForWrite(ctx, *found);
+	if (not current)
+		return 1;
+	return ApplyTo(ctx, line, *current,
 	               [&](const Entry& e) { return WithValues(e, values.value(), today); });
 }
 
@@ -207,15 +210,13 @@ int RunRemove(const Command& self, const args::Parsed& line, CliContext& ctx) {
 		return 1;
 	if (not line.Has("f") and not RemovalConfirmed(ctx, *found, request.how.ask))
 		return 1;
-	if (not LoadForWrite(ctx))
+	auto current = TakeForWrite(ctx, *found);
+	if (not current)
 		return 1;
 	std::vector<journal::Change> changes;
-	for (const auto& each : *found) {
-		auto current = ctx.db.GetById(each.type, each.id);
-		if (not current)
-			return Fail(ctx, std::format("{} was removed meanwhile", refs::Of(each)));
-		ctx.db.RemoveEntry(current->type, current->id);
-		changes.push_back({current->type, current->id, *current, std::nullopt});
+	for (const auto& each : *current) {
+		ctx.db.RemoveEntry(each.type, each.id);
+		changes.push_back({each.type, each.id, each, std::nullopt});
 	}
 	return SaveAndReport(ctx, line, changes);
 }

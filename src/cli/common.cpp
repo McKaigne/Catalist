@@ -276,6 +276,26 @@ bool LoadForWrite(CliContext& ctx) {
 	return Load(ctx);
 }
 
+// A ref can pass to a new title once its own is removed, so a title is the
+// one that was chosen only if its name and site ids are still the same.
+std::optional<std::vector<Entry>> TakeForWrite(CliContext& ctx, const std::vector<Entry>& chosen) {
+	if (not LoadForWrite(ctx))
+		return std::nullopt;
+	std::vector<Entry> current;
+	for (const auto& each : chosen) {
+		auto now = ctx.db.GetById(each.type, each.id);
+		bool same = now and now->title == each.title and now->anilist_id == each.anilist_id and
+		            now->mal_id == each.mal_id;
+		if (not same) {
+			Fail(ctx, std::format("{} ({}) was removed or replaced meanwhile; nothing was changed",
+			                      each.title, refs::Of(each)));
+			return std::nullopt;
+		}
+		current.push_back(*now);
+	}
+	return current;
+}
+
 // A line for every field that changed. Into a pipe: the ref, the title, the
 // field, its old value and its new one.
 void PrintChanges(CliContext& ctx, const std::vector<journal::Change>& changes) {
@@ -323,16 +343,20 @@ int ApplyTo(CliContext& ctx, const args::Parsed& line, const std::vector<Entry>&
 }
 
 // Makes one change to every title the REFs name; every REF is resolved
-// before any title changes.
+// before any title changes, and before the catalogue is taken for writing:
+// no other program waits while the person chooses.
 int ChangeTitles(const Command& self, const args::Parsed& line, CliContext& ctx,
                  const TitleChange& change) {
 	auto request = ReadRefs(self, line, ctx);
 	if (request.stop)
 		return *request.stop;
-	if (not LoadForWrite(ctx))
+	if (not Load(ctx))
 		return 1;
 	auto found = Resolve(ctx, request.refs, request.how);
-	return found ? ApplyTo(ctx, line, *found, change) : 1;
+	if (not found)
+		return 1;
+	auto current = TakeForWrite(ctx, *found);
+	return current ? ApplyTo(ctx, line, *current, change) : 1;
 }
 
 // The N of -n, or `otherwise` when it is not given.

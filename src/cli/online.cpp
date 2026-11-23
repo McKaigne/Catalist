@@ -18,16 +18,14 @@ std::optional<MediaType> OneType(const args::Parsed& line) {
 	return line.Has("m") ? MediaType::kManga : MediaType::kAnime;
 }
 
-// The title as AniList has it: its name, both ids, the totals and how much
-// is out. Fails with what to tell the person.
-Result<Entry> LookedUp(CliContext& ctx, Entry blank, const anilist::Match& match) {
+// The title as AniList has it: its name, both ids and the totals.
+Entry FromMatch(Entry blank, const anilist::Match& match) {
+	blank.title = match.name;
 	blank.anilist_id = match.anilist_id;
 	blank.mal_id = match.mal_id;
-	auto details = anilist::LookUp(ctx.net, blank);
-	if (not details.has_value())
-		return std::unexpected(details.error());
-	blank.title = details.value().name.empty() ? match.name : details.value().name;
-	return ApplyWebFacts(blank, details.value().facts);
+	blank.total_units = match.total_units;
+	blank.total_volumes = match.total_volumes;
+	return blank;
 }
 
 // "28 episodes", or "? chapters" while the total is not known.
@@ -146,10 +144,7 @@ int RunAdd(const Command& self, const args::Parsed& line, CliContext& ctx) {
 		auto match = ChooseMatch(ctx, *type, added.title, pick);
 		if (not match)
 			return 1;
-		auto found = LookedUp(ctx, added, *match);
-		if (not found.has_value())
-			return Fail(ctx, found.error());
-		added = found.value();
+		added = FromMatch(added, *match);
 	}
 	// In the order `set` takes them: the progress starts the title, or
 	// completes it at the total, and a status that is given stands.

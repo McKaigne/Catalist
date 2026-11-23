@@ -107,19 +107,6 @@ enum class CountField { kProgress, kTotalUnits, kVolumes, kRewatched };
 // win: imported values only fill fields the user never set.
 [[nodiscard]] Entry MergeImported(Entry existing, const Entry& incoming);
 
-// What a web check found out about a title; 0 means it did not say.
-struct WebFacts {
-	int total_units = 0;
-	int total_volumes = 0;
-	int anilist_id = 0;
-	int mal_id = 0;
-};
-
-// Takes the totals from a web check, keeping the known values where the
-// check had none, and fills in an id the entry lacked. The user's own fields,
-// updated_at included, are left alone.
-[[nodiscard]] Entry ApplyWebFacts(Entry target, const WebFacts& facts);
-
 }  // namespace catalist
 
 #endif  // CATALIST_CORE_ENTRY_HPP_

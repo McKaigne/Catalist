@@ -26,16 +26,6 @@ std::string JsonString(const std::string& text) {
 	return quoted + "\"";
 }
 
-Details DetailsOf(const json::Value& media, MediaType type) {
-	Details found;
-	found.name = media["title"]["romaji"].AsString().value_or("");
-	found.facts.anilist_id = media["id"].AsCount();
-	found.facts.mal_id = media["idMal"].AsCount();
-	found.facts.total_units = media[type == MediaType::kAnime ? "episodes" : "chapters"].AsCount();
-	found.facts.total_volumes = media["volumes"].AsCount();
-	return found;
-}
-
 // The body of AniList's reply to a query, or what to tell the person.
 Result<std::string> Ask(const web::Fetcher& fetch, const std::string& query) {
 	auto got = fetch(
@@ -48,29 +38,10 @@ Result<std::string> Ask(const web::Fetcher& fetch, const std::string& query) {
 	if (status == 429 or status >= 500)
 		return std::unexpected(std::format(
 		    "AniList is busy or down (HTTP {}); check the connection and try again", status));
-	if (status == 404)
-		return std::unexpected("AniList does not know the title");
 	return std::unexpected(std::format("AniList said no (HTTP {})", status));
 }
 
 }  // namespace
-
-std::string LookupRequest(const TitleRef& wanted) {
-	// AniList's own id when known; a MyAnimeList id goes in idMal.
-	bool own = wanted.anilist_id > 0;
-	return std::format(R"({{"query":"query($id:Int,$type:MediaType){{Media({}:$id,type:$type){{)"
-	                   R"(id idMal title{{romaji}} episodes chapters volumes}}}}",)"
-	                   R"("variables":{{"id":{},"type":"{}"}}}})",
-	                   own ? "id" : "idMal", own ? wanted.anilist_id : wanted.mal_id,
-	                   TypeName(wanted.type));
-}
-
-Result<Details> ParseLookup(const std::string& body, MediaType type) {
-	auto reply = json::Parse(body);
-	if (not reply.has_value() or reply.value()["data"]["Media"].IsNull())
-		return std::unexpected("AniList does not know the title");
-	return DetailsOf(reply.value()["data"]["Media"], type);
-}
 
 std::string SearchRequest(MediaType type, const std::string& query) {
 	return std::format(
@@ -111,15 +82,6 @@ Result<std::vector<Match>> Search(const web::Fetcher& fetch, MediaType type,
 	if (not body)
 		return std::unexpected(body.error());
 	return ParseSearch(*body, type);
-}
-
-Result<Details> LookUp(const web::Fetcher& fetch, const Entry& known) {
-	if (known.anilist_id <= 0 and known.mal_id <= 0)
-		return std::unexpected("the title has no id to look up");
-	auto body = Ask(fetch, LookupRequest({known.type, known.anilist_id, known.mal_id}));
-	if (not body)
-		return std::unexpected(body.error());
-	return ParseLookup(*body, known.type);
 }
 
 }  // namespace catalist::anilist

@@ -293,16 +293,4 @@ Entry MergeImported(Entry existing, const Entry& incoming) {
 	return existing;
 }
 
-Entry ApplyWebFacts(Entry target, const WebFacts& facts) {
-	if (target.anilist_id == 0)
-		target.anilist_id = facts.anilist_id;
-	if (target.mal_id == 0)
-		target.mal_id = facts.mal_id;
-	if (facts.total_units > 0)
-		target.total_units = facts.total_units;
-	if (facts.total_volumes > 0)
-		target.total_volumes = facts.total_volumes;
-	return target;
-}
-
 }  // namespace catalist

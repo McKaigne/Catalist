@@ -14,11 +14,11 @@ TEST_CASE_FIXTURE(CliFixture, "cli add finds the title on AniList and adds it") 
 	web.Respond(R"("search":"dandadan","type":"ANIME")", R"({"data":{"Page":{"media":[
 	  {"id":171018,"idMal":57334,"title":{"romaji":"Dandadan"},"episodes":12,
 	   "startDate":{"year":2024}}]}}})");
-	web.Respond(R"({"id":171018,"type":"ANIME")", R"({"data":{"Media":{"id":171018,
-	  "idMal":57334,"title":{"romaji":"Dandadan"},"episodes":12,"status":"FINISHED"}}})");
 	CHECK(Run({"add", "--status", "watching", "dandadan"}) == 0);
 	CHECK(out == "a:3\tDandadan\tadded\t-\twatching\n");
 	CHECK(err.empty());
+	// The search says all there is to know: AniList is asked once.
+	CHECK(web.posted.size() == 1);
 	auto added = SavedTitle(MediaType::kAnime, "Dandadan");
 	CHECK(added.anilist_id == 171018);
 	CHECK(added.mal_id == 57334);
@@ -48,11 +48,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli add finds the title on AniList and adds it") 
 
 TEST_CASE_FIXTURE(CliFixture, "cli add -m adds a manga, planned unless told otherwise") {
 	web.Respond(R"("search":"vagabond","type":"MANGA")", R"({"data":{"Page":{"media":[
-	  {"id":30656,"idMal":656,"title":{"romaji":"Vagabond"},"chapters":327,
+	  {"id":30656,"idMal":656,"title":{"romaji":"Vagabond"},"chapters":327,"volumes":37,
 	   "startDate":{"year":1998}}]}}})");
-	web.Respond(R"({"id":30656,"type":"MANGA")", R"({"data":{"Media":{"id":30656,
-	  "idMal":656,"title":{"romaji":"Vagabond"},"chapters":327,"volumes":37,
-	  "status":"HIATUS"}}})");
 	CHECK(Run({"add", "-m", "vagabond"}, "", 100) == 0);
 	CHECK(out == "Vagabond  added as planned (m:1)\n");
 	auto added = SavedTitle(MediaType::kManga, "Vagabond");
@@ -70,12 +67,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli add with several matches asks, or wants --pic
 	   "episodes":64,"startDate":{"year":2009}},
 	  {"id":121,"idMal":121,"title":{"romaji":"Fullmetal Alchemist"},"episodes":51,
 	   "startDate":{"year":2003}}]}}})");
-	web.Respond(R"({"id":121,"type":"ANIME")",
-	            R"({"data":{"Media":{"id":121,"idMal":121,"title":{"romaji":"Fullmetal Alchemist"},
-	                "episodes":51,"status":"FINISHED"}}})");
-	web.Respond(R"({"id":5114,"type":"ANIME")",
-	            R"({"data":{"Media":{"id":5114,"idMal":5114,
-	                "title":{"romaji":"Fullmetal Alchemist: Brotherhood"},"episodes":64}}})");
 
 	CHECK(Run({"add", "fullmetal"}) == 1);
 	CHECK(err ==
@@ -133,12 +124,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli add says what went wrong") {
 	web.Respond(R"("search":"zzz")", R"({"data":{"Page":{"media":[]}}})");
 	CHECK(Run({"add", "-m", "zzz"}) == 1);
 	CHECK(err == "error: AniList has no manga matching 'zzz'\n");
-	// Found by the search, gone when looked up.
-	web.Respond(R"("search":"ghost","type":"ANIME")", R"({"data":{"Page":{"media":[
-	  {"id":999,"idMal":null,"title":{"romaji":"Ghost"}}]}}})");
-	web.Respond(R"({"id":999,"type":"ANIME")", R"({"data":{"Media":null}})");
-	CHECK(Run({"add", "ghost"}) == 1);
-	CHECK(err == "error: AniList does not know the title\n");
 	CHECK(out.empty());
 	CHECK(Saved(MediaType::kAnime).size() == 2);
 	CHECK(Steps().empty());

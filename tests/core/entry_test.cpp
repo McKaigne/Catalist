@@ -254,17 +254,6 @@ TEST_CASE("mergeImported refreshes totals and fills only what the user left empt
 	CHECK(FormatDate(merged.finish_date) == "2020-02-02");
 }
 
-TEST_CASE("applyWebFacts keeps known values the check did not have") {
-	auto tracked = MakeEntry().TotalUnits(24).TotalVolumes(3).UpdatedAt("2026-01-01").Build();
-	auto refreshed = catalist::ApplyWebFacts(tracked, {});
-	CHECK(refreshed.total_units == 24);
-	CHECK(refreshed.total_volumes == 3);
-	CHECK(FormatDate(refreshed.updated_at) == "2026-01-01");
-	auto finished = catalist::ApplyWebFacts(tracked, {26, 4});
-	CHECK(finished.total_units == 26);
-	CHECK(finished.total_volumes == 4);
-}
-
 TEST_CASE("setStatus fills the dates like the cycle and ignores no change") {
 	Entry planned = MakeEntry().Status(WatchStatus::kPlanToWatch).TotalUnits(12).Progress(3);
 	auto done = catalist::SetStatus(planned, WatchStatus::kCompleted, kToday);
@@ -307,16 +296,6 @@ TEST_CASE("an entry's page is its AniList page") {
 	CHECK(catalist::PageOf(MakeEntry().Type(catalist::MediaType::kManga).AnilistId(30002)) ==
 	      "https://anilist.co/manga/30002");
 	CHECK(catalist::PageOf(MakeEntry().MalId(52991)).empty());
-}
-
-TEST_CASE("applyWebFacts fills in an id the entry lacked, never replaces one") {
-	Entry known = MakeEntry().MalId(2);
-	catalist::WebFacts facts;
-	facts.anilist_id = 30002;
-	facts.mal_id = 999;
-	auto filled = catalist::ApplyWebFacts(known, facts);
-	CHECK(filled.anilist_id == 30002);
-	CHECK(filled.mal_id == 2);
 }
 
 TEST_CASE("setTitle and the date setters stamp the entry only when they change it") {

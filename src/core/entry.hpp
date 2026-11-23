@@ -74,8 +74,6 @@ namespace catalist {
 
 [[nodiscard]] bool AtTotal(const Entry& target);
 
-// Why a title cannot take this status: resuming a completed title, or
-// rewatching one that was never completed. Nothing when it can.
 [[nodiscard]] std::optional<std::string> StatusRefusal(const Entry& target, WatchStatus status);
 
 // Moves progress by delta, never below zero nor past a known total. Moving
@@ -117,8 +115,6 @@ enum class CountField { kProgress, kTotalUnits, kVolumes, kRewatched };
 // win: imported values only fill fields the user never set.
 [[nodiscard]] Entry MergeImported(Entry existing, const Entry& incoming);
 
-// The same when the person chose the file: its status, and every count or
-// date it holds, replace the entry's.
 [[nodiscard]] Entry TakeImported(Entry existing, const Entry& incoming);
 
 }  // namespace catalist

@@ -31,7 +31,6 @@ void SayNoMatch(CliContext& ctx, const std::string& ref, const Naming& how) {
 		ctx.err << "See what is there with: catalist ls\n";
 }
 
-// The titles as a numbered list to choose from, names in one column.
 void PrintChoices(CliContext& ctx, const std::vector<Entry>& titles) {
 	int width = 0;
 	for (const auto& each : titles)
@@ -42,7 +41,6 @@ void PrintChoices(CliContext& ctx, const std::vector<Entry>& titles) {
 		                       OutOf(titles[i].progress, titles[i].total_units));
 }
 
-// The one title chosen at a terminal when none was named.
 std::optional<std::vector<Entry>> PickTitle(CliContext& ctx, const Naming& how) {
 	constexpr size_t kMostOffered = 20;
 	std::vector<Entry> offered;

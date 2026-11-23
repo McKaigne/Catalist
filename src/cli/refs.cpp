@@ -61,8 +61,6 @@ std::vector<Entry> Find(const Catalogue& db, const std::string& text,
 
 namespace {
 
-// The edits from the words to the name, or nothing when one word is too far
-// from all of the name's words to be a typo of any.
 std::optional<int> TypoCost(const std::vector<std::string>& words, const std::string& name) {
 	auto parts = utf8::Words(name);
 	int total = 0;

@@ -21,7 +21,7 @@ Entries below that describe them no longer apply.
   and =my:= search forms.
 - CSV and JSON import and export, =import --user= and =export --format=.
 - Shell completions, the manual page, =--json=, =--header=, =--table=, REFs
-  from standard input, typo suggestions and =--color=.
+  from standard input and =--color=.
 - The NEW column and =--sort=new=. The store moves to version 2: a version 1
   file is upgraded when first opened, keeping its lists and clearing its undo
   history.
@@ -29,6 +29,8 @@ Entries below that describe them no longer apply.
   clangd and clang-format stay as editor tools.
 
 *** Added
+- At a terminal, a command with no title offers a list, a lone in-progress
+  match is taken, and a typo gets a suggestion.
 - Tracking at parity with Mihon's: =catalist link= reads your entry on the
   site first and folds it in (one step for undo) before sending the title
   there whole; =link --query= searches under another name, and =id:N= and
@@ -89,6 +91,19 @@ Entries below that describe them no longer apply.
   =done=, =hold=, =drop=, =plan= and =resume=.
 
 *** Changed
+- Titles are named by words, not refs: any part of the English or romaji
+  name, in any order, without regard to case or punctuation. Commas separate
+  titles and options may follow them. Refs stay in piped output.
+- English names are shown first, with romaji on =show=. Tables are grouped
+  under ANIME and MANGA, and long lists open in a pager.
+- =add= and =search= look at anime and manga together, up to five of each or
+  ten with =-a= or =-m=, without adult titles. =add= takes several titles.
+- Only completed and rewatching titles keep a finish date. A finished rewatch
+  keeps the first date, a stopped rewatch returns to completed, and =resume=
+  and =rewatch= refuse titles they do not apply to.
+- An import asks title by title where the file and your lists differ.
+- The store moves to version 3, with English names and exact change times. A
+  dated backup is made before any upgrade.
 - The documentation is Org: =README.org=, =CHANGELOG.org= and
   =docs/ARCHITECTURE.org=. =catalist __readme= prints the command list in
   Org, and the =readme= test checks =README.org=.
@@ -161,6 +176,7 @@ Entries below that describe them no longer apply.
   =unwatched=, is an error with a suggestion instead of a guess.
 
 *** Removed
+- =add --no-lookup=: =add= now always asks AniList.
 - The full-screen terminal interface (the Anime and Manga tabs, their keys,
   the cover card drawn with img2sixel, and the background checks that kept
   totals current); FTXUI and libsixel are no longer needed. It lives on as

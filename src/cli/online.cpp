@@ -63,9 +63,6 @@ void PrintMatches(CliContext& ctx, const std::vector<anilist::Match>& matches,
 	}
 }
 
-// The match `add` is to take: the only one, the one `pick` numbers, at a
-// terminal the one exact name, or the one chosen there. Nothing, with the
-// reason on standard error, when there is no such match.
 std::optional<anilist::Match> ChooseMatch(CliContext& ctx, std::optional<MediaType> only,
                                           const std::string& query, std::optional<int> pick) {
 	auto found = anilist::Search(ctx.net, only, query);

@@ -19,7 +19,7 @@ nix run . -- help
 You need GCC 13 or later, CMake 3.20 or later, Ninja or Make, SQLite 3.35 or
 later (=libsqlite3-dev= on Debian and Ubuntu), and doctest for the tests
 (=doctest-dev=; =-DBUILD_TESTING=OFF= builds without them). At run time,
-=curl= reaches AniList; without it =add --no-lookup= still works. Scores are
+=curl= reaches AniList, which =add= and =search= need. Scores are
 drawn as stars from a [[https://www.nerdfonts.com][Nerd Font]]; in a terminal
 font without them they show as boxes.
 
@@ -53,10 +53,11 @@ catalist import animelist.xml mangalist.xml   # bring in a MyAnimeList export
 catalist search frieren                       # look without adding
 catalist add frieren                          # add a match from AniList
 catalist add -m --status=watching berserk     # a manga you are reading
-catalist add --no-lookup "Odd Taxi"           # offline, as written
+catalist add odd taxi, dandadan               # several at once
 catalist ls                                   # both lists
 catalist + frieren                            # one more episode
-catalist + -n 4 frieren                       # four more
+catalist + frieren -n 4                       # four more
+catalist +                                    # choose from what is in progress
 catalist set frieren score=10                 # change any field
 catalist done taxi                            # mark it completed
 catalist undo                                 # take the last command back
@@ -65,18 +66,27 @@ catalist undo                                 # take the last command back
 =catalist= alone lists what you are watching or reading, the title changed
 last first.
 
-- *Refs:* every title has a ref, the first column of =ls=: =a:12= is an
-  anime, =m:3= a manga. A command takes refs or any part of a title, in
-  capitals or not. Several matches are an error unless =--all= takes them
-  all, and =-a= and =-m= look in one list only.
-- *Options* follow POSIX: they come before the operands, group (=-amq=),
-  take their value joined or apart (=-n3=, =-n 3=, =--sort=title=), and =--=
-  ends them.
-- *Output:* a table at a terminal, in colour unless =NO_COLOR= is set. Into
-  a pipe, one line a title with a tab between the fields. Messages go to
-  stderr. Exit codes: 0 done, 1 failed, 2 wrong command line.
+- *Names:* a command takes any part of a title's English or romaji name, the
+  words in any order, ignoring capitals and punctuation. =catalist + odd taxi=
+  is one title, and commas separate several: =catalist + odd taxi, frieren=.
+  At a terminal, when several titles match, the only one in progress is taken,
+  otherwise you choose. With no name, =+=, =-=, =done=, =hold=, =drop=,
+  =resume= and =rewatch= offer a list. A typo gets a suggestion. Scripts stay
+  strict: several matches are an error unless =--all= takes them all, and =-a=
+  and =-m= look in one list only.
+- *Refs:* piped output starts each line with a ref such as =a:12= (an anime)
+  or =m:3= (a manga), for scripts. Commands accept them too.
+- *Options* group (=-amq=), take their value joined or apart (=-n3=, =-n 3=,
+  =--sort=title=), may come before or after the names, and =--= ends them.
+- *Output:* at a terminal, ANIME and MANGA sections showing English names, in
+  colour unless =NO_COLOR= is set, and a list taller than the screen opens in
+  =$PAGER= or =less=. Into a pipe, one line a title with a tab between the
+  fields. Messages go to stderr. Exit codes: 0 done, 1 failed, 2 wrong command
+  line.
 - *Statuses* are =watching=, =completed=, =on-hold=, =dropped=, =planned= and
-  =rewatching= (=reading= and =rereading= say the same).
+  =rewatching= (=reading= and =rereading= say the same). Only a completed or
+  rewatching title has a finish date. Stopping a rewatch returns the title to
+  completed.
 - *Scores* are whole numbers from 0 to 10 (0 is none), drawn at a terminal
   as five stars. Pipes keep the number.
 - *Undo:* every command that changes the lists is one step. =undo= takes it
@@ -86,20 +96,20 @@ last first.
 
 ** Commands
 - ~catalist ls [-amrq] [-s STATUS] [--sort=KEY] [QUERY...]~: List your titles.
-- ~catalist show [-am] [--all] REF...~: Show titles in full.
+- ~catalist show [-am] [--all] TITLE...~: Show titles in full.
 - ~catalist stats [-am]~: Show the numbers of your lists.
-- ~catalist + [-amq] [--all] [-n N] REF...~: Count one more episode or chapter. Also ~inc~.
-- ~catalist - [-amq] [--all] [-n N] REF...~: Count one less episode or chapter. Also ~dec~.
-- ~catalist set [-amq] [--all] REF FIELD=VALUE...~: Set fields of a title.
-- ~catalist done [-amq] [--all] [--score=N] REF...~: Mark titles completed.
-- ~catalist hold [-amq] [--all] REF...~: Put titles on hold.
-- ~catalist drop [-amq] [--all] REF...~: Mark titles dropped.
-- ~catalist plan [-amq] [--all] REF...~: Mark titles planned.
-- ~catalist resume [-amq] [--all] REF...~: Take titles up again.
-- ~catalist rewatch [-amq] [--all] REF...~: Watch or read titles again.
-- ~catalist rm [-amfq] [--all] REF...~: Remove titles.
-- ~catalist add [-amq] [--pick=N] [--status=STATUS] [--score=N] [--progress=N] [--no-lookup] TITLE...~: Add a title found on AniList.
-- ~catalist search [-am] QUERY...~: Search AniList without adding anything.
+- ~catalist + [-amq] [--all] [-n N] [TITLE...]~: Count one more episode or chapter. Also ~inc~.
+- ~catalist - [-amq] [--all] [-n N] [TITLE...]~: Count one less episode or chapter. Also ~dec~.
+- ~catalist set [-amq] [--all] TITLE FIELD=VALUE...~: Set fields of a title.
+- ~catalist done [-amq] [--all] [--score=N] [TITLE...]~: Mark titles completed.
+- ~catalist hold [-amq] [--all] [TITLE...]~: Put titles on hold.
+- ~catalist drop [-amq] [--all] [TITLE...]~: Mark titles dropped.
+- ~catalist plan [-amq] [--all] TITLE...~: Mark titles planned.
+- ~catalist resume [-amq] [--all] [TITLE...]~: Take titles up again.
+- ~catalist rewatch [-amq] [--all] [TITLE...]~: Watch or read titles again.
+- ~catalist rm [-amfq] [--all] TITLE...~: Remove titles.
+- ~catalist add [-amq] [--pick=N] [--status=STATUS] [--score=N] [--progress=N] TITLE...~: Add a title found on AniList.
+- ~catalist search [-am] QUERY...~: Search AniList without adding anything: up to five anime and five manga, or ten with =-a= or =-m=. Adult titles are left out.
 - ~catalist import [-q] FILE...~: Add titles from MyAnimeList XML files.
 - ~catalist export anime|manga~: Print a list as MyAnimeList XML.
 - ~catalist undo [-fq] [-n N]~: Take back what the last command changed.
@@ -118,9 +128,10 @@ catalist export manga > manga.xml
 #+end_src
 
 MyAnimeList's export page gives =.xml.gz= files: unpack them with =gunzip=
-first. Importing never overwrites what you track: a title already in your
-lists keeps its score, progress and dates, and only fills in what is empty.
-An import is one step for undo. Titles without a MyAnimeList id are left out
+first. An import fills in what a title in your lists lacks. Where the file and
+your lists differ, a terminal asks title by title: keep yours, take the file,
+do either for the rest, or quit and change nothing. Scripts and =-q= keep
+yours. An import is one step for undo. Titles without a MyAnimeList id are left out
 of an export, with a note on stderr.
 
 ** Data and backups
@@ -131,8 +142,10 @@ change is one SQLite transaction, so a crash never leaves half a change.
 *To back up, copy =catalist.db=.* It is the only complete copy of your
 lists, because XML export leaves out titles with no MyAnimeList id.
 
-A file from an earlier version is upgraded the first time it is opened. Its
-lists are kept and its undo history is cleared.
+A file from an earlier version is upgraded the first time it is opened, after
+a dated copy such as =catalist-v2-20261123-101500.db= is saved beside it. If
+the copy fails, nothing is upgraded. A version 1 file also loses its undo
+history.
 
 A development build with =login= kept site tokens in
 =~/.local/state/catalist/accounts= (or =$XDG_STATE_HOME/catalist/accounts=,
@@ -147,7 +160,7 @@ src/system.*      what touches the outside world: files, curl, the clock, the te
 src/core/         a title and its rules, dates, results, UTF-8 text (no I/O)
 src/storage/      the lists in SQLite, the undo history, MyAnimeList XML
 src/web/          AniList, and the JSON it answers in
-src/cli/          the command line: parser, refs, output, and the commands
+src/cli/          the command line: parser, title names, output, and the commands
 tests/            unit tests, one folder per source folder; tests/smoke runs the program from sh
 #+end_example
 

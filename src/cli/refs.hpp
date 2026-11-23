@@ -35,7 +35,6 @@ struct LocalRef {
 [[nodiscard]] std::vector<Entry> Find(const Catalogue& db, const std::string& text,
                                       std::optional<MediaType> only);
 
-// The title the text was most likely a misspelling of, if any is close.
 [[nodiscard]] std::optional<Entry> Closest(const Catalogue& db, const std::string& text,
                                            std::optional<MediaType> only);
 

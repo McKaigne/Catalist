@@ -23,7 +23,6 @@ struct Match {
 	int mal_id = 0;
 	MediaType type = MediaType::kAnime;
 	std::string name;
-	// Empty when AniList has no English name.
 	std::string english;
 	// Episodes or chapters; 0 while the series is still running.
 	int total_units = 0;

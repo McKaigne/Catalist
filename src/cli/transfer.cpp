@@ -85,7 +85,6 @@ void PrintClashes(CliContext& ctx, const Entry& mine, const std::vector<Clash>& 
 	ctx.err << "\n";
 }
 
-// k, f, K, F or q; q too when the input ends.
 char AskClash(CliContext& ctx) {
 	while (true) {
 		ctx.err << "[k]eep  [f]ile  [K]eep rest  [F]ile rest  [q]uit: " << std::flush;
@@ -97,8 +96,6 @@ char AskClash(CliContext& ctx) {
 	}
 }
 
-// The titles of the files whose values are to replace the person's. Nothing
-// when the person quit.
 std::optional<std::set<const Entry*>> AskClashes(CliContext& ctx,
                                                  const std::vector<Source>& sources) {
 	std::set<const Entry*> take_file;

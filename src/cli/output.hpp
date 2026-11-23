@@ -61,8 +61,6 @@ struct Section {
 	std::vector<std::vector<Styled>> rows;
 };
 
-// Rows under headings instead of a header row, one set of column widths for
-// them all. A section with no rows is left out.
 [[nodiscard]] std::string Sections(const std::vector<TableColumn>& columns,
                                    const std::vector<Section>& sections, int width, bool color);
 

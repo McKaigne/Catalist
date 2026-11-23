@@ -77,9 +77,7 @@ struct Naming {
 	std::optional<MediaType> only;
 	bool all = false;
 	bool ask = false;
-	// Among several matches at a terminal, the only one in these is taken.
 	std::vector<WatchStatus> prefer{};
-	// With no name at a terminal, the titles to choose from.
 	std::vector<WatchStatus> pick_from{};
 };
 
@@ -95,7 +93,6 @@ struct RefRequest {
 
 // Reads the titles named by the operands.
 [[nodiscard]] RefRequest ReadRefs(const Command& cmd, const args::Parsed& line, CliContext& ctx);
-// The same, from some of them.
 [[nodiscard]] RefRequest ReadRefsIn(const Command& cmd, const args::Parsed& line, CliContext& ctx,
                                     const std::vector<std::string>& words);
 
@@ -169,7 +166,6 @@ struct ListQuery {
 	bool reverse = false;
 	// The refs alone, one a line.
 	bool refs_only = false;
-	// Bare `catalist`, which says what to do next when it has nothing to show.
 	bool is_home = false;
 };
 // Lists the titles the query asks for: a table at a terminal, else lines.

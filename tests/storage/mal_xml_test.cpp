@@ -2,6 +2,8 @@
 
 #include <doctest/doctest.h>
 
+#include <format>
+
 #include "support/test_support.hpp"
 
 using catalist::MediaType;
@@ -223,8 +225,7 @@ TEST_CASE("malXml reads back exactly what it wrote") {
 	        .Volumes(40)
 	        .Rewatched(2)
 	        .Score(10)
-	        .Status(WatchStatus::kDropped)
-	        .FinishDate("2021-12-31"),
+	        .Status(WatchStatus::kDropped),
 	    MakeEntry()
 	        .MalId(4)
 	        .Type(MediaType::kManga)
@@ -250,4 +251,18 @@ TEST_CASE("malXml reads back exactly what it wrote") {
 		CHECK(read_back[i].start_date == entries[i].start_date);
 		CHECK(read_back[i].finish_date == entries[i].finish_date);
 	}
+}
+
+TEST_CASE("malXml keeps a finish date only on a completed or rewatched title") {
+	auto block = [](const std::string& status, int id) {
+		return std::format(
+		    "<anime><series_animedb_id>{}</series_animedb_id><series_title>T{}</series_title>"
+		    "<my_status>{}</my_status><my_finish_date>2021-12-31</my_finish_date></anime>",
+		    id, id, status);
+	};
+	auto read = mal_xml::Parse(block("Dropped", 1) + block("On-Hold", 2) + block("Completed", 3));
+	REQUIRE(read.size() == 3);
+	CHECK_FALSE(read[0].finish_date.has_value());
+	CHECK_FALSE(read[1].finish_date.has_value());
+	CHECK(read[2].finish_date.has_value());
 }

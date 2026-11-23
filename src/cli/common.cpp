@@ -346,7 +346,7 @@ int ApplyTo(CliContext& ctx, const args::Parsed& line, const std::vector<Entry>&
 // before any title changes, and before the catalogue is taken for writing:
 // no other program waits while the person chooses.
 int ChangeTitles(const Command& self, const args::Parsed& line, CliContext& ctx,
-                 const TitleChange& change) {
+                 const TitleChange& change, const TitleRefusal& refuse) {
 	auto request = ReadRefs(self, line, ctx);
 	if (request.stop)
 		return *request.stop;
@@ -356,7 +356,14 @@ int ChangeTitles(const Command& self, const args::Parsed& line, CliContext& ctx,
 	if (not found)
 		return 1;
 	auto current = TakeForWrite(ctx, *found);
-	return current ? ApplyTo(ctx, line, *current, change) : 1;
+	if (not current)
+		return 1;
+	for (const auto& each : *current) {
+		auto reason = refuse ? refuse(each) : std::nullopt;
+		if (reason)
+			return Fail(ctx, *reason);
+	}
+	return ApplyTo(ctx, line, *current, change);
 }
 
 // The N of -n, or `otherwise` when it is not given.

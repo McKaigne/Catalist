@@ -72,17 +72,24 @@ std::string TypeToString(MediaType type);
 // in. A change that changes nothing returns the entry exactly as it was.
 namespace catalist {
 
+[[nodiscard]] bool AtTotal(const Entry& target);
+
+// Why a title cannot take this status: resuming a completed title, or
+// rewatching one that was never completed. Nothing when it can.
+[[nodiscard]] std::optional<std::string> StatusRefusal(const Entry& target, WatchStatus status);
+
 // Moves progress by delta, never below zero nor past a known total. Moving
 // forward starts the entry (start date, and resumes it from planned, on-hold
 // or dropped); reaching the total completes it with a finish date, and ends a
 // rewatch with one more to the rewatch count. Moving back below the total
-// reopens a completed entry.
+// reopens a completed entry. A finished rewatch keeps the first finish date.
 [[nodiscard]] Entry StepProgress(Entry target, int delta, const IsoDate& today);
 
 // Sets the status, keeping the start and finish dates and the progress
 // consistent with it. A rewatch starts again from the first episode or
-// chapter, and keeps the dates of the first time. Setting the status it
-// already has changes nothing.
+// chapter, and keeps the dates of the first time; holding, dropping or
+// planning it instead returns it to completed. Only a completed or rewatching
+// entry keeps a finish date. Setting the status it already has changes nothing.
 [[nodiscard]] Entry SetStatus(Entry target, WatchStatus status, const IsoDate& today);
 
 // Sets the score, kept within 0..10.

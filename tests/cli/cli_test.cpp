@@ -231,7 +231,10 @@ TEST_CASE_FIXTURE(CliFixture, "cli says when a command changed nothing, and reco
 	// Frieren is complete: there is no more to count.
 	CHECK(Run({"+", "a:1"}) == 0);
 	CHECK(out.empty());
-	CHECK(err == "Nothing changed.\n");
+	CHECK(err ==
+	      "Nothing changed.\n"
+	      "Sousou no Frieren is at its total, 28 episodes. If there are more: catalist set TITLE "
+	      "total=N\n");
 	CHECK(Run({"set", "taxi", "score=8", "progress=5"}) == 0);
 	CHECK(err == "Nothing changed.\n");
 	CHECK(Run({"resume", "taxi"}) == 0);

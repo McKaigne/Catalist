@@ -173,11 +173,59 @@ TEST_CASE("setStatus from completed back to watching clears the finish date") {
 	CHECK_FALSE(resumed.finish_date.has_value());
 }
 
-TEST_CASE("setStatus to on hold keeps an existing finish date") {
+TEST_CASE("only a completed or rewatching title keeps a finish date") {
 	Entry done = MakeEntry().Status(WatchStatus::kCompleted).FinishDate("2026-05-05");
-	auto on_hold = catalist::SetStatus(done, WatchStatus::kOnHold, kToday);
-	CHECK(on_hold.status == WatchStatus::kOnHold);
-	CHECK(FormatDate(on_hold.finish_date) == "2026-05-05");
+	for (WatchStatus status :
+	     {WatchStatus::kOnHold, WatchStatus::kDropped, WatchStatus::kPlanToWatch}) {
+		auto stopped = catalist::SetStatus(done, status, kToday);
+		CHECK(stopped.status == status);
+		CHECK_FALSE(stopped.finish_date.has_value());
+	}
+	auto dropped = catalist::SetStatus(MakeEntry(), WatchStatus::kDropped, kToday);
+	CHECK_FALSE(dropped.finish_date.has_value());
+	Entry stale = MakeEntry().Status(WatchStatus::kOnHold).FinishDate("2026-05-05");
+	CHECK_FALSE(catalist::SetStatus(stale, WatchStatus::kWatching, kToday).finish_date);
+	CHECK_FALSE(catalist::StepProgress(stale, 1, kToday).finish_date);
+}
+
+TEST_CASE("stopping a rewatch returns the title to completed") {
+	Entry again = MakeEntry()
+	                  .Status(WatchStatus::kRewatching)
+	                  .TotalUnits(12)
+	                  .Progress(4)
+	                  .Rewatched(1)
+	                  .FinishDate("2026-02-01");
+	for (WatchStatus status :
+	     {WatchStatus::kOnHold, WatchStatus::kDropped, WatchStatus::kPlanToWatch}) {
+		auto back = catalist::SetStatus(again, status, kToday);
+		CHECK(back.status == WatchStatus::kCompleted);
+		CHECK(back.progress == 12);
+		CHECK(back.rewatched == 1);
+		CHECK(FormatDate(back.finish_date) == "2026-02-01");
+	}
+	Entry unknown = again;
+	unknown.total_units = 0;
+	CHECK(catalist::SetStatus(unknown, WatchStatus::kDropped, kToday).progress == 4);
+	CHECK(catalist::SetStatus(again, WatchStatus::kWatching, kToday) == again);
+	auto finished = catalist::SetStatus(again, WatchStatus::kCompleted, kToday);
+	CHECK(finished.rewatched == 2);
+	CHECK(FormatDate(finished.finish_date) == "2026-02-01");
+}
+
+TEST_CASE("a status a title cannot take is refused") {
+	Entry done = MakeEntry().Title("Done").Status(WatchStatus::kCompleted);
+	CHECK(catalist::StatusRefusal(done, WatchStatus::kWatching).has_value());
+	CHECK_FALSE(catalist::StatusRefusal(done, WatchStatus::kRewatching).has_value());
+	Entry open = MakeEntry().Title("Open").Status(WatchStatus::kOnHold);
+	CHECK(catalist::StatusRefusal(open, WatchStatus::kRewatching).has_value());
+	CHECK_FALSE(catalist::StatusRefusal(open, WatchStatus::kWatching).has_value());
+}
+
+TEST_CASE("going back reopens a completed title of unknown length") {
+	Entry done = MakeEntry().Status(WatchStatus::kCompleted).Progress(5).FinishDate("2026-02-01");
+	auto back = catalist::StepProgress(done, -1, kToday);
+	CHECK(back.status == WatchStatus::kWatching);
+	CHECK_FALSE(back.finish_date.has_value());
 }
 
 TEST_CASE("setScore stays within zero and ten") {
@@ -236,7 +284,13 @@ TEST_CASE("countOf reads each count") {
 }
 
 TEST_CASE("mergeImported refreshes totals and fills only what the user left empty") {
-	Entry mine = MakeEntry().MalId(5).Score(8).Progress(3).TotalUnits(0).StartDate("2026-01-01");
+	Entry mine = MakeEntry()
+	                 .MalId(5)
+	                 .Status(WatchStatus::kCompleted)
+	                 .Score(8)
+	                 .Progress(3)
+	                 .TotalUnits(0)
+	                 .StartDate("2026-01-01");
 	Entry imported = MakeEntry()
 	                     .MalId(5)
 	                     .Score(2)
@@ -252,6 +306,8 @@ TEST_CASE("mergeImported refreshes totals and fills only what the user left empt
 	CHECK(merged.total_volumes == 3);
 	CHECK(FormatDate(merged.start_date) == "2026-01-01");
 	CHECK(FormatDate(merged.finish_date) == "2020-02-02");
+	mine.status = WatchStatus::kWatching;
+	CHECK_FALSE(catalist::MergeImported(mine, imported).finish_date.has_value());
 }
 
 TEST_CASE("setStatus fills the dates like the cycle and ignores no change") {
@@ -287,7 +343,7 @@ TEST_CASE("a rewatch starts over, keeps the first dates, and counts once it is d
 	CHECK(over.status == WatchStatus::kCompleted);
 	CHECK(over.progress == 3);
 	CHECK(over.rewatched == 1);
-	CHECK(FormatDate(over.finish_date) == "2026-10-20");
+	CHECK(FormatDate(over.finish_date) == "2026-02-01");
 }
 
 TEST_CASE("an entry's page is its AniList page") {

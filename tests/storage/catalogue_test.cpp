@@ -160,7 +160,7 @@ TEST_CASE_FIXTURE(TempDirFixture,
 
 TEST_CASE_FIXTURE(TempDirFixture, "addEntry re-add backfills empty user fields") {
 	Catalogue db(TempDir() / "data");
-	int id = db.AddEntry(MakeEntry().MalId(100).Title("Blank"));
+	int id = db.AddEntry(MakeEntry().MalId(100).Title("Blank").Status(WatchStatus::kCompleted));
 	db.AddEntry(
 	    MakeEntry().MalId(100).Title("Blank").Score(7).Progress(3).FinishDate("2024-01-01"));
 	auto merged = *db.GetById(MediaType::kAnime, id);

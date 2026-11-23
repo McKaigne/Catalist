@@ -123,7 +123,8 @@ void ParseBlocks(const std::string& xml, const BlockTags& tags, std::vector<Entr
 			item.status = WatchStatus::kRewatching;
 		// MyAnimeList writes 0000-00-00 for "no date", which parses as absent.
 		item.start_date = IsoDate::Parse(TagText(block, "my_start_date"));
-		item.finish_date = IsoDate::Parse(TagText(block, "my_finish_date"));
+		if (item.status == WatchStatus::kCompleted or item.status == WatchStatus::kRewatching)
+			item.finish_date = IsoDate::Parse(TagText(block, "my_finish_date"));
 		found.push_back(item);
 	}
 }

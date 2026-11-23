@@ -127,6 +127,7 @@ int SaveAndReport(CliContext& ctx, const args::Parsed& line,
                   const std::vector<journal::Change>& changes);
 
 using TitleChange = std::function<Entry(const Entry&)>;
+using TitleRefusal = std::function<std::optional<std::string>(const Entry&)>;
 
 // Makes one change to each title, then saves and reports it.
 int ApplyTo(CliContext& ctx, const args::Parsed& line, const std::vector<Entry>& titles,
@@ -135,7 +136,7 @@ int ApplyTo(CliContext& ctx, const args::Parsed& line, const std::vector<Entry>&
 // Makes one change to every title the REFs name; every REF is resolved
 // before any title changes.
 int ChangeTitles(const Command& self, const args::Parsed& line, CliContext& ctx,
-                 const TitleChange& change);
+                 const TitleChange& change, const TitleRefusal& refuse = nullptr);
 
 // The N of -n, or `otherwise` when it is not given.
 [[nodiscard]] Result<int> CountGiven(const args::Parsed& line, int otherwise);

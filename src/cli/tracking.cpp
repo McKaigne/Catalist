@@ -112,6 +112,21 @@ Result<std::map<std::string, std::string>> ReadAssignments(const std::vector<std
 	return values;
 }
 
+// The status is judged as it will be reached: after the fields set before it.
+std::optional<std::string> RefusedValues(Entry target,
+                                         const std::map<std::string, std::string>& values,
+                                         const IsoDate& today) {
+	for (const auto& field : Settables()) {
+		auto given = values.find(field.name);
+		if (given == values.end())
+			continue;
+		if (field.name == "status")
+			return StatusRefusal(target, *StatusNamed(given->second));
+		target = *field.set(target, given->second, today);
+	}
+	return std::nullopt;
+}
+
 Entry WithValues(Entry target, const std::map<std::string, std::string>& values,
                  const IsoDate& today) {
 	for (const auto& field : Settables()) {
@@ -128,8 +143,21 @@ int RunStep(const Command& self, const args::Parsed& line, CliContext& ctx) {
 		return UsageError(ctx, self, by.error());
 	int delta = self.name == "+" ? by.value() : -by.value();
 	IsoDate today = ctx.Today();
-	return ChangeTitles(self, line, ctx,
-	                    [&](const Entry& e) { return StepProgress(e, delta, today); });
+	size_t titles = 0;
+	std::vector<Entry> at_total;
+	int code = ChangeTitles(self, line, ctx, [&](const Entry& e) {
+		++titles;
+		if (delta > 0 and AtTotal(e))
+			at_total.push_back(e);
+		return StepProgress(e, delta, today);
+	});
+	if (line.Has("q") or at_total.size() != titles)
+		return code;
+	for (const auto& e : at_total)
+		ctx.err << std::format("{} is at its total, {} {}. If there are more: catalist set TITLE "
+		                       "total=N\n",
+		                       DisplayName(e), e.total_units, UnitName(e.type, e.total_units));
+	return code;
 }
 
 int RunSet(const Command& self, const args::Parsed& line, CliContext& ctx) {
@@ -152,6 +180,10 @@ int RunSet(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	auto current = TakeForWrite(ctx, *found);
 	if (not current)
 		return 1;
+	for (const auto& each : *current) {
+		if (auto reason = RefusedValues(each, values.value(), today))
+			return Fail(ctx, *reason);
+	}
 	return ApplyTo(ctx, line, *current,
 	               [&](const Entry& e) { return WithValues(e, values.value(), today); });
 }
@@ -172,10 +204,13 @@ int RunStatus(const Command& self, const args::Parsed& line, CliContext& ctx) {
 			                  std::format("--score '{}' is not 0 to 10", line.Get("score")));
 	}
 	IsoDate today = ctx.Today();
-	return ChangeTitles(self, line, ctx, [&](const Entry& e) {
-		Entry next = SetStatus(e, status, today);
-		return score ? SetScore(next, *score, today) : next;
-	});
+	return ChangeTitles(
+	    self, line, ctx,
+	    [&](const Entry& e) {
+		    Entry next = SetStatus(e, status, today);
+		    return score ? SetScore(next, *score, today) : next;
+	    },
+	    [&](const Entry& e) { return StatusRefusal(e, status); });
 }
 
 // Asks before titles are removed. False, with the reason on standard error,
@@ -273,12 +308,14 @@ std::vector<Command> TrackingCommands() {
 	    StatusCommand("drop", "Mark titles dropped", ""),
 	    StatusCommand("plan", "Mark titles planned", ""),
 	    StatusCommand("resume", "Take titles up again",
-	                  "Sets the status to watching (reading, for a manga).\n"),
+	                  "Sets the status to watching (reading, for a manga). A completed title\n"
+	                  "is refused: use rewatch.\n"),
 	    StatusCommand("rewatch", "Watch or read titles again",
 	                  "Sets the status to rewatching (rereading, for a manga). A completed title\n"
 	                  "starts again from the first episode or chapter and keeps the dates of\n"
 	                  "the first time; reaching the total completes it again, one more to\n"
-	                  "its rewatch count.\n"),
+	                  "its rewatch count. Holding or dropping it returns it to completed. A title\n"
+	                  "not completed yet is refused: use resume.\n"),
 	    {.name = "rm",
 	     .summary = "Remove titles",
 	     .details =

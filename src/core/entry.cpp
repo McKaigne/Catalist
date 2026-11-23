@@ -109,10 +109,6 @@ bool HasKnownTotal(const Entry& target) {
 	return target.total_units > 0;
 }
 
-bool IsFinished(const Entry& target) {
-	return HasKnownTotal(target) and target.progress >= target.total_units;
-}
-
 bool IsPaused(WatchStatus status) {
 	return status == WatchStatus::kPlanToWatch or status == WatchStatus::kOnHold or
 	       status == WatchStatus::kDropped;
@@ -123,13 +119,13 @@ Entry ApplyStatusDates(Entry target, WatchStatus previous, const IsoDate& today)
 		case WatchStatus::kWatching:
 			if (not target.start_date)
 				target.start_date = today;
-			if (previous == WatchStatus::kCompleted)
-				target.finish_date.reset();
+			target.finish_date.reset();
 			break;
 		case WatchStatus::kCompleted:
 			if (not target.start_date)
 				target.start_date = today;
-			target.finish_date = today;
+			if (previous != WatchStatus::kRewatching or not target.finish_date)
+				target.finish_date = today;
 			if (HasKnownTotal(target))
 				target.progress = std::max(target.progress, target.total_units);
 			if (previous == WatchStatus::kRewatching)
@@ -137,9 +133,6 @@ Entry ApplyStatusDates(Entry target, WatchStatus previous, const IsoDate& today)
 			break;
 		case WatchStatus::kOnHold:
 		case WatchStatus::kDropped:
-			if (not target.finish_date)
-				target.finish_date = today;
-			break;
 		case WatchStatus::kPlanToWatch:
 			target.finish_date.reset();
 			break;
@@ -156,7 +149,7 @@ Entry ApplyStatusDates(Entry target, WatchStatus previous, const IsoDate& today)
 
 Entry WithProgress(Entry target, int progress, const IsoDate& today) {
 	target.progress = progress;
-	if (IsFinished(target)) {
+	if (AtTotal(target)) {
 		target.progress = target.total_units;
 		if (target.status == WatchStatus::kRewatching)
 			++target.rewatched;
@@ -167,19 +160,21 @@ Entry WithProgress(Entry target, int progress, const IsoDate& today) {
 }
 
 Entry StepForward(Entry target, int new_progress, const IsoDate& today) {
+	bool again = target.status == WatchStatus::kRewatching;
 	if (not target.start_date)
 		target.start_date = today;
-	if (IsPaused(target.status))
+	if (IsPaused(target.status)) {
 		target.status = WatchStatus::kWatching;
+		target.finish_date.reset();
+	}
 	target = WithProgress(target, new_progress, today);
-	if (IsFinished(target))
+	if (AtTotal(target) and (not again or not target.finish_date))
 		target.finish_date = today;
 	return target;
 }
 
 Entry StepBackward(Entry target, int new_progress, const IsoDate& today) {
-	bool reopens = IsFinished(target) and new_progress < target.total_units;
-	if (reopens) {
+	if (target.status == WatchStatus::kCompleted) {
 		target.status = WatchStatus::kWatching;
 		target.finish_date.reset();
 	}
@@ -190,9 +185,25 @@ Entry StepBackward(Entry target, int new_progress, const IsoDate& today) {
 
 }  // namespace
 
+bool AtTotal(const Entry& target) {
+	return HasKnownTotal(target) and target.progress >= target.total_units;
+}
+
+std::optional<std::string> StatusRefusal(const Entry& target, WatchStatus status) {
+	if (status == WatchStatus::kWatching and target.status == WatchStatus::kCompleted)
+		return std::format("{} is completed; to start it again: catalist rewatch",
+		                   DisplayName(target));
+	bool first_time =
+	    target.status != WatchStatus::kCompleted and target.status != WatchStatus::kRewatching;
+	if (status == WatchStatus::kRewatching and first_time)
+		return std::format("{} is not completed; to carry on with it: catalist resume",
+		                   DisplayName(target));
+	return std::nullopt;
+}
+
 Entry StepProgress(Entry target, int delta, const IsoDate& today) {
 	int new_progress = std::max(0, target.progress + delta);
-	if (new_progress == target.progress or (delta > 0 and IsFinished(target)))
+	if (new_progress == target.progress or (delta > 0 and AtTotal(target)))
 		return target;
 	return delta > 0 ? StepForward(target, new_progress, today)
 	                 : StepBackward(target, new_progress, today);
@@ -202,6 +213,17 @@ Entry SetStatus(Entry target, WatchStatus status, const IsoDate& today) {
 	if (status == target.status)
 		return target;
 	WatchStatus previous = target.status;
+	if (previous == WatchStatus::kRewatching) {
+		if (status == WatchStatus::kWatching)
+			return target;
+		if (IsPaused(status)) {
+			target.status = WatchStatus::kCompleted;
+			if (HasKnownTotal(target))
+				target.progress = target.total_units;
+			target.updated_at = today;
+			return target;
+		}
+	}
 	target.status = status;
 	target = ApplyStatusDates(target, previous, today);
 	target.updated_at = today;
@@ -292,7 +314,9 @@ Entry MergeImported(Entry existing, const Entry& incoming) {
 		existing.progress = incoming.progress;
 	if (not existing.start_date and incoming.start_date)
 		existing.start_date = incoming.start_date;
-	if (not existing.finish_date and incoming.finish_date)
+	bool can_finish =
+	    existing.status == WatchStatus::kCompleted or existing.status == WatchStatus::kRewatching;
+	if (can_finish and not existing.finish_date and incoming.finish_date)
 		existing.finish_date = incoming.finish_date;
 	return existing;
 }

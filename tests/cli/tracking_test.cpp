@@ -125,6 +125,22 @@ TEST_CASE_FIXTURE(CliFixture, "cli + changes nothing when one title cannot be fo
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 5);
 }
 
+TEST_CASE_FIXTURE(CliFixture, "cli refuses a status a title cannot take") {
+	Seed();
+	CHECK(Run({"resume", "a:1"}) == 1);
+	CHECK(err == "error: Sousou no Frieren is completed; to start it again: catalist rewatch\n");
+	CHECK(Run({"set", "a:1", "status=watching"}) == 1);
+	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").status == WatchStatus::kCompleted);
+	CHECK(Run({"rewatch", "taxi"}) == 1);
+	CHECK(err == "error: Odd Taxi is not completed; to carry on with it: catalist resume\n");
+	CHECK(Run({"rewatch", "--all", "a:1", "taxi"}) == 1);
+	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").status == WatchStatus::kCompleted);
+	CHECK(Steps().empty());
+	// Lowering the progress in the same command reopens it first.
+	CHECK(Run({"set", "a:1", "progress=3", "status=watching"}) == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").status == WatchStatus::kWatching);
+}
+
 TEST_CASE_FIXTURE(CliFixture, "cli set changes the fields of a title") {
 	Seed();
 	CHECK(Run({"set", "taxi", "score=9", "progress=13"}) == 0);
@@ -244,9 +260,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli done, hold, drop, plan and resume set the sta
 	      "a:2\tOdd Taxi\tfinished\t-\t2026-10-20\n");
 	CHECK(err.empty());
 	CHECK(Run({"hold", "berserk"}, "", 100) == 0);
-	CHECK(out ==
-	      "Berserk  status watching → on-hold\n"
-	      "Berserk  finished - → 2026-10-20\n");
+	CHECK(out == "Berserk  status watching → on-hold\n");
 	CHECK(SavedTitle(MediaType::kManga, "Berserk").status == WatchStatus::kOnHold);
 	CHECK(Run({"resume", "berserk"}) == 0);
 	CHECK(out == "m:1\tBerserk\tstatus\ton-hold\twatching\n");

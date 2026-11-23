@@ -6,11 +6,24 @@ and this project adheres to [[https://semver.org/][Semantic Versioning]].
 
 ** [Unreleased]
 Catalist is now a small, local-first tracker for the command line: one
-SQLite file, commands made for daily tracking, scripts and pipes with undo
-and redo, and AniList, MyAnimeList and Kitsu as equal sites to find titles
-on and, logged in, to tell what changes, one way, as Mihon tells its
-trackers. The full-screen terminal interface is now a separate program,
-Catalist-TUI, kept as an archive.
+SQLite file, commands made for daily tracking with undo and redo, AniList to
+find titles on, and MyAnimeList XML to move lists. The full-screen terminal
+interface is now a separate program, Catalist-TUI, kept as an archive.
+
+*** Removed before release
+These were built during this cycle and taken out to keep the program simple.
+Entries below that describe them no longer apply.
+- Account tracking: =login=, =logout=, =accounts=, =sync=, =link=, =unlink=,
+  =track=, =rm --remote= and =ls --linked=/=--unlinked=.
+- Kitsu, the MyAnimeList API, =provider=, =--from=, =refresh=, and the =id:=
+  and =my:= search forms.
+- CSV and JSON import and export, =import --user= and =export --format=.
+- Shell completions, the manual page, =--json=, =--header=, =--table=, REFs
+  from standard input, typo suggestions and =--color=.
+- The NEW column and =--sort=new=. The store moves to version 2: a version 1
+  file is upgraded when first opened, keeping its lists and clearing its undo
+  history.
+- The Clang tooling, the CI workflow and macOS from the flake.
 
 *** Added
 - Tracking at parity with Mihon's: =catalist link= reads your entry on the

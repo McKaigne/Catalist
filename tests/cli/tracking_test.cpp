@@ -74,8 +74,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli - counts one less") {
 	CHECK(Has(out, "a:1\tSousou no Frieren\tprogress\t28\t27\n"));
 	CHECK(Has(out, "a:1\tSousou no Frieren\tstatus\tcompleted\twatching\n"));
 	// A title named - is not one: the command's own name comes first.
-	CHECK(Run({"-", "--", "-n"}) == 1);
-	CHECK(err.find("error: nothing in your lists matches '-n'\n") == 0);
+	CHECK(Run({"-", "--", "-zq"}) == 1);
+	CHECK(err.find("error: nothing in your lists matches '-zq'\n") == 0);
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli + takes several titles") {
@@ -92,22 +92,22 @@ TEST_CASE_FIXTURE(CliFixture, "cli + takes several titles") {
 	CHECK(history[0].stamp == "2026-10-20 21:30:00");
 	CHECK(history[0].changes == 2);
 
-	CHECK(Run({"+", "--all", "-q", "frieren", "taxi"}) == 0);
+	CHECK(Run({"+", "--all", "-q", "frieren,", "taxi"}) == 0);
 	CHECK(out.empty());
 	CHECK(err.empty());
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 7);
 	CHECK(SavedTitle(MediaType::kManga, "Sousou no Frieren").progress == 1);
 	// The same title named twice is counted once.
-	CHECK(Run({"+", "taxi", "a:2"}) == 0);
+	CHECK(Run({"+", "taxi,", "a:2"}) == 0);
 	CHECK(out == "a:2\tOdd Taxi\tprogress\t7\t8\n");
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli + changes nothing when one title cannot be found") {
 	Seed();
-	CHECK(Run({"+", "taxi", "naruto"}) == 1);
+	CHECK(Run({"+", "taxi,", "naruto"}) == 1);
 	CHECK(err.find("error: nothing in your lists matches 'naruto'\n") == 0);
 	CHECK(out.empty());
-	CHECK(Run({"+", "taxi", "frieren"}) == 1);
+	CHECK(Run({"+", "taxi,", "frieren"}) == 1);
 	CHECK(err.find("error: 'frieren' matches 2 titles:\n") == 0);
 	CHECK(Run({"+", "frieren"}, "7\n") == 1);
 	CHECK(Has(err, "Cancelled.\n"));
@@ -116,7 +116,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli + changes nothing when one title cannot be fo
 
 	CHECK(Run({"+"}) == 2);
 	CHECK(err.find("error: ") == 0);
-	CHECK(Has(err, "Usage: catalist + [-amq] [--all] [-n N] REF...\n"));
+	CHECK(Has(err, "Usage: catalist + [-amq] [--all] [-n N] [REF...]\n"));
 	CHECK(Run({"+", "-n", "0", "taxi"}) == 2);
 	CHECK(err.find("error: -n '0' is not a count of one or more\n") == 0);
 	CHECK(Run({"+", "-n", "x", "taxi"}) == 2);
@@ -385,7 +385,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli takes a lone - for no title, though titles ho
 	Seed();
 	CHECK(Run({"add", "-q", "--no-lookup", "Re-Zero"}) == 0);
 	const std::string said =
-	    "error: '-' is not a REF: give a ref such as a:12, or part of a title\n";
+	    "error: punctuation alone is not a title: give a ref such as a:12, or part of a title\n";
 	for (const std::vector<std::string>& line : {std::vector<std::string>{"rm", "-f", "-"},
 	                                             {"done", "-"},
 	                                             {"+", "a:2", "-"},

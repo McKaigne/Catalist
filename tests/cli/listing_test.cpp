@@ -50,7 +50,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls keeps to a list, a status or a part of the
 	CHECK(Run({"ls", "-q", "-s", "on-hold"}) == 0);
 	CHECK(out.empty());
 	// After --, a title may start with a dash.
-	CHECK(Run({"ls", "-q", "--", "-s"}) == 0);
+	CHECK(Run({"ls", "-q", "--", "-zq"}) == 0);
 	CHECK(out.empty());
 
 	// Several statuses, with commas.
@@ -67,12 +67,10 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls keeps to a list, a status or a part of the
 	// The words of a query need no quotes.
 	CHECK(Run({"ls", "-q", "odd", "taxi"}) == 0);
 	CHECK(out == "a:2\n");
-	CHECK(Run({"ls", "-q", "sousou", "frieren"}) == 0);
-	CHECK(out.empty());
-	// Options come first.
-	CHECK(Run({"ls", "taxi", "-q"}) == 2);
-	CHECK(err.find("error: '-q' comes after the text; options go before it\n") == 0);
-	CHECK(out.empty());
+	CHECK(Run({"ls", "-q", "frieren", "sousou"}) == 0);
+	CHECK(out == "a:1\nm:2\n");
+	CHECK(Run({"ls", "taxi", "-q"}) == 0);
+	CHECK(out == "a:2\n");
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli ls sorts by title, or by the key asked for") {
@@ -159,18 +157,18 @@ TEST_CASE_FIXTURE(CliFixture, "cli show prints a title's line into a pipe") {
 TEST_CASE_FIXTURE(CliFixture, "cli show takes several titles, by ref or by title") {
 	Seed();
 	// Each once, in the order named.
-	CHECK(Run({"show", "a:1", "taxi", "a:1", "ODD"}) == 0);
+	CHECK(Run({"show", "a:1", "taxi,", "a:1", "ODD"}) == 0);
 	CHECK(out.find("a:1\t") == 0);
 	CHECK(Has(out, "\na:2\t"));
 	CHECK(std::count(out.begin(), out.end(), '\n') == 2);
 	// A title that starts with a dash goes after --.
-	CHECK(Run({"show", "--", "-s"}) == 1);
-	CHECK(Has(err, "error: nothing in your lists matches '-s'\n"));
+	CHECK(Run({"show", "--", "-zq"}) == 1);
+	CHECK(Has(err, "error: nothing in your lists matches '-zq'\n"));
 
 	CHECK(Run({"show"}) == 2);
 	CHECK(err.find("error: name a title: a ref such as a:12, or part of it\n") == 0);
 	CHECK(Run({"show", "taxi", ""}) == 2);
-	CHECK(err.find("error: a REF cannot be empty\n") == 0);
+	CHECK(err.find("error: a title cannot be empty\n") == 0);
 	CHECK(out.empty());
 }
 

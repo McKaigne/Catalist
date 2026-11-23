@@ -182,7 +182,8 @@ int RunCli(const std::vector<std::string>& args, CliContext& ctx) {
 		return CommandError(ctx, std::format("unknown command '{}'", first));
 	std::vector<args::Option> options = cmd->options;
 	options.push_back(HelpOption());
-	auto line = args::Parse({before.operands.begin() + 1, before.operands.end()}, options);
+	auto line = args::Parse({before.operands.begin() + 1, before.operands.end()}, options,
+	                        args::Placement::kAnywhere);
 	if (not line.has_value())
 		return UsageError(ctx, *cmd, line.error());
 	if (line.value().Has("help")) {

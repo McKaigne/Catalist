@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cctype>
 #include <format>
 #include <istream>
 #include <map>
@@ -89,18 +91,26 @@ const Settable* FindSettable(const std::string& name) {
 	return nullptr;
 }
 
-// The FIELD=VALUE operands (all but the first, the REF) by field name;
-// fails on the first that names no field or holds no value for it.
-Result<std::map<std::string, std::string>> ReadAssignments(const std::vector<std::string>& operands,
+// A word such as score=9; a title can hold an = too, but not after letters
+// alone.
+bool IsAssignment(const std::string& word) {
+	auto equals = word.find('=');
+	return equals != std::string::npos and equals > 0 and
+	       std::all_of(word.begin(), word.begin() + static_cast<std::ptrdiff_t>(equals),
+	                   [](unsigned char c) { return std::isalpha(c); });
+}
+
+// The FIELD=VALUE words by field name; fails on the first that names no field
+// or holds no value for it.
+Result<std::map<std::string, std::string>> ReadAssignments(const std::vector<std::string>& words,
                                                            const IsoDate& today) {
 	std::map<std::string, std::string> values;
-	for (size_t i = 1; i < operands.size(); ++i) {
-		auto equals = operands[i].find('=');
-		if (equals == std::string::npos)
-			return std::unexpected(std::format(
-			    "'{}' is not FIELD=VALUE; quote a title of several words", operands[i]));
-		std::string name = utf8::Lowercase(operands[i].substr(0, equals));
-		std::string value = operands[i].substr(equals + 1);
+	for (const auto& word : words) {
+		if (not IsAssignment(word))
+			return std::unexpected(std::format("'{}' is not FIELD=VALUE", word));
+		auto equals = word.find('=');
+		std::string name = utf8::Lowercase(word.substr(0, equals));
+		std::string value = word.substr(equals + 1);
 		const Settable* field = FindSettable(name);
 		if (not field)
 			return std::unexpected(std::format("unknown field '{}'", name));
@@ -161,20 +171,19 @@ int RunStep(const Command& self, const args::Parsed& line, CliContext& ctx) {
 }
 
 int RunSet(const Command& self, const args::Parsed& line, CliContext& ctx) {
-	if (line.operands.empty() or line.operands[0].empty())
-		return UsageError(ctx, self, "name a title: a ref such as a:12, or part of it");
-	if (line.operands[0] == "-")
-		return UsageError(ctx, self, kDashNotRef);
-	if (line.operands.size() < 2)
+	auto first_field = std::ranges::find_if(line.operands, IsAssignment);
+	auto request = ReadRefsIn(self, line, ctx, {line.operands.begin(), first_field});
+	if (request.stop)
+		return *request.stop;
+	if (first_field == line.operands.end())
 		return UsageError(ctx, self, "nothing to change: give a FIELD=VALUE such as score=8");
 	IsoDate today = ctx.Today();
-	auto values = ReadAssignments(line.operands, today);
+	auto values = ReadAssignments({first_field, line.operands.end()}, today);
 	if (not values.has_value())
 		return UsageError(ctx, self, values.error());
 	if (not Load(ctx))
 		return 1;
-	auto found =
-	    Resolve(ctx, {line.operands[0]}, {OnlyType(line), line.Has("all"), ctx.interactive});
+	auto found = Resolve(ctx, request.refs, request.how);
 	if (not found)
 		return 1;
 	auto current = TakeForWrite(ctx, *found);
@@ -256,17 +265,27 @@ int RunRemove(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	return SaveAndReport(ctx, line, changes);
 }
 
+const std::vector<WatchStatus> kInProgress = {WatchStatus::kWatching, WatchStatus::kRewatching};
+
 // done, hold, drop, plan and resume differ in their name and their words.
 Command StatusCommand(const std::string& name, const std::string& summary,
                       const std::string& details) {
 	std::vector<args::Option> options = {kQuiet};
+	std::vector<WatchStatus> pick_from = kInProgress;
+	if (name == "resume")
+		pick_from = {WatchStatus::kOnHold, WatchStatus::kDropped};
+	else if (name == "rewatch")
+		pick_from = {WatchStatus::kCompleted};
+	else if (name == "plan")
+		pick_from = {};
 	if (name == "done")
 		options.insert(options.begin(), {0, "score", "N", "give it a score as well, 0 to 10"});
 	return {.name = name,
 	        .summary = summary,
 	        .details = details + "\n" + kRefsHelp + "\n" + kChangeFormat,
 	        .options = WithRefOptions(options),
-	        .operands = "REF...",
+	        .operands = pick_from.empty() ? "REF..." : "[REF...]",
+	        .pick_from = pick_from,
 	        .run = RunStatus};
 }
 
@@ -277,7 +296,8 @@ Command StepCommand(const std::string& name, const std::string& alias, const std
 	        .summary = summary,
 	        .details = details + "\n" + kRefsHelp + "\n" + kChangeFormat,
 	        .options = WithRefOptions({{'n', "", "N", "count N instead of one"}, kQuiet}),
-	        .operands = "REF...",
+	        .operands = "[REF...]",
+	        .pick_from = kInProgress,
 	        .run = RunStep};
 }
 

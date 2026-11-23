@@ -42,10 +42,7 @@ const std::map<std::string, SortKey> kSortKeys = {
     {"title", SortKey::kTitle},     {"progress", SortKey::kProgress}, {"date", SortKey::kDate}};
 
 int RunList(const Command& self, const args::Parsed& line, CliContext& ctx) {
-	auto text = ReadText(self, line, ctx);
-	if (not text)
-		return 2;
-	ListQuery query{.text = *text,
+	ListQuery query{.text = ReadText(line),
 	                .only = OnlyType(line),
 	                .reverse = line.Has("r"),
 	                .refs_only = line.Has("q")};

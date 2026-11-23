@@ -24,6 +24,14 @@ namespace catalist::utf8 {
 // ASCII lower case, byte by byte, for matching titles without regard to case.
 [[nodiscard]] std::string Lowercase(std::string text);
 
+// For matching names: lower case, apostrophes gone, other punctuation a
+// single space.
+[[nodiscard]] std::string Folded(const std::string& text);
+[[nodiscard]] std::vector<std::string> Words(const std::string& text);
+
+// Edits between two texts, in glyphs; swapping two neighbours is one edit.
+[[nodiscard]] int EditDistance(const std::string& a, const std::string& b);
+
 }  // namespace catalist::utf8
 
 #endif  // CATALIST_CORE_TEXT_HPP_

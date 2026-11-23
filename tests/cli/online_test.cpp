@@ -103,8 +103,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli add says what went wrong") {
 	CHECK(err.find("error: name the title to add\n"
 	               "Usage: catalist add ") == 0);
 	CHECK(Run({"add", ""}) == 2);
-	CHECK(Run({"add", "odd", "--pick=1"}) == 2);
-	CHECK(err.find("error: '--pick=1' comes after the text; options go before it\n") == 0);
 	CHECK(Run({"add", "-am", "x"}) == 2);
 	CHECK(err.find("error: give -a or -m, not both\n") == 0);
 	CHECK(Run({"add", "--status", "nope", "x"}) == 2);
@@ -194,7 +192,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli search says what went wrong") {
 	CHECK(Run({"search"}) == 2);
 	CHECK(err.find("error: give the QUERY to search for\n"
 	               "Usage: catalist search ") == 0);
-	CHECK(Run({"search", "odd", "-m"}) == 2);
 	CHECK(Run({"search", "-am", "taxi"}) == 2);
 	CHECK(web.posted.empty());
 

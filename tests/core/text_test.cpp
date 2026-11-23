@@ -37,3 +37,22 @@ TEST_CASE("utf8 clip keeps whole glyphs") {
 	// A sequence cut short at the end is kept as it is.
 	CHECK(utf8::Clip(std::string("ab\xE3\x81"), 3) == std::string("ab\xE3\x81"));
 }
+
+TEST_CASE("utf8 folded ignores case and punctuation") {
+	CHECK(utf8::Folded("Frieren: Beyond Journey's End") == "frieren beyond journeys end");
+	CHECK(utf8::Folded("  Re:ZERO -Starting Life-  ") == "re zero starting life");
+	CHECK(utf8::Folded("Journey\u2019s \u2014 End") == "journeys end");
+	CHECK(utf8::Folded("HUNTER×HUNTER") == "hunter x hunter");
+	CHECK(utf8::Folded("葬送のフリーレン") == "葬送のフリーレン");
+	CHECK(utf8::Folded("!?-").empty());
+	CHECK(utf8::Words("Odd, Taxi") == std::vector<std::string>{"odd", "taxi"});
+	CHECK(utf8::Words("--").empty());
+}
+
+TEST_CASE("utf8 edit distance counts a swap as one edit") {
+	CHECK(utf8::EditDistance("taxi", "taxi") == 0);
+	CHECK(utf8::EditDistance("tiax", "taxi") == 2);
+	CHECK(utf8::EditDistance("freiren", "frieren") == 1);
+	CHECK(utf8::EditDistance("", "abc") == 3);
+	CHECK(utf8::EditDistance("フリーレン", "フリレン") == 1);
+}

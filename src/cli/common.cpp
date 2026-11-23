@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <format>
 #include <ostream>
+#include <utility>
 
 #include "cli/refs.hpp"
 #include "core/text.hpp"
@@ -23,9 +24,51 @@ void SayNoMatch(CliContext& ctx, const std::string& ref, const Naming& how) {
 	std::string where = how.only ? std::format("your {} list", TypeKey(*how.only)) : "your lists";
 	Fail(ctx, refs::Parse(ref) ? std::format("no title in {} has the ref {}", where, ref)
 	                           : std::format("nothing in {} matches '{}'", where, ref));
-	if (ref.size() > 1 and ref[0] == '-')
-		ctx.err << "Options go before the first operand.\n";
-	ctx.err << "See what is there with: catalist ls\n";
+	auto closest = refs::Parse(ref) ? std::nullopt : refs::Closest(ctx.db, ref, how.only);
+	if (closest)
+		ctx.err << std::format("Did you mean {}?\n", DisplayName(*closest));
+	else
+		ctx.err << "See what is there with: catalist ls\n";
+}
+
+// The titles as a numbered list to choose from, names in one column.
+void PrintChoices(CliContext& ctx, const std::vector<Entry>& titles) {
+	int width = 0;
+	for (const auto& each : titles)
+		width = std::max(width, utf8::Width(DisplayName(each)));
+	for (size_t i = 0; i < titles.size(); ++i)
+		ctx.err << std::format("  {:>2}  {}  {}  {}\n", i + 1,
+		                       utf8::Fit(DisplayName(titles[i]), width), TypeKey(titles[i].type),
+		                       OutOf(titles[i].progress, titles[i].total_units));
+}
+
+// The one title chosen at a terminal when none was named.
+std::optional<std::vector<Entry>> PickTitle(CliContext& ctx, const Naming& how) {
+	constexpr size_t kMostOffered = 20;
+	std::vector<Entry> offered;
+	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
+		if (how.only and *how.only != type)
+			continue;
+		for (const auto& each : ctx.db.GetEntries(type))
+			if (std::ranges::contains(how.pick_from, each.status))
+				offered.push_back(each);
+	}
+	if (offered.empty()) {
+		Fail(ctx, "no title to choose from; name one");
+		return std::nullopt;
+	}
+	SortEntries(offered, SortKey::kUpdated, false);
+	size_t more = offered.size() > kMostOffered ? offered.size() - kMostOffered : 0;
+	offered.resize(offered.size() - more);
+	PrintChoices(ctx, offered);
+	if (more > 0)
+		ctx.err << std::format("  and {} more: name one to reach it\n", more);
+	auto picked = AskWhich(ctx, offered.size());
+	if (not picked) {
+		ctx.err << "Cancelled.\n";
+		return std::nullopt;
+	}
+	return std::vector<Entry>{offered[*picked]};
 }
 
 // The titles one REF names: one, or all it matches with --all. Nothing,
@@ -40,17 +83,25 @@ std::optional<std::vector<Entry>> Named(CliContext& ctx, const std::string& ref,
 	}
 	if (found.size() == 1 or how.all)
 		return found;
+	if (how.ask) {
+		std::vector<Entry> preferred;
+		for (const auto& each : found)
+			if (std::ranges::contains(how.prefer, each.status))
+				preferred.push_back(each);
+		if (preferred.size() == 1)
+			return preferred;
+	}
 
 	ctx.err << std::format("{}'{}' matches {} titles:\n", how.ask ? "" : "error: ", ref,
 	                       found.size());
-	for (size_t i = 0; i < found.size(); ++i)
-		ctx.err << (how.ask ? std::format("  {:>2}", i + 1) : "") << "  " << refs::Of(found[i])
-		        << "  " << DisplayName(found[i]) << "\n";
 	if (not how.ask) {
+		for (const auto& each : found)
+			ctx.err << "  " << refs::Of(each) << "  " << DisplayName(each) << "\n";
 		ctx.err << "Name one by its ref (-a and -m keep to one list), or pass --all for all of "
 		           "them.\n";
 		return std::nullopt;
 	}
+	PrintChoices(ctx, found);
 	auto picked = AskWhich(ctx, found.size());
 	if (not picked) {
 		ctx.err << "Cancelled.\n";
@@ -178,18 +229,45 @@ std::optional<WatchStatus> StatusNamed(const std::string& word) {
 	return std::nullopt;
 }
 
-std::optional<std::string> ReadText(const Command& cmd, const args::Parsed& line, CliContext& ctx) {
+std::string ReadText(const args::Parsed& line) {
 	std::string text;
-	for (size_t i = 0; i < line.operands.size(); ++i) {
-		const std::string& word = line.operands[i];
-		if (i > 0 and word.size() > 1 and word[0] == '-') {
-			UsageError(ctx, cmd,
-			           std::format("'{}' comes after the text; options go before it", word));
-			return std::nullopt;
-		}
-		text += (i > 0 ? " " : "") + word;
-	}
+	for (const auto& word : line.operands)
+		text += (text.empty() ? "" : " ") + word;
 	return text;
+}
+
+std::vector<std::string> NamesIn(const std::vector<std::string>& words) {
+	std::vector<std::string> names;
+	std::string open;
+	auto close = [&] {
+		if (not open.empty())
+			names.push_back(std::exchange(open, ""));
+	};
+	auto add = [&](const std::string& piece) {
+		if (refs::Parse(piece)) {
+			close();
+			names.push_back(piece);
+		} else if (not piece.empty()) {
+			open += (open.empty() ? "" : " ") + piece;
+		}
+	};
+	for (const auto& word : words) {
+		if (word.contains(' ')) {
+			close();
+			names.push_back(word);
+			continue;
+		}
+		size_t start = 0;
+		for (size_t comma = word.find(','); comma != std::string::npos;
+		     comma = word.find(',', start)) {
+			add(word.substr(start, comma - start));
+			close();
+			start = comma + 1;
+		}
+		add(word.substr(start));
+	}
+	close();
+	return names;
 }
 
 // -a and -m: the one list a command is kept to, or both.
@@ -207,20 +285,25 @@ std::vector<args::Option> WithRefOptions(std::vector<args::Option> options) {
 	return options;
 }
 
-// Reads the REF operands.
 RefRequest ReadRefs(const Command& cmd, const args::Parsed& line, CliContext& ctx) {
+	return ReadRefsIn(cmd, line, ctx, line.operands);
+}
+
+RefRequest ReadRefsIn(const Command& cmd, const args::Parsed& line, CliContext& ctx,
+                      const std::vector<std::string>& words) {
 	RefRequest request;
-	if (line.operands.empty()) {
+	request.refs = NamesIn(words);
+	std::vector<WatchStatus> prefer =
+	    cmd.pick_from.empty() ? std::vector{WatchStatus::kWatching, WatchStatus::kRewatching}
+	                          : cmd.pick_from;
+	request.how = {OnlyType(line), line.Has("all"), ctx.interactive, prefer, cmd.pick_from};
+	if (std::ranges::contains(words, std::string()))
+		request.stop = UsageError(ctx, cmd, "a title cannot be empty");
+	else if (request.refs.empty() and (cmd.pick_from.empty() or not ctx.interactive))
 		request.stop = UsageError(ctx, cmd, "name a title: a ref such as a:12, or part of it");
-		return request;
-	}
-	request.refs = line.operands;
-	request.how = {OnlyType(line), line.Has("all"), ctx.interactive};
-	bool any_empty = std::any_of(request.refs.begin(), request.refs.end(),
-	                             [](const std::string& ref) { return ref.empty(); });
-	if (any_empty)
-		request.stop = UsageError(ctx, cmd, "a REF cannot be empty");
-	else if (std::find(request.refs.begin(), request.refs.end(), "-") != request.refs.end())
+	else if (std::ranges::any_of(request.refs, [](const std::string& name) {
+		         return not refs::Parse(name) and utf8::Folded(name).empty();
+	         }))
 		request.stop = UsageError(ctx, cmd, kDashNotRef);
 	return request;
 }
@@ -242,6 +325,8 @@ std::optional<size_t> AskWhich(CliContext& ctx, size_t count) {
 // any REF fails: a command works on all it was given, or on none.
 std::optional<std::vector<Entry>> Resolve(CliContext& ctx, const std::vector<std::string>& given,
                                           const Naming& how) {
+	if (given.empty())
+		return PickTitle(ctx, how);
 	std::vector<Entry> all;
 	for (const auto& ref : given) {
 		auto found = Named(ctx, ref, how);
@@ -382,9 +467,8 @@ extern const char* const kRefsHelp =
     "A REF is a ref such as a:12, or part of a title. Every REF is looked up\n"
     "before anything changes: when one of them fails, nothing is changed.\n";
 
-// Alone, - would match every title with a hyphen in it.
 extern const char* const kDashNotRef =
-    "'-' is not a REF: give a ref such as a:12, or part of a title";
+    "punctuation alone is not a title: give a ref such as a:12, or part of a title";
 
 extern const char* const kChangeFormat =
     "Each field that changed is printed. Into a pipe that is one line of\n"

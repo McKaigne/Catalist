@@ -97,10 +97,8 @@ int RunAdd(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	auto type = OneType(line);
 	if (not type)
 		return UsageError(ctx, self, "give -a or -m, not both");
-	auto name = ReadText(self, line, ctx);
-	if (not name)
-		return 2;
-	if (name->empty())
+	std::string name = ReadText(line);
+	if (name.empty())
 		return UsageError(ctx, self, "name the title to add");
 	auto status = StatusNamed(line.Has("status") ? line.Get("status") : "planned");
 	if (not status)
@@ -135,7 +133,7 @@ int RunAdd(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	IsoDate today = ctx.Today();
 	Entry added;
 	added.type = *type;
-	added.title = *name;
+	added.title = name;
 	added.status = WatchStatus::kPlanToWatch;
 	added.updated_at = today;
 	// AniList is asked before the catalogue is taken for writing: no other
@@ -197,14 +195,12 @@ int RunSearch(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	auto type = OneType(line);
 	if (not type)
 		return UsageError(ctx, self, "give -a or -m, not both");
-	auto query = ReadText(self, line, ctx);
-	if (not query)
-		return 2;
-	if (query->empty())
+	std::string query = ReadText(line);
+	if (query.empty())
 		return UsageError(ctx, self, "give the QUERY to search for");
 	if (not Load(ctx))
 		return 1;
-	auto found = anilist::Search(ctx.net, *type, *query);
+	auto found = anilist::Search(ctx.net, *type, query);
 	if (not found.has_value())
 		return Fail(ctx, found.error());
 	const auto& matches = found.value();
@@ -216,7 +212,7 @@ int RunSearch(const Command& self, const args::Parsed& line, CliContext& ctx) {
 
 	if (ctx.columns > 0) {
 		if (matches.empty()) {
-			ctx.err << std::format("AniList has no {} matching '{}'.\n", TypeKey(*type), *query);
+			ctx.err << std::format("AniList has no {} matching '{}'.\n", TypeKey(*type), query);
 			return 0;
 		}
 		ctx.out << MatchTable(ctx, *type, matches, mine);

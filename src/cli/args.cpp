@@ -87,14 +87,18 @@ std::string Parsed::Get(const std::string& name) const {
 	return found == options.end() ? "" : found->second;
 }
 
-Result<Parsed> Parse(const std::vector<std::string>& arguments,
-                     const std::vector<Option>& options) {
+Result<Parsed> Parse(const std::vector<std::string>& arguments, const std::vector<Option>& options,
+                     Placement placement) {
 	Reader read{arguments, options};
 	while (read.next < arguments.size()) {
 		const std::string& argument = arguments[read.next];
-		// The first operand ends the options; a lone - is an operand.
-		if (argument.size() < 2 or argument[0] != '-')
-			break;
+		if (argument.size() < 2 or argument[0] != '-') {
+			if (placement == Placement::kBeforeOperands)
+				break;
+			read.line.operands.push_back(argument);
+			++read.next;
+			continue;
+		}
 		++read.next;
 		if (argument == "--")
 			break;
@@ -102,7 +106,8 @@ Result<Parsed> Parse(const std::vector<std::string>& arguments,
 		if (not error.empty())
 			return std::unexpected(error);
 	}
-	read.line.operands.assign(arguments.begin() + static_cast<std::ptrdiff_t>(read.next),
+	read.line.operands.insert(read.line.operands.end(),
+	                          arguments.begin() + static_cast<std::ptrdiff_t>(read.next),
 	                          arguments.end());
 	return std::move(read.line);
 }

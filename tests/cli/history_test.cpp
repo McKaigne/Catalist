@@ -123,7 +123,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli log lists the steps, newest first") {
 	CHECK(out.empty());
 	CHECK(err == "Nothing has been changed yet.\n");
 
-	REQUIRE(Run({"+", "--all", "frieren", "taxi"}) == 0);
+	REQUIRE(Run({"+", "--all", "frieren,", "taxi"}) == 0);
 	REQUIRE(Run({"set", "a:2", "score=9"}) == 0);
 	REQUIRE(Run({"hold", "berserk"}) == 0);
 	REQUIRE(Run({"undo"}) == 0);
@@ -131,7 +131,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli log lists the steps, newest first") {
 	CHECK(out ==
 	      "3\t2026-10-20 21:30:00\tundone\t1\thold berserk\n"
 	      "2\t2026-10-20 21:30:00\tdone\t1\tset a:2 score=9\n"
-	      "1\t2026-10-20 21:30:00\tdone\t2\t+ --all frieren taxi\n");
+	      "1\t2026-10-20 21:30:00\tdone\t2\t+ --all frieren, taxi\n");
 	CHECK(err.empty());
 	CHECK(Run({"log", "-n", "1"}) == 0);
 	CHECK(out == "3\t2026-10-20 21:30:00\tundone\t1\thold berserk\n");
@@ -140,7 +140,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli log lists the steps, newest first") {
 	      "TX  WHEN                 STATE   CHANGES  COMMAND\n"
 	      " 3  2026-10-20 21:30:00  undone        1  hold berserk\n"
 	      " 2  2026-10-20 21:30:00  done          1  set a:2 score=9\n"
-	      " 1  2026-10-20 21:30:00  done          2  + --all frieren taxi\n");
+	      " 1  2026-10-20 21:30:00  done          2  + --all frieren, taxi\n");
 
 	// A long command is cut to 60 characters, never inside a character.
 	REQUIRE(Run({"set", "a:2", "title=" + std::string(40, 'x') + "葬送のフリーレン"}) == 0);

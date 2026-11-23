@@ -121,3 +121,19 @@ TEST_CASE("args reads a count of digits only") {
 	for (const char* bad : {"", "-1", "+1", "1.5", "3x", " 3", "1234567"})
 		CHECK_FALSE(catalist::args::ParseCount(bad).has_value());
 }
+
+TEST_CASE("args can read options after operands, up to --") {
+	using catalist::args::Placement;
+	auto line = Parse({"odd", "-n", "4", "taxi", "--force", "--", "-a"}, kOptions,
+	                  Placement::kAnywhere);
+	REQUIRE(line.has_value());
+	CHECK(line.value().Get("n") == "4");
+	CHECK(line.value().Has("force"));
+	CHECK_FALSE(line.value().Has("a"));
+	CHECK(line.value().operands == Words{"odd", "taxi", "-a"});
+
+	line = Parse({"odd", "-n", "4"}, kOptions);
+	REQUIRE(line.has_value());
+	CHECK_FALSE(line.value().Has("n"));
+	CHECK(line.value().operands == Words{"odd", "-n", "4"});
+}

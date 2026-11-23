@@ -52,6 +52,8 @@ struct Command {
 	std::vector<args::Option> options{};
 	// The operands as the usage line shows them: "REF...".
 	std::string operands{};
+	// What a terminal is offered when no title is named; empty: one must be.
+	std::vector<WatchStatus> pick_from{};
 	int (*run)(const Command& self, const args::Parsed& line, CliContext& ctx) = nullptr;
 };
 

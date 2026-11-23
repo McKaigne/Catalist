@@ -24,8 +24,8 @@ struct LocalRef {
 [[nodiscard]] std::string Of(const Entry& named);
 [[nodiscard]] std::string Of(MediaType type, int id);
 
-// Whether the title holds the text, in any case. Empty text is in every
-// title.
+// Whether its English or romaji name holds every word of the text, in any
+// order, ignoring case and punctuation. Empty text is in every title.
 [[nodiscard]] bool TitleHolds(const Entry& shown, const std::string& text);
 
 // The entries the text names, anime first, each list in its stored order:
@@ -34,6 +34,10 @@ struct LocalRef {
 // search to one list.
 [[nodiscard]] std::vector<Entry> Find(const Catalogue& db, const std::string& text,
                                       std::optional<MediaType> only);
+
+// The title the text was most likely a misspelling of, if any is close.
+[[nodiscard]] std::optional<Entry> Closest(const Catalogue& db, const std::string& text,
+                                           std::optional<MediaType> only);
 
 }  // namespace catalist::refs
 

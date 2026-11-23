@@ -79,8 +79,8 @@ TEST_CASE_FIXTURE(RefsFixture, "refs finds titles by a part of them, in any case
 	CHECK(Found("sousou", MediaType::kManga) == List{"m:2"});
 	CHECK(Found("ser") == List{"m:1"});
 	CHECK(Found("naruto").empty());
-	// The words must be there as written, not each somewhere.
-	CHECK(Found("sousou frieren").empty());
+	CHECK(Found("frieren sousou") == List{"a:1", "m:2"});
+	CHECK(Found("taxi naruto").empty());
 }
 
 TEST_CASE_FIXTURE(RefsFixture, "refs lets a title that is exactly the text win") {
@@ -96,7 +96,25 @@ TEST_CASE("refs matches a title by any part of it, in any case") {
 	CHECK(refs::TitleHolds(shown, "no fri"));
 	CHECK(refs::TitleHolds(shown, "SOUSOU"));
 	CHECK(refs::TitleHolds(shown, ""));
-	CHECK_FALSE(refs::TitleHolds(shown, "frieren sousou"));
+	CHECK(refs::TitleHolds(shown, "frieren sousou"));
+	CHECK_FALSE(refs::TitleHolds(shown, "frieren taxi"));
 	catalist::Entry kanji = MakeEntry().Title("葬送のフリーレン");
 	CHECK(refs::TitleHolds(kanji, "フリーレン"));
+}
+
+TEST_CASE("refs matches the English name too, but each name on its own") {
+	catalist::Entry shown =
+	    MakeEntry().Title("Sousou no Frieren").EnglishTitle("Frieren: Beyond Journey's End");
+	CHECK(refs::TitleHolds(shown, "sousou"));
+	CHECK(refs::TitleHolds(shown, "frieren beyond journeys end"));
+	CHECK(refs::TitleHolds(shown, "END, journey's"));
+	CHECK_FALSE(refs::TitleHolds(shown, "sousou beyond"));
+}
+
+TEST_CASE_FIXTURE(RefsFixture, "refs finds the closest title to a typo") {
+	CHECK(DisplayName(*refs::Closest(db, "freiren", std::nullopt)) == "Sousou no Frieren");
+	CHECK(DisplayName(*refs::Closest(db, "bersrek", std::nullopt)) == "Berserk");
+	CHECK_FALSE(refs::Closest(db, "bersrek", MediaType::kAnime).has_value());
+	CHECK_FALSE(refs::Closest(db, "naruto", std::nullopt).has_value());
+	CHECK_FALSE(refs::Closest(db, "", std::nullopt).has_value());
 }

@@ -65,6 +65,11 @@ constexpr Range kDoubleWidth[] = {
     {0x30000, 0x3FFFD},
 };
 
+constexpr Range kPunctuation[] = {
+    {0x00A0, 0x00BF}, {0x2000, 0x206F}, {0x3000, 0x3004}, {0x3008, 0x3020}, {0x3030, 0x3030},
+    {0x30FB, 0x30FB}, {0xFF01, 0xFF0F}, {0xFF1A, 0xFF20}, {0xFF3B, 0xFF40}, {0xFF5B, 0xFF65},
+};
+
 int GlyphWidth(const std::string& glyph) {
 	std::uint32_t point = CodePoint(glyph);
 	if (InRanges(point, kZeroWidth, std::size(kZeroWidth)))
@@ -126,6 +131,64 @@ std::string Lowercase(std::string text) {
 			c = static_cast<char>(c + ('a' - 'A'));
 	}
 	return text;
+}
+
+std::string Folded(const std::string& text) {
+	std::string folded;
+	auto gap = [&folded] {
+		if (not folded.empty() and folded.back() != ' ')
+			folded += ' ';
+	};
+	for (const auto& glyph : SplitGlyphs(text)) {
+		std::uint32_t point = CodePoint(glyph);
+		if (point == '\'' or point == '`' or point == 0x2018 or point == 0x2019)
+			continue;
+		// AniList writes the x of HUNTER x HUNTER as a multiplication sign.
+		if (point == 0xD7) {
+			gap();
+			folded += "x ";
+		} else if ((point < 0x80 and not std::isalnum(static_cast<unsigned char>(point))) or
+		           InRanges(point, kPunctuation, std::size(kPunctuation))) {
+			gap();
+		} else {
+			folded += Lowercase(glyph);
+		}
+	}
+	if (not folded.empty() and folded.back() == ' ')
+		folded.pop_back();
+	return folded;
+}
+
+std::vector<std::string> Words(const std::string& text) {
+	std::vector<std::string> words;
+	std::string folded = Folded(text);
+	size_t start = 0;
+	while (start < folded.size()) {
+		size_t end = std::min(folded.find(' ', start), folded.size());
+		words.push_back(folded.substr(start, end - start));
+		start = end + 1;
+	}
+	return words;
+}
+
+int EditDistance(const std::string& a, const std::string& b) {
+	auto from = SplitGlyphs(a);
+	auto to = SplitGlyphs(b);
+	std::vector<std::vector<int>> cost(from.size() + 1, std::vector<int>(to.size() + 1));
+	for (size_t i = 0; i <= from.size(); ++i)
+		cost[i][0] = static_cast<int>(i);
+	for (size_t j = 0; j <= to.size(); ++j)
+		cost[0][j] = static_cast<int>(j);
+	for (size_t i = 1; i <= from.size(); ++i) {
+		for (size_t j = 1; j <= to.size(); ++j) {
+			int swap = from[i - 1] == to[j - 1] ? 0 : 1;
+			cost[i][j] =
+			    std::min({cost[i - 1][j] + 1, cost[i][j - 1] + 1, cost[i - 1][j - 1] + swap});
+			if (i > 1 and j > 1 and from[i - 1] == to[j - 2] and from[i - 2] == to[j - 1])
+				cost[i][j] = std::min(cost[i][j], cost[i - 2][j - 2] + 1);
+		}
+	}
+	return cost[from.size()][to.size()];
 }
 
 }  // namespace catalist::utf8

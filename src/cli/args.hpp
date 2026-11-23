@@ -10,9 +10,8 @@
 
 // The command-line syntax, after the POSIX Utility Syntax Guidelines: options
 // are one letter (`-a`, grouped as `-am`, with a value as `-n 3` or `-n3`) or
-// a long name (`--all`, `--sort=title`, `--sort title`); they come before
-// the operands; `--` ends them, and so does the first operand. A lone `-` is
-// an operand. Pure text in, options and operands out.
+// a long name (`--all`, `--sort=title`, `--sort title`). `--` ends them. A
+// lone `-` is an operand. Pure text in, options and operands out.
 namespace catalist::args {
 
 // An option a command takes. `letter` is 0 or `name` is empty when it has
@@ -37,8 +36,11 @@ struct Parsed {
 
 // Fails, saying which argument is wrong, on an option not in `options`, a
 // missing value, or a value given to a flag.
+enum class Placement { kBeforeOperands, kAnywhere };
+
 [[nodiscard]] Result<Parsed> Parse(const std::vector<std::string>& arguments,
-                                   const std::vector<Option>& options);
+                                   const std::vector<Option>& options,
+                                   Placement placement = Placement::kBeforeOperands);
 
 // A count: digits only, and few enough of them to fit an int.
 [[nodiscard]] std::optional<int> ParseCount(const std::string& text);

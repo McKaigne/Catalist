@@ -60,13 +60,13 @@ extern const std::vector<WatchStatus> kStatuses;
 
 // ---- Naming titles ----
 
-// The operands of a command that takes one text (ls, search and add) as
-// that text: the words with a space between them, so a title of several
-// words needs no quotes. Empty without operands. Nothing, after the usage
-// error (exit code 2), on a later word that looks like an option: options
-// come before the text.
-[[nodiscard]] std::optional<std::string> ReadText(const Command& cmd, const args::Parsed& line,
-                                                  CliContext& ctx);
+// The operands of a command that takes one text (ls, search and add), with a
+// space between them. Empty without operands.
+[[nodiscard]] std::string ReadText(const args::Parsed& line);
+
+// The titles named by words: a comma ends a name, and a ref or a word the
+// shell kept whole (it holds a space) is a name of its own.
+[[nodiscard]] std::vector<std::string> NamesIn(const std::vector<std::string>& words);
 
 // -a and -m: the one list a command is kept to, or both.
 [[nodiscard]] std::optional<MediaType> OnlyType(const args::Parsed& line);
@@ -77,6 +77,10 @@ struct Naming {
 	std::optional<MediaType> only;
 	bool all = false;
 	bool ask = false;
+	// Among several matches at a terminal, the only one in these is taken.
+	std::vector<WatchStatus> prefer{};
+	// With no name at a terminal, the titles to choose from.
+	std::vector<WatchStatus> pick_from{};
 };
 
 // The options of every command that takes REFs: -a, -m and --all first.
@@ -89,8 +93,11 @@ struct RefRequest {
 	std::optional<int> stop;
 };
 
-// Reads the REF operands.
+// Reads the titles named by the operands.
 [[nodiscard]] RefRequest ReadRefs(const Command& cmd, const args::Parsed& line, CliContext& ctx);
+// The same, from some of them.
+[[nodiscard]] RefRequest ReadRefsIn(const Command& cmd, const args::Parsed& line, CliContext& ctx,
+                                    const std::vector<std::string>& words);
 
 // Asks which of the numbered choices was meant; nothing when the answer is
 // empty or not one of them.

@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <filesystem>
+#include <format>
 #include <string>
 #include <vector>
 
@@ -8,6 +9,7 @@
 #include "support/cli_fixture.hpp"
 
 using catalist::MediaType;
+using catalist::WatchStatus;
 using catalist::test::CliFixture;
 using catalist::test::Has;
 using catalist::test::kAnimeXml;
@@ -59,15 +61,15 @@ TEST_CASE_FIXTURE(CliFixture, "cli help lists the commands, and each command has
 	CHECK(Run({"help", "show"}) == 0);
 	CHECK(Has(out, "Usage: catalist show [-am] [--all] REF...\n"));
 	CHECK(Run({"help", "+"}) == 0);
-	CHECK(Has(out, "Usage: catalist + [-amq] [--all] [-n N] REF...\nAlso:  catalist inc\n"));
+	CHECK(Has(out, "Usage: catalist + [-amq] [--all] [-n N] [REF...]\nAlso:  catalist inc\n"));
 	CHECK(Run({"-", "--help"}) == 0);
-	CHECK(Has(out, "Usage: catalist - [-amq] [--all] [-n N] REF...\nAlso:  catalist dec\n"));
+	CHECK(Has(out, "Usage: catalist - [-amq] [--all] [-n N] [REF...]\nAlso:  catalist dec\n"));
 	CHECK(Run({"help", "set"}) == 0);
 	CHECK(Has(out, "Usage: catalist set [-amq] [--all] REF FIELD=VALUE...\n"));
 	CHECK(Run({"help", "done"}) == 0);
-	CHECK(Has(out, "Usage: catalist done [-amq] [--all] [--score=N] REF...\n"));
+	CHECK(Has(out, "Usage: catalist done [-amq] [--all] [--score=N] [REF...]\n"));
 	CHECK(Run({"help", "hold"}) == 0);
-	CHECK(Has(out, "Usage: catalist hold [-amq] [--all] REF...\n"));
+	CHECK(Has(out, "Usage: catalist hold [-amq] [--all] [REF...]\n"));
 	CHECK(Run({"help", "undo"}) == 0);
 	CHECK(Has(out, "Usage: catalist undo [-fq] [-n N]\n"));
 	CHECK(Run({"help", "add"}) == 0);
@@ -164,7 +166,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli stops quietly when nothing reads its output a
 	Seed();
 	out_closed = true;
 	for (const auto& args :
-	     {std::vector<std::string>{"ls"}, {"ls", "-q"}, {"show", "taxi", "berserk"}, {"help"}}) {
+	     {std::vector<std::string>{"ls"}, {"ls", "-q"}, {"show", "taxi,", "berserk"}, {"help"}}) {
 		CHECK(Run(args) == 0);
 		CHECK(out.empty());
 		CHECK(err.empty());
@@ -187,14 +189,81 @@ TEST_CASE_FIXTURE(CliFixture, "cli says which title it could not find, and shows
 	CHECK(Run({"show", "-m", "a:2"}) == 1);
 	CHECK(err.find("error: no title in your manga list has the ref a:2\n") == 0);
 	// One REF that fails stops them all.
-	CHECK(Run({"show", "taxi", "naruto"}) == 1);
+	CHECK(Run({"show", "taxi,", "naruto"}) == 1);
 	CHECK(out.empty());
-	// An option after the first title is read as a title.
-	CHECK(Run({"show", "taxi", "--all"}) == 1);
+	CHECK(Run({"show", "frieren", "--all"}) == 0);
+	CHECK(Has(out, "\nm:2\t"));
+}
+
+TEST_CASE_FIXTURE(CliFixture, "cli suggests the closest title and changes nothing") {
+	Seed();
+	CHECK(Run({"+", "freiren"}) == 1);
 	CHECK(err ==
-	      "error: nothing in your lists matches '--all'\n"
-	      "Options go before the first operand.\n"
-	      "See what is there with: catalist ls\n");
+	      "error: nothing in your lists matches 'freiren'\n"
+	      "Did you mean Sousou no Frieren?\n");
+	CHECK(Run({"+", "taxo"}) == 1);
+	CHECK(Has(err, "Did you mean Odd Taxi?\n"));
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 5);
+	CHECK(Steps().empty());
+}
+
+TEST_CASE_FIXTURE(CliFixture, "cli takes the one in-progress match, only at a terminal") {
+	Seed();
+	REQUIRE(Run({"resume", "m:2"}) == 0);
+	CHECK(Run({"+", "frieren"}, "unused\n") == 0);
+	CHECK(SavedTitle(MediaType::kManga, "Sousou no Frieren").progress == 1);
+	CHECK(Run({"+", "frieren"}) == 1);
+	CHECK(Has(err, "matches 2 titles"));
+	// rewatch prefers what it can start: the completed one.
+	CHECK(Run({"rewatch", "frieren"}, "unused\n") == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").status == WatchStatus::kRewatching);
+}
+
+TEST_CASE_FIXTURE(CliFixture, "cli offers titles when none is named, at a terminal only") {
+	Seed();
+	CHECK(Run({"+"}, "1\n") == 0);
+	CHECK(Has(err, "   1  Berserk   manga  364/?\n   2  Odd Taxi  anime  5/13\n"));
+	CHECK(Has(err, "Which one? [1-2, Enter to cancel]: "));
+	CHECK(Run({"+"}) == 2);
+	CHECK(Has(err, "error: name a title"));
+
+	CHECK(Run({"rewatch"}, "1\n") == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").status == WatchStatus::kRewatching);
+	CHECK(Run({"resume"}, "1\n") == 1);
+	CHECK(Has(err, "error: no title to choose from; name one\n"));
+	CHECK(Run({"rm"}, "1\n") == 2);
+	CHECK(Run({"show"}, "1\n") == 2);
+	CHECK(Run({"+"}, "\n") == 1);
+	CHECK(Has(err, "Cancelled.\n"));
+}
+
+TEST_CASE_FIXTURE(CliFixture, "cli offers only the 20 latest titles") {
+	std::string xml = "<myanimelist>";
+	for (int i = 1; i <= 25; ++i)
+		xml += std::format(
+		    "<anime><series_animedb_id>{0}</series_animedb_id><series_title>Show {0}"
+		    "</series_title><my_status>Watching</my_status></anime>",
+		    i);
+	Put("many.xml", xml + "</myanimelist>");
+	REQUIRE(Run({"import", "many.xml"}) == 0);
+	CHECK(Run({"+"}, "\n") == 1);
+	CHECK(Has(err, "Which one? [1-20, Enter to cancel]: "));
+	CHECK(Has(err, "  and 5 more: name one to reach it\n"));
+}
+
+TEST_CASE_FIXTURE(CliFixture, "cli names several titles with commas") {
+	Seed();
+	CHECK(Run({"+", "odd", "taxi,", "berserk"}) == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 6);
+	CHECK(SavedTitle(MediaType::kManga, "Berserk").progress == 365);
+	CHECK(Run({"+", "taxi", "-n", "2"}) == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 8);
+	CHECK(Run({"set", "odd", "taxi,", "berserk", "score=3"}) == 0);
+	CHECK(SavedTitle(MediaType::kManga, "Berserk").score == 3);
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").score == 3);
+	CHECK(Run({"+", ","}) == 2);
+	CHECK(Run({"+", "!!"}) == 2);
+	CHECK(Has(err, "punctuation alone is not a title"));
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli asks which title was meant, or lists them into a pipe") {
@@ -215,8 +284,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli asks which title was meant, or lists them int
 	CHECK(Run({"show", "frieren"}, "2\n") == 0);
 	CHECK(err ==
 	      "'frieren' matches 2 titles:\n"
-	      "   1  a:1  Sousou no Frieren\n"
-	      "   2  m:2  Sousou no Frieren\n"
+	      "   1  Sousou no Frieren  anime  28/28\n"
+	      "   2  Sousou no Frieren  manga  0/?\n"
 	      "Which one? [1-2, Enter to cancel]: ");
 	CHECK(out.find("m:2\t") == 0);
 	for (const char* answer : {"\n", "7\n", "both\n"}) {
@@ -255,7 +324,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli says when a command changed nothing, and reco
 TEST_CASE_FIXTURE(CliFixture, "cli stops quietly when nobody reads what a change printed") {
 	Seed();
 	out_closed = true;
-	CHECK(Run({"+", "--all", "frieren", "taxi"}) == 0);
+	CHECK(Run({"+", "--all", "frieren,", "taxi"}) == 0);
 	CHECK(err.empty());
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 6);
 	CHECK(Run({"undo"}) == 0);

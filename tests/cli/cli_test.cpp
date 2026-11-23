@@ -46,7 +46,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli help lists the commands, and each command has
 	    out,
 	    "  -s STATUS         only watching, completed, on-hold, dropped, planned, rewatching, or a,b\n"));
 	CHECK(
-	    Has(out, "      --sort=KEY    new, updated, score, progress, date, status or title\n"));
+	    Has(out, "      --sort=KEY    updated, score, progress, date, status or title\n"));
 	CHECK(out.rfind("  -h, --help        show this help\n") + 35 == out.size());
 	CHECK(err.empty());
 	std::string from_help = out;
@@ -282,9 +282,12 @@ TEST_CASE_FIXTURE(CliFixture, "cli alone at a terminal lists what is being watch
 	CHECK(Has(out, "Odd Taxi"));
 	CHECK(Has(out, "Berserk"));
 	CHECK_FALSE(Has(out, "Frieren"));
-	// Odd Taxi Has new episodes out, so it comes first.
-	CHECK(out.find("Odd Taxi") < out.find("Berserk"));
 	CHECK(err.empty());
+	// The title changed last comes first.
+	CHECK(out.find("Berserk") < out.find("Odd Taxi"));
+	CHECK(Run({"+", "-q", "taxi"}) == 0);
+	CHECK(Run({}, "", 100) == 0);
+	CHECK(out.find("Odd Taxi") < out.find("Berserk"));
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli without a command says how to give one, with exit code 2") {

@@ -11,7 +11,6 @@
 namespace catalist {
 
 enum class SortKey {
-	kNew,  // most new releases first, then the latest change
 	kUpdated,
 	kScore,
 	kStatus,
@@ -20,8 +19,8 @@ enum class SortKey {
 	kDate
 };
 
-// Each key has a natural order: new releases, last change, score, progress
-// and date from high to low, title and status from first to last.
+// Each key has a natural order: last change, score, progress and date from
+// high to low, title and status from first to last.
 // `reverse` flips it. Titles that compare equal keep their order.
 void SortEntries(std::vector<Entry>& entries, SortKey key, bool reverse);
 

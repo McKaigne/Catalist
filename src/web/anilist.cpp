@@ -26,23 +26,13 @@ std::string JsonString(const std::string& text) {
 	return quoted + "\"";
 }
 
-// AniList's statuses: FINISHED, RELEASING, NOT_YET_RELEASED, CANCELLED and
-// HIATUS.
 Details DetailsOf(const json::Value& media, MediaType type) {
-	std::string status = media["status"].AsString().value_or("");
 	Details found;
 	found.name = media["title"]["romaji"].AsString().value_or("");
 	found.facts.anilist_id = media["id"].AsCount();
 	found.facts.mal_id = media["idMal"].AsCount();
 	found.facts.total_units = media[type == MediaType::kAnime ? "episodes" : "chapters"].AsCount();
 	found.facts.total_volumes = media["volumes"].AsCount();
-	found.ongoing = status == "RELEASING" or status == "HIATUS";
-	if (status == "FINISHED" or status == "CANCELLED")
-		found.facts.released = found.facts.total_units;
-	// An airing anime: every episode before the next one to air is out.
-	int next_episode = media["nextAiringEpisode"]["episode"].AsCount();
-	if (found.ongoing and next_episode > 1)
-		found.facts.released = next_episode - 1;
 	return found;
 }
 
@@ -69,8 +59,7 @@ std::string LookupRequest(const TitleRef& wanted) {
 	// AniList's own id when known; a MyAnimeList id goes in idMal.
 	bool own = wanted.anilist_id > 0;
 	return std::format(R"({{"query":"query($id:Int,$type:MediaType){{Media({}:$id,type:$type){{)"
-	                   R"(id idMal title{{romaji}} episodes chapters volumes status )"
-	                   R"(nextAiringEpisode{{episode}}}}}}",)"
+	                   R"(id idMal title{{romaji}} episodes chapters volumes}}}}",)"
 	                   R"("variables":{{"id":{},"type":"{}"}}}})",
 	                   own ? "id" : "idMal", own ? wanted.anilist_id : wanted.mal_id,
 	                   TypeName(wanted.type));

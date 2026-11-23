@@ -18,10 +18,6 @@ int SumOf(const std::vector<Entry>& list, int Entry::* count) {
 // back to the title so the order never depends on how the list was stored.
 bool ComesBefore(const Entry& a, const Entry& b, SortKey key) {
 	switch (key) {
-		case SortKey::kNew:
-			if (NewReleases(a) != NewReleases(b))
-				return NewReleases(a) > NewReleases(b);
-			[[fallthrough]];
 		case SortKey::kUpdated:
 			if (a.updated_at != b.updated_at)
 				return a.updated_at > b.updated_at;

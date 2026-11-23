@@ -45,7 +45,6 @@ std::vector<Entry> SampleList(MediaType type) {
 	            .Id(2)
 	            .MalId(44265)
 	            .Title("Odd Taxi")
-	            .Released(13)
 	            .Status(WatchStatus::kWatching)
 	            .Score(8)
 	            .Progress(5)

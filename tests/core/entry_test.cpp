@@ -254,33 +254,16 @@ TEST_CASE("mergeImported refreshes totals and fills only what the user left empt
 	CHECK(FormatDate(merged.finish_date) == "2020-02-02");
 }
 
-TEST_CASE("newReleases counts only for titles being followed") {
-	auto with_status = [](WatchStatus status) {
-		return MakeEntry().Status(status).Progress(5).Released(12).Build();
-	};
-	CHECK(catalist::NewReleases(with_status(WatchStatus::kWatching)) == 7);
-	CHECK(catalist::NewReleases(with_status(WatchStatus::kOnHold)) == 7);
-	CHECK(catalist::NewReleases(with_status(WatchStatus::kCompleted)) == 0);
-	CHECK(catalist::NewReleases(with_status(WatchStatus::kDropped)) == 0);
-	CHECK(catalist::NewReleases(with_status(WatchStatus::kPlanToWatch)) == 0);
-	// Ahead of what is known to be out, or nothing known: no new releases.
-	CHECK(catalist::NewReleases(MakeEntry().Progress(20).Released(12).Build()) == 0);
-	CHECK(catalist::NewReleases(MakeEntry().Progress(3).Build()) == 0);
-}
-
 TEST_CASE("applyWebFacts keeps known values the check did not have") {
 	auto tracked =
-	    MakeEntry().TotalUnits(24).TotalVolumes(3).Released(10).UpdatedAt("2026-01-01").Build();
-	auto refreshed = catalist::ApplyWebFacts(tracked, {0, 0, 0}, kToday);
+	    MakeEntry().TotalUnits(24).TotalVolumes(3).UpdatedAt("2026-01-01").Build();
+	auto refreshed = catalist::ApplyWebFacts(tracked, {});
 	CHECK(refreshed.total_units == 24);
 	CHECK(refreshed.total_volumes == 3);
-	CHECK(refreshed.released == 10);
-	CHECK(FormatDate(refreshed.checked_at) == "2026-10-20");
 	CHECK(FormatDate(refreshed.updated_at) == "2026-01-01");
-	auto finished = catalist::ApplyWebFacts(tracked, {26, 4, 26}, kToday);
+	auto finished = catalist::ApplyWebFacts(tracked, {26, 4});
 	CHECK(finished.total_units == 26);
 	CHECK(finished.total_volumes == 4);
-	CHECK(finished.released == 26);
 }
 
 TEST_CASE("setStatus fills the dates like the cycle and ignores no change") {
@@ -332,7 +315,7 @@ TEST_CASE("applyWebFacts fills in an id the entry lacked, never replaces one") {
 	catalist::WebFacts facts;
 	facts.anilist_id = 30002;
 	facts.mal_id = 999;
-	auto filled = catalist::ApplyWebFacts(known, facts, kToday);
+	auto filled = catalist::ApplyWebFacts(known, facts);
 	CHECK(filled.anilist_id == 30002);
 	CHECK(filled.mal_id == 2);
 }

@@ -49,8 +49,6 @@ TEST_CASE("sortEntries puts each key in its natural order and reverse flips it")
 	CHECK(TitlesSortedBy(anime, SortKey::kDate, false) ==
 	      TitleList{"A Very Long Title That Will Definitely Be Truncated", "Sousou no Frieren",
 	                "Odd Taxi", "Ghost, \"in\" the Shell"});
-	// Most new episodes first: Odd Taxi has 8 out that are not seen.
-	CHECK(TitlesSortedBy(anime, SortKey::kNew, false).front() == "Odd Taxi");
 }
 
 TEST_CASE("sortEntries breaks ties by title") {

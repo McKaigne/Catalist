@@ -92,8 +92,7 @@ struct CliFixture : catalist::test::TempDirFixture {
 		                .Status(WatchStatus::kCompleted)
 		                .Score(10)
 		                .Progress(28)
-		                .TotalUnits(28)
-		                .CheckedAt("2026-10-20"));
+		                .TotalUnits(28));
 		db.AddEntry(MakeEntry()
 		                .Title("Odd Taxi")
 		                .MalId(44265)
@@ -102,9 +101,7 @@ struct CliFixture : catalist::test::TempDirFixture {
 		                .Score(8)
 		                .Progress(5)
 		                .TotalUnits(13)
-		                .Released(13)
-		                .StartDate("2026-10-01")
-		                .CheckedAt("2026-10-20"));
+		                .StartDate("2026-10-01"));
 		db.AddEntry(MakeEntry()
 		                .Title("Berserk")
 		                .Type(MediaType::kManga)
@@ -112,15 +109,13 @@ struct CliFixture : catalist::test::TempDirFixture {
 		                .AnilistId(30002)
 		                .Status(WatchStatus::kWatching)
 		                .Progress(364)
-		                .StartDate("2019-05-01")
-		                .CheckedAt("2026-10-20"));
+		                .StartDate("2019-05-01"));
 		db.AddEntry(MakeEntry()
 		                .Title("Sousou no Frieren")
 		                .Type(MediaType::kManga)
 		                .MalId(126287)
 		                .AnilistId(118586)
-		                .Status(WatchStatus::kPlanToWatch)
-		                .CheckedAt("2026-10-20"));
+		                .Status(WatchStatus::kPlanToWatch));
 		REQUIRE(db.SaveAll());
 	}
 

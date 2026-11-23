@@ -121,14 +121,6 @@ public:
 		built_.updated_at = RequireDate(value);
 		return *this;
 	}
-	EntryBuilder& Released(int value) {
-		built_.released = value;
-		return *this;
-	}
-	EntryBuilder& CheckedAt(const std::string& value) {
-		built_.checked_at = RequireDate(value);
-		return *this;
-	}
 
 	[[nodiscard]] Entry Build() const { return built_; }
 	operator Entry() const { return built_; }

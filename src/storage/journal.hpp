@@ -14,8 +14,8 @@
 //
 // Only what the person sets counts as a change: the title, the status, the
 // score, the progress, the total, the volumes, the rewatch count and the
-// two dates. What a web check fills in (ids, released episodes, the volume
-// total) is never recorded and never undone.
+// two dates. What a web check fills in (ids, the volume total) is never
+// recorded and never undone.
 namespace catalist::journal {
 
 // One entry before and after a command. No `before`: the command added it.

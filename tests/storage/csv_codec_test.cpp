@@ -31,9 +31,9 @@ TEST_CASE("csvCodec decodeEntry rejects short rows and non numeric ids") {
 	CHECK_FALSE(csv_codec::DecodeEntry({"1", "2", "3"}));
 	CHECK_FALSE(csv_codec::DecodeEntry({"1", "0", "anime", "T", "Watching"}));
 	CHECK_FALSE(csv_codec::DecodeEntry(
-	    csv_codec::SplitFields("x,0,anime,T,Watching,0,0,0,0,0,0,,,,0,,0")));
+	    csv_codec::SplitFields("x,0,anime,T,Watching,0,0,0,0,0,0,,,,0")));
 	CHECK_FALSE(csv_codec::DecodeEntry(
-	    csv_codec::SplitFields("1,0,book,T,Watching,0,0,0,0,0,0,,,,0,,0")));
+	    csv_codec::SplitFields("1,0,book,T,Watching,0,0,0,0,0,0,,,,0")));
 }
 
 TEST_CASE("csvCodec writes a row and reads it back") {
@@ -51,13 +51,11 @@ TEST_CASE("csvCodec writes a row and reads it back") {
 	                               .TotalVolumes(2)
 	                               .Rewatched(1)
 	                               .StartDate("2024-01-02")
-	                               .UpdatedAt("2024-02-03")
-	                               .Released(7)
-	                               .CheckedAt("2024-02-05");
+	                               .UpdatedAt("2024-02-03");
 	auto row = csv_codec::EncodeEntry(original);
 	CHECK(row ==
 	      "5,6,manga,\"R, \"\"t\"\"\",On-Hold,4,3,9,1,2,1,2024-01-02,,"
-	      "2024-02-03,7,2024-02-05,306");
+	      "2024-02-03,306");
 	auto copy = csv_codec::DecodeEntry(csv_codec::SplitFields(row));
 	REQUIRE(copy.has_value());
 	CHECK(*copy == original);
@@ -67,7 +65,7 @@ TEST_CASE("csvCodec writes a row and reads it back") {
 
 TEST_CASE("csvCodec reads an unknown status as planned instead of dropping the row") {
 	auto decoded = csv_codec::DecodeEntry(
-	    csv_codec::SplitFields("1,0,manga,Edited by hand,Someday,0,0,0,0,0,0,,,,0,,0"));
+	    csv_codec::SplitFields("1,0,manga,Edited by hand,Someday,0,0,0,0,0,0,,,,0"));
 	REQUIRE(decoded.has_value());
 	CHECK(decoded->status == WatchStatus::kPlanToWatch);
 	CHECK(decoded->type == MediaType::kManga);

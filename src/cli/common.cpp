@@ -104,15 +104,13 @@ std::vector<std::string> RowOf(const Entry& e) {
 	        std::to_string(e.rewatched),
 	        output::DateText(e.start_date),
 	        output::DateText(e.finish_date),
-	        output::DateText(e.updated_at),
-	        std::to_string(NewReleases(e))};
+	        output::DateText(e.updated_at)};
 }
 
 std::vector<std::string> FullRowOf(const Entry& e) {
 	auto row = RowOf(e);
-	for (const auto& more : {std::to_string(e.total_volumes), std::to_string(e.released),
-	                         std::to_string(e.anilist_id), std::to_string(e.mal_id),
-	                         output::OrDash(PageOf(e))})
+	for (const auto& more : {std::to_string(e.total_volumes), std::to_string(e.anilist_id),
+	                         std::to_string(e.mal_id), output::OrDash(PageOf(e))})
 		row.push_back(more);
 	return row;
 }

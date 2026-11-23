@@ -69,8 +69,8 @@ void PrintHelp(CliContext& ctx) {
 	    "  catalist set a:12 score=9\n"
 	    "  catalist undo\n"
 	    "\nOptions come before the titles. Run 'catalist help COMMAND' for the options of\n"
-	    "a command. 'catalist' alone lists what you are watching or reading, new\n"
-	    "episodes and chapters first. Your lists are kept in\n{}.\n",
+	    "a command. 'catalist' alone lists what you are watching or reading, the\n"
+	    "latest changed first. Your lists are kept in\n{}.\n",
 	    ctx.db.data_dir().string());
 }
 
@@ -99,10 +99,10 @@ int CommandError(CliContext& ctx, const std::string& what) {
 }
 
 // The program alone at a terminal: what is being watched or read, the
-// titles with new episodes or chapters first.
+// title changed last first.
 int RunDefault(CliContext& ctx) {
 	return cli::PrintList(ctx, {.statuses = {WatchStatus::kWatching, WatchStatus::kRewatching},
-	                            .key = SortKey::kNew});
+	                            .key = SortKey::kUpdated});
 }
 
 }  // namespace

@@ -23,7 +23,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli add finds the title on AniList and adds it") 
 	CHECK(added.anilist_id == 171018);
 	CHECK(added.mal_id == 57334);
 	CHECK(added.total_units == 12);
-	CHECK(added.released == 12);
 	CHECK(added.progress == 0);
 	CHECK(catalist::FormatDate(added.start_date) == "2026-10-20");
 	CHECK(catalist::FormatDate(added.updated_at) == "2026-10-20");

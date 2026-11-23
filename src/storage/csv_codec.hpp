@@ -20,8 +20,8 @@ namespace catalist::csv_codec {
 // type in its place.
 [[nodiscard]] std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields);
 // id, mal_id, type, title, status, score, progress, total_units, volumes,
-// total_volumes, rewatched, start_date, finish_date, updated_at, released,
-// checked_at and anilist_id; no line end.
+// total_volumes, rewatched, start_date, finish_date, updated_at and
+// anilist_id; no line end.
 [[nodiscard]] std::string EncodeEntry(const Entry& row);
 
 }  // namespace catalist::csv_codec

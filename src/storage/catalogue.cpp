@@ -12,7 +12,7 @@ namespace {
 const char* kStoreFile = "catalist.db";
 
 // PRAGMA user_version of a store this code set up; 0 is a new, empty file.
-constexpr int kStoreVersion = 1;
+constexpr int kStoreVersion = 2;
 
 // `entry` holds both lists. `tx` and `change` are the undo history: one
 // row per command that changed something, and under it each entry before
@@ -24,9 +24,7 @@ const char* kSchema =
     " progress INTEGER NOT NULL, total_units INTEGER NOT NULL,"
     " volumes INTEGER NOT NULL, total_volumes INTEGER NOT NULL,"
     " rewatched INTEGER NOT NULL, start_date TEXT, finish_date TEXT,"
-    " updated_at TEXT, released INTEGER NOT NULL, checked_at TEXT,"
-    " anilist_id INTEGER NOT NULL, PRIMARY KEY (type, id));"
-    "CREATE TABLE setting (key TEXT PRIMARY KEY, value TEXT NOT NULL);"
+    " updated_at TEXT, anilist_id INTEGER NOT NULL, PRIMARY KEY (type, id));"
     "CREATE TABLE tx ("
     " id INTEGER PRIMARY KEY AUTOINCREMENT, stamp TEXT NOT NULL,"
     " label TEXT NOT NULL, undone INTEGER NOT NULL DEFAULT 0);"
@@ -34,14 +32,27 @@ const char* kSchema =
     " tx INTEGER NOT NULL, seq INTEGER NOT NULL, type TEXT NOT NULL,"
     " id INTEGER NOT NULL, before TEXT NOT NULL, after TEXT NOT NULL,"
     " PRIMARY KEY (tx, seq));"
-    "PRAGMA user_version = 1;";
+    "PRAGMA user_version = 2;";
+
+// From version 1, which also kept what the sites were to be told and how far
+// each title had aired. Its undo rows have those columns too, so they go.
+const char* kUpgradeFromV1 =
+    "ALTER TABLE entry DROP COLUMN released;"
+    "ALTER TABLE entry DROP COLUMN checked_at;"
+    "DROP TABLE IF EXISTS entry_id;"
+    "DROP TABLE IF EXISTS outbox;"
+    "DROP TABLE IF EXISTS track_option;"
+    "DROP TABLE IF EXISTS setting;"
+    "DELETE FROM change;"
+    "DELETE FROM tx;"
+    "PRAGMA user_version = 2;";
 
 const char* kSelectEntries =
     "SELECT type, id, mal_id, title, status, score, progress, total_units,"
     " volumes, total_volumes, rewatched, start_date, finish_date, updated_at,"
-    " released, checked_at, anilist_id FROM entry ORDER BY type, id";
+    " anilist_id FROM entry ORDER BY type, id";
 const char* kInsertEntry =
-    "INSERT OR REPLACE INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    "INSERT OR REPLACE INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 int StoreVersion(const store::Database& db) {
 	auto version = db.Prepare("PRAGMA user_version");
@@ -63,8 +74,6 @@ store::Statement& BindEntry(store::Statement& into, const Entry& row) {
 	BindDate(into, row.start_date);
 	BindDate(into, row.finish_date);
 	BindDate(into, row.updated_at);
-	into.Bind(row.released);
-	BindDate(into, row.checked_at);
 	return into.Bind(row.anilist_id);
 }
 
@@ -85,9 +94,7 @@ Entry ReadEntry(const store::Statement& from) {
 	row.start_date = IsoDate::Parse(from.TextAt(11));
 	row.finish_date = IsoDate::Parse(from.TextAt(12));
 	row.updated_at = IsoDate::Parse(from.TextAt(13));
-	row.released = number(14);
-	row.checked_at = IsoDate::Parse(from.TextAt(15));
-	row.anilist_id = number(16);
+	row.anilist_id = number(14);
 	return row;
 }
 
@@ -227,8 +234,8 @@ Done Catalogue::OpenStore() {
 	return ready;
 }
 
-// A new file gets its tables, in one transaction: two programs starting at
-// the same moment cannot both set it up.
+// A new file gets its tables and an older one is brought up to date, in one
+// transaction: two programs starting at the same moment cannot both do it.
 Done Catalogue::SetUpStore() {
 	if (StoreVersion(db_) == kStoreVersion)
 		return Done{};
@@ -240,11 +247,11 @@ Done Catalogue::SetUpStore() {
 	int version = StoreVersion(db_);
 	if (version == kStoreVersion)
 		return Done{};
-	if (version != 0)
+	if (version != 0 and version != 1)
 		return std::unexpected(
 		    std::format("{} was written by a newer Catalist", StorePath().string()));
 
-	if (not db_.Run(kSchema))
+	if (not db_.Run(version == 0 ? kSchema : kUpgradeFromV1))
 		return std::unexpected(
 		    std::format("cannot set up {}: {}", StorePath().string(), db_.LastError()));
 	if (not setup.Commit())

@@ -95,11 +95,6 @@ std::optional<IsoDate> ListDate(const Entry& shown) {
 	return shown.start_date ? shown.start_date : shown.updated_at;
 }
 
-int NewReleases(const Entry& shown) {
-	bool following = shown.status == WatchStatus::kWatching or shown.status == WatchStatus::kOnHold;
-	return following ? std::max(0, shown.released - shown.progress) : 0;
-}
-
 }  // namespace catalist
 
 namespace catalist {
@@ -298,7 +293,7 @@ Entry MergeImported(Entry existing, const Entry& incoming) {
 	return existing;
 }
 
-Entry ApplyWebFacts(Entry target, const WebFacts& facts, const IsoDate& today) {
+Entry ApplyWebFacts(Entry target, const WebFacts& facts) {
 	if (target.anilist_id == 0)
 		target.anilist_id = facts.anilist_id;
 	if (target.mal_id == 0)
@@ -307,9 +302,6 @@ Entry ApplyWebFacts(Entry target, const WebFacts& facts, const IsoDate& today) {
 		target.total_units = facts.total_units;
 	if (facts.total_volumes > 0)
 		target.total_volumes = facts.total_volumes;
-	if (facts.released > 0)
-		target.released = facts.released;
-	target.checked_at = today;
 	return target;
 }
 

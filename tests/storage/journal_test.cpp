@@ -64,11 +64,9 @@ TEST_CASE("journal diff finds what was added, changed and removed, by id") {
 
 TEST_CASE("journal diff leaves out what only the web fills in") {
 	Entry checked = Taxi();
-	checked.released = 13;
 	checked.total_volumes = 4;
 	checked.anilist_id = 9;
 	checked.mal_id = 8;
-	checked.checked_at = RequireDate("2026-10-20");
 	checked.updated_at = RequireDate("2026-10-20");
 	CHECK(journal::Diff({Taxi()}, {checked}).empty());
 
@@ -127,9 +125,9 @@ TEST_CASE("journal changedFields names each field with its old and new value") {
 TEST_CASE("journal transition sets back only the fields the change set") {
 	Entry before = Taxi();
 	Entry after = WithProgress(Taxi(), 6);
-	// Since then the web found the releases and the person rated the title.
+	// Since then the web found the volumes and the person rated the title.
 	Entry now = after;
-	now.released = 13;
+	now.total_volumes = 13;
 	now.score = 9;
 
 	auto undone = journal::Transition({Frieren(), now}, after, before, false);
@@ -137,7 +135,7 @@ TEST_CASE("journal transition sets back only the fields the change set") {
 	REQUIRE(undone.value());
 	CHECK(undone.value()->progress == 5);
 	CHECK(undone.value()->score == 9);
-	CHECK(undone.value()->released == 13);
+	CHECK(undone.value()->total_volumes == 13);
 	CHECK(undone.value()->updated_at == RequireDate("2026-10-01"));
 
 	// Redo is the same step the other way.

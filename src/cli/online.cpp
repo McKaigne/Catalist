@@ -27,7 +27,7 @@ Result<Entry> LookedUp(CliContext& ctx, Entry blank, const anilist::Match& match
 	if (not details.has_value())
 		return std::unexpected(details.error());
 	blank.title = details.value().name.empty() ? match.name : details.value().name;
-	return ApplyWebFacts(blank, details.value().facts, ctx.Today());
+	return ApplyWebFacts(blank, details.value().facts);
 }
 
 // "28 episodes", or "? chapters" while the total is not known.

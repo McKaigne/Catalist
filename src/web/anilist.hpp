@@ -9,7 +9,7 @@
 #include "web/http.hpp"
 
 // AniList's public GraphQL API: the title search, and what is known about
-// one title (both ids, totals, how much is out). Neither needs an account,
+// one title (both ids and totals). Neither needs an account,
 // and AniList also knows every title's MyAnimeList id. The API takes only
 // POST requests.
 namespace catalist::anilist {
@@ -41,11 +41,8 @@ struct Match {
 // What AniList knows about one title.
 struct Details {
 	std::string name;
-	// The ids, totals and, once the title has ended, everything as released;
-	// for an anime still airing, the episodes aired so far.
+	// The ids and totals.
 	WebFacts facts;
-	// Still airing or publishing.
-	bool ongoing = false;
 };
 
 // The request bodies, and readers for their replies.

@@ -196,11 +196,9 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue saves both lists and reloads them")
 	                         .Progress(3)
 	                         .TotalUnits(12)
 	                         .Rewatched(2)
-	                         .Released(5)
 	                         .StartDate("2026-01-02")
 	                         .FinishDate("2026-02-03")
-	                         .UpdatedAt("2026-03-04")
-	                         .CheckedAt("2026-04-05"));
+	                         .UpdatedAt("2026-03-04"));
 	db.AddEntry(MakeEntry().Title("Paper").Type(MediaType::kManga).Volumes(3).TotalVolumes(9));
 	REQUIRE(db.SaveAll());
 	CHECK(std::filesystem::exists(TempDir() / "data/catalist.db"));
@@ -212,9 +210,9 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue saves both lists and reloads them")
 	REQUIRE(reloaded.LoadAll().value());
 	CHECK(csv_codec::EncodeEntry(*reloaded.GetById(MediaType::kAnime, id)) ==
 	      "1,7,anime,\"Kept, \"\"quoted\"\"\",On-Hold,6,3,12,0,0,2,2026-01-02,2026-02-03,"
-	      "2026-03-04,5,2026-04-05,70");
+	      "2026-03-04,70");
 	CHECK(csv_codec::EncodeEntry(reloaded.GetEntries(MediaType::kManga)[0]) ==
-	      "1,0,manga,Paper,Reading,0,0,0,3,9,0,,,,0,,0");
+	      "1,0,manga,Paper,Reading,0,0,0,3,9,0,,,,0");
 }
 
 TEST_CASE_FIXTURE(TempDirFixture, "catalogue writes only the rows it changed") {
@@ -349,8 +347,7 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue enters a save with a note in the un
 	// Nothing the person sets has changed: no step.
 	REQUIRE(db.SaveAll(NoteOf("nothing")));
 	auto taxi = *db.GetById(MediaType::kAnime, 2);
-	taxi.released = 13;
-	taxi.checked_at = catalist::test::RequireDate("2026-10-20");
+	taxi.total_volumes = 13;
 	REQUIRE(db.UpdateEntry(taxi));
 	REQUIRE(db.SaveAll(NoteOf("web")));
 	CHECK(db.History(0).value().size() == 2);
@@ -358,7 +355,7 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue enters a save with a note in the un
 	// The history is in the file: another program reads the same.
 	Catalogue other(TempDir() / "data");
 	REQUIRE(other.LoadAll().value());
-	CHECK(other.GetById(MediaType::kAnime, 2)->released == 13);
+	CHECK(other.GetById(MediaType::kAnime, 2)->total_volumes == 13);
 	CHECK(other.History(0).value().size() == 2);
 }
 
@@ -427,7 +424,7 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo keeps what the web filled in s
 	SeedForUndo(db);
 	Watch(db, 2, 6, NoteOf("+ taxi"));
 	auto taxi = *db.GetById(MediaType::kAnime, 2);
-	taxi.released = 13;
+	taxi.total_volumes = 13;
 	taxi.score = 9;
 	REQUIRE(db.UpdateEntry(taxi));
 	REQUIRE(db.SaveAll());
@@ -435,7 +432,7 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo keeps what the web filled in s
 	REQUIRE(db.Undo(1, false).has_value());
 	taxi = *db.GetById(MediaType::kAnime, 2);
 	CHECK(taxi.progress == 5);
-	CHECK(taxi.released == 13);
+	CHECK(taxi.total_volumes == 13);
 	CHECK(taxi.score == 9);
 }
 
@@ -548,7 +545,7 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue forgets what was undone when new wo
 	REQUIRE(db.Undo(1, false).has_value());
 	// A save outside the history leaves what can be redone.
 	auto frieren = *db.GetById(MediaType::kAnime, 1);
-	frieren.released = 28;
+	frieren.total_volumes = 28;
 	REQUIRE(db.UpdateEntry(frieren));
 	REQUIRE(db.SaveAll());
 	CHECK(db.History(0).value().size() == 2);
@@ -591,4 +588,76 @@ TEST_CASE("catalogue data dir: CATALIST_DATA_DIR, then XDG_DATA_HOME, then ~/.lo
 	Catalogue db("/data");
 	CHECK(db.data_dir() == "/data");
 	CHECK(db.StorePath() == "/data/catalist.db");
+}
+
+TEST_CASE_FIXTURE(TempDirFixture, "catalogue brings a version 1 file up to date, keeping its lists") {
+	std::filesystem::create_directories(TempDir() / "data");
+	{
+		catalist::store::Database raw;
+		REQUIRE(raw.Open(TempDir() / "data/catalist.db"));
+		REQUIRE(raw.Run(
+		    "CREATE TABLE entry (type TEXT NOT NULL, id INTEGER NOT NULL, mal_id INTEGER NOT NULL,"
+		    " title TEXT NOT NULL, status TEXT NOT NULL, score INTEGER NOT NULL,"
+		    " progress INTEGER NOT NULL, total_units INTEGER NOT NULL, volumes INTEGER NOT NULL,"
+		    " total_volumes INTEGER NOT NULL, rewatched INTEGER NOT NULL, start_date TEXT,"
+		    " finish_date TEXT, updated_at TEXT, released INTEGER NOT NULL, checked_at TEXT,"
+		    " anilist_id INTEGER NOT NULL, PRIMARY KEY (type, id));"
+		    "CREATE TABLE setting (key TEXT PRIMARY KEY, value TEXT NOT NULL);"
+		    "CREATE TABLE tx (id INTEGER PRIMARY KEY AUTOINCREMENT, stamp TEXT NOT NULL,"
+		    " label TEXT NOT NULL, undone INTEGER NOT NULL DEFAULT 0);"
+		    "CREATE TABLE change (tx INTEGER NOT NULL, seq INTEGER NOT NULL, type TEXT NOT NULL,"
+		    " id INTEGER NOT NULL, before TEXT NOT NULL, after TEXT NOT NULL,"
+		    " PRIMARY KEY (tx, seq));"
+		    "CREATE TABLE entry_id (type TEXT, id INTEGER, site TEXT, site_id INTEGER);"
+		    "CREATE TABLE outbox (seq INTEGER PRIMARY KEY);"
+		    "CREATE TABLE track_option (site TEXT);"
+		    "INSERT INTO entry VALUES ('anime', 3, 44265, 'Odd Taxi', 'watching', 8, 5, 13, 0, 0,"
+		    " 1, '2026-10-01', NULL, '2026-10-02', 13, '2026-10-03', 128547);"
+		    "INSERT INTO setting VALUES ('provider', 'kitsu');"
+		    "INSERT INTO tx (stamp, label) VALUES ('2026-10-02 10:00:00', 'import');"
+		    "INSERT INTO change VALUES (1, 0, 'anime', 3, '', 'old row');"
+		    "PRAGMA user_version = 1;"));
+	}
+	Catalogue db(TempDir() / "data");
+	REQUIRE(db.LoadAll().value());
+	auto taxi = db.GetById(MediaType::kAnime, 3);
+	REQUIRE(taxi.has_value());
+	CHECK(taxi->title == "Odd Taxi");
+	CHECK(taxi->mal_id == 44265);
+	CHECK(taxi->anilist_id == 128547);
+	CHECK(taxi->score == 8);
+	CHECK(taxi->progress == 5);
+	CHECK(taxi->total_units == 13);
+	CHECK(taxi->rewatched == 1);
+	CHECK(FormatDate(taxi->start_date) == "2026-10-01");
+	CHECK(FormatDate(taxi->updated_at) == "2026-10-02");
+	// The old undo rows have columns that are gone.
+	CHECK(db.History(0).value().empty());
+
+	catalist::store::Database raw;
+	REQUIRE(raw.Open(TempDir() / "data/catalist.db"));
+	auto version = raw.Prepare("PRAGMA user_version");
+	REQUIRE(version.Step());
+	CHECK(version.IntAt(0) == 2);
+	auto columns = raw.Prepare("SELECT COUNT(*) FROM pragma_table_info('entry')");
+	REQUIRE(columns.Step());
+	CHECK(columns.IntAt(0) == 15);
+	auto gone = raw.Prepare(
+	    "SELECT COUNT(*) FROM sqlite_master WHERE name IN"
+	    " ('setting', 'entry_id', 'outbox', 'track_option')");
+	REQUIRE(gone.Step());
+	CHECK(gone.IntAt(0) == 0);
+}
+
+TEST_CASE_FIXTURE(TempDirFixture, "catalogue refuses a file from a newer version") {
+	std::filesystem::create_directories(TempDir() / "data");
+	{
+		catalist::store::Database raw;
+		REQUIRE(raw.Open(TempDir() / "data/catalist.db"));
+		REQUIRE(raw.Run("PRAGMA user_version = 3;"));
+	}
+	Catalogue db(TempDir() / "data");
+	auto loaded = db.LoadAll();
+	REQUIRE_FALSE(loaded.has_value());
+	CHECK(loaded.error().find("was written by a newer Catalist") != std::string::npos);
 }

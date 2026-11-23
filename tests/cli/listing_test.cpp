@@ -15,10 +15,10 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls prints tab-separated lines into a pipe") {
 	CHECK(Run({"ls"}) == 0);
 	// In title order; nothing but the titles, and every field holds something.
 	CHECK(out ==
-	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t2019-05-01\t-\t-\t0\n"
-	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t8\n"
-	      "a:1\tanime\tSousou no Frieren\tcompleted\t10\t28\t28\t0\t0\t-\t-\t-\t0\n"
-	      "m:2\tmanga\tSousou no Frieren\tplanned\t0\t0\t0\t0\t0\t-\t-\t-\t0\n");
+	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t2019-05-01\t-\t-\n"
+	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\n"
+	      "a:1\tanime\tSousou no Frieren\tcompleted\t10\t28\t28\t0\t0\t-\t-\t-\n"
+	      "m:2\tmanga\tSousou no Frieren\tplanned\t0\t0\t0\t0\t0\t-\t-\t-\n");
 	CHECK(err.empty());
 
 	// Nothing listed: nothing printed, and that is not a failure.
@@ -88,8 +88,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls sorts by title, or by the key asked for") 
 	CHECK(out.find("m:1\na:1\na:2\n") == 0);
 	CHECK(Run({"ls", "-qr", "--sort=progress"}) == 0);
 	CHECK(out == "m:2\na:2\na:1\nm:1\n");
-	CHECK(Run({"ls", "-q", "--sort=new"}) == 0);
-	CHECK(out.find("a:2\n") == 0);
+	CHECK(Run({"ls", "--sort=new"}) == 2);
 	for (const char* key : {"updated", "date", "status"})
 		CHECK(Run({"ls", "-q", std::string("--sort=") + key}) == 0);
 
@@ -106,7 +105,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls keeps a tab or a quote in a title from bre
 	}
 	CHECK(Run({"ls"}) == 0);
 	CHECK(out ==
-	      "a:1\tanime\tTab here, \"quoted\"\twatching\t0\t0\t0\t0\t0\t2026-01-02\t-\t-\t0\n");
+	      "a:1\tanime\tTab here, \"quoted\"\twatching\t0\t0\t0\t0\t0\t2026-01-02\t-\t-\n");
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {
@@ -116,11 +115,11 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {
 	const std::string ten = "\U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04CE";
 	CHECK(Run({"ls"}, "", 100) == 0);
 	CHECK(out ==
-	      "REF  TITLE              STATUS        SCORE  PROGRESS  NEW\n"
+	      "REF  TITLE              STATUS        SCORE  PROGRESS\n"
 	      "m:1  Berserk            Reading       -      364/?\n"
 	      "a:2  Odd Taxi           Watching      " +
 	          eight +
-	          "  5/13      +8\n"
+	          "  5/13\n"
 	          "a:1  Sousou no Frieren  Completed     " +
 	          ten +
 	          "  28/28\n"
@@ -130,10 +129,10 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {
 	// A narrow terminal cuts the titles, not the other columns.
 	CHECK(Run({"ls", "-a"}, "", 40) == 0);
 	CHECK(out ==
-	      "REF  TITLE       STATUS     SCORE  PROGRESS  NEW\n"
+	      "REF  TITLE       STATUS     SCORE  PROGRESS\n"
 	      "a:2  Odd Taxi    Watching   " +
 	          eight +
-	          "  5/13      +8\n"
+	          "  5/13\n"
 	          "a:1  Sousou no…  Completed  " +
 	          ten + "  28/28\n");
 
@@ -147,14 +146,13 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {
 	CHECK(Run({"ls", "taxi"}, "", 100) == 0);
 	CHECK(Has(out, "\x1b[2mREF\x1b[0m  "));
 	CHECK(Has(out, "\x1b[36ma:2\x1b[0m  Odd Taxi  \x1b[32mWatching\x1b[0m  "));
-	CHECK(Has(out, "  \x1b[32m+8\x1b[0m\n"));
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli show prints a title's line into a pipe") {
 	Seed();
 	CHECK(Run({"show", "taxi"}) == 0);
 	CHECK(out ==
-	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t8\t0\t13\t128547\t"
+	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t0\t128547\t"
 	      "44265\thttps://anilist.co/anime/128547\n");
 	CHECK(err.empty());
 }
@@ -189,7 +187,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli show draws a card at a terminal") {
 	      "  Page         https://anilist.co/anime/128547\n"
 	      "  Status       Watching\n"
 	      "  Score        \U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04D2  8/10\n"
-	      "  Progress     5/13 episodes  (+8 new)\n"
+	      "  Progress     5/13 episodes\n"
 	      "  Rewatched    0\n"
 	      "  Started      2026-10-01\n"
 	      "  Finished     -\n"

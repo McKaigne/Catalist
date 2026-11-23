@@ -33,10 +33,6 @@ struct Entry {
 	std::optional<IsoDate> start_date;
 	std::optional<IsoDate> finish_date;
 	std::optional<IsoDate> updated_at;
-	// Episodes or chapters out so far, from the last web check (0: unknown),
-	// and when that check was.
-	int released = 0;
-	std::optional<IsoDate> checked_at;
 
 	bool operator==(const Entry&) const = default;
 };
@@ -64,10 +60,6 @@ std::string TypeToString(MediaType type);
 // The one date the list shows for an entry: when it was finished if it is
 // completed, else when it was started, else when it was last changed.
 [[nodiscard]] std::optional<IsoDate> ListDate(const Entry& shown);
-
-// Released episodes or chapters not yet watched or read, for titles being
-// followed (watching or on hold); 0 for everything else.
-[[nodiscard]] int NewReleases(const Entry& shown);
 
 }  // namespace catalist
 
@@ -119,16 +111,14 @@ enum class CountField { kProgress, kTotalUnits, kVolumes, kRewatched };
 struct WebFacts {
 	int total_units = 0;
 	int total_volumes = 0;
-	int released = 0;
 	int anilist_id = 0;
 	int mal_id = 0;
 };
 
-// Takes the totals and the released count from a web check, keeping the
-// known values where the check had none, fills in an id the entry lacked,
-// and stamps checked_at. The user's
-// own fields, updated_at included, are left alone.
-[[nodiscard]] Entry ApplyWebFacts(Entry target, const WebFacts& facts, const IsoDate& today);
+// Takes the totals from a web check, keeping the known values where the
+// check had none, and fills in an id the entry lacked. The user's own fields,
+// updated_at included, are left alone.
+[[nodiscard]] Entry ApplyWebFacts(Entry target, const WebFacts& facts);
 
 }  // namespace catalist
 

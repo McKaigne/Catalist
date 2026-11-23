@@ -34,7 +34,7 @@ int SaveFailed(CliContext& ctx);
 // new field goes at the end: scripts count on the order.
 [[nodiscard]] std::vector<std::string> RowOf(const Entry& e);
 // Everything about a title: the fields of RowOf, then total_volumes,
-// released, anilist_id, mal_id and its AniList page, as show prints it.
+// anilist_id, mal_id and its AniList page, as show prints it.
 [[nodiscard]] std::vector<std::string> FullRowOf(const Entry& e);
 // The terminal's colour for each status.
 [[nodiscard]] const char* StatusColor(WatchStatus status);

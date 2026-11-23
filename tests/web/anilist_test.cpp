@@ -10,13 +10,11 @@ using catalist::MediaType;
 
 namespace {
 
-// Real replies, shortened: Frieren (finished), One Piece (airing) and
-// Berserk (a manga still running).
+// Real replies, shortened: Frieren (finished) and Berserk (a manga still
+// running).
 const char* kFrieren =
     R"({"data":{"Media":{"title":{"romaji":"Sousou no Frieren"},"episodes":28,"chapters":null,"volumes":null,
   "status":"FINISHED","nextAiringEpisode":null}}})";
-const char* kOnePiece = R"({"data":{"Media":{"episodes":null,"chapters":null,"volumes":null,
-  "status":"RELEASING","nextAiringEpisode":{"episode":1181}}}})";
 const char* kBerserk = R"({"data":{"Media":{"episodes":null,"chapters":null,"volumes":null,
   "status":"RELEASING"}}})";
 
@@ -27,23 +25,12 @@ TEST_CASE("anilist reads a finished title and its totals") {
 	REQUIRE(found.has_value());
 	CHECK(found.value().name == "Sousou no Frieren");
 	CHECK(found.value().facts.total_units == 28);
-	CHECK(found.value().facts.released == 28);
-	CHECK_FALSE(found.value().ongoing);
-}
-
-TEST_CASE("anilist counts the aired episodes from the next one to air") {
-	auto found = anilist::ParseLookup(kOnePiece, MediaType::kAnime);
-	REQUIRE(found.has_value());
-	CHECK(found.value().ongoing);
-	CHECK(found.value().facts.total_units == 0);
-	CHECK(found.value().facts.released == 1180);
 }
 
 TEST_CASE("anilist leaves a running manga's chapters unknown") {
 	auto found = anilist::ParseLookup(kBerserk, MediaType::kManga);
 	REQUIRE(found.has_value());
-	CHECK(found.value().ongoing);
-	CHECK(found.value().facts.released == 0);
+	CHECK(found.value().facts.total_units == 0);
 	CHECK_FALSE(anilist::ParseLookup(R"({"data":{"Media":null}})", MediaType::kManga).has_value());
 	CHECK_FALSE(anilist::ParseLookup("<html>", MediaType::kManga).has_value());
 }

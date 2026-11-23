@@ -19,30 +19,28 @@ const char* const kRowFormat =
     "title is one line of fields with a tab between them, so cut, awk and\n"
     "read can take them apart:\n"
     "  ref type title status score progress total volumes rewatched\n"
-    "  started finished updated new\n"
+    "  started finished updated\n"
     "A date that is not set is '-' there, and a total that is not known is 0.\n";
 
 // The list as a table for a terminal.
 std::string ListTable(const CliContext& ctx, const std::vector<Entry>& shown) {
-	std::vector<output::TableColumn> columns = {{"REF"},   {"TITLE", false, true}, {"STATUS"},
-	                                            {"SCORE"}, {"PROGRESS"},           {"NEW"}};
+	std::vector<output::TableColumn> columns = {
+	    {"REF"}, {"TITLE", false, true}, {"STATUS"}, {"SCORE"}, {"PROGRESS"}};
 	std::vector<std::vector<output::Styled>> rows;
 	for (const auto& e : shown) {
-		int fresh = NewReleases(e);
 		rows.push_back({{refs::Of(e), output::kCyan},
 		                {e.title},
 		                {StatusToString(e.status, e.type), StatusColor(e.status)},
 		                {output::Stars(e.score), output::kYellow},
-		                {OutOf(e.progress, e.total_units)},
-		                {fresh > 0 ? std::format("+{}", fresh) : "", output::kGreen}});
+		                {OutOf(e.progress, e.total_units)}});
 	}
 	return output::Table(columns, rows, ctx.columns, ctx.color);
 }
 
 const std::map<std::string, SortKey> kSortKeys = {
-    {"new", SortKey::kNew},       {"updated", SortKey::kUpdated}, {"score", SortKey::kScore},
-    {"status", SortKey::kStatus}, {"title", SortKey::kTitle},     {"progress", SortKey::kProgress},
-    {"date", SortKey::kDate}};
+    {"updated", SortKey::kUpdated}, {"score", SortKey::kScore},
+    {"status", SortKey::kStatus},   {"title", SortKey::kTitle},
+    {"progress", SortKey::kProgress}, {"date", SortKey::kDate}};
 
 int RunList(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	auto text = ReadText(self, line, ctx);
@@ -84,7 +82,6 @@ void PrintCard(CliContext& ctx, const Entry& e) {
 	};
 	auto id_text = [](int id) { return id > 0 ? std::to_string(id) : std::string("-"); };
 	std::string page = PageOf(e);
-	int fresh = NewReleases(e);
 
 	ctx.out << Paint(e.title, output::kBold, ctx.color) << "\n";
 	row("Ref", Paint(refs::Of(e), output::kCyan, ctx.color));
@@ -99,9 +96,7 @@ void PrintCard(CliContext& ctx, const Entry& e) {
 	        ? std::format("{}  {}/10", Paint(output::Stars(e.score), output::kYellow, ctx.color),
 	                      e.score)
 	        : "-");
-	row("Progress",
-	    std::format("{} {}", OutOf(e.progress, e.total_units), UnitName(e.type)) +
-	        (fresh > 0 ? Paint(std::format("  (+{} new)", fresh), output::kGreen, ctx.color) : ""));
+	row("Progress", std::format("{} {}", OutOf(e.progress, e.total_units), UnitName(e.type)));
 	if (e.type == MediaType::kManga)
 		row("Volumes", OutOf(e.volumes, e.total_volumes));
 	row(e.type == MediaType::kAnime ? "Rewatched" : "Reread", std::to_string(e.rewatched));
@@ -247,7 +242,7 @@ std::vector<Command> ListingCommands() {
 	                 {'m', "", "", "list manga only"},
 	                 {'s', "", "STATUS",
 	                  "only watching, completed, on-hold, dropped, planned, rewatching, or a,b"},
-	                 {0, "sort", "KEY", "new, updated, score, progress, date, status or title"},
+	                 {0, "sort", "KEY", "updated, score, progress, date, status or title"},
 	                 {'r', "", "", "reverse the order"},
 	                 {'q', "", "", "print the refs and nothing else"}},
 	     .operands = "[QUERY...]",
@@ -255,8 +250,8 @@ std::vector<Command> ListingCommands() {
 	    {.name = "show",
 	     .summary = "Show titles in full",
 	     .details = "A REF is a ref such as a:12, or part of a title. Into a pipe a title is\n"
-	                "one line: the fields of ls, then total_volumes, released, anilist_id,\n"
-	                "mal_id and url, the title's page on AniList.\n",
+	                "one line: the fields of ls, then total_volumes, anilist_id, mal_id and\n"
+	                "url, the title's page on AniList.\n",
 	     .options = WithRefOptions({}),
 	     .operands = "REF...",
 	     .run = RunShow},

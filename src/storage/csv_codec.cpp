@@ -6,7 +6,7 @@ namespace catalist::csv_codec {
 
 namespace {
 
-constexpr size_t kCatalogFields = 17;
+constexpr size_t kCatalogFields = 15;
 
 std::optional<int> ParseInt(const std::string& field) {
 	try {
@@ -95,19 +95,16 @@ std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields) {
 	decoded.start_date = IsoDate::Parse(fields[11]);
 	decoded.finish_date = IsoDate::Parse(fields[12]);
 	decoded.updated_at = IsoDate::Parse(fields[13]);
-	decoded.released = IntOrZero(fields[14]);
-	decoded.checked_at = IsoDate::Parse(fields[15]);
-	decoded.anilist_id = IntOrZero(fields[16]);
+	decoded.anilist_id = IntOrZero(fields[14]);
 	return decoded;
 }
 
 std::string EncodeEntry(const Entry& e) {
 	return std::format(
-	    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, e.mal_id, TypeKey(e.type),
+	    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, e.mal_id, TypeKey(e.type),
 	    EscapeField(e.title), EscapeField(StatusToString(e.status, e.type)), e.score, e.progress,
 	    e.total_units, e.volumes, e.total_volumes, e.rewatched, FormatDate(e.start_date),
-	    FormatDate(e.finish_date), FormatDate(e.updated_at), e.released, FormatDate(e.checked_at),
-	    e.anilist_id);
+	    FormatDate(e.finish_date), FormatDate(e.updated_at), e.anilist_id);
 }
 
 }  // namespace catalist::csv_codec

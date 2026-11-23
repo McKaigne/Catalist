@@ -109,6 +109,30 @@ TEST_CASE_FIXTURE(CliFixture, "cli importing again keeps what the user changed")
 	CHECK(Steps().size() == 1);
 }
 
+TEST_CASE_FIXTURE(CliFixture, "cli importing twice adds a title without a site id once") {
+	Put("lists/noid.xml",
+	    "<myanimelist><anime><series_title><![CDATA[Home Video]]></series_title>"
+	    "<my_watched_episodes>3</my_watched_episodes><my_status>Watching</my_status></anime>"
+	    "</myanimelist>");
+	CHECK(Run({"import", "lists/noid.xml"}) == 0);
+	CHECK(Run({"import", "lists/noid.xml"}) == 0);
+	CHECK(err ==
+	      "lists/noid.xml: 1 title, 0 added, 1 in your lists already\n"
+	      "Nothing changed.\n");
+	REQUIRE(Saved(MediaType::kAnime).size() == 1);
+	CHECK(Saved(MediaType::kAnime)[0].progress == 3);
+
+	// A stored title with a site id is another title, whatever its name.
+	Put("lists/taxi.xml", kAnimeXml);
+	CHECK(Run({"import", "lists/taxi.xml"}) == 0);
+	Put("lists/same_name.xml",
+	    "<myanimelist><anime><series_title><![CDATA[odd taxi]]></series_title>"
+	    "<my_status>Watching</my_status></anime></myanimelist>");
+	CHECK(Run({"import", "lists/same_name.xml"}) == 0);
+	CHECK(Has(err, "1 title, 1 added"));
+	CHECK(Saved(MediaType::kAnime).size() == 4);
+}
+
 TEST_CASE_FIXTURE(CliFixture, "cli import changes nothing when any file is bad") {
 	Put("lists/anime.xml", kAnimeXml);
 	Put("lists/empty.xml", "<myanimelist></myanimelist>");

@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "core/entry.hpp"
+#include "core/text.hpp"
 
 namespace catalist {
 
@@ -165,6 +166,20 @@ int Catalogue::AddEntry(Entry added) {
 	added.id = NextId(list);
 	list.push_back(std::move(added));
 	return list.back().id;
+}
+
+int Catalogue::ImportEntry(Entry incoming) {
+	if (incoming.anilist_id > 0 or incoming.mal_id > 0)
+		return AddEntry(std::move(incoming));
+	std::string name = utf8::Lowercase(incoming.title);
+	for (auto& existing : GetList(incoming.type)) {
+		bool has_id = existing.anilist_id > 0 or existing.mal_id > 0;
+		if (has_id or utf8::Lowercase(existing.title) != name)
+			continue;
+		existing = MergeImported(existing, incoming);
+		return existing.id;
+	}
+	return AddEntry(std::move(incoming));
 }
 
 const std::vector<Entry>& Catalogue::GetEntries(MediaType type) const {

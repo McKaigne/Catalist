@@ -65,8 +65,12 @@ public:
 
 	// Adds a title under a fresh id and returns it. A title that shares its
 	// AniList or MyAnimeList id with a stored one is merged into that entry
-	// instead (see MergeImported), so importing a list twice adds nothing.
+	// instead (see MergeImported).
 	int AddEntry(Entry added);
+	// AddEntry for a title read from a file, so importing a list twice adds
+	// nothing: one without a site id is known by its name alone, and merges
+	// into a stored title of that name that has no site id either.
+	int ImportEntry(Entry incoming);
 	[[nodiscard]] const std::vector<Entry>& GetEntries(MediaType type) const;
 	[[nodiscard]] std::optional<Entry> GetById(MediaType type, int id) const;
 	// The entry with any of the ids (0 matches nothing).

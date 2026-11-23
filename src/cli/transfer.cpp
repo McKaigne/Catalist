@@ -49,7 +49,7 @@ int AddSources(CliContext& ctx, const args::Parsed& line, const std::vector<Sour
 		size_t added = 0;
 		for (const auto& title : each.titles) {
 			size_t before = ctx.db.GetEntries(title.type).size();
-			ctx.db.AddEntry(title);
+			ctx.db.ImportEntry(title);
 			added += ctx.db.GetEntries(title.type).size() - before;
 		}
 		if (not line.Has("q"))

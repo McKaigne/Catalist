@@ -1,7 +1,6 @@
 #ifndef CATALIST_CLI_ARGS_HPP_
 #define CATALIST_CLI_ARGS_HPP_
 
-#include <iosfwd>
 #include <map>
 #include <optional>
 #include <string>
@@ -11,7 +10,7 @@
 
 // The command-line syntax, after the POSIX Utility Syntax Guidelines: options
 // are one letter (`-a`, grouped as `-am`, with a value as `-n 3` or `-n3`) or
-// a long name (`--json`, `--sort=title`, `--sort title`); they come before
+// a long name (`--all`, `--sort=title`, `--sort title`); they come before
 // the operands; `--` ends them, and so does the first operand. A lone `-` is
 // an operand. Pure text in, options and operands out.
 namespace catalist::args {
@@ -23,13 +22,7 @@ struct Option {
 	std::string name;
 	std::string value;
 	std::string help;
-	// The values there are to choose from, when they are only a few: the
-	// shell completes them. The command checks what it is given.
-	std::vector<std::string> choices{};
 };
-
-// How the option is written: "--sort", or "-n" when it has no long name.
-[[nodiscard]] std::string Spelled(const Option& taken);
 
 struct Parsed {
 	// By the option's long name, or its letter when it has none. A flag's
@@ -47,23 +40,8 @@ struct Parsed {
 [[nodiscard]] Result<Parsed> Parse(const std::vector<std::string>& arguments,
                                    const std::vector<Option>& options);
 
-// The operands with each `-` replaced by the lines of `in` (blank lines are
-// skipped), for commands that take their operands from a pipe.
-[[nodiscard]] std::vector<std::string> WithLinesFor(const std::vector<std::string>& operands,
-                                                    std::istream& in);
-
-// How many single-character edits turn one word into the other.
-[[nodiscard]] size_t EditDistance(const std::string& from, const std::string& to);
-
-// The known word a typo was probably meant to be: at most two edits away.
-[[nodiscard]] std::optional<std::string> ClosestTo(const std::string& typed,
-                                                   const std::vector<std::string>& known);
-
 // A count: digits only, and few enough of them to fit an int.
 [[nodiscard]] std::optional<int> ParseCount(const std::string& text);
-
-// A positive site id: digits only, above 0, fitting an int.
-[[nodiscard]] std::optional<int> ParseId(const std::string& text);
 
 }  // namespace catalist::args
 

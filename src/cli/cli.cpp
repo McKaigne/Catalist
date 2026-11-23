@@ -9,7 +9,6 @@ namespace catalist {
 
 namespace {
 
-using cli::DidYouMean;
 using cli::UsageError;
 
 const Command* FindCommand(const std::string& name) {
@@ -19,18 +18,6 @@ const Command* FindCommand(const std::string& name) {
 			return &each;
 	}
 	return nullptr;
-}
-
-// What a mistyped command may have been meant to be.
-std::vector<std::string> CommandNames() {
-	std::vector<std::string> names;
-	for (const auto& each : Commands()) {
-		if (each.hidden)
-			continue;
-		names.push_back(each.name);
-		names.insert(names.end(), each.aliases.begin(), each.aliases.end());
-	}
-	return names;
 }
 
 // "-s STATUS", "    --sort=KEY", "-h, --help".
@@ -70,8 +57,7 @@ void PrintHelp(CliContext& ctx) {
 	    "Usage: catalist [OPTION...] COMMAND [ARG...]\n\nCommands:\n",
 	    kVersionString);
 	for (const auto& each : Commands())
-		if (not each.hidden)
-			ctx.out << std::format("  {:<12}{}\n", each.name, each.summary);
+		ctx.out << std::format("  {:<12}{}\n", each.name, each.summary);
 	ctx.out << "\nOptions, before the command:\n";
 	for (const auto& each : GlobalOptions())
 		ctx.out << std::format("  {:<18}{}\n", OptionLabel(each), each.help);
@@ -100,8 +86,7 @@ int RunHelp(const Command& self, const args::Parsed& line, CliContext& ctx) {
 		PrintCommandHelp(ctx, *asked);
 		return 0;
 	}
-	return UsageError(ctx, self,
-	                  std::format("no command '{}'{}", name, DidYouMean(name, CommandNames())));
+	return UsageError(ctx, self, std::format("no command '{}'", name));
 }
 
 // A command line wrong before its command: no command, or one not known.
@@ -120,30 +105,6 @@ int RunDefault(CliContext& ctx) {
 	                            .key = SortKey::kNew});
 }
 
-// What the options before the command ask for: colours, and tables into a
-// pipe. False on a WHEN that is not one.
-bool ApplyGlobals(CliContext& ctx, const args::Parsed& line) {
-	std::string when = line.Has("color") ? line.Get("color") : "auto";
-	if (when == "always")
-		ctx.color = true;
-	else if (when == "never")
-		ctx.color = false;
-	else if (when != "auto")
-		return false;
-	// A table into a pipe is as wide as the shell says, and has no colours
-	// unless they are asked for.
-	if (line.Has("table") and ctx.columns == 0)
-		ctx.columns = ctx.table_width;
-	if (line.Has("offline"))
-		ctx.offline = true;
-	return true;
-}
-
-int UnknownCommand(CliContext& ctx, const std::string& first) {
-	return CommandError(
-	    ctx, std::format("unknown command '{}'{}", first, DidYouMean(first, CommandNames())));
-}
-
 }  // namespace
 
 // The commands in the order the help lists them, each group from its file
@@ -151,32 +112,22 @@ int UnknownCommand(CliContext& ctx, const std::string& first) {
 const std::vector<Command>& Commands() {
 	static const std::vector<Command> kAll = [] {
 		std::vector<Command> table;
-		for (const auto& group :
-		     {cli::ListingCommands(), cli::TrackingCommands(), cli::OnlineCommands(),
-		      cli::AccountCommands(), cli::SyncCommands(), cli::TrackCommands(),
-		      cli::TransferCommands(), cli::HistoryCommands(), cli::SetupCommands()})
+		for (const auto& group : {cli::ListingCommands(), cli::TrackingCommands(),
+		                          cli::OnlineCommands(), cli::TransferCommands(),
+		                          cli::HistoryCommands()})
 			table.insert(table.end(), group.begin(), group.end());
 		table.push_back({.name = "help",
 		                 .summary = "Show help for a command",
 		                 .operands = "[COMMAND]",
-		                 .run = RunHelp,
-		                 .completes = OperandKind::kCommands});
+		                 .run = RunHelp});
 		return table;
 	}();
 	return kAll;
 }
 
 const std::vector<args::Option>& GlobalOptions() {
-	static const std::vector<args::Option> kAll = {
-	    {0,
-	     "color",
-	     "WHEN",
-	     "colours: auto (at a terminal), always or never",
-	     {"auto", "always", "never"}},
-	    {'t', "table", "", "draw tables into a pipe as well ($COLUMNS wide)"},
-	    {0, "offline", "", "keep what the sites are to be told until 'sync'"},
-	    {'V', "version", "", "print the version"},
-	    {'h', "help", "", "show the commands"}};
+	static const std::vector<args::Option> kAll = {{'V', "version", "", "print the version"},
+	                                               {'h', "help", "", "show the commands"}};
 	return kAll;
 }
 
@@ -213,9 +164,6 @@ int RunCli(const std::vector<std::string>& args, CliContext& ctx) {
 	if (not program.has_value())
 		return CommandError(ctx, program.error());
 	const args::Parsed& before = program.value();
-	if (not ApplyGlobals(ctx, before))
-		return CommandError(
-		    ctx, std::format("--color '{}' is not auto, always or never", before.Get("color")));
 	if (before.Has("version") or before.Has("v")) {
 		ctx.out << "Catalist v" << kVersionString << "\n";
 		return 0;
@@ -230,13 +178,12 @@ int RunCli(const std::vector<std::string>& args, CliContext& ctx) {
 	const std::string& first = before.operands[0];
 	const Command* cmd = FindCommand(first);
 	if (not cmd)
-		return UnknownCommand(ctx, first);
+		return CommandError(ctx, std::format("unknown command '{}'", first));
 	std::vector<args::Option> options = cmd->options;
 	options.push_back(HelpOption());
 	auto line = args::Parse({before.operands.begin() + 1, before.operands.end()}, options);
-	// The scripts' own commands say nothing, whatever they are given.
 	if (not line.has_value())
-		return cmd->hidden ? 0 : UsageError(ctx, *cmd, line.error());
+		return UsageError(ctx, *cmd, line.error());
 	if (line.value().Has("help")) {
 		PrintCommandHelp(ctx, *cmd);
 		return 0;

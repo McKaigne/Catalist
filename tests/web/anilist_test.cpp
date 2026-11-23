@@ -59,8 +59,7 @@ TEST_CASE("anilist asks by its own id when known, else by the MyAnimeList id") {
 
 	catalist::test::FakeWeb web;
 	// Without an id there is nothing to ask.
-	anilist::Tracker site(web.Link());
-	CHECK_FALSE(site.LookUp(catalist::Entry{}).has_value());
+	CHECK_FALSE(anilist::LookUp(web.Link(), catalist::Entry{}).has_value());
 	CHECK(web.sent.empty());
 }
 
@@ -97,53 +96,4 @@ TEST_CASE("anilist search keeps titles MyAnimeList does not list") {
 	CHECK(found.value()[1].mal_id == 0);
 	CHECK(found.value()[1].year.empty());
 	CHECK(found.value()[1].score == 0.0);
-}
-
-TEST_CASE("anilist looks up many titles in one request, by either id") {
-	auto request = anilist::BatchRequest(MediaType::kAnime, {154587, 128547}, false);
-	CHECK(request.find("media(id_in:$ids") != std::string::npos);
-	CHECK(request.find(R"("ids":[154587,128547],"type":"ANIME")") != std::string::npos);
-	CHECK(catalist::json::Parse(request).has_value());
-	CHECK(anilist::BatchRequest(MediaType::kManga, {2}, true).find("idMal_in:$ids") !=
-	      std::string::npos);
-
-	catalist::test::FakeWeb web;
-	web.Respond(R"("ids":[154587,128547],"type":"ANIME")",
-	            R"({"data":{"Page":{"media":[
-	            {"id":128547,"idMal":44265,"episodes":13,"status":"FINISHED"},
-	            {"id":154587,"idMal":52991,"episodes":28,"status":"FINISHED"}]}}})");
-	web.Respond(R"("ids":[2],"type":"MANGA")",
-	            R"({"data":{"Page":{"media":[{"id":30002,"idMal":2,"status":"RELEASING"}]}}})");
-	int pauses = 0;
-	auto net = web.Link();
-	net.pause = [&pauses] { ++pauses; };
-	anilist::Tracker site(net);
-	std::vector<catalist::Entry> titles = {
-	    catalist::test::MakeEntry().AnilistId(154587),
-	    catalist::test::MakeEntry().Type(MediaType::kManga).MalId(2),
-	    catalist::test::MakeEntry().AnilistId(128547),
-	    catalist::test::MakeEntry().Title("Home Video"),
-	};
-	auto found = site.LookUpMany(titles);
-	REQUIRE(found.size() == 4);
-	CHECK(found[0].value().facts.total_units == 28);
-	CHECK(found[1].value().facts.anilist_id == 30002);
-	CHECK(found[2].value().facts.total_units == 13);
-	CHECK(found[3].error().message == "the title has no id to look up");
-	// One request for each list, a pause between them.
-	CHECK(web.sent.size() == 2);
-	CHECK(pauses == 1);
-}
-
-TEST_CASE("anilist many-title lookups fail as one when AniList cannot be reached") {
-	catalist::test::FakeWeb web;
-	anilist::Tracker site(web.Link());
-	auto found =
-	    site.LookUpMany({catalist::test::MakeEntry().AnilistId(1),
-	                     catalist::test::MakeEntry().Type(MediaType::kManga).AnilistId(2)});
-	REQUIRE(found.size() == 2);
-	CHECK(found[0].error().message == "could not reach AniList");
-	CHECK(found[1].error().message == "could not reach AniList");
-	// Once it is not there, it is not asked again.
-	CHECK(web.sent.size() == 1);
 }

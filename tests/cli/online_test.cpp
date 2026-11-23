@@ -176,22 +176,9 @@ TEST_CASE_FIXTURE(CliFixture, "cli search prints the matches and which are yours
 	   "startDate":{"year":2026}}]}}})");
 	CHECK(Run({"search", "frieren"}) == 0);
 	CHECK(out ==
-	      "1\tanime\tSousou no Frieren\t2023\t28\t8.9\t154587\t52991\ta:1\t0\n"
-	      "2\tanime\tSousou no Frieren 2nd Season\t2026\t0\t0\t182255\t59978\t-\t0\n");
+	      "1\tanime\tSousou no Frieren\t2023\t28\t8.9\t154587\t52991\ta:1\n"
+	      "2\tanime\tSousou no Frieren 2nd Season\t2026\t0\t0\t182255\t59978\t-\n");
 	CHECK(err.empty());
-	CHECK(Run({"search", "--header", "frieren"}) == 0);
-	CHECK(
-	    out.find(
-	        "pick\ttype\ttitle\tyear\ttotal\tscore\tanilist_id\tmal_id\tref\tkitsu_id\n1\tanime\t") ==
-	    0);
-	CHECK(Run({"search", "--json", "frieren"}, "", 100) == 0);
-	CHECK(
-	    out ==
-	    "{\"pick\":1,\"type\":\"anime\",\"title\":\"Sousou no Frieren\",\"year\":2023,"
-	    "\"total\":28,\"score\":8.9,\"anilist_id\":154587,\"mal_id\":52991,\"ref\":\"a:1\",\"kitsu_id\":null}\n"
-	    "{\"pick\":2,\"type\":\"anime\",\"title\":\"Sousou no Frieren 2nd Season\","
-	    "\"year\":2026,\"total\":null,\"score\":null,\"anilist_id\":182255,\"mal_id\":59978,"
-	    "\"ref\":null,\"kitsu_id\":null}\n");
 
 	// A table at a terminal, with how to add one of them.
 	CHECK(Run({"search", "frieren"}, "", 100) == 0);
@@ -210,7 +197,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli search -m searches manga") {
 	web.Respond(R"("search":"berserk","type":"MANGA")", R"({"data":{"Page":{"media":[
 	  {"id":30002,"idMal":2,"title":{"romaji":"Berserk"},"startDate":{"year":1989}}]}}})");
 	CHECK(Run({"search", "-m", "berserk"}) == 0);
-	CHECK(out == "1\tmanga\tBerserk\t1989\t0\t0\t30002\t2\tm:1\t0\n");
+	CHECK(out == "1\tmanga\tBerserk\t1989\t0\t0\t30002\t2\tm:1\n");
 	CHECK(Run({"search", "-m", "berserk"}, "", 100) == 0);
 	CHECK(Has(out, "CHAPTERS"));
 	CHECK(err == "Add one with: catalist add -m --pick=N QUERY\n");
@@ -275,148 +262,4 @@ TEST_CASE_FIXTURE(CliFixture, "cli add takes a score and the progress made alrea
 	CHECK(err.find("error: --score '11' is not 0 to 10\n") == 0);
 	CHECK(Run({"add", "--no-lookup", "--progress=lots", "x"}) == 2);
 	CHECK(err.find("error: --progress 'lots' is not a count\n") == 0);
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli search and add ask the site --from names, or the provider") {
-	Seed();
-	const char* frieren = R"({"data":[{"id":"46474","type":"anime","attributes":{
-	  "canonicalTitle":"Sousou no Frieren","episodeCount":28,"startDate":"2023-09-29",
-	  "averageRating":"89.6","status":"finished"},
-	  "relationships":{"mappings":{"data":[{"type":"mappings","id":"7"}]}}}],
-	  "included":[{"id":"7","type":"mappings",
-	  "attributes":{"externalSite":"myanimelist/anime","externalId":"52991"}}]})";
-	web.Respond("GET https://kitsu.app/api/edge/anime?filter[text]=frieren", frieren);
-	CHECK(Run({"search", "--from", "kitsu", "frieren"}) == 0);
-	// Kitsu's mapping says which title of the lists it is.
-	CHECK(out == "1\tanime\tSousou no Frieren\t2023\t28\t9.0\t0\t52991\ta:1\t46474\n");
-	CHECK(web.posted.empty());
-
-	// With Kitsu as the provider, --from is not needed.
-	CHECK(Run({"provider", "kitsu"}) == 0);
-	CHECK(Run({"search", "frieren"}, "", 100) == 0);
-	CHECK(Has(err, "Add one with: catalist add --pick=N QUERY\n"));
-
-	// A title Kitsu does not have.
-	web.Respond("GET https://kitsu.app/api/edge/anime?filter[text]=zzz", R"({"data":[]})");
-	CHECK(Run({"add", "zzz"}) == 1);
-	CHECK(err == "error: Kitsu has no anime matching 'zzz'\n");
-
-	CHECK(Run({"search", "--from=shikimori", "frieren"}) == 2);
-	CHECK(err.find("error: --from 'shikimori' is not anilist, mal or kitsu\n") == 0);
-	CHECK(Run({"add", "--no-lookup", "--from=mal", "x"}) == 2);
-	CHECK(err.find("error: --from chooses among a site's matches; --no-lookup asks none\n") == 0);
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli add from Kitsu keeps every id Kitsu knows") {
-	Seed();
-	web.Respond("GET https://kitsu.app/api/edge/anime?filter[text]=dandadan",
-	            R"({"data":[{"id":"48291","type":"anime","attributes":{"canonicalTitle":"Dandadan"},
-	            "relationships":{"mappings":{"data":[]}}}]})");
-	web.Respond("GET https://kitsu.app/api/edge/anime/48291?include=mappings",
-	            R"({"data":{"id":"48291","type":"anime","attributes":{"canonicalTitle":"Dandadan",
-	            "episodeCount":12,"status":"finished"},
-	            "relationships":{"mappings":{"data":[{"type":"mappings","id":"1"},
-	            {"type":"mappings","id":"2"}]}}},"included":[
-	            {"id":"1","type":"mappings","attributes":{"externalSite":"myanimelist/anime","externalId":"57334"}},
-	            {"id":"2","type":"mappings","attributes":{"externalSite":"anilist/anime","externalId":"171018"}}]})");
-	CHECK(Run({"add", "--from", "kitsu", "dandadan"}) == 0);
-	auto added = SavedTitle(MediaType::kAnime, "Dandadan");
-	CHECK(added.kitsu_id == 48291);
-	CHECK(added.mal_id == 57334);
-	CHECK(added.anilist_id == 171018);
-	CHECK(added.total_units == 12);
-	// Known by any of its ids: AniList's answer finds it in the list.
-	CHECK(Run({"show", "--json", "dandadan"}) == 0);
-	CHECK(Has(out, "\"kitsu_id\":48291}"));
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli says what MyAnimeList needs before it can be asked") {
-	CHECK(Run({"search", "--from", "mal", "frieren"}) == 1);
-	CHECK(Has(err, "error: MyAnimeList answers only programs with a client id"));
-	CHECK(web.sent.empty());
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli refresh asks what is out of the titles being followed") {
-	Seed();
-	web.Respond(R"("ids":[128547],"type":"ANIME")",
-	            R"({"data":{"Page":{"media":[{"id":128547,"idMal":44265,"episodes":13,
-	            "status":"FINISHED"}]}}})");
-	web.Respond(R"("ids":[30002],"type":"MANGA")",
-	            R"({"data":{"Page":{"media":[{"id":30002,"idMal":2,"chapters":380,
-	            "volumes":42,"status":"FINISHED"}]}}})");
-	CHECK(Run({"refresh"}) == 0);
-	// Only a total a person sees is a change; what is out is kept quietly.
-	CHECK(out == "m:1\tBerserk\ttotal\t0\t380\n");
-	CHECK(err == "Checked 2 titles on AniList; 2 have new episodes or chapters out.\n");
-	// One request for each list.
-	CHECK(web.sent.size() == 2);
-	auto berserk = SavedTitle(MediaType::kManga, "Berserk");
-	CHECK(berserk.total_units == 380);
-	CHECK(berserk.released == 380);
-	CHECK(berserk.total_volumes == 42);
-	REQUIRE(Steps().size() == 1);
-	CHECK(Steps()[0].label == "refresh");
-
-	// Asked again, nothing a person sees changes: no step for undo.
-	CHECK(Run({"refresh", "-q"}) == 0);
-	CHECK(out.empty());
-	CHECK(err.empty());
-	CHECK(Steps().size() == 1);
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli refresh takes REFs, and says what it could not find") {
-	Seed();
-	CHECK(Run({"add", "-q", "--no-lookup", "--status=watching", "Home Video"}) == 0);
-	web.Respond(R"("ids":[154587],"type":"ANIME")",
-	            R"({"data":{"Page":{"media":[{"id":154587,"idMal":52991,"episodes":28,
-	            "status":"FINISHED"}]}}})");
-	CHECK(Run({"refresh", "a:1", "home"}) == 0);
-	CHECK(err ==
-	      "note: AniList could not find a:3.\n"
-	      "Checked 1 title on AniList.\n");
-
-	// Offline: nothing is saved.
-	CHECK(Run({"refresh", "taxi"}) == 1);
-	CHECK(err == "error: could not reach AniList; check the connection and try again\n");
-	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").checked_at ==
-	      catalist::test::RequireDate("2026-10-20"));
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli refresh with nothing followed says what to give it") {
-	CHECK(Run({"refresh"}) == 0);
-	CHECK(err == "Nothing is being watched or read: name the titles to refresh.\n");
-	CHECK(web.sent.empty());
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli searches by a site's id, and in your own list there") {
-	Seed();
-	web.Respond(R"({"id":171018,"type":"ANIME")", R"({"data":{"Media":{"id":171018,
-	  "idMal":57334,"title":{"romaji":"Dandadan"},"episodes":12,"status":"FINISHED"}}})");
-	// id:N is the title with that id on the site.
-	CHECK(Run({"search", "id:171018"}) == 0);
-	CHECK(out == "1\tanime\tDandadan\t-\t12\t0\t171018\t57334\t-\t0\n");
-	CHECK(Run({"add", "id:171018"}) == 0);
-	CHECK(SavedTitle(MediaType::kAnime, "Dandadan").anilist_id == 171018);
-	CHECK(Run({"search", "id:x"}) == 1);
-	CHECK(Has(err, "'id:x' is not id: and a number"));
-
-	// my: is your own list there, which wants a login.
-	CHECK(Run({"search", "my:taxi"}) == 1);
-	CHECK(Has(err, "my: searches your list on AniList: log in first"));
-	LogIn(catalist::Provider::kAniList);
-	web.Respond(R"("u":"Abel")", R"({"data":{"MediaListCollection":{"lists":[{"entries":[
-	  {"status":"CURRENT","score":8,"progress":5,"media":{"id":128547,"idMal":44265,
-	   "title":{"romaji":"Odd Taxi"},"episodes":13,"status":"FINISHED"}},
-	  {"status":"PLANNING","score":0,"progress":0,"media":{"id":1,"idMal":1,
-	   "title":{"romaji":"Cowboy Bebop"},"episodes":26,"status":"FINISHED"}}]}]}}})");
-	CHECK(Run({"search", "my:taxi"}) == 0);
-	CHECK(out == "1\tanime\tOdd Taxi\t-\t13\t0\t128547\t44265\ta:2\t0\n");
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli search id: accepts ids of seven or more digits") {
-	web.Respond(
-	    R"({"id":1234567,"type":"ANIME")",
-	    R"({"data":{"Media":{"id":1234567,"idMal":null,"title":{"romaji":"Future Show"}}}})");
-	CHECK(Run({"search", "id:1234567"}) == 0);
-	CHECK(out == "1\tanime\tFuture Show\t-\t0\t0\t1234567\t0\t-\t0\n");
 }

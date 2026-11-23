@@ -21,59 +21,11 @@ TEST_CASE("output keeps a tab or a line break out of a field") {
 	      "say \"hi\"\tback\\slash\t葬送\n");
 }
 
-TEST_CASE("output writes one line of comma-separated fields, quoted where it must be") {
-	CHECK(output::CsvLine(std::vector<std::string>{"a:1", "anime", "Odd Taxi"}) ==
-	      "a:1,anime,Odd Taxi\n");
-	CHECK(output::CsvLine(std::vector<std::string>{"a, b", "say \"hi\"", "c\nd", "葬送"}) ==
-	      "\"a, b\",\"say \"\"hi\"\"\",\"c\nd\",葬送\n");
-	CHECK(output::CsvLine(std::vector<std::string>{"", "x", ""}) == ",x,\n");
-	CHECK(output::CsvLine(std::vector<std::string>{}) == "\n");
-}
-
-TEST_CASE("output leaves a CSV field empty where JSON has null") {
-	CHECK(output::CsvLine(std::vector<output::Cell>{
-	          output::Text("Odd Taxi"), output::Number(5), output::Known(0), output::Known(13),
-	          output::Date(std::nullopt), output::Maybe("")}) == "Odd Taxi,5,,13,,\n");
-}
-
-TEST_CASE("output gives every kind of value a text for a line") {
-	CHECK(output::Text("Odd Taxi").text == "Odd Taxi");
-	CHECK(output::Number(13).text == "13");
-	CHECK(output::Known(13).text == "13");
-	CHECK(output::Known(0).text == "0");
-	CHECK(output::Date(catalist::test::RequireDate("2026-10-20")).text == "2026-10-20");
-	CHECK(output::Date(std::nullopt).text == "-");
-	CHECK(output::Maybe("https://anilist.co/anime/1").text == "https://anilist.co/anime/1");
-	CHECK(output::Maybe("").text == "-");
-	CHECK(output::TsvLine({output::Text("a:1"), output::Known(0), output::Date(std::nullopt)}) ==
-	      "a:1\t0\t-\n");
-}
-
-TEST_CASE("output escapes a JSON string") {
-	CHECK(output::JsonString("Odd Taxi") == "\"Odd Taxi\"");
-	CHECK(output::JsonString("") == "\"\"");
-	CHECK(output::JsonString("say \"hi\"") == "\"say \\\"hi\\\"\"");
-	CHECK(output::JsonString("back\\slash") == "\"back\\\\slash\"");
-	CHECK(output::JsonString("a\tb\nc\rd") == "\"a\\tb\\nc\\rd\"");
-	CHECK(output::JsonString(std::string("bell\x07nul\x00!", 10)) == "\"bell\\u0007nul\\u0000!\"");
-	CHECK(output::JsonString("\x1f") == "\"\\u001f\"");
-	// UTF-8 goes through as it is.
-	CHECK(output::JsonString("葬送のフリーレン") == "\"葬送のフリーレン\"");
-	CHECK(output::JsonString("a/b") == "\"a/b\"");
-}
-
-TEST_CASE("output writes one JSON object a line, numbers and nulls unquoted") {
-	CHECK(output::JsonLine(
-	          {"ref", "title", "score", "total", "started", "finished", "url"},
-	          {output::Text("a:1"), output::Text("Odd \"Taxi\""), output::Number(8),
-	           output::Known(0), output::Date(std::nullopt),
-	           output::Date(catalist::test::RequireDate("2026-10-20")), output::Maybe("")}) ==
-	      "{\"ref\":\"a:1\",\"title\":\"Odd \\\"Taxi\\\"\",\"score\":8,\"total\":null,"
-	      "\"started\":null,\"finished\":\"2026-10-20\",\"url\":null}\n");
-	CHECK(output::JsonLine({"total"}, {output::Known(13)}) == "{\"total\":13}\n");
-	// A title that is all digits is still a string.
-	CHECK(output::JsonLine({"title"}, {output::Text("86")}) == "{\"title\":\"86\"}\n");
-	CHECK(output::JsonLine({}, {}) == "{}\n");
+TEST_CASE("output writes a dash for a date or a text that is not there") {
+	CHECK(output::DateText(catalist::test::RequireDate("2026-10-20")) == "2026-10-20");
+	CHECK(output::DateText(std::nullopt) == "-");
+	CHECK(output::OrDash("https://anilist.co/anime/1") == "https://anilist.co/anime/1");
+	CHECK(output::OrDash("") == "-");
 }
 
 TEST_CASE("output paints only when colours are on") {

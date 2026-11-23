@@ -1,9 +1,7 @@
 #ifndef CATALIST_SYSTEM_HPP_
 #define CATALIST_SYSTEM_HPP_
 
-#include <cstddef>
 #include <filesystem>
-#include <iosfwd>
 #include <optional>
 #include <string>
 #include <vector>
@@ -38,20 +36,6 @@ namespace catalist {
 // (0 when it is not one).
 [[nodiscard]] bool IsInteractive();
 [[nodiscard]] int TerminalColumns();
-
-// Writes the file so that only its owner can read it (mode 600), making the
-// directories it is in; false when that failed.
-[[nodiscard]] bool WritePrivateFile(const std::filesystem::path& file, const std::string& text);
-
-// A line of `in`, not shown as it is typed when standard input is a
-// terminal (a password); nothing at the end of the input.
-[[nodiscard]] std::optional<std::string> ReadSecretLine(std::istream& in);
-
-// Letters, digits and -._~ from /dev/urandom: what OAuth's PKCE wants.
-[[nodiscard]] std::string RandomText(size_t length);
-
-// Seconds since 1970.
-[[nodiscard]] long long UnixNow();
 
 }  // namespace catalist
 

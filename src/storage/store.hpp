@@ -49,8 +49,6 @@ private:
 	bool failed_ = false;
 };
 
-enum class OpenMode { kReadWrite, kReadOnly };
-
 class Database {
 public:
 	Database() = default;
@@ -58,10 +56,9 @@ public:
 	Database(const Database&) = delete;
 	Database& operator=(const Database&) = delete;
 
-	// Opens the file, creating it unless read-only. Another program's write
-	// is waited for up to `busy_wait_ms`.
-	[[nodiscard]] bool Open(const std::filesystem::path& file, OpenMode mode = OpenMode::kReadWrite,
-	                        int busy_wait_ms = 5000);
+	// Opens the file, creating it if need be. Another program's write is
+	// waited for up to five seconds.
+	[[nodiscard]] bool Open(const std::filesystem::path& file);
 	void Close();
 	[[nodiscard]] bool IsOpen() const { return handle_ != nullptr; }
 

@@ -2,8 +2,6 @@
 
 #include <doctest/doctest.h>
 
-#include <sstream>
-
 namespace {
 
 using catalist::args::Option;
@@ -106,10 +104,7 @@ TEST_CASE("args says what is wrong with an option") {
 	CHECK(Parse({"-x"}, kOptions).error() == "unknown option '-x'");
 	CHECK(Parse({"-ax"}, kOptions).error() == "unknown option '-x'");
 	CHECK(Parse({"--frobnicate"}, kOptions).error() == "unknown option '--frobnicate'");
-	CHECK(Parse({"--jsno"}, kOptions).error() ==
-	      "unknown option '--jsno' (did you mean '--json'?)");
-	CHECK(Parse({"--forse=1"}, kOptions).error() ==
-	      "unknown option '--forse' (did you mean '--force'?)");
+	CHECK(Parse({"--forse=1"}, kOptions).error() == "unknown option '--forse'");
 	CHECK(Parse({"-n"}, kOptions).error() == "option '-n' needs a value (N)");
 	CHECK(Parse({"-an"}, kOptions).error() == "option '-n' needs a value (N)");
 	CHECK(Parse({"--sort"}, kOptions).error() == "option '--sort' needs a value (KEY)");
@@ -119,46 +114,10 @@ TEST_CASE("args says what is wrong with an option") {
 	CHECK(Parse({"--"}, kOptions).has_value());
 }
 
-TEST_CASE("args spells an option by its long name, or its letter") {
-	CHECK(catalist::args::Spelled(kOptions[0]) == "-a");
-	CHECK(catalist::args::Spelled(kOptions[3]) == "--force");
-	CHECK(catalist::args::Spelled(kOptions[4]) == "--sort");
-}
-
-TEST_CASE("args reads operands from the input where there is a -") {
-	std::istringstream in("a:1\n\n  \nSousou no Frieren\r\nm:2");
-	CHECK(catalist::args::WithLinesFor({"first", "-", "last"}, in) ==
-	      Words{"first", "a:1", "Sousou no Frieren", "m:2", "last"});
-	std::istringstream untouched("a:1\n");
-	CHECK(catalist::args::WithLinesFor({"first", "last"}, untouched) == Words{"first", "last"});
-	std::string left;
-	CHECK(std::getline(untouched, left));
-	CHECK(left == "a:1");
-	std::istringstream empty("");
-	CHECK(catalist::args::WithLinesFor({"-"}, empty).empty());
-}
-
-TEST_CASE("args suggests the closest known word for a typo") {
-	const Words known = {"ls", "show", "set", "search", "stats"};
-	CHECK(catalist::args::ClosestTo("lst", known) == "ls");
-	CHECK(catalist::args::ClosestTo("serach", known) == "search");
-	CHECK(catalist::args::ClosestTo("shwo", known) == "show");
-	CHECK_FALSE(catalist::args::ClosestTo("sync", known).has_value());
-	// Not when every letter would have to change.
-	CHECK_FALSE(catalist::args::ClosestTo("x", known).has_value());
-}
-
 TEST_CASE("args reads a count of digits only") {
 	CHECK(catalist::args::ParseCount("0") == 0);
 	CHECK(catalist::args::ParseCount("28") == 28);
 	CHECK(catalist::args::ParseCount("999999") == 999999);
 	for (const char* bad : {"", "-1", "+1", "1.5", "3x", " 3", "1234567"})
 		CHECK_FALSE(catalist::args::ParseCount(bad).has_value());
-}
-
-TEST_CASE("args reads a site id beyond six digits") {
-	CHECK(catalist::args::ParseId("1") == 1);
-	CHECK(catalist::args::ParseId("1234567") == 1234567);
-	for (const char* bad : {"", "0", "-1", "+1", "1x", "99999999999"})
-		CHECK_FALSE(catalist::args::ParseId(bad).has_value());
 }

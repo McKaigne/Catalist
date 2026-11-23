@@ -79,17 +79,16 @@ Database::~Database() {
 	Close();
 }
 
-bool Database::Open(const std::filesystem::path& file, OpenMode mode, int busy_wait_ms) {
+bool Database::Open(const std::filesystem::path& file) {
 	Close();
-	int flags = mode == OpenMode::kReadOnly ? SQLITE_OPEN_READONLY
-	                                        : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
+	int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
 	if (sqlite3_open_v2(file.c_str(), &handle_, flags, nullptr) != SQLITE_OK) {
 		// A handle is returned even for a failed open, to carry the message.
 		openError_ = handle_ ? sqlite3_errmsg(handle_) : "out of memory";
 		Close();
 		return false;
 	}
-	sqlite3_busy_timeout(handle_, busy_wait_ms);
+	sqlite3_busy_timeout(handle_, 5000);
 	return true;
 }
 

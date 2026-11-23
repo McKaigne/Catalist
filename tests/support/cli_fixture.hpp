@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "cli/cli.hpp"
-#include "storage/accounts.hpp"
 #include "support/test_support.hpp"
 
 // What the tests of the command line share: a run of `catalist ...` against
@@ -60,9 +59,6 @@ struct CliFixture : catalist::test::TempDirFixture {
 		ctx.interactive = not input.empty();
 		ctx.columns = columns;
 		ctx.color = color;
-		ctx.accounts_file = "state/accounts";
-		ctx.net.ids = ids;
-		ctx.net.now = [this] { return clock; };
 		int exit_code = catalist::RunCli(args, ctx);
 		out = out_stream.str();
 		err = err_stream.str();
@@ -126,21 +122,6 @@ struct CliFixture : catalist::test::TempDirFixture {
 		                .Status(WatchStatus::kPlanToWatch)
 		                .CheckedAt("2026-10-20"));
 		REQUIRE(db.SaveAll());
-		REQUIRE(db.SaveSettings());
-	}
-
-	// A login on the site, as `catalist login` leaves one.
-	void LogIn(catalist::Provider site, const std::string& user = "Abel") {
-		auto logins = catalist::accounts::Parse(catalist::test::ReadText("state/accounts"));
-		logins = catalist::accounts::With(logins, {site, user, "77", "tok", "", 0});
-		catalist::test::WriteText("state/accounts", catalist::accounts::Format(logins));
-	}
-
-	// What waits to be sent to the sites.
-	std::vector<catalist::Pending> Waiting() {
-		catalist::Catalogue db("data");
-		REQUIRE(db.LoadAll().has_value());
-		return db.Outbox();
 	}
 
 	// The steps of the undo history, newest first.
@@ -150,8 +131,7 @@ struct CliFixture : catalist::test::TempDirFixture {
 		return db.History(0).value();
 	}
 
-	// A change no command made, as another program (Catalist-TUI's web
-	// check) makes one.
+	// A change no command made, as another program makes one.
 	void ChangeBehindTheHistory(MediaType type, const std::string& title, int progress) {
 		catalist::Catalogue db("data");
 		REQUIRE(db.LoadAll().has_value());
@@ -167,9 +147,6 @@ struct CliFixture : catalist::test::TempDirFixture {
 	// reader has gone.
 	bool color = false;
 	bool out_closed = false;
-	// The ids the sites gave this Catalist, and the time, in seconds.
-	catalist::web::AppIds ids;
-	long long clock = 1792531800;
 	std::string out;
 	std::string err;
 };

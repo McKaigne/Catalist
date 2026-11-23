@@ -319,26 +319,12 @@ TEST_CASE("a rewatch starts over, keeps the first dates, and counts once it is d
 	CHECK(FormatDate(over.finish_date) == "2026-10-20");
 }
 
-TEST_CASE("entries show the chosen provider's id and page") {
-	Entry frieren = MakeEntry().MalId(52991).AnilistId(154587);
-	CHECK(catalist::IdOn(frieren, catalist::Provider::kAniList) == 154587);
-	CHECK(catalist::PageOn(frieren, catalist::Provider::kAniList) ==
+TEST_CASE("an entry's page is its AniList page") {
+	CHECK(catalist::PageOf(MakeEntry().MalId(52991).AnilistId(154587)) ==
 	      "https://anilist.co/anime/154587");
-	CHECK(catalist::PageOn(frieren, catalist::Provider::kMyAnimeList) ==
-	      "https://myanimelist.net/anime/52991");
-	CHECK(catalist::PageOn(MakeEntry(), catalist::Provider::kAniList).empty());
-	CHECK(catalist::ParseProvider("MAL") == catalist::Provider::kMyAnimeList);
-	CHECK(catalist::ParseProvider("AniList") == catalist::Provider::kAniList);
-	CHECK(catalist::ParseProvider("Kitsu") == catalist::Provider::kKitsu);
-	CHECK_FALSE(catalist::ParseProvider("shikimori").has_value());
-	// Kitsu's id is the one Kitsu gave; without it there is no page there.
-	CHECK(catalist::PageOn(frieren, catalist::Provider::kKitsu).empty());
-	Entry on_kitsu = MakeEntry().KitsuId(46474);
-	CHECK(catalist::IdOn(on_kitsu, catalist::Provider::kKitsu) == 46474);
-	CHECK(catalist::PageOn(on_kitsu, catalist::Provider::kKitsu) ==
-	      "https://kitsu.app/anime/46474");
-	CHECK(catalist::ProviderKey(catalist::Provider::kKitsu) == "kitsu");
-	CHECK(catalist::ProviderKey(catalist::Provider::kMyAnimeList) == "mal");
+	CHECK(catalist::PageOf(MakeEntry().Type(catalist::MediaType::kManga).AnilistId(30002)) ==
+	      "https://anilist.co/manga/30002");
+	CHECK(catalist::PageOf(MakeEntry().MalId(52991)).empty());
 }
 
 TEST_CASE("applyWebFacts fills in an id the entry lacked, never replaces one") {
@@ -381,48 +367,8 @@ TEST_CASE("setTitle and the date setters stamp the entry only when they change i
 	CHECK(catalist::SetFinishDate(before, std::nullopt, today).updated_at == before.updated_at);
 }
 
-TEST_CASE("fields to send merge, and the progress stays up-only only when both said so") {
-	namespace field = catalist::site_field;
-	unsigned up = field::kProgress | field::kRaiseOnly;
-	CHECK(catalist::MergeFields(up, field::kScore) == (up | field::kScore));
-	CHECK(catalist::MergeFields(up, up) == up);
-	// A progress set on purpose, as by -, is sent whatever the site has.
-	CHECK(catalist::MergeFields(up, field::kProgress) == field::kProgress);
-	CHECK(catalist::MergeFields(field::kStatus, field::kAll) == field::kAll);
-}
-
-TEST_CASE("linking keeps what you set, and takes what the site has beyond it") {
-	Entry mine = MakeEntry().Status(WatchStatus::kPlanToWatch).TotalUnits(12).Progress(2);
-	Entry theirs = MakeEntry()
-	                   .Status(WatchStatus::kWatching)
-	                   .Progress(7)
-	                   .Score(8)
-	                   .Rewatched(1)
-	                   .StartDate("2026-09-01");
-	auto merged = catalist::MergeLinked(mine, theirs, kToday);
-	CHECK(merged.status == WatchStatus::kWatching);
-	CHECK(merged.progress == 7);
-	CHECK(merged.score == 8);
-	CHECK(merged.rewatched == 1);
-	CHECK(FormatDate(merged.start_date) == "2026-09-01");
-	CHECK(FormatDate(merged.updated_at) == "2026-10-20");
-
-	// What you set here stands.
-	Entry set = MakeEntry().Status(WatchStatus::kOnHold).Progress(9).Score(6).TotalUnits(12);
-	auto kept = catalist::MergeLinked(set, theirs, kToday);
-	CHECK(kept.status == WatchStatus::kOnHold);
-	CHECK(kept.progress == 9);
-	CHECK(kept.score == 6);
-	// Never past a known total, and nothing new is no change.
-	theirs.progress = 40;
-	CHECK(catalist::MergeLinked(set, theirs, kToday).progress == 12);
-	auto same = catalist::MergeLinked(kept, MakeEntry().Status(WatchStatus::kPlanToWatch), kToday);
-	CHECK(same == kept);
-}
-
-TEST_CASE("parseStatus and parseProvider handle UTF-8 safely and done finishes a rewatch") {
+TEST_CASE("parseStatus handles UTF-8 safely and done finishes a rewatch") {
 	CHECK_FALSE(ParseStatus("葬送のフリーレン").has_value());
-	CHECK_FALSE(catalist::ParseProvider("葬送のフリーレン").has_value());
 	Entry again = MakeEntry()
 	                  .Status(WatchStatus::kRewatching)
 	                  .TotalUnits(12)

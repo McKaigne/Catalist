@@ -104,7 +104,7 @@ Result<std::map<std::string, std::string>> ReadAssignments(const std::vector<std
 		const Settable* field = FindSettable(name);
 		if (not field)
 			return std::unexpected(
-			    std::format("unknown field '{}'{}", name, DidYouMean(name, SettableNames())));
+			    std::format("unknown field '{}'", name));
 		if (not field->set(Entry{}, value, today))
 			return std::unexpected(
 			    std::format("{} '{}' is not {}", field->name, value, field->wants));
@@ -209,19 +209,14 @@ int RunRemove(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	if (not LoadForWrite(ctx))
 		return 1;
 	std::vector<journal::Change> changes;
-	std::vector<Entry> removed;
 	for (const auto& each : *found) {
 		auto current = ctx.db.GetById(each.type, each.id);
 		if (not current)
 			return Fail(ctx, std::format("{} was removed meanwhile", refs::Of(each)));
 		ctx.db.RemoveEntry(current->type, current->id);
 		changes.push_back({current->type, current->id, *current, std::nullopt});
-		removed.push_back(*current);
 	}
-	int code = SaveAndReport(ctx, line, changes);
-	if (code == 0 and line.Has("remote"))
-		TellSitesGone(ctx, removed);
-	return code;
+	return SaveAndReport(ctx, line, changes);
 }
 
 // done, hold, drop, plan and resume differ in their name and their words.
@@ -235,8 +230,7 @@ Command StatusCommand(const std::string& name, const std::string& summary,
 	        .details = details + "\n" + kRefsHelp + "\n" + kChangeFormat,
 	        .options = WithRefOptions(options),
 	        .operands = "REF...",
-	        .run = RunStatus,
-	        .completes = OperandKind::kRefs};
+	        .run = RunStatus};
 }
 
 Command StepCommand(const std::string& name, const std::string& alias, const std::string& summary,
@@ -247,18 +241,10 @@ Command StepCommand(const std::string& name, const std::string& alias, const std
 	        .details = details + "\n" + kRefsHelp + "\n" + kChangeFormat,
 	        .options = WithRefOptions({{'n', "", "N", "count N instead of one"}, kQuiet}),
 	        .operands = "REF...",
-	        .run = RunStep,
-	        .completes = OperandKind::kRefs};
+	        .run = RunStep};
 }
 
 }  // namespace
-
-std::vector<std::string> SettableNames() {
-	std::vector<std::string> names;
-	for (const auto& each : Settables())
-		names.push_back(each.name);
-	return names;
-}
 
 std::vector<Command> TrackingCommands() {
 	return {
@@ -278,8 +264,7 @@ std::vector<Command> TrackingCommands() {
 	         kChangeFormat,
 	     .options = WithRefOptions({kQuiet}),
 	     .operands = "REF FIELD=VALUE...",
-	     .run = RunSet,
-	     .completes = OperandKind::kRefThenFields},
+	     .run = RunSet},
 	    StatusCommand("done", "Mark titles completed",
 	                  "Sets the finish date, and the progress to the total when it is known.\n"),
 	    StatusCommand("hold", "Put titles on hold", ""),
@@ -295,18 +280,13 @@ std::vector<Command> TrackingCommands() {
 	    {.name = "rm",
 	     .summary = "Remove titles",
 	     .details =
-	         std::string("At a terminal rm asks first. Where nobody can be asked, in a script or\n"
-	                     "with REFs from standard input, it removes nothing without -f. 'undo'\n"
-	                     "brings a removed title back under its ref. The sites you are logged in\n"
-	                     "to keep the title on your lists there, unless --remote is given.\n\n") +
+	         std::string("At a terminal rm asks first. Where nobody can be asked, in a script,\n"
+	                     "it removes nothing without -f. 'undo' brings a removed title back\n"
+	                     "under its ref.\n\n") +
 	         kRefsHelp + "\n" + kChangeFormat,
-	     .options =
-	         WithRefOptions({{'f', "", "", "remove without asking"},
-	                         {0, "remote", "", "take them off your lists on the sites as well"},
-	                         kQuiet}),
+	     .options = WithRefOptions({{'f', "", "", "remove without asking"}, kQuiet}),
 	     .operands = "REF...",
-	     .run = RunRemove,
-	     .completes = OperandKind::kRefs},
+	     .run = RunRemove},
 	};
 }
 

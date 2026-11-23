@@ -92,49 +92,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue getById and findByIds look in one m
 	CHECK_FALSE(db.GetById(MediaType::kAnime, 99).has_value());
 }
 
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue keeps the provider") {
-	Catalogue db(TempDir() / "data");
-	REQUIRE(db.LoadAll().has_value());
-	CHECK(db.provider() == catalist::Provider::kAniList);
-	db.set_provider(catalist::Provider::kMyAnimeList);
-	// Only the settings are written: a title added but not saved stays out.
-	db.AddEntry(MakeEntry().Title("Not saved yet"));
-	REQUIRE(db.SaveSettings());
-
-	Catalogue reread(TempDir() / "data");
-	REQUIRE(reread.LoadAll().value());
-	CHECK(reread.provider() == catalist::Provider::kMyAnimeList);
-	CHECK(reread.GetEntries(MediaType::kAnime).empty());
-
-	// SaveAll writes it too, with the lists.
-	reread.set_provider(catalist::Provider::kAniList);
-	REQUIRE(reread.SaveAll());
-	Catalogue last(TempDir() / "data");
-	REQUIRE(last.LoadAll().value());
-	CHECK(last.provider() == catalist::Provider::kAniList);
-}
-
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue leaves the settings of Catalist-TUI alone") {
-	Catalogue db(TempDir() / "data");
-	db.AddEntry(MakeEntry().Title("First"));
-	REQUIRE(db.SaveAll());
-	{
-		catalist::store::Database raw;
-		REQUIRE(raw.Open(db.StorePath()));
-		REQUIRE(raw.Run("INSERT INTO setting VALUES ('linked', '2026-10-19')"));
-	}
-	Catalogue again(TempDir() / "data");
-	REQUIRE(again.LoadAll().value());
-	again.set_provider(catalist::Provider::kMyAnimeList);
-	REQUIRE(again.SaveSettings());
-
-	catalist::store::Database raw;
-	REQUIRE(raw.Open(db.StorePath()));
-	auto linked = raw.Prepare("SELECT value FROM setting WHERE key = 'linked'");
-	REQUIRE(linked.Step());
-	CHECK(linked.TextAt(0) == "2026-10-19");
-}
-
 TEST_CASE_FIXTURE(TempDirFixture, "catalogue merges an added title known by either id") {
 	Catalogue db(TempDir() / "data");
 	db.AddEntry(MakeEntry().Title("Frieren").MalId(52991));
@@ -317,37 +274,11 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue beginWrite holds the catalogue unti
 	CHECK(after.GetEntries(MediaType::kAnime)[0].title == "Kept");
 }
 
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue peek reads the lists and leaves nothing behind") {
-	auto dir = TempDir() / "data";
-	// Nothing stored: not even the directory is made.
-	Catalogue nothing(dir);
-	CHECK_FALSE(nothing.Peek());
-	CHECK_FALSE(std::filesystem::exists(dir));
-
-	{
-		Catalogue db(dir);
-		db.AddEntry(MakeEntry().Title("Odd Taxi"));
-		REQUIRE(db.SaveAll());
-	}
-	Catalogue db(dir);
-	REQUIRE(db.Peek());
-	REQUIRE(db.GetEntries(MediaType::kAnime).size() == 1);
-	CHECK(db.GetEntries(MediaType::kAnime)[0].title == "Odd Taxi");
-	// The file was closed again: another program writes without waiting.
-	Catalogue writer(dir);
-	CHECK(writer.BeginWrite().has_value());
-
-	catalist::test::WriteText(TempDir() / "other/catalist.db", "this is not a database");
-	Catalogue broken(TempDir() / "other");
-	CHECK_FALSE(broken.Peek());
-}
-
 TEST_CASE_FIXTURE(TempDirFixture, "catalogue reports a failed write and a file it cannot open") {
 	Catalogue db(TempDir() / "data");
 	catalist::test::MakeUnwritable(TempDir() / "data/catalist.db");
 	db.AddEntry(MakeEntry().Title("Nowhere to go"));
 	CHECK_FALSE(db.SaveAll());
-	CHECK_FALSE(db.SaveSettings());
 	CHECK_FALSE(db.BeginWrite().has_value());
 	auto loaded = db.LoadAll();
 	REQUIRE_FALSE(loaded.has_value());
@@ -660,142 +591,4 @@ TEST_CASE("catalogue data dir: CATALIST_DATA_DIR, then XDG_DATA_HOME, then ~/.lo
 	Catalogue db("/data");
 	CHECK(db.data_dir() == "/data");
 	CHECK(db.StorePath() == "/data/catalist.db");
-}
-
-TEST_CASE_FIXTURE(TempDirFixture,
-                  "catalogue keeps Kitsu ids beside the entries Catalist-TUI writes") {
-	Catalogue db(TempDir() / "data");
-	db.AddEntry(MakeEntry().Title("Sousou no Frieren").MalId(52991).KitsuId(46474));
-	db.AddEntry(MakeEntry().Title("Odd Taxi").MalId(44265));
-	REQUIRE(db.SaveAll());
-	{
-		Catalogue again(TempDir() / "data");
-		REQUIRE(again.LoadAll().value());
-		CHECK(again.GetById(MediaType::kAnime, 1)->kitsu_id == 46474);
-		CHECK(again.GetById(MediaType::kAnime, 2)->kitsu_id == 0);
-		CHECK(again.FindByIds(MediaType::kAnime, 0, 0, 46474)->title == "Sousou no Frieren");
-	}
-	// The file stays one Catalist-TUI opens and writes: the same version, and
-	// `entry` with the columns it binds.
-	catalist::store::Database raw;
-	REQUIRE(raw.Open(db.StorePath()));
-	auto version = raw.Prepare("PRAGMA user_version");
-	REQUIRE(version.Step());
-	CHECK(version.IntAt(0) == 1);
-	auto columns = raw.Prepare("SELECT COUNT(*) FROM pragma_table_info('entry')");
-	REQUIRE(columns.Step());
-	CHECK(columns.IntAt(0) == 17);
-}
-
-TEST_CASE_FIXTURE(TempDirFixture,
-                  "catalogue drops a Kitsu id whose title another program replaced") {
-	Catalogue db(TempDir() / "data");
-	db.AddEntry(MakeEntry().Title("Sousou no Frieren").MalId(52991).KitsuId(46474));
-	REQUIRE(db.SaveAll());
-	{
-		// Catalist-TUI removes the title, and gives its ref to the next one.
-		catalist::store::Database raw;
-		REQUIRE(raw.Open(db.StorePath()));
-		REQUIRE(raw.Run("UPDATE entry SET title = 'Dandadan', mal_id = 57334 WHERE id = 1"));
-	}
-	Catalogue again(TempDir() / "data");
-	REQUIRE(again.LoadAll().value());
-	CHECK(again.GetById(MediaType::kAnime, 1)->kitsu_id == 0);
-	// Saved again, the stale row is gone.
-	again.AddEntry(MakeEntry().Title("Odd Taxi").MalId(44265));
-	REQUIRE(again.SaveAll());
-	catalist::store::Database raw;
-	REQUIRE(raw.Open(db.StorePath()));
-	auto rows = raw.Prepare("SELECT COUNT(*) FROM entry_id");
-	REQUIRE(rows.Step());
-	CHECK(rows.IntAt(0) == 0);
-}
-
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue reads a file that has no Kitsu ids yet") {
-	Catalogue db(TempDir() / "data");
-	db.AddEntry(MakeEntry().Title("Odd Taxi").MalId(44265));
-	REQUIRE(db.SaveAll());
-	{
-		catalist::store::Database raw;
-		REQUIRE(raw.Open(db.StorePath()));
-		REQUIRE(raw.Run("DROP TABLE entry_id"));
-	}
-	// The completion scripts' read-only look, too.
-	Catalogue peeked(TempDir() / "data");
-	CHECK(peeked.Peek());
-	Catalogue again(TempDir() / "data");
-	REQUIRE(again.LoadAll().value());
-	CHECK(again.GetEntries(MediaType::kAnime).size() == 1);
-}
-
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo brings back a removed title's Kitsu id") {
-	Catalogue db(TempDir() / "data");
-	db.AddEntry(MakeEntry().Title("Sousou no Frieren").MalId(52991).KitsuId(46474));
-	REQUIRE(db.SaveAll());
-	REQUIRE(db.RemoveEntry(MediaType::kAnime, 1));
-	REQUIRE(db.SaveAll(NoteOf("rm frieren")));
-	REQUIRE(db.Undo(1, false).has_value());
-	Catalogue again(TempDir() / "data");
-	REQUIRE(again.LoadAll().value());
-	CHECK(again.GetById(MediaType::kAnime, 1)->kitsu_id == 46474);
-}
-
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue merges an added title known by its Kitsu id") {
-	Catalogue db(TempDir() / "data");
-	db.AddEntry(MakeEntry().Title("Sousou no Frieren").KitsuId(46474));
-	int again = db.AddEntry(MakeEntry().Title("Frieren").KitsuId(46474).MalId(52991));
-	CHECK(again == 1);
-	CHECK(db.GetEntries(MediaType::kAnime).size() == 1);
-	CHECK(db.GetById(MediaType::kAnime, 1)->mal_id == 52991);
-}
-
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue keeps what the sites are to be told, once each") {
-	Catalogue db(TempDir() / "data");
-	db.AddEntry(MakeEntry().Title("Odd Taxi"));
-	REQUIRE(db.SaveAll());
-	CHECK(db.Outbox().empty());
-	using catalist::Pending;
-	using catalist::Provider;
-	REQUIRE(db.Queue({{Provider::kAniList, MediaType::kAnime, 1},
-	                  {Provider::kKitsu, MediaType::kAnime, 1},
-	                  {Provider::kAniList, MediaType::kAnime, 1}}));
-	REQUIRE(db.Queue({{Provider::kKitsu, MediaType::kManga, 3, true, 46474}}));
-	auto waiting = db.Outbox();
-	REQUIRE(waiting.size() == 3);
-	CHECK(waiting[0].site == Provider::kAniList);
-	CHECK(waiting[2].removed);
-	CHECK(waiting[2].site_id == 46474);
-	REQUIRE(db.Sent(waiting[0]));
-	Catalogue again(TempDir() / "data");
-	REQUIRE(again.LoadAll().value());
-	CHECK(again.Outbox().size() == 2);
-
-	// A try that failed waits; a new change to the title merges its fields
-	// and makes it due at once.
-	namespace field = catalist::site_field;
-	Pending score{
-	    .site = Provider::kKitsu, .type = MediaType::kAnime, .id = 1, .fields = field::kScore};
-	REQUIRE(again.Deferred(score, 2, 5000));
-	CHECK(again.Outbox()[0].attempts == 2);
-	CHECK(again.Outbox()[0].next_try == 5000);
-	REQUIRE(again.Queue({score}));
-	auto merged = again.Outbox()[0];
-	CHECK(merged.fields == field::kAll);
-	CHECK(merged.attempts == 0);
-	CHECK(merged.next_try == 0);
-}
-
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue keeps whether a title is hidden on a site") {
-	using catalist::Provider;
-	Catalogue db(TempDir() / "data");
-	CHECK_FALSE(db.HiddenOn(Provider::kAniList, MediaType::kAnime, 1, 128547));
-	CHECK_FALSE(std::filesystem::exists(TempDir() / "data"));
-	REQUIRE(db.SetHidden(Provider::kAniList, MediaType::kAnime, 1, 128547, true));
-	Catalogue again(TempDir() / "data");
-	CHECK(again.HiddenOn(Provider::kAniList, MediaType::kAnime, 1, 128547) == true);
-	// Another title under the same ref is not the one hidden.
-	CHECK_FALSE(again.HiddenOn(Provider::kAniList, MediaType::kAnime, 1, 999));
-	CHECK_FALSE(again.HiddenOn(Provider::kKitsu, MediaType::kAnime, 1, 128547));
-	REQUIRE(again.SetHidden(Provider::kAniList, MediaType::kAnime, 1, 128547, false));
-	CHECK(again.HiddenOn(Provider::kAniList, MediaType::kAnime, 1, 128547) == false);
 }

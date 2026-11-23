@@ -42,17 +42,3 @@ TEST_CASE("localTime follows the computer's calendar and clock") {
 	REQUIRE(stamp.size() == 19);
 	CHECK(catalist::IsoDate::Parse(stamp).has_value());
 }
-
-TEST_CASE_FIXTURE(catalist::test::TempDirFixture,
-                  "writePrivateFile leaves a file only its owner reads") {
-	auto file = TempDir() / "deep" / "accounts";
-	REQUIRE(catalist::WritePrivateFile(file, "secret\n"));
-	CHECK(catalist::test::ReadText(file) == "secret\n");
-	auto mode = std::filesystem::status(file).permissions();
-	CHECK((mode & std::filesystem::perms::all) ==
-	      (std::filesystem::perms::owner_read | std::filesystem::perms::owner_write));
-	REQUIRE(catalist::WritePrivateFile(file, "again\n"));
-	CHECK(catalist::test::ReadText(file) == "again\n");
-	CHECK(catalist::RandomText(43).size() == 43);
-	CHECK(catalist::RandomText(16) != catalist::RandomText(16));
-}

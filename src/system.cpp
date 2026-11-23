@@ -3,24 +3,16 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/ioctl.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
-#include <termios.h>
 #include <unistd.h>
 
-#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <charconv>
 #include <chrono>
-#include <cstdio>
-#include <cstdlib>
 #include <ctime>
-#include <format>
 #include <fstream>
-#include <istream>
 #include <iterator>
-#include <random>
 #include <utility>
 
 namespace catalist {
@@ -161,10 +153,9 @@ namespace {
 
 // The status goes on a line of its own after the body (-w), so an error's
 // body is kept too; a server that does not answer is given up on after four
-// seconds, and the whole request after eight. -g leaves the brackets of a
-// URL (Kitsu's filter[text]) to the server.
+// seconds, and the whole request after eight.
 const std::vector<std::string> kCurl = {
-    "curl", "-sLg", "--connect-timeout", "4", "-m", "8", "-A", "catalist", "-w", "\n%{http_code}"};
+    "curl", "-sL", "--connect-timeout", "4", "-m", "8", "-A", "catalist", "-w", "\n%{http_code}"};
 
 }  // namespace
 
@@ -208,84 +199,6 @@ int TerminalColumns() {
 	if (not isatty(STDOUT_FILENO) or ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) != 0)
 		return 0;
 	return window.ws_col;
-}
-
-bool WritePrivateFile(const std::filesystem::path& file, const std::string& text) {
-	std::error_code ec;
-	if (file.has_parent_path())
-		std::filesystem::create_directories(file.parent_path(), ec);
-	// Written beside it and moved in place, so a crash leaves the old file.
-	std::filesystem::path next = file;
-	next += ".new";
-	FileDescriptor out(open(next.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600));
-	auto cleanup = [&] { std::filesystem::remove(next, ec); };
-	if (out.Get() < 0 or fchmod(out.Get(), 0600) != 0) {
-		out.Reset();
-		cleanup();
-		return false;
-	}
-	for (size_t done = 0; done < text.size();) {
-		ssize_t count = write(out.Get(), text.data() + done, text.size() - done);
-		if (count < 0 and errno == EINTR)
-			continue;
-		if (count <= 0) {
-			out.Reset();
-			cleanup();
-			return false;
-		}
-		done += static_cast<size_t>(count);
-	}
-	if (fsync(out.Get()) != 0) {
-		out.Reset();
-		cleanup();
-		return false;
-	}
-	out.Reset();
-	std::filesystem::rename(next, file, ec);
-	if (ec)
-		cleanup();
-	return not ec;
-}
-
-std::optional<std::string> ReadSecretLine(std::istream& in) {
-	termios before{};
-	bool hidden = isatty(STDIN_FILENO) and tcgetattr(STDIN_FILENO, &before) == 0;
-	if (hidden) {
-		termios quiet = before;
-		quiet.c_lflag &= static_cast<tcflag_t>(~ECHO);
-		tcsetattr(STDIN_FILENO, TCSAFLUSH, &quiet);
-	}
-	std::string line;
-	bool read = static_cast<bool>(std::getline(in, line));
-	if (hidden) {
-		tcsetattr(STDIN_FILENO, TCSAFLUSH, &before);
-		// The Enter that was not shown.
-		std::fputs("\n", stderr);
-	}
-	return read ? std::optional<std::string>(line) : std::nullopt;
-}
-
-std::string RandomText(size_t length) {
-	static const char kLetters[] =
-	    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-	std::string bytes(length, '\0');
-	std::ifstream source("/dev/urandom", std::ios::binary);
-	source.read(bytes.data(), static_cast<std::streamsize>(length));
-	size_t got = source ? length : static_cast<size_t>(source.gcount());
-	if (got < length) {
-		std::random_device fallback;
-		for (size_t i = got; i < length; ++i)
-			bytes[i] = static_cast<char>(fallback());
-	}
-	std::string text;
-	for (unsigned char c : bytes)
-		text += kLetters[c % (sizeof(kLetters) - 1)];
-	return text;
-}
-
-long long UnixNow() {
-	return static_cast<long long>(
-	    std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
 }
 
 }  // namespace catalist

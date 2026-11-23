@@ -1,15 +1,11 @@
 #include "cli/common.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <format>
 #include <ostream>
 
 #include "cli/refs.hpp"
 #include "core/text.hpp"
-#include "storage/accounts.hpp"
-#include "system.hpp"
-#include "web/sites.hpp"
 
 namespace catalist::cli {
 
@@ -25,11 +21,8 @@ TxNote UndoNote(const CliContext& ctx) {
 
 void SayNoMatch(CliContext& ctx, const std::string& ref, const Naming& how) {
 	std::string where = how.only ? std::format("your {} list", TypeKey(*how.only)) : "your lists";
-	auto meant = refs::Closest(ctx.db, ref, how.only);
-	std::string hint =
-	    meant ? std::format(" (did you mean '{}', {}?)", meant->title, refs::Of(*meant)) : "";
 	Fail(ctx, refs::Parse(ref) ? std::format("no title in {} has the ref {}", where, ref)
-	                           : std::format("nothing in {} matches '{}'{}", where, ref, hint));
+	                           : std::format("nothing in {} matches '{}'", where, ref));
 	if (ref.size() > 1 and ref[0] == '-')
 		ctx.err << "Options go before the first operand.\n";
 	ctx.err << "See what is there with: catalist ls\n";
@@ -95,47 +88,33 @@ int UsageError(CliContext& ctx, const Command& cmd, const std::string& message) 
 	return 2;
 }
 
-std::string DidYouMean(const std::string& typed, const std::vector<std::string>& known) {
-	auto guess = args::ClosestTo(typed, known);
-	return guess ? std::format(" (did you mean '{}'?)", *guess) : "";
-}
-
 int SaveFailed(CliContext& ctx) {
 	return Fail(ctx, std::format("could not save the catalogue to {}", ctx.db.data_dir().string()));
 }
 
-// The columns of a title, in the order every tab-separated line and JSON
-// object has them. A new column goes at the end: scripts count on the order.
-extern const std::vector<std::string> kColumns = {
-    "ref",     "type",      "title",   "status",   "score",   "progress", "total",
-    "volumes", "rewatched", "started", "finished", "updated", "new"};
-
-std::vector<output::Cell> CellsOf(const Entry& e) {
-	return {output::Text(refs::Of(e)),     output::Text(TypeKey(e.type)),
-	        output::Text(e.title),         output::Text(StatusKey(e.status)),
-	        output::Number(e.score),       output::Number(e.progress),
-	        output::Known(e.total_units),  output::Number(e.volumes),
-	        output::Number(e.rewatched),   output::Date(e.start_date),
-	        output::Date(e.finish_date),   output::Date(e.updated_at),
-	        output::Number(NewReleases(e))};
+std::vector<std::string> RowOf(const Entry& e) {
+	return {refs::Of(e),
+	        TypeKey(e.type),
+	        e.title,
+	        StatusKey(e.status),
+	        std::to_string(e.score),
+	        std::to_string(e.progress),
+	        std::to_string(e.total_units),
+	        std::to_string(e.volumes),
+	        std::to_string(e.rewatched),
+	        output::DateText(e.start_date),
+	        output::DateText(e.finish_date),
+	        output::DateText(e.updated_at),
+	        std::to_string(NewReleases(e))};
 }
 
-extern const std::vector<std::string> kFullColumns = {"total_volumes", "released", "anilist_id",
-                                                      "mal_id",        "url",      "kitsu_id"};
-
-std::vector<std::string> AllColumns() {
-	std::vector<std::string> names = kColumns;
-	names.insert(names.end(), kFullColumns.begin(), kFullColumns.end());
-	return names;
-}
-
-std::vector<output::Cell> FullCellsOf(const Entry& e, Provider site) {
-	auto cells = CellsOf(e);
-	for (const auto& more :
-	     {output::Known(e.total_volumes), output::Known(e.released), output::Known(e.anilist_id),
-	      output::Known(e.mal_id), output::Maybe(PageOn(e, site)), output::Known(e.kitsu_id)})
-		cells.push_back(more);
-	return cells;
+std::vector<std::string> FullRowOf(const Entry& e) {
+	auto row = RowOf(e);
+	for (const auto& more : {std::to_string(e.total_volumes), std::to_string(e.released),
+	                         std::to_string(e.anilist_id), std::to_string(e.mal_id),
+	                         output::OrDash(PageOf(e))})
+		row.push_back(more);
+	return row;
 }
 
 // The terminal's colour for each status.
@@ -173,16 +152,13 @@ std::string OutOf(int done, int total) {
 	return std::format("{}/{}", done, total > 0 ? std::to_string(total) : std::string("?"));
 }
 
-// Rows as JSON Lines, or as tab-separated lines (the column names first
-// when `header`). A write that fails, because the reader has gone, ends it.
-void WriteRows(CliContext& ctx, const std::vector<std::string>& names,
-               const std::vector<std::vector<output::Cell>>& rows, bool json, bool header) {
-	if (header and not json)
-		ctx.out << output::TsvLine(names);
+// Rows as tab-separated lines. A write that fails, because the reader has
+// gone, ends it.
+void WriteRows(CliContext& ctx, const std::vector<std::vector<std::string>>& rows) {
 	for (const auto& row : rows) {
 		if (not ctx.out)
 			return;
-		ctx.out << (json ? output::JsonLine(names, row) : output::TsvLine(row));
+		ctx.out << output::TsvLine(row);
 	}
 }
 
@@ -191,15 +167,6 @@ void WriteRows(CliContext& ctx, const std::vector<std::string>& names,
 extern const std::vector<WatchStatus> kStatuses = {
     WatchStatus::kWatching, WatchStatus::kCompleted,   WatchStatus::kOnHold,
     WatchStatus::kDropped,  WatchStatus::kPlanToWatch, WatchStatus::kRewatching};
-
-// The words a status is written with: watching, completed, on-hold, dropped,
-// planned and rewatching.
-std::vector<std::string> StatusWords() {
-	std::vector<std::string> words;
-	for (WatchStatus status : kStatuses)
-		words.push_back(StatusKey(status));
-	return words;
-}
 
 std::optional<WatchStatus> StatusNamed(const std::string& word) {
 	std::string wanted = utf8::Lowercase(word);
@@ -242,26 +209,19 @@ std::vector<args::Option> WithRefOptions(std::vector<args::Option> options) {
 	return options;
 }
 
-// Reads the REF operands; a `-` among them stands for the lines of standard
-// input, which then cannot answer a question as well.
+// Reads the REF operands.
 RefRequest ReadRefs(const Command& cmd, const args::Parsed& line, CliContext& ctx) {
 	RefRequest request;
 	if (line.operands.empty()) {
 		request.stop = UsageError(ctx, cmd, "name a title: a ref such as a:12, or part of it");
 		return request;
 	}
-	bool from_input =
-	    std::find(line.operands.begin(), line.operands.end(), "-") != line.operands.end();
-	request.refs = args::WithLinesFor(line.operands, ctx.in);
-	request.how = {OnlyType(line), line.Has("all"), ctx.interactive and not from_input};
+	request.refs = line.operands;
+	request.how = {OnlyType(line), line.Has("all"), ctx.interactive};
 	bool any_empty = std::any_of(request.refs.begin(), request.refs.end(),
 	                             [](const std::string& ref) { return ref.empty(); });
-	if (any_empty) {
+	if (any_empty)
 		request.stop = UsageError(ctx, cmd, "a REF cannot be empty");
-	} else if (request.refs.empty()) {
-		ctx.err << "No titles named on standard input: nothing to do.\n";
-		request.stop = 0;
-	}
 	return request;
 }
 
@@ -335,7 +295,7 @@ void PrintChanges(CliContext& ctx, const std::vector<journal::Change>& changes) 
 // Saves what a command changed as one undo step and prints it (not with
 // -q). A command that changed nothing says so and saves nothing.
 int SaveAndReport(CliContext& ctx, const args::Parsed& line,
-                  const std::vector<journal::Change>& changes, bool tell) {
+                  const std::vector<journal::Change>& changes) {
 	bool any = std::any_of(changes.begin(), changes.end(), [](const journal::Change& made) {
 		return not journal::ChangedFields(made).empty();
 	});
@@ -348,8 +308,6 @@ int SaveAndReport(CliContext& ctx, const args::Parsed& line,
 		return SaveFailed(ctx);
 	if (not line.Has("q"))
 		PrintChanges(ctx, changes);
-	if (tell)
-		TellSites(ctx, changes);
 	return 0;
 }
 
@@ -387,88 +345,11 @@ Result<int> CountGiven(const args::Parsed& line, int otherwise) {
 	return *count;
 }
 
-extern const args::Option kFrom{
-    0, "from", "SITE", "ask anilist, mal or kitsu, not your provider", {"anilist", "mal", "kitsu"}};
-
-bool FromKnown(const Command& cmd, const args::Parsed& line, CliContext& ctx) {
-	if (not line.Has("from") or ParseProvider(line.Get("from")))
-		return true;
-	UsageError(ctx, cmd,
-	           std::format("--from '{}' is not anilist, mal or kitsu{}", line.Get("from"),
-	                       DidYouMean(line.Get("from"), kFrom.choices)));
-	return false;
-}
-
-bool AsksProvider(const args::Parsed& line) {
-	return not line.Has("from");
-}
-
-Provider SiteOf(const args::Parsed& line, const CliContext& ctx) {
-	if (auto named = line.Has("from") ? ParseProvider(line.Get("from")) : std::nullopt)
-		return *named;
-	return ctx.db.provider();
-}
-
-std::unique_ptr<web::Tracker> TrackerFor(const CliContext& ctx, Provider site) {
-	return web::MakeTracker(site, ctx.net);
-}
-
-const std::vector<Provider>& AllSites() {
-	static const std::vector<Provider> kAll = {Provider::kAniList, Provider::kMyAnimeList,
-	                                           Provider::kKitsu};
-	return kAll;
-}
-
-Entry AsTitle(const web::SiteEntry& theirs, Provider site) {
-	Entry title;
-	title.status = theirs.status;
-	title.score = static_cast<int>(std::lround(web::OutOfTen(site, theirs.score)));
-	title.progress = theirs.progress;
-	title.volumes = theirs.volumes;
-	title.rewatched = theirs.rewatched;
-	title.start_date = theirs.start_date;
-	title.finish_date = theirs.finish_date;
-	return title;
-}
-
-std::optional<Entry> HeldAgain(CliContext& ctx, const Entry& title) {
-	if (not LoadForWrite(ctx))
-		return std::nullopt;
-	auto now = ctx.db.GetById(title.type, title.id);
-	if (not now)
-		Fail(ctx, std::format("{} was removed meanwhile", refs::Of(title)));
-	return now;
-}
-
-std::vector<Account> ReadAccounts(const CliContext& ctx) {
-	return accounts::Parse(ReadFile(ctx.accounts_file).value_or(""));
-}
-
-bool SaveAccounts(const CliContext& ctx, const std::vector<Account>& logins) {
-	return WritePrivateFile(ctx.accounts_file, accounts::Format(logins));
-}
-
-web::Answer<Account> CurrentLogin(CliContext& ctx, web::Tracker& site, const Account& login) {
-	auto fresh = site.Current(login);
-	if (fresh and (fresh->token != login.token or fresh->renewal != login.renewal)) {
-		if (not SaveAccounts(ctx, accounts::With(ReadAccounts(ctx), *fresh)))
-			ctx.err << "note: could not save the renewed login.\n";
-	}
-	return fresh;
-}
-
-std::string WebError(const web::Failure& why) {
-	if (why.why == web::Failure::Kind::kUnreachable)
-		return why.message + "; check the connection and try again";
-	return why.message;
-}
-
 extern const args::Option kQuiet{'q', "", "", "print nothing"};
 
 extern const char* const kRefsHelp =
-    "A REF is a ref such as a:12, or part of a title; a REF of - reads REFs\n"
-    "from standard input, one a line. Every REF is looked up before anything\n"
-    "changes: when one of them fails, nothing is changed.\n";
+    "A REF is a ref such as a:12, or part of a title. Every REF is looked up\n"
+    "before anything changes: when one of them fails, nothing is changed.\n";
 
 extern const char* const kChangeFormat =
     "Each field that changed is printed. Into a pipe that is one line of\n"

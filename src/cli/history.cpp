@@ -31,7 +31,6 @@ int RunReplay(const Command& self, const args::Parsed& line, CliContext& ctx) {
 		ctx.err << std::format("Nothing to {}.\n", self.name);
 		return 0;
 	}
-	TellSites(ctx, done.value().changes);
 	if (line.Has("q"))
 		return 0;
 	for (const auto& step : done.value().steps)
@@ -54,7 +53,7 @@ int RunLog(const Command& self, const args::Parsed& line, CliContext& ctx) {
 		return Fail(ctx, steps.error());
 
 	auto state_of = [](const TxRecord& step) { return step.undone ? "undone" : "done"; };
-	if (not line.Has("json") and ctx.columns > 0) {
+	if (ctx.columns > 0) {
 		std::vector<std::vector<output::Styled>> rows;
 		for (const auto& step : steps.value())
 			rows.push_back({{std::to_string(step.id), output::kCyan},
@@ -70,13 +69,11 @@ int RunLog(const Command& self, const args::Parsed& line, CliContext& ctx) {
 			    rows, ctx.columns, ctx.color);
 		return 0;
 	}
-	std::vector<std::vector<output::Cell>> rows;
+	std::vector<std::vector<std::string>> rows;
 	for (const auto& step : steps.value())
-		rows.push_back({output::Number(step.id), output::Text(step.stamp),
-		                output::Text(state_of(step)), output::Number(step.changes),
-		                output::Text(step.label)});
-	WriteRows(ctx, {"tx", "stamp", "state", "changes", "label"}, rows, line.Has("json"),
-	          line.Has("header"));
+		rows.push_back({std::to_string(step.id), step.stamp, state_of(step),
+		                std::to_string(step.changes), step.label});
+	WriteRows(ctx, rows);
 	return 0;
 }
 
@@ -107,9 +104,7 @@ std::vector<Command> HistoryCommands() {
 	     .details = "The last 100 steps, newest first. Into a pipe each is one line of fields\n"
 	                "with a tab between them: tx, stamp, state (done or undone), changes (how\n"
 	                "many titles) and label (the command).\n",
-	     .options = {{'n', "", "N", "the newest N steps only"},
-	                 {0, "json", "", "print one JSON object a line"},
-	                 {0, "header", "", "name the columns on the first line of a pipe"}},
+	     .options = {{'n', "", "N", "the newest N steps only"}},
 	     .run = RunLog},
 	};
 }

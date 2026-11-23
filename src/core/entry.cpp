@@ -25,16 +25,6 @@ std::string StatusToString(WatchStatus status, MediaType type) {
 	return "Unknown";
 }
 
-unsigned MergeFields(unsigned first, unsigned second) {
-	auto up_only = [](unsigned fields) {
-		return not(fields & site_field::kProgress) or (fields & site_field::kRaiseOnly);
-	};
-	unsigned merged = (first | second) & ~site_field::kRaiseOnly;
-	if ((merged & site_field::kProgress) and up_only(first) and up_only(second))
-		merged |= site_field::kRaiseOnly;
-	return merged;
-}
-
 std::string StatusKey(WatchStatus status) {
 	switch (status) {
 		case WatchStatus::kWatching:
@@ -75,67 +65,10 @@ std::optional<WatchStatus> ParseStatus(const std::string& str) {
 	return std::nullopt;
 }
 
-std::string ProviderName(Provider site) {
-	switch (site) {
-		case Provider::kAniList:
-			return "AniList";
-		case Provider::kMyAnimeList:
-			return "MyAnimeList";
-		case Provider::kKitsu:
-			return "Kitsu";
-	}
-	return "AniList";
-}
-
-std::string ProviderKey(Provider site) {
-	switch (site) {
-		case Provider::kAniList:
-			return "anilist";
-		case Provider::kMyAnimeList:
-			return "mal";
-		case Provider::kKitsu:
-			return "kitsu";
-	}
-	return "anilist";
-}
-
-std::optional<Provider> ParseProvider(const std::string& name) {
-	std::string lower = utf8::Lowercase(name);
-	if (lower == "anilist" or lower == "al")
-		return Provider::kAniList;
-	if (lower == "myanimelist" or lower == "mal")
-		return Provider::kMyAnimeList;
-	if (lower == "kitsu")
-		return Provider::kKitsu;
-	return std::nullopt;
-}
-
-int IdOn(const Entry& shown, Provider site) {
-	switch (site) {
-		case Provider::kAniList:
-			return shown.anilist_id;
-		case Provider::kMyAnimeList:
-			return shown.mal_id;
-		case Provider::kKitsu:
-			return shown.kitsu_id;
-	}
-	return 0;
-}
-
-std::string PageOn(const Entry& shown, Provider site) {
-	int id = IdOn(shown, site);
-	if (id <= 0)
+std::string PageOf(const Entry& shown) {
+	if (shown.anilist_id <= 0)
 		return "";
-	std::string kind = shown.type == MediaType::kAnime ? "anime" : "manga";
-	switch (site) {
-		case Provider::kAniList:
-			return std::format("https://anilist.co/{}/{}", kind, id);
-		case Provider::kMyAnimeList:
-			return std::format("https://myanimelist.net/{}/{}", kind, id);
-		case Provider::kKitsu:
-			return std::format("https://kitsu.app/{}/{}", kind, id);
-	}
-	return "";
+	return std::format("https://anilist.co/{}/{}", TypeKey(shown.type), shown.anilist_id);
 }
 
 std::string TypeToString(MediaType type) {
@@ -354,8 +287,6 @@ Entry MergeImported(Entry existing, const Entry& incoming) {
 		existing.mal_id = incoming.mal_id;
 	if (incoming.anilist_id > 0)
 		existing.anilist_id = incoming.anilist_id;
-	if (incoming.kitsu_id > 0)
-		existing.kitsu_id = incoming.kitsu_id;
 	if (existing.score == 0 and incoming.score > 0)
 		existing.score = incoming.score;
 	if (existing.progress == 0 and incoming.progress > 0)
@@ -367,47 +298,11 @@ Entry MergeImported(Entry existing, const Entry& incoming) {
 	return existing;
 }
 
-Entry MergeLinked(Entry mine, const Entry& theirs, const IsoDate& today) {
-	Entry merged = mine;
-	int most = merged.total_units > 0 ? merged.total_units : theirs.progress;
-	merged.progress = std::max(merged.progress, std::min(theirs.progress, most));
-	merged.volumes = std::max(merged.volumes, theirs.volumes);
-	merged.rewatched = std::max(merged.rewatched, theirs.rewatched);
-	if (merged.score == 0)
-		merged.score = theirs.score;
-	if (not merged.start_date)
-		merged.start_date = theirs.start_date;
-	if (not merged.finish_date)
-		merged.finish_date = theirs.finish_date;
-	if (merged.status == WatchStatus::kPlanToWatch)
-		merged.status = theirs.status;
-	if (not(merged == mine))
-		merged.updated_at = today;
-	return merged;
-}
-
-Entry PullFromSite(Entry mine, const Entry& theirs, const IsoDate& today) {
-	Entry pulled = mine;
-	pulled.status = theirs.status;
-	pulled.score = theirs.score;
-	pulled.progress =
-	    pulled.total_units > 0 ? std::min(theirs.progress, pulled.total_units) : theirs.progress;
-	pulled.volumes = theirs.volumes;
-	pulled.rewatched = theirs.rewatched;
-	pulled.start_date = theirs.start_date;
-	pulled.finish_date = theirs.finish_date;
-	if (not(pulled == mine))
-		pulled.updated_at = today;
-	return pulled;
-}
-
 Entry ApplyWebFacts(Entry target, const WebFacts& facts, const IsoDate& today) {
 	if (target.anilist_id == 0)
 		target.anilist_id = facts.anilist_id;
 	if (target.mal_id == 0)
 		target.mal_id = facts.mal_id;
-	if (target.kitsu_id == 0)
-		target.kitsu_id = facts.kitsu_id;
 	if (facts.total_units > 0)
 		target.total_units = facts.total_units;
 	if (facts.total_volumes > 0)

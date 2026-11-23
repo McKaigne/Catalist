@@ -11,7 +11,7 @@
 
 #include "core/entry.hpp"
 #include "storage/catalogue.hpp"
-#include "web/tracker.hpp"
+#include "web/http.hpp"
 
 namespace catalist::test {
 
@@ -44,7 +44,7 @@ struct FakeWeb {
 	// when there is no connection.
 	void Respond(const std::string& fragment, const std::string& body, int status = 200);
 	[[nodiscard]] std::optional<web::Reply> Fetch(const web::Request& sent);
-	[[nodiscard]] web::Link Link();
+	[[nodiscard]] web::Fetcher Link();
 
 	// "POST url body" for each request, in the order sent.
 	std::vector<std::string> sent;
@@ -71,10 +71,6 @@ public:
 	}
 	EntryBuilder& AnilistId(int value) {
 		built_.anilist_id = value;
-		return *this;
-	}
-	EntryBuilder& KitsuId(int value) {
-		built_.kitsu_id = value;
 		return *this;
 	}
 	EntryBuilder& Title(std::string value) {

@@ -70,8 +70,7 @@ Outcome ComeBack(const std::vector<Entry>& list, const Entry& back) {
 			return std::unexpected(std::format("{} cannot come back: its ref is now that of {}",
 			                                   NameOf(back), other.title));
 		bool same = (back.anilist_id > 0 and other.anilist_id == back.anilist_id) or
-		            (back.mal_id > 0 and other.mal_id == back.mal_id) or
-		            (back.kitsu_id > 0 and other.kitsu_id == back.kitsu_id);
+		            (back.mal_id > 0 and other.mal_id == back.mal_id);
 		if (same)
 			return std::unexpected(
 			    std::format("{} is in your lists again, as {}", back.title, NameOf(other)));

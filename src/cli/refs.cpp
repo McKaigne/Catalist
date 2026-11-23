@@ -3,32 +3,10 @@
 #include <algorithm>
 #include <cctype>
 #include <format>
-#include <sstream>
 
-#include "cli/args.hpp"
 #include "core/text.hpp"
 
 namespace catalist::refs {
-
-namespace {
-
-std::vector<std::string> SplitWords(const std::string& text) {
-	std::vector<std::string> words;
-	std::istringstream in(text);
-	for (std::string word; in >> word;)
-		words.push_back(word);
-	return words;
-}
-
-// `count` words from `at`, with a space between them.
-std::string JoinWords(const std::vector<std::string>& words, size_t at, size_t count) {
-	std::string joined;
-	for (size_t i = at; i < at + count; ++i)
-		joined += (i > at ? " " : "") + words[i];
-	return joined;
-}
-
-}  // namespace
 
 std::optional<LocalRef> Parse(const std::string& text) {
 	if (text.size() < 3 or text.size() > 11 or text[1] != ':' or
@@ -73,36 +51,6 @@ std::vector<Entry> Find(const Catalogue& db, const std::string& text,
 		}
 	}
 	return exact.empty() ? holding : exact;
-}
-
-std::optional<Entry> Closest(const Catalogue& db, const std::string& text,
-                             std::optional<MediaType> only) {
-	if (text.empty() or text[0] == '-' or Parse(text))
-		return std::nullopt;
-	std::string wanted = utf8::Lowercase(text);
-	size_t wanted_words = SplitWords(wanted).size();
-	// A typo is a few edits: two, or one in four letters of a longer text.
-	size_t best = std::max<size_t>(2, wanted.size() / 4) + 1;
-	std::optional<Entry> found;
-	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
-		if (only and *only != type)
-			continue;
-		for (const auto& each : db.GetEntries(type)) {
-			std::string title = utf8::Lowercase(each.title);
-			auto words = SplitWords(title);
-			std::vector<std::string> tried = {title};
-			for (size_t at = 0; at + wanted_words <= words.size(); ++at)
-				tried.push_back(JoinWords(words, at, wanted_words));
-			for (const auto& candidate : tried) {
-				size_t distance = args::EditDistance(wanted, candidate);
-				if (distance < best and distance < wanted.size()) {
-					best = distance;
-					found = each;
-				}
-			}
-		}
-	}
-	return found;
 }
 
 }  // namespace catalist::refs

@@ -44,13 +44,6 @@ const std::map<std::string, SortKey> kSortKeys = {
     {"status", SortKey::kStatus}, {"title", SortKey::kTitle},     {"progress", SortKey::kProgress},
     {"date", SortKey::kDate}};
 
-std::vector<std::string> SortWords() {
-	std::vector<std::string> words;
-	for (const auto& [word, key] : kSortKeys)
-		words.push_back(word);
-	return words;
-}
-
 int RunList(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	auto text = ReadText(self, line, ctx);
 	if (not text)
@@ -58,37 +51,17 @@ int RunList(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	ListQuery query{.text = *text,
 	                .only = OnlyType(line),
 	                .reverse = line.Has("r"),
-	                .refs_only = line.Has("q"),
-	                .json = line.Has("json"),
-	                .header = line.Has("header")};
+	                .refs_only = line.Has("q")};
 	// -s watching,on-hold: any of them; no -s, all of them.
 	std::istringstream given(line.Get("s"));
 	for (std::string word; std::getline(given, word, ',');) {
 		auto status = StatusNamed(word);
 		if (not status)
-			return UsageError(
-			    ctx, self,
-			    std::format("unknown status '{}'{}", word, DidYouMean(word, StatusWords())));
+			return UsageError(ctx, self, std::format("unknown status '{}'", word));
 		query.statuses.push_back(*status);
 	}
 	if (line.Has("s") and query.statuses.empty())
 		return UsageError(ctx, self, "-s needs a status");
-	// --linked anilist,mal and --unlinked kitsu: on these sites, and not on
-	// those.
-	for (const char* option : {"linked", "unlinked"}) {
-		std::istringstream sites(line.Get(option));
-		auto& into = std::string(option) == "linked" ? query.linked : query.unlinked;
-		for (std::string word; std::getline(sites, word, ',');) {
-			auto site = ParseProvider(word);
-			if (not site)
-				return UsageError(ctx, self,
-				                  std::format("--{} '{}' is not anilist, mal or kitsu{}", option,
-				                              word, DidYouMean(word, {"anilist", "mal", "kitsu"})));
-			into.push_back(*site);
-		}
-		if (line.Has(option) and into.empty())
-			return UsageError(ctx, self, std::format("--{} needs a site", option));
-	}
 	if (line.Has("sort")) {
 		auto found = kSortKeys.find(line.Get("sort"));
 		if (found == kSortKeys.end())
@@ -110,10 +83,7 @@ void PrintCard(CliContext& ctx, const Entry& e) {
 		CardRow(ctx, label, value);
 	};
 	auto id_text = [](int id) { return id > 0 ? std::to_string(id) : std::string("-"); };
-	auto date_text = [](const std::optional<IsoDate>& day) {
-		return day ? day->ToString() : std::string("-");
-	};
-	std::string page = PageOn(e, ctx.db.provider());
+	std::string page = PageOf(e);
 	int fresh = NewReleases(e);
 
 	ctx.out << Paint(e.title, output::kBold, ctx.color) << "\n";
@@ -121,7 +91,6 @@ void PrintCard(CliContext& ctx, const Entry& e) {
 	row("Type", TypeToString(e.type));
 	row("AniList", id_text(e.anilist_id));
 	row("MyAnimeList", id_text(e.mal_id));
-	row("Kitsu", id_text(e.kitsu_id));
 	if (not page.empty())
 		row("Page", page);
 	row("Status", Paint(StatusToString(e.status, e.type), StatusColor(e.status), ctx.color));
@@ -136,9 +105,9 @@ void PrintCard(CliContext& ctx, const Entry& e) {
 	if (e.type == MediaType::kManga)
 		row("Volumes", OutOf(e.volumes, e.total_volumes));
 	row(e.type == MediaType::kAnime ? "Rewatched" : "Reread", std::to_string(e.rewatched));
-	row("Started", date_text(e.start_date));
-	row("Finished", date_text(e.finish_date));
-	row("Updated", date_text(e.updated_at));
+	row("Started", output::DateText(e.start_date));
+	row("Finished", output::DateText(e.finish_date));
+	row("Updated", output::DateText(e.updated_at));
 }
 
 int RunShow(const Command& self, const args::Parsed& line, CliContext& ctx) {
@@ -151,47 +120,37 @@ int RunShow(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	if (not found)
 		return 1;
 
-	if (not line.Has("json") and ctx.columns > 0) {
+	if (ctx.columns > 0) {
 		for (size_t i = 0; i < found->size() and ctx.out; ++i) {
 			ctx.out << (i > 0 ? "\n" : "");
 			PrintCard(ctx, (*found)[i]);
 		}
 		return 0;
 	}
-	std::vector<std::vector<output::Cell>> rows;
+	std::vector<std::vector<std::string>> rows;
 	for (const auto& e : *found)
-		rows.push_back(FullCellsOf(e, ctx.db.provider()));
-	WriteRows(ctx, AllColumns(), rows, line.Has("json"), line.Has("header"));
+		rows.push_back(FullRowOf(e));
+	WriteRows(ctx, rows);
 	return 0;
 }
 
-// The columns of a list's numbers: how many titles, how many in each
-// status, the mean of the scores given, the episodes or chapters done
-// (units), the volumes read, the rewatches, the days all of it took, and
-// how many are being rewatched (a later column, so it comes last).
-const std::vector<std::string> kStatsColumns = {
-    "type", "total", "watching", "completed", "on_hold", "dropped",   "planned",
-    "mean", "units", "volumes",  "rewatched", "days",    "rewatching"};
-
-std::vector<output::Cell> StatsCells(const std::vector<Entry>& list, MediaType type) {
-	std::vector<output::Cell> cells = {output::Text(TypeKey(type)),
-	                                   output::Number(static_cast<long long>(list.size()))};
-	auto counted = [&list](WatchStatus status) {
-		return output::Number(static_cast<long long>(CountByStatus(list, status)));
-	};
+// A list's numbers as a line: type, how many titles, how many in each status,
+// the mean of the scores given, the episodes or chapters done (units), the
+// volumes read, the rewatches, the days all of it took, and how many are
+// being rewatched (a later field, so it comes last).
+std::vector<std::string> StatsRow(const std::vector<Entry>& list, MediaType type) {
+	std::vector<std::string> row = {TypeKey(type), std::to_string(list.size())};
 	for (WatchStatus status : kStatuses)
 		if (status != WatchStatus::kRewatching)
-			cells.push_back(counted(status));
+			row.push_back(std::to_string(CountByStatus(list, status)));
 	double mean = AverageScore(list);
-	cells.push_back(mean > 0.0
-	                    ? output::Cell{std::format("{:.2f}", mean), output::JsonForm::kNumber}
-	                    : output::Cell{"0", output::JsonForm::kNull});
-	cells.push_back(output::Number(TotalProgress(list)));
-	cells.push_back(output::Number(TotalVolumes(list)));
-	cells.push_back(output::Number(TotalRewatched(list)));
-	cells.push_back({std::format("{:.1f}", DaysSpent(list)), output::JsonForm::kNumber});
-	cells.push_back(counted(WatchStatus::kRewatching));
-	return cells;
+	row.push_back(mean > 0.0 ? std::format("{:.2f}", mean) : "0");
+	row.push_back(std::to_string(TotalProgress(list)));
+	row.push_back(std::to_string(TotalVolumes(list)));
+	row.push_back(std::to_string(TotalRewatched(list)));
+	row.push_back(std::format("{:.1f}", DaysSpent(list)));
+	row.push_back(std::to_string(CountByStatus(list, WatchStatus::kRewatching)));
+	return row;
 }
 
 // The numbers of one list, for a terminal.
@@ -226,17 +185,17 @@ int RunStats(const Command& self, const args::Parsed& line, CliContext& ctx) {
 		if (not only or *only == type)
 			types.push_back(type);
 
-	if (not line.Has("json") and ctx.columns > 0) {
+	if (ctx.columns > 0) {
 		for (size_t i = 0; i < types.size() and ctx.out; ++i) {
 			ctx.out << (i > 0 ? "\n" : "");
 			PrintStatsCard(ctx, ctx.db.GetEntries(types[i]), types[i]);
 		}
 		return 0;
 	}
-	std::vector<std::vector<output::Cell>> rows;
+	std::vector<std::vector<std::string>> rows;
 	for (MediaType type : types)
-		rows.push_back(StatsCells(ctx.db.GetEntries(type), type));
-	WriteRows(ctx, kStatsColumns, rows, line.Has("json"), line.Has("header"));
+		rows.push_back(StatsRow(ctx.db.GetEntries(type), type));
+	WriteRows(ctx, rows);
 	return 0;
 }
 
@@ -251,11 +210,7 @@ int PrintList(CliContext& ctx, const ListQuery& query) {
 			continue;
 		for (const auto& e : ctx.db.GetEntries(type))
 			if ((query.statuses.empty() or std::ranges::contains(query.statuses, e.status)) and
-			    refs::TitleHolds(e, query.text) and
-			    std::ranges::all_of(query.linked,
-			                        [&e](Provider site) { return IdOn(e, site) > 0; }) and
-			    std::ranges::all_of(query.unlinked,
-			                        [&e](Provider site) { return IdOn(e, site) == 0; }))
+			    refs::TitleHolds(e, query.text))
 				shown.push_back(e);
 	}
 	SortEntries(shown, query.key, query.reverse);
@@ -265,17 +220,17 @@ int PrintList(CliContext& ctx, const ListQuery& query) {
 			ctx.out << refs::Of(e) << "\n";
 		return 0;
 	}
-	if (not query.json and ctx.columns > 0) {
+	if (ctx.columns > 0) {
 		if (shown.empty())
 			ctx.err << "No titles to list.\n";
 		else
 			ctx.out << ListTable(ctx, shown);
 		return 0;
 	}
-	std::vector<std::vector<output::Cell>> rows;
+	std::vector<std::vector<std::string>> rows;
 	for (const auto& e : shown)
-		rows.push_back(CellsOf(e));
-	WriteRows(ctx, kColumns, rows, query.json, query.header);
+		rows.push_back(RowOf(e));
+	WriteRows(ctx, rows);
 	return 0;
 }
 
@@ -291,39 +246,20 @@ std::vector<Command> ListingCommands() {
 	     .options = {{'a', "", "", "list anime only"},
 	                 {'m', "", "", "list manga only"},
 	                 {'s', "", "STATUS",
-	                  "only watching, completed, on-hold, dropped, planned, rewatching, or a,b",
-	                  StatusWords()},
-	                 {0, "sort", "KEY", "new, updated, score, progress, date, status or title",
-	                  SortWords()},
+	                  "only watching, completed, on-hold, dropped, planned, rewatching, or a,b"},
+	                 {0, "sort", "KEY", "new, updated, score, progress, date, status or title"},
 	                 {'r', "", "", "reverse the order"},
-	                 {0,
-	                  "linked",
-	                  "SITE",
-	                  "only titles linked to the site, or to each of a,b",
-	                  {"anilist", "mal", "kitsu"}},
-	                 {0,
-	                  "unlinked",
-	                  "SITE",
-	                  "only titles not linked to the site, nor to any of a,b",
-	                  {"anilist", "mal", "kitsu"}},
-	                 {'q', "", "", "print the refs and nothing else"},
-	                 {0, "json", "", "print one JSON object a line"},
-	                 {0, "header", "", "name the columns on the first line of a pipe"}},
+	                 {'q', "", "", "print the refs and nothing else"}},
 	     .operands = "[QUERY...]",
-	     .run = RunList,
-	     .completes = OperandKind::kTitle},
+	     .run = RunList},
 	    {.name = "show",
 	     .summary = "Show titles in full",
-	     .details = "A REF is a ref such as a:12, or part of a title; a REF of - reads REFs\n"
-	                "from standard input, one a line. Into a pipe a title is one line: the\n"
-	                "columns of ls, then total_volumes, released, anilist_id, mal_id, url\n"
-	                "and kitsu_id. url is the title's page on your provider.\n",
-	     .options =
-	         WithRefOptions({{0, "json", "", "print one JSON object a line"},
-	                         {0, "header", "", "name the columns on the first line of a pipe"}}),
+	     .details = "A REF is a ref such as a:12, or part of a title. Into a pipe a title is\n"
+	                "one line: the fields of ls, then total_volumes, released, anilist_id,\n"
+	                "mal_id and url, the title's page on AniList.\n",
+	     .options = WithRefOptions({}),
 	     .operands = "REF...",
-	     .run = RunShow,
-	     .completes = OperandKind::kRefs},
+	     .run = RunShow},
 	    {.name = "stats",
 	     .summary = "Show the numbers of your lists",
 	     .details = "Into a pipe each list is one line of fields with a tab between them:\n"
@@ -332,10 +268,7 @@ std::vector<Command> ListingCommands() {
 	                "mean is the mean of the scores you gave (0 when there is none), units\n"
 	                "the episodes or chapters done, and days an estimate of the time they\n"
 	                "took: 24 minutes an episode, 5 minutes a chapter.\n",
-	     .options = {{'a', "", "", "the anime list only"},
-	                 {'m', "", "", "the manga list only"},
-	                 {0, "json", "", "print one JSON object a line"},
-	                 {0, "header", "", "name the columns on the first line of a pipe"}},
+	     .options = {{'a', "", "", "the anime list only"}, {'m', "", "", "the manga list only"}},
 	     .run = RunStats},
 	};
 }

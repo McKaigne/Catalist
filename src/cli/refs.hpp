@@ -35,13 +35,6 @@ struct LocalRef {
 [[nodiscard]] std::vector<Entry> Find(const Catalogue& db, const std::string& text,
                                       std::optional<MediaType> only);
 
-// The title a text that names none was probably meant to name: the one
-// whose title, or a run of as many of its words as the text has, is the
-// fewest edits away, and few enough for a typo. Nothing for a ref, or text
-// that looks like an option.
-[[nodiscard]] std::optional<Entry> Closest(const Catalogue& db, const std::string& text,
-                                           std::optional<MediaType> only);
-
 }  // namespace catalist::refs
 
 #endif  // CATALIST_CLI_REFS_HPP_

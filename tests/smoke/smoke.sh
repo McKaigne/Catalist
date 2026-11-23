@@ -63,9 +63,9 @@ catalist add -q --no-lookup --status=watching Dandadan
 expect "add: the titles" "$(catalist ls -q | tr '\n' ' ')" "a:3 a:1 a:2 "
 
 # The refs of one command feed another.
-catalist ls -q -s watching | catalist + -q -
-expect "ls -q | + -: Odd Taxi" "$(field a:2 6)" 1
-expect "ls -q | + -: Dandadan" "$(field a:3 6)" 1
+catalist ls -q -s watching | xargs "$program" + -q
+expect "ls -q | xargs +: Odd Taxi" "$(field a:2 6)" 1
+expect "ls -q | xargs +: Dandadan" "$(field a:3 6)" 1
 
 # undo takes the whole command back; redo makes it again.
 catalist undo -q
@@ -108,13 +108,6 @@ CATALIST_DATA_DIR=$work/many "$program" import -q "$work/many.xml"
 first=$(CATALIST_DATA_DIR=$work/many "$program" ls 2>"$work/err" | head -n 1 | cut -f 1)
 expect "ls | head -n 1" "$first" a:1
 expect "ls | head -n 1: standard error" "$(cat "$work/err")" ""
-
-# The completions ask for the refs; with no lists there are none, quietly.
-expect "__complete refs" "$(catalist __complete refs | head -n 1)" \
-	"$(printf 'a:1\tFullmetal Alchemist')"
-expect "__complete, no lists" \
-	"$(CATALIST_DATA_DIR=$work/none "$program" __complete refs 2>&1; echo "$?")" 0
-[ -e "$work/none" ] && fail "__complete made a data directory"
 
 if [ "$failures" -ne 0 ]; then
 	printf '%s: %d failed\n' "$0" "$failures" >&2

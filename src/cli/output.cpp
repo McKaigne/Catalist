@@ -71,24 +71,12 @@ std::string TableLine(const std::vector<TableColumn>& columns, const std::vector
 
 }  // namespace
 
-Cell Text(std::string value) {
-	return {std::move(value), JsonForm::kString};
+std::string DateText(const std::optional<IsoDate>& value) {
+	return value ? value->ToString() : "-";
 }
 
-Cell Number(long long value) {
-	return {std::to_string(value), JsonForm::kNumber};
-}
-
-Cell Known(int value) {
-	return {std::to_string(value), value > 0 ? JsonForm::kNumber : JsonForm::kNull};
-}
-
-Cell Date(const std::optional<IsoDate>& value) {
-	return value ? Cell{value->ToString(), JsonForm::kString} : Cell{"-", JsonForm::kNull};
-}
-
-Cell Maybe(const std::string& value) {
-	return value.empty() ? Cell{"-", JsonForm::kNull} : Cell{value, JsonForm::kString};
+std::string OrDash(const std::string& value) {
+	return value.empty() ? "-" : value;
 }
 
 std::string TsvLine(const std::vector<std::string>& fields) {
@@ -96,77 +84,6 @@ std::string TsvLine(const std::vector<std::string>& fields) {
 	for (size_t i = 0; i < fields.size(); ++i)
 		line += (i > 0 ? "\t" : "") + OneLine(fields[i]);
 	return line + "\n";
-}
-
-std::string TsvLine(const std::vector<Cell>& cells) {
-	std::vector<std::string> fields;
-	for (const auto& each : cells)
-		fields.push_back(each.text);
-	return TsvLine(fields);
-}
-
-std::string CsvLine(const std::vector<std::string>& fields) {
-	std::string line;
-	for (size_t i = 0; i < fields.size(); ++i) {
-		const std::string& field = fields[i];
-		line += i > 0 ? "," : "";
-		if (field.find_first_of(",\"\r\n") == std::string::npos) {
-			line += field;
-			continue;
-		}
-		line += '"';
-		for (char c : field)
-			line += c == '"' ? std::string("\"\"") : std::string(1, c);
-		line += '"';
-	}
-	return line + "\n";
-}
-
-std::string CsvLine(const std::vector<Cell>& cells) {
-	std::vector<std::string> fields;
-	for (const auto& each : cells)
-		fields.push_back(each.json == JsonForm::kNull ? "" : each.text);
-	return CsvLine(fields);
-}
-
-std::string JsonString(const std::string& value) {
-	std::string quoted = "\"";
-	for (unsigned char c : value) {
-		switch (c) {
-			case '"':
-				quoted += "\\\"";
-				break;
-			case '\\':
-				quoted += "\\\\";
-				break;
-			case '\n':
-				quoted += "\\n";
-				break;
-			case '\r':
-				quoted += "\\r";
-				break;
-			case '\t':
-				quoted += "\\t";
-				break;
-			default:
-				// The other control characters have no short form.
-				quoted +=
-				    c < 0x20 ? std::format("\\u{:04x}", c) : std::string(1, static_cast<char>(c));
-		}
-	}
-	return quoted + "\"";
-}
-
-std::string JsonLine(const std::vector<std::string>& names, const std::vector<Cell>& cells) {
-	std::string line = "{";
-	for (size_t i = 0; i < names.size() and i < cells.size(); ++i) {
-		const Cell& each = cells[i];
-		std::string value = each.json == JsonForm::kNull     ? "null"
-		                    : each.json == JsonForm::kNumber ? each.text
-		                                                     : JsonString(each.text);
-		line += std::format("{}{}:{}", i > 0 ? "," : "", JsonString(names[i]), value);
-	}
-	return line + "}\n";
 }
 
 std::string Stars(double out_of_ten) {

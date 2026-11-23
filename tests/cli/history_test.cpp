@@ -133,16 +133,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli log lists the steps, newest first") {
 	      "2\t2026-10-20 21:30:00\tdone\t1\tset a:2 score=9\n"
 	      "1\t2026-10-20 21:30:00\tdone\t2\t+ --all frieren taxi\n");
 	CHECK(err.empty());
-	CHECK(Run({"log", "--header", "-n", "1"}) == 0);
-	CHECK(out ==
-	      "tx\tstamp\tstate\tchanges\tlabel\n"
-	      "3\t2026-10-20 21:30:00\tundone\t1\thold berserk\n");
-	CHECK(Run({"log", "--json", "-n2"}) == 0);
-	CHECK(out ==
-	      "{\"tx\":3,\"stamp\":\"2026-10-20 21:30:00\",\"state\":\"undone\",\"changes\":1,"
-	      "\"label\":\"hold berserk\"}\n"
-	      "{\"tx\":2,\"stamp\":\"2026-10-20 21:30:00\",\"state\":\"done\",\"changes\":1,"
-	      "\"label\":\"set a:2 score=9\"}\n");
+	CHECK(Run({"log", "-n", "1"}) == 0);
+	CHECK(out == "3\t2026-10-20 21:30:00\tundone\t1\thold berserk\n");
 	CHECK(Run({"log"}, "", 100) == 0);
 	CHECK(out ==
 	      "TX  WHEN                 STATE   CHANGES  COMMAND\n"

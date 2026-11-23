@@ -6,8 +6,7 @@
 
 // The undo history of the catalogue: each save with a note is a step in
 // `tx`, and its changes are rows of `change`, each entry before and after
-// as a csv_codec row (empty: the entry did not exist), as Catalist-TUI
-// writes them too.
+// as a csv_codec row (empty: the entry did not exist).
 namespace catalist {
 
 namespace {
@@ -87,7 +86,7 @@ bool Catalogue::SaveAll(const TxNote& note) {
 	changes.insert(changes.end(), manga.begin(), manga.end());
 	if (changes.empty())
 		return SaveAll();
-	bool done = Commit([&] { return WriteChanged() and WriteJournal(db_, note, changes); });
+	bool done = Commit([&] { return WriteRows() and WriteJournal(db_, note, changes); });
 	if (done)
 		RememberSaved();
 	return done;
@@ -150,7 +149,7 @@ Result<Replay> Catalogue::WalkHistory(bool redoing, int count, bool force) {
 			return set.Bind(redoing ? 0 : 1).Bind(step.id).Run();
 		});
 	};
-	if (problem.empty() and not Commit([&] { return WriteChanged() and mark(); }))
+	if (problem.empty() and not Commit([&] { return WriteRows() and mark(); }))
 		problem = std::format("could not save the catalogue to {}", data_dir().string());
 	if (not problem.empty()) {
 		animeEntries_ = std::move(anime);

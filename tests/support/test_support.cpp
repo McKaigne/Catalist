@@ -105,8 +105,8 @@ std::optional<web::Reply> FakeWeb::Fetch(const web::Request& asked) {
 	return answer ? std::optional<web::Reply>(*answer) : std::nullopt;
 }
 
-web::Link FakeWeb::Link() {
-	return {[this](const web::Request& asked) { return Fetch(asked); }};
+web::Fetcher FakeWeb::Link() {
+	return [this](const web::Request& asked) { return Fetch(asked); };
 }
 
 Entry FindTitle(const Catalogue& db, MediaType type, const std::string& title) {

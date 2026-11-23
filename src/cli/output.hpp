@@ -7,45 +7,17 @@
 
 #include "core/date.hpp"
 
-// The three forms the command line prints rows in: an aligned table for a
-// terminal, tab-separated lines for a pipe, and JSON Lines. Pure text out.
+// The two forms the command line prints rows in: an aligned table for a
+// terminal, and tab-separated lines for a pipe. Pure text out.
 namespace catalist::output {
 
-// One field of a row. `text` is how it reads in a table or a tab-separated
-// line; `json` says how JSON writes it.
-enum class JsonForm { kString, kNumber, kNull };
-struct Cell {
-	std::string text;
-	JsonForm json = JsonForm::kString;
-};
-
-[[nodiscard]] Cell Text(std::string value);
-[[nodiscard]] Cell Number(long long value);
-// A count that is 0 while it is not known: 0 in a line, null in JSON.
-[[nodiscard]] Cell Known(int value);
-// A date that may be absent: "-" in a line, null in JSON.
-[[nodiscard]] Cell Date(const std::optional<IsoDate>& value);
-// Text that may be empty: "-" in a line, null in JSON.
-[[nodiscard]] Cell Maybe(const std::string& value);
+// A date that may be absent, or text that may be empty: "-" then.
+[[nodiscard]] std::string DateText(const std::optional<IsoDate>& value);
+[[nodiscard]] std::string OrDash(const std::string& value);
 
 // One line of tab-separated fields, with its line end. A tab or a line break
 // inside a field becomes one space, so every line has the same fields.
 [[nodiscard]] std::string TsvLine(const std::vector<std::string>& fields);
-[[nodiscard]] std::string TsvLine(const std::vector<Cell>& cells);
-
-// One line of comma-separated fields, with its line end, quoted as RFC 4180
-// has it: a field that holds a comma, a quote or a line break goes in double
-// quotes, with each quote in it doubled. A cell that JSON writes as null (no
-// date, a total that is not known) is an empty field.
-[[nodiscard]] std::string CsvLine(const std::vector<std::string>& fields);
-[[nodiscard]] std::string CsvLine(const std::vector<Cell>& cells);
-
-// The text as a JSON string, quotes included.
-[[nodiscard]] std::string JsonString(const std::string& value);
-// One JSON object on one line, with its line end: `names[i]` is the key of
-// `cells[i]`.
-[[nodiscard]] std::string JsonLine(const std::vector<std::string>& names,
-                                   const std::vector<Cell>& cells);
 
 // A score out of 10 as five Nerd Font stars (nf-md-star, nf-md-star_half_full
 // and nf-md-star_outline: full, a whole star half filled, and empty), each

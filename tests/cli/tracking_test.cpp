@@ -78,12 +78,9 @@ TEST_CASE_FIXTURE(CliFixture, "cli - counts one less") {
 	CHECK(err.find("error: nothing in your lists matches '-n'\n") == 0);
 }
 
-TEST_CASE_FIXTURE(CliFixture, "cli + takes several titles, from standard input as well") {
+TEST_CASE_FIXTURE(CliFixture, "cli + takes several titles") {
 	Seed();
-	CHECK(Run({"ls", "-q", "-s", "watching"}) == 0);
-	std::string watching = out;
-	CHECK(watching == "m:1\na:2\n");
-	CHECK(Run({"+", "-"}, watching) == 0);
+	CHECK(Run({"+", "m:1", "a:2"}) == 0);
 	CHECK(out ==
 	      "m:1\tBerserk\tprogress\t364\t365\n"
 	      "a:2\tOdd Taxi\tprogress\t5\t6\n");
@@ -91,7 +88,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli + takes several titles, from standard input a
 	// One step for undo, named as the command was typed.
 	auto history = Steps();
 	REQUIRE(history.size() == 1);
-	CHECK(history[0].label == "+ -");
+	CHECK(history[0].label == "+ m:1 a:2");
 	CHECK(history[0].stamp == "2026-10-20 21:30:00");
 	CHECK(history[0].changes == 2);
 
@@ -201,7 +198,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli set checks every value before touching anythi
 	CHECK(Run({"ls", "-s", "rewatched"}) == 2);
 	CHECK(err.find("error: unknown status 'rewatched'") == 0);
 	CHECK(Run({"ls", "-s", "watchng"}) == 2);
-	CHECK(err.find("error: unknown status 'watchng' (did you mean 'watching'?)\n") == 0);
+	CHECK(err.find("error: unknown status 'watchng'\n") == 0);
 	CHECK(Run({"add", "--no-lookup", "--status=plan", "Some OVA"}) == 2);
 	CHECK(Run({"ls", "-q", "-s", "Reading,ON-HOLD"}) == 0);
 	CHECK(Run({"set", "taxi", "progress=lots"}) == 2);
@@ -215,7 +212,7 @@ TEST_CASE_FIXTURE(CliFixture, "cli set checks every value before touching anythi
 	CHECK(Run({"set", "taxi", "title="}) == 2);
 	CHECK(err.find("error: title '' is not a title\n") == 0);
 	CHECK(Run({"set", "taxi", "scor=9"}) == 2);
-	CHECK(err.find("error: unknown field 'scor' (did you mean 'score'?)\n") == 0);
+	CHECK(err.find("error: unknown field 'scor'\n") == 0);
 	CHECK(Run({"set", "taxi", "colour=red"}) == 2);
 	CHECK(err.find("error: unknown field 'colour'\n") == 0);
 	CHECK(Run({"set", "taxi", "score=9", "nine"}) == 2);
@@ -256,11 +253,11 @@ TEST_CASE_FIXTURE(CliFixture, "cli done, hold, drop, plan and resume set the sta
 	CHECK(Run({"drop", "-q", "m:1"}) == 0);
 	CHECK(out.empty());
 	CHECK(SavedTitle(MediaType::kManga, "Berserk").status == WatchStatus::kDropped);
-	CHECK(Run({"plan", "-"}, "m:1\n\na:2\n") == 0);
+	CHECK(Run({"plan", "m:1", "a:2"}) == 0);
 	CHECK(Has(out, "m:1\tBerserk\tstatus\tdropped\tplanned\n"));
 	CHECK(Has(out, "a:2\tOdd Taxi\tstatus\tcompleted\tplanned\n"));
 	CHECK(Steps().size() == 5);
-	CHECK(Steps()[0].label == "plan -");
+	CHECK(Steps()[0].label == "plan m:1 a:2");
 	CHECK(Steps()[0].changes == 2);
 	// A manga of unknown length is done where it stands.
 	CHECK(Run({"done", "--score", "0", "--all", "frieren"}) == 0);
@@ -312,11 +309,11 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm removes several titles as one step") {
 	REQUIRE(Steps().size() == 1);
 	CHECK(Steps()[0].changes == 2);
 
-	// REFs from standard input leave nobody to ask.
-	CHECK(Run({"rm", "-"}, "a:2\nm:1\n") == 1);
+	// In a script there is nobody to ask.
+	CHECK(Run({"rm", "a:2", "m:1"}) == 1);
 	CHECK(Has(err, "error: nobody to ask here: pass -f to remove these 2 titles\n"));
 	CHECK(Saved(MediaType::kAnime).size() == 1);
-	CHECK(Run({"rm", "-fq", "-"}, "a:2\nm:1\n") == 0);
+	CHECK(Run({"rm", "-fq", "a:2", "m:1"}) == 0);
 	CHECK(out.empty());
 	CHECK(err.empty());
 	CHECK(Saved(MediaType::kAnime).empty());

@@ -21,11 +21,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls prints tab-separated lines into a pipe") {
 	      "m:2\tmanga\tSousou no Frieren\tplanned\t0\t0\t0\t0\t0\t-\t-\t-\t0\n");
 	CHECK(err.empty());
 
-	CHECK(Run({"ls", "--header", "taxi"}) == 0);
-	CHECK(out ==
-	      "ref\ttype\ttitle\tstatus\tscore\tprogress\ttotal\tvolumes\trewatched\tstarted\t"
-	      "finished\tupdated\tnew\n"
-	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t8\n");
 	// Nothing listed: nothing printed, and that is not a failure.
 	CHECK(Run({"ls", "nothing like it"}) == 0);
 	CHECK(out.empty());
@@ -103,26 +98,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls sorts by title, or by the key asked for") 
 	CHECK(Run({"ls", "--sort=Title"}) == 2);
 }
 
-TEST_CASE_FIXTURE(CliFixture, "cli ls --json prints one object a line") {
-	Seed();
-	CHECK(Run({"ls", "--json", "taxi"}) == 0);
-	CHECK(out ==
-	      "{\"ref\":\"a:2\",\"type\":\"anime\",\"title\":\"Odd Taxi\",\"status\":\"watching\","
-	      "\"score\":8,\"progress\":5,\"total\":13,\"volumes\":0,\"rewatched\":0,"
-	      "\"started\":\"2026-10-01\",\"finished\":null,\"updated\":null,\"new\":8}\n");
-	// A total that is not known is null; --header is for the tabbed form.
-	CHECK(Run({"ls", "--json", "--header", "berserk"}) == 0);
-	CHECK(out.find("{\"ref\":\"m:1\",\"type\":\"manga\",\"title\":\"Berserk\"") == 0);
-	CHECK(Has(out, "\"progress\":364,\"total\":null,"));
-	CHECK(Run({"ls", "--json"}) == 0);
-	CHECK(std::count(out.begin(), out.end(), '\n') == 4);
-	// The same at a terminal, and -q wins over it.
-	CHECK(Run({"ls", "--json", "taxi"}, "", 100) == 0);
-	CHECK(out.find("{\"ref\":\"a:2\"") == 0);
-	CHECK(Run({"ls", "--json", "-q", "taxi"}) == 0);
-	CHECK(out == "a:2\n");
-}
-
 TEST_CASE_FIXTURE(CliFixture, "cli ls keeps a tab or a quote in a title from breaking a line") {
 	{
 		catalist::Catalogue db("data");
@@ -132,9 +107,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls keeps a tab or a quote in a title from bre
 	CHECK(Run({"ls"}) == 0);
 	CHECK(out ==
 	      "a:1\tanime\tTab here, \"quoted\"\twatching\t0\t0\t0\t0\t0\t2026-01-02\t-\t-\t0\n");
-	CHECK(Run({"ls", "--json"}) == 0);
-	CHECK(Has(out, "\"title\":\"Tab\\there, \\\"quoted\\\"\","));
-	CHECK(Has(out, "\"started\":\"2026-01-02\",\"finished\":null,"));
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {
@@ -181,43 +153,19 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {
 TEST_CASE_FIXTURE(CliFixture, "cli show prints a title's line into a pipe") {
 	Seed();
 	CHECK(Run({"show", "taxi"}) == 0);
-	CHECK(
-	    out ==
-	    "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t8\t0\t13\t128547\t44265\t"
-	    "https://anilist.co/anime/128547\t0\n");
+	CHECK(out ==
+	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\t8\t0\t13\t128547\t"
+	      "44265\thttps://anilist.co/anime/128547\n");
 	CHECK(err.empty());
-	CHECK(Run({"show", "--header", "m:1"}) == 0);
-	CHECK(out ==
-	      "ref\ttype\ttitle\tstatus\tscore\tprogress\ttotal\tvolumes\trewatched\tstarted\t"
-	      "finished\tupdated\tnew\ttotal_volumes\treleased\tanilist_id\tmal_id\turl\tkitsu_id\n"
-	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t2019-05-01\t-\t-\t0\t0\t0\t30002\t2\t"
-	      "https://anilist.co/manga/30002\t0\n");
-	CHECK(Run({"show", "--json", "m:1"}) == 0);
-	CHECK(out ==
-	      "{\"ref\":\"m:1\",\"type\":\"manga\",\"title\":\"Berserk\",\"status\":\"watching\","
-	      "\"score\":0,\"progress\":364,\"total\":null,\"volumes\":0,\"rewatched\":0,"
-	      "\"started\":\"2019-05-01\",\"finished\":null,\"updated\":null,\"new\":0,"
-	      "\"total_volumes\":null,\"released\":null,\"anilist_id\":30002,\"mal_id\":2,"
-	      "\"url\":\"https://anilist.co/manga/30002\",\"kitsu_id\":null}\n");
 }
 
-TEST_CASE_FIXTURE(CliFixture, "cli show takes several titles, by ref, by title or from a pipe") {
+TEST_CASE_FIXTURE(CliFixture, "cli show takes several titles, by ref or by title") {
 	Seed();
 	// Each once, in the order named.
 	CHECK(Run({"show", "a:1", "taxi", "a:1", "ODD"}) == 0);
 	CHECK(out.find("a:1\t") == 0);
 	CHECK(Has(out, "\na:2\t"));
 	CHECK(std::count(out.begin(), out.end(), '\n') == 2);
-	CHECK(Run({"show", "-"}, "a:2\n\nberserk\n") == 0);
-	CHECK(out.find("a:2\t") == 0);
-	CHECK(Has(out, "\nm:1\t"));
-	CHECK(Run({"show", "m:2", "-"}, "a:2\n") == 0);
-	CHECK(out.find("m:2\t") == 0);
-	CHECK(Has(out, "\na:2\t"));
-	// Nothing in the pipe is nothing to do.
-	CHECK(Run({"show", "-"}) == 0);
-	CHECK(out.empty());
-	CHECK(err == "No titles named on standard input: nothing to do.\n");
 	// A title that starts with a dash goes after --.
 	CHECK(Run({"show", "--", "-s"}) == 1);
 	CHECK(Has(err, "error: nothing in your lists matches '-s'\n"));
@@ -238,7 +186,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli show draws a card at a terminal") {
 	      "  Type         Anime\n"
 	      "  AniList      128547\n"
 	      "  MyAnimeList  44265\n"
-	      "  Kitsu        -\n"
 	      "  Page         https://anilist.co/anime/128547\n"
 	      "  Status       Watching\n"
 	      "  Score        \U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04D2  8/10\n"
@@ -253,8 +200,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli show draws a card at a terminal") {
 	CHECK(Has(out, "  Progress     0/? chapters\n  Volumes      0/?\n  Reread       0\n"));
 	// A blank line between two cards.
 	CHECK(Has(out, "  Updated      -\n\nBerserk\n"));
-	CHECK(Run({"show", "--json", "taxi"}, "", 100) == 0);
-	CHECK(out.find("{\"ref\":\"a:2\"") == 0);
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli stats prints one line of numbers a list") {
@@ -264,19 +209,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli stats prints one line of numbers a list") {
 	      "anime\t2\t1\t1\t0\t0\t0\t9.00\t33\t0\t0\t0.6\t0\n"
 	      "manga\t2\t1\t0\t0\t0\t1\t0\t364\t0\t0\t1.3\t0\n");
 	CHECK(err.empty());
-	CHECK(Run({"stats", "-m", "--header"}) == 0);
-	CHECK(out ==
-	      "type\ttotal\twatching\tcompleted\ton_hold\tdropped\tplanned\tmean\tunits\tvolumes\t"
-	      "rewatched\tdays\trewatching\n"
-	      "manga\t2\t1\t0\t0\t0\t1\t0\t364\t0\t0\t1.3\t0\n");
-	CHECK(Run({"stats", "-a", "--json"}, "", 100) == 0);
-	CHECK(out ==
-	      "{\"type\":\"anime\",\"total\":2,\"watching\":1,\"completed\":1,\"on_hold\":0,"
-	      "\"dropped\":0,\"planned\":0,\"mean\":9.00,\"units\":33,\"volumes\":0,"
-	      "\"rewatched\":0,\"days\":0.6,\"rewatching\":0}\n");
-	// No score given yet: there is no mean.
-	CHECK(Run({"stats", "-m", "--json"}) == 0);
-	CHECK(Has(out, "\"planned\":1,\"mean\":null,\"units\":364,"));
+	CHECK(Run({"stats", "-m"}) == 0);
+	CHECK(out == "manga\t2\t1\t0\t0\t0\t1\t0\t364\t0\t0\t1.3\t0\n");
 	CHECK(Run({"stats", "anime"}) == 2);
 	CHECK(err.find("error: stats takes no operands\nUsage: catalist stats ") == 0);
 }

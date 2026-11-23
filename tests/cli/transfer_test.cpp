@@ -1,6 +1,5 @@
 #include <doctest/doctest.h>
 
-#include <algorithm>
 #include <filesystem>
 #include <string>
 
@@ -64,35 +63,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli import reads standard input for a FILE of -")
 	      "error: no anime or manga found in standard input (is it a MyAnimeList XML export?)\n");
 	CHECK(Run({"import", "-"}, std::string("\x1f\x8b\x08\x00", 4) + "gz") == 1);
 	CHECK(err == "error: standard input is compressed; unpack it first (gunzip)\n");
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli import reads the CSV files of Catalist 0.3.0") {
-	// As 0.3.0 wrote them: the AniList id third, notes, and its sync columns.
-	Put("old/anime.csv",
-	    "#id,mal_id,anilist_id,type,title,status,score,progress,total_units,volumes,"
-	    "total_volumes,rewatched,start_date,finish_date,notes,updated_at,dirty,external_ids,"
-	    "queue_pos,synced\r\n"
-	    "1,52991,154587,anime,Sousou no Frieren,Completed,10,28,28,0,0,0,2023-09-29,"
-	    "2024-03-22,\"Best, \"\"ever\"\"\",2026-10-17,0,,0,\r\n");
-	Put("old/manga.csv",
-	    "#id,mal_id,type,title,status,score,progress,total_units,volumes,total_volumes,"
-	    "rewatched,start_date,finish_date,updated_at,released,checked_at,anilist_id\n"
-	    "2,2,manga,Berserk,Reading,0,364,0,42,0,1,2019-05-01,,2026-10-17,0,,30002\n");
-	CHECK(Run({"import", "old/anime.csv", "old/manga.csv"}) == 0);
-	CHECK(err ==
-	      "old/anime.csv: 1 title, 1 added, 0 in your lists already\n"
-	      "old/manga.csv: 1 title, 1 added, 0 in your lists already\n");
-	auto frieren = SavedTitle(MediaType::kAnime, "Sousou no Frieren");
-	CHECK(frieren.anilist_id == 154587);
-	CHECK(frieren.score == 10);
-	CHECK(catalist::FormatDate(frieren.finish_date) == "2024-03-22");
-	auto berserk = SavedTitle(MediaType::kManga, "Berserk");
-	CHECK(berserk.volumes == 42);
-	CHECK(berserk.anilist_id == 30002);
-
-	Put("old/bad.csv", "#id,mal_id\n52991,52991,Sousou no Frieren,Completed\n");
-	CHECK(Run({"import", "old/bad.csv"}) == 1);
-	CHECK(err == "error: old/bad.csv: row 1 has a column layout this version cannot read\n");
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli import adds only the titles not tracked yet") {
@@ -185,10 +155,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli export prints what import read") {
 	CHECK(anime[0].progress == 28);
 	CHECK(anime[1].title == "Odd Taxi");
 	CHECK(anime[1].score == 8);
-	// xml is the format when none is named.
-	std::string xml = out;
-	CHECK(Run({"export", "--format=xml", "anime"}) == 0);
-	CHECK(out == xml);
 
 	CHECK(Run({"export", "manga"}) == 0);
 	auto manga = catalist::mal_xml::Parse(out);
@@ -197,68 +163,14 @@ TEST_CASE_FIXTURE(CliFixture, "cli export prints what import read") {
 	CHECK(manga[0].title == "Berserk");
 }
 
-TEST_CASE_FIXTURE(CliFixture, "cli export --format=csv prints the columns of show, quoted as CSV") {
-	Seed();
-	REQUIRE(Run({"add", "--no-lookup", "Say \"hi\", twice"}) == 0);
-	CHECK(Run({"export", "--format=csv", "anime"}) == 0);
-	CHECK(err.empty());
-	CHECK(out ==
-	      "ref,type,title,status,score,progress,total,volumes,rewatched,started,finished,"
-	      "updated,new,total_volumes,released,anilist_id,mal_id,url,kitsu_id\n"
-	      "a:1,anime,Sousou no Frieren,completed,10,28,28,0,0,,,,0,,,154587,52991,"
-	      "https://anilist.co/anime/154587,\n"
-	      "a:2,anime,Odd Taxi,watching,8,5,13,0,0,2026-10-01,,,8,,13,128547,44265,"
-	      "https://anilist.co/anime/128547,\n"
-	      "a:3,anime,\"Say \"\"hi\"\", twice\",planned,0,0,,0,0,,,2026-10-20,0,,,,,,\n");
-	// The same at a terminal: a file is what it is for.
-	std::string csv = out;
-	CHECK(Run({"export", "--format", "csv", "anime"}, "", 100) == 0);
-	CHECK(out == csv);
-	CHECK(Run({"export", "--format=csv", "manga"}) == 0);
-	CHECK(std::count(out.begin(), out.end(), '\n') == 3);
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli export --format=json prints one object a title") {
-	Seed();
-	CHECK(Run({"export", "--format=json", "anime"}) == 0);
-	CHECK(std::count(out.begin(), out.end(), '\n') == 2);
-	CHECK(out.find("{\"ref\":\"a:1\",\"type\":\"anime\",\"title\":\"Sousou no Frieren\",") == 0);
-	CHECK(
-	    Has(out,
-	        "\n{\"ref\":\"a:2\",\"type\":\"anime\",\"title\":\"Odd Taxi\",\"status\":\"watching\","
-	        "\"score\":8,\"progress\":5,\"total\":13,"));
-	// The lines of `show --json`, ids and all.
-	std::string json = out;
-	CHECK(Run({"show", "--json", "a:1", "a:2"}) == 0);
-	CHECK(out == json);
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli export --format=csv or json without a list holds both") {
-	Seed();
-	CHECK(Run({"export", "--format=json"}) == 0);
-	CHECK(std::count(out.begin(), out.end(), '\n') == 4);
-	CHECK(out.find("{\"ref\":\"a:1\",") == 0);
-	CHECK(Has(out, "\n{\"ref\":\"m:1\",\"type\":\"manga\",\"title\":\"Berserk\","));
-	CHECK(Run({"export", "--format=csv"}) == 0);
-	// The column names, then the four titles.
-	CHECK(std::count(out.begin(), out.end(), '\n') == 5);
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli export wants a list and a format it knows") {
+TEST_CASE_FIXTURE(CliFixture, "cli export wants a list") {
 	Seed();
 	CHECK(Run({"export"}) == 2);
-	CHECK(err.find("error: say which list: anime or manga (XML is one a file)\n"
+	CHECK(err.find("error: say which list: anime or manga\n"
 	               "Usage: catalist export ") == 0);
-	CHECK(Run({"export", "--format=csv", "anime", "manga"}) == 2);
-	CHECK(err.find("error: say which list: anime, manga, or none for both\n") == 0);
 	CHECK(Run({"export", "books"}) == 2);
 	CHECK(Run({"export", "anime", "manga"}) == 2);
-	CHECK(Run({"export", "--format=yaml", "anime"}) == 2);
-	CHECK(err.find("error: unknown format 'yaml'") == 0);
-	CHECK(Has(err, "; choose xml, csv or json\nUsage: catalist export "));
-	CHECK(Run({"export", "--format=jsno", "anime"}) == 2);
-	CHECK(err.find("error: unknown format 'jsno' (did you mean 'json'?); choose xml, csv or "
-	               "json\n") == 0);
+	CHECK(Run({"export", "--format=csv", "anime"}) == 2);
 	CHECK(out.empty());
 }
 
@@ -273,10 +185,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli export notes the titles it had to leave out")
 	CHECK(err == "note: 2 titles without a MyAnimeList id were left out.\n");
 	CHECK(catalist::mal_xml::Parse(out).empty());
 	CHECK(out.find("<myanimelist>") != std::string::npos);
-	// The other formats leave nothing out.
-	CHECK(Run({"export", "--format=csv", "anime"}) == 0);
-	CHECK(err.empty());
-	CHECK(std::count(out.begin(), out.end(), '\n') == 3);
 }
 
 TEST_CASE_FIXTURE(CliFixture, "cli export of an empty catalogue is an empty list") {
@@ -284,60 +192,5 @@ TEST_CASE_FIXTURE(CliFixture, "cli export of an empty catalogue is an empty list
 	CHECK(err.empty());
 	CHECK(out.find("<user_export_type>2</user_export_type>") != std::string::npos);
 	CHECK(catalist::mal_xml::Parse(out).empty());
-	CHECK(Run({"export", "--format=csv", "manga"}) == 0);
-	CHECK(out ==
-	      "ref,type,title,status,score,progress,total,volumes,rewatched,started,finished,"
-	      "updated,new,total_volumes,released,anilist_id,mal_id,url,kitsu_id\n");
-	CHECK(Run({"export", "--format=json", "manga"}) == 0);
-	CHECK(out.empty());
 	CHECK_FALSE(std::filesystem::exists("data"));
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli import --user moves in a user's lists from a site") {
-	Seed();
-	web.Respond(R"("u":"Abel","t":"ANIME")",
-	            R"({"data":{"MediaListCollection":{"lists":[{"entries":[
-	            {"status":"COMPLETED","score":9,"progress":13,"repeat":0,"startedAt":{},"completedAt":{},
-	             "media":{"id":128547,"idMal":44265,"title":{"romaji":"Odd Taxi"},"episodes":13,"status":"FINISHED"}},
-	            {"status":"CURRENT","score":0,"progress":3,"repeat":0,"startedAt":{},"completedAt":{},
-	             "media":{"id":171018,"idMal":57334,"title":{"romaji":"Dandadan"},"episodes":12,"status":"FINISHED"}}]}]}}})");
-	CHECK(Run({"import", "-a", "--user", "Abel", "--from", "anilist"}) == 0);
-	CHECK(Has(err, "Abel on AniList (anime): 2 titles, 1 added, 1 in your lists already\n"));
-	auto dandadan = SavedTitle(MediaType::kAnime, "Dandadan");
-	CHECK(dandadan.progress == 3);
-	CHECK(dandadan.anilist_id == 171018);
-	// A title there already keeps what the person gave it.
-	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 5);
-	CHECK(Steps().size() == 1);
-
-	web.Respond(R"("u":"Nobody")", R"({"errors":[{"message":"Not Found."}]})", 404);
-	CHECK(Run({"import", "--user", "Nobody"}) == 1);
-	CHECK(err == "error: AniList has no public list of Nobody\n");
-	CHECK(Run({"import", "--user", "Abel", "file.xml"}) == 2);
-	CHECK(Run({"import", "-a", "file.xml"}) == 2);
-	CHECK(err.find("error: --from, -a and -m go with --user\n") == 0);
-}
-
-TEST_CASE_FIXTURE(CliFixture, "cli export --format=json is a backup import reads back whole") {
-	Seed();
-	REQUIRE(Run({"link", "taxi", "kitsu", "43095"}) == 0);
-	REQUIRE(Run({"set", "taxi", "rewatched=1", "finish=2026-10-19"}) == 0);
-	REQUIRE(Run({"export", "--format=json"}) == 0);
-	std::string backup = out;
-	Put("backup.jsonl", backup);
-
-	std::filesystem::remove_all("data");
-	CHECK(Run({"import", "backup.jsonl"}) == 0);
-	CHECK(Has(err, "backup.jsonl: 4 titles, 4 added, 0 in your lists already\n"));
-	CHECK(Run({"export", "--format=json"}) == 0);
-	CHECK(out == backup);
-	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").kitsu_id == 43095);
-	// Again: all of them are there already.
-	CHECK(Run({"import", "-"}, backup) == 0);
-	CHECK(Has(err, "standard input: 4 titles, 0 added, 4 in your lists already\n"));
-
-	Put("bad.jsonl", "{\"type\":\"anime\",\"title\":\"x\",\"status\":\"planned\"}\n{\"a\":1}\n");
-	CHECK(Run({"import", "bad.jsonl"}) == 1);
-	CHECK(err ==
-	      "error: line 2 of bad.jsonl is not a title as 'export --format=json' writes one\n");
 }

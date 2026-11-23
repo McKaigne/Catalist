@@ -183,7 +183,8 @@ TEST_CASE_FIXTURE(CliFixture, "cli search prints the matches and which are yours
 	CHECK(Run({"search", "frieren"}, "", 100) == 0);
 	CHECK(out ==
 	      "#  YEAR  TITLE                         EPISODES  SCORE  YOURS\n"
-	      "1  2023  Sousou no Frieren                   28    8.9  a:1\n"
+	      "1  2023  Sousou no Frieren                   28  "
+	      "\U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04D0  a:1\n"
 	      "2  2026  Sousou no Frieren 2nd Season         ?      -\n");
 	CHECK(err == "Add one with: catalist add --pick=N QUERY\n");
 	// Nothing is added, and no step is made.

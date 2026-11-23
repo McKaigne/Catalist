@@ -192,7 +192,7 @@ std::string MatchTable(const CliContext& ctx, MediaType type,
 		                {match.year.empty() ? "-" : match.year},
 		                {match.name},
 		                {match.total_units > 0 ? std::to_string(match.total_units) : "?"},
-		                {match.score > 0.0 ? std::format("{:.1f}", match.score) : "-"},
+		                {output::Stars(match.score), output::kYellow},
 		                {mine[i], output::kGreen}});
 	}
 	return output::Table(columns, rows, ctx.columns, ctx.color);

@@ -2,7 +2,7 @@
 #+OPTIONS: toc:2 num:nil
 #+STARTUP: overview
 
-Code blocks are copied from commit =61f375f=. The =Source:= line above each block gives its file and lines.
+Code blocks are copied from commit =b0d3ea6=. The =Source:= line above each block gives its file and lines.
 
 * Notes for building the PDF
 Follow the WVSU CICT documentation template and the CC 202 Final Project Requirements. Use the template's header on every page: West Visayas State University, College of Information and Communications Technology, La Paz, Iloilo City. The sections below are already in the template's order.
@@ -38,7 +38,7 @@ The score stars are Nerd Font glyphs. They show as boxes in a PDF without that f
 Catalist: A Menu-Driven Anime and Manga Tracker
 
 * Abstract
-Catalist is a menu-driven C++23 console application for keeping track of anime and manga. Through numbered menus, a person can add, view, update and remove titles, see statistics, and undo a mistake. The lists are saved in one CSV file beside the program. New titles are found through AniList's public API without an account, and lists can be moved in and out as MyAnimeList XML.
+Catalist is a menu-driven C++23 console application for keeping track of anime and manga. Through numbered menus, a person can add, view, update and remove titles, see statistics, and undo a mistake. The lists are saved in one CSV file in the project folder. New titles are found through AniList's public API without an account, and lists can be moved in and out as MyAnimeList XML.
 
 * Introduction
 People who follow anime and manga often track dozens or hundreds of titles at once. Catalist keeps those lists in a simple console program, where the most common action, recording one more episode or chapter, takes a few number keys.
@@ -171,7 +171,7 @@ int ReadChoice(App& app, int highest) {
 *** 1.4 The program takes no command-line arguments
 It is an interactive menu program, not a command-line tool.
 
-Source: =src/main.cpp:12-15=
+Source: =src/main.cpp:13-16=
 #+begin_src cpp
 if (argc > 1) {
 	std::cerr << "Catalist takes no arguments. Run it and use the menu.\n";
@@ -1029,21 +1029,15 @@ void RemoveScreen(App& app) {
 
 ** 7. Storage
 
-*** 7.1 One CSV file beside the program
-Both lists are in =catalist.csv=, in the same folder as the program. SQLite was removed.
+*** 7.1 One CSV file in the Catalist folder
+Both lists are in =catalist.csv= in the project folder, wherever the program is run from. The program itself is built in =build/=. SQLite was removed.
 
-Source: =src/main.cpp:17=
+Source: =src/main.cpp:19-22=
 #+begin_src cpp
-catalist::Catalogue db(catalist::ProgramDir() / "catalist.csv");
-#+end_src
-
-Source: =src/system.cpp:220-224=
-#+begin_src cpp
-std::filesystem::path ProgramDir() {
-	std::error_code ec;
-	auto program = std::filesystem::read_symlink("/proc/self/exe", ec);
-	return ec ? std::filesystem::current_path() : program.parent_path();
-}
+const char* test_file = std::getenv("CATALIST_CSV");
+std::filesystem::path file =
+    test_file ? test_file : std::filesystem::path(CATALIST_HOME) / "catalist.csv";
+catalist::Catalogue db(file);
 #+end_src
 
 *** 7.2 The file format

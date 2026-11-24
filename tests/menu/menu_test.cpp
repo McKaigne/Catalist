@@ -16,7 +16,7 @@ TEST_CASE_FIXTURE(MenuFixture, "menu shows the main menu and exits with 0") {
 	CHECK(out.starts_with("Catalist\n"));
 	CHECK(Has(out, "1. Add Title\n2. View Lists\n3. Log Progress\n4. Edit Title\n"
 	               "5. Remove Title\n6. Stats\n7. Import & Export\n0. Exit\n"));
-	CHECK(Has(out, "Continue\n"));
+	CHECK_FALSE(Has(out, "Continue"));
 	CHECK(Has(out, "Enter choice [0-7]: "));
 	CHECK(Has(out, "2 anime, 2 manga, 2 in progress"));
 	CHECK(Has(out, "Goodbye!\n"));

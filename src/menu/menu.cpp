@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <format>
 
 #include "menu/common.hpp"
@@ -9,28 +8,15 @@ namespace catalist {
 
 namespace {
 
-constexpr size_t kHomeRows = 5;
-
 void DrawHome(App& app) {
 	ClearScreen(app);
 	app.out << output::Paint("Catalist", output::kBold, app.color) << "\n";
 	size_t anime = app.db.GetEntries(MediaType::kAnime).size();
 	size_t manga = app.db.GetEntries(MediaType::kManga).size();
-	auto open = InProgress(app.db);
-	app.out << std::format("{} anime, {} manga, {} in progress\n\n", anime, manga, open.size());
+	app.out << std::format("{} anime, {} manga, {} in progress\n\n", anime, manga,
+	                       InProgress(app.db).size());
 	if (anime + manga == 0)
 		app.out << "Your lists are empty. Choose 1 to add a title, or 7 to import a list.\n\n";
-	if (open.empty())
-		return;
-	open.resize(std::min(open.size(), kHomeRows));
-	std::vector<std::vector<output::Styled>> rows;
-	for (const auto& each : open)
-		rows.push_back({{DisplayName(each)},
-		                {TypeKey(each.type)},
-		                {OutOf(each.progress, each.total_units)}});
-	app.out << output::Sections({{"", false, true}, {""}, {""}}, {{"Continue", rows}}, app.columns,
-	                            app.color)
-	        << "\n";
 }
 
 }  // namespace

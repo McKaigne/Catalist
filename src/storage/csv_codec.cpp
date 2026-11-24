@@ -1,43 +1,33 @@
 #include "storage/csv_codec.hpp"
 
+#include <charconv>
 #include <format>
+#include <utility>
 
 namespace catalist::csv_codec {
 
 namespace {
 
-constexpr size_t kCatalogFields = 15;
-constexpr size_t kAllFields = 17;
+constexpr size_t kFields = 17;
 
-std::optional<int> ParseInt(const std::string& field) {
-	try {
-		return std::stoi(field);
-	} catch (...) {
+std::optional<int> ParseCount(const std::string& field) {
+	int value = 0;
+	const char* last = field.data() + field.size();
+	auto [end, error] = std::from_chars(field.data(), last, value);
+	if (field.empty() or error != std::errc() or end != last or value < 0)
 		return std::nullopt;
-	}
+	return value;
 }
 
-int IntOrZero(const std::string& field) {
-	return ParseInt(field).value_or(0);
-}
-
-bool IsTypeColumn(const std::string& field) {
-	return field == "anime" or field == "manga";
-}
-
-MediaType TypeOf(const std::string& field) {
-	return field == "manga" ? MediaType::kManga : MediaType::kAnime;
-}
-
-WatchStatus DecodeStatus(const std::string& field) {
-	return ParseStatus(field).value_or(WatchStatus::kPlanToWatch);
+bool ReadDate(const std::string& field, std::optional<IsoDate>& date) {
+	date = IsoDate::Parse(field);
+	return field.empty() or date.has_value();
 }
 
 }  // namespace
 
 std::string EscapeField(const std::string& field) {
-	bool needs_quotes = field.find_first_of(",\"\n\r") != std::string::npos;
-	if (not needs_quotes)
+	if (field.find_first_of(",\"\n\r") == std::string::npos)
 		return field;
 	std::string escaped = "\"";
 	for (char c : field) {
@@ -46,8 +36,30 @@ std::string EscapeField(const std::string& field) {
 		else
 			escaped += c;
 	}
-	escaped += "\"";
-	return escaped;
+	return escaped + "\"";
+}
+
+std::vector<std::string> SplitRecords(std::string_view text) {
+	std::vector<std::string> records;
+	std::string record;
+	bool in_quotes = false;
+	auto finish = [&] {
+		if (not record.empty() and record.back() == '\r')
+			record.pop_back();
+		if (not record.empty())
+			records.push_back(record);
+		record.clear();
+	};
+	for (char c : text) {
+		if (c == '"')
+			in_quotes = not in_quotes;
+		if (c == '\n' and not in_quotes)
+			finish();
+		else
+			record += c;
+	}
+	finish();
+	return records;
 }
 
 std::vector<std::string> SplitFields(std::string_view record) {
@@ -75,41 +87,42 @@ std::vector<std::string> SplitFields(std::string_view record) {
 }
 
 std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields) {
-	if (fields.size() < kCatalogFields or not IsTypeColumn(fields[2]))
+	if (fields.size() != kFields or (fields[1] != "anime" and fields[1] != "manga") or
+	    fields[2].empty())
 		return std::nullopt;
-	auto id = ParseInt(fields[0]);
-	if (not id)
+	auto status = ParseStatus(fields[4]);
+	if (not status)
 		return std::nullopt;
-	Entry decoded;
-	decoded.id = *id;
-	decoded.mal_id = IntOrZero(fields[1]);
-	decoded.type = TypeOf(fields[2]);
-	decoded.title = fields[3];
-	decoded.status = DecodeStatus(fields[4]);
-	decoded.score = IntOrZero(fields[5]);
-	decoded.progress = IntOrZero(fields[6]);
-	decoded.total_units = IntOrZero(fields[7]);
-	decoded.volumes = IntOrZero(fields[8]);
-	decoded.total_volumes = IntOrZero(fields[9]);
-	decoded.rewatched = IntOrZero(fields[10]);
-	decoded.start_date = IsoDate::Parse(fields[11]);
-	decoded.finish_date = IsoDate::Parse(fields[12]);
-	decoded.updated_at = IsoDate::Parse(fields[13]);
-	decoded.anilist_id = IntOrZero(fields[14]);
-	if (fields.size() >= kAllFields) {
-		decoded.english_title = fields[15];
-		decoded.changed_at = fields[16];
+
+	Entry row;
+	row.type = fields[1] == "manga" ? MediaType::kManga : MediaType::kAnime;
+	row.title = fields[2];
+	row.english_title = fields[3];
+	row.status = *status;
+	row.changed_at = fields[14];
+	const std::pair<size_t, int*> counts[] = {
+	    {0, &row.id},      {5, &row.score},         {6, &row.progress},   {7, &row.total_units},
+	    {8, &row.volumes}, {9, &row.total_volumes}, {10, &row.rewatched}, {15, &row.mal_id},
+	    {16, &row.anilist_id}};
+	for (const auto& [column, value] : counts) {
+		auto number = ParseCount(fields[column]);
+		if (not number)
+			return std::nullopt;
+		*value = *number;
 	}
-	return decoded;
+	bool dates = ReadDate(fields[11], row.start_date) and ReadDate(fields[12], row.finish_date) and
+	             ReadDate(fields[13], row.updated_at);
+	if (not dates or row.id == 0 or row.score > 10)
+		return std::nullopt;
+	return row;
 }
 
 std::string EncodeEntry(const Entry& e) {
-	return std::format(
-	    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, e.mal_id, TypeKey(e.type),
-	    EscapeField(e.title), EscapeField(StatusToString(e.status, e.type)), e.score, e.progress,
-	    e.total_units, e.volumes, e.total_volumes, e.rewatched, FormatDate(e.start_date),
-	    FormatDate(e.finish_date), FormatDate(e.updated_at), e.anilist_id,
-	    EscapeField(e.english_title), e.changed_at);
+	return std::format("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, TypeKey(e.type),
+	                   EscapeField(e.title), EscapeField(e.english_title), StatusKey(e.status),
+	                   e.score, e.progress, e.total_units, e.volumes, e.total_volumes, e.rewatched,
+	                   FormatDate(e.start_date), FormatDate(e.finish_date),
+	                   FormatDate(e.updated_at), e.changed_at, e.mal_id, e.anilist_id);
 }
 
 }  // namespace catalist::csv_codec

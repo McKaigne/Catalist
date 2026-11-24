@@ -4,132 +4,18 @@
 #include <format>
 #include <utility>
 
-#include "core/entry.hpp"
 #include "core/text.hpp"
+#include "storage/csv_codec.hpp"
+#include "system.hpp"
 
 namespace catalist {
 
 namespace {
 
-const char* kStoreFile = "catalist.db";
-
-constexpr int kStoreVersion = 3;
-
-// `entry` holds both lists. `tx` and `change` are the undo history: one
-// row per command that changed something, and under it each entry before
-// and after, as csv_codec rows (empty: the entry did not exist).
-const char* kSchema =
-    "CREATE TABLE entry ("
-    " type TEXT NOT NULL, id INTEGER NOT NULL, mal_id INTEGER NOT NULL,"
-    " title TEXT NOT NULL, status TEXT NOT NULL, score INTEGER NOT NULL,"
-    " progress INTEGER NOT NULL, total_units INTEGER NOT NULL,"
-    " volumes INTEGER NOT NULL, total_volumes INTEGER NOT NULL,"
-    " rewatched INTEGER NOT NULL, start_date TEXT, finish_date TEXT,"
-    " updated_at TEXT, anilist_id INTEGER NOT NULL,"
-    " english_title TEXT NOT NULL DEFAULT '', changed_at TEXT NOT NULL DEFAULT '',"
-    " PRIMARY KEY (type, id));"
-    "CREATE TABLE tx ("
-    " id INTEGER PRIMARY KEY AUTOINCREMENT, stamp TEXT NOT NULL,"
-    " label TEXT NOT NULL, undone INTEGER NOT NULL DEFAULT 0);"
-    "CREATE TABLE change ("
-    " tx INTEGER NOT NULL, seq INTEGER NOT NULL, type TEXT NOT NULL,"
-    " id INTEGER NOT NULL, before TEXT NOT NULL, after TEXT NOT NULL,"
-    " PRIMARY KEY (tx, seq));"
-    "PRAGMA user_version = 3;";
-
-// From version 1, which also kept what the sites were to be told and how far
-// each title had aired. Its undo rows have those columns too, so they go.
-const char* kUpgradeFromV1 =
-    "ALTER TABLE entry DROP COLUMN released;"
-    "ALTER TABLE entry DROP COLUMN checked_at;"
-    "DROP TABLE IF EXISTS entry_id;"
-    "DROP TABLE IF EXISTS outbox;"
-    "DROP TABLE IF EXISTS track_option;"
-    "DROP TABLE IF EXISTS setting;"
-    "DELETE FROM change;"
-    "DELETE FROM tx;"
-    "PRAGMA user_version = 2;";
-
-const char* kUpgradeFromV2 =
-    "ALTER TABLE entry ADD COLUMN english_title TEXT NOT NULL DEFAULT '';"
-    "ALTER TABLE entry ADD COLUMN changed_at TEXT NOT NULL DEFAULT '';"
-    "UPDATE entry SET finish_date = NULL"
-    " WHERE lower(status) NOT IN ('completed', 'rewatching');"
-    "PRAGMA user_version = 3;";
-
-const char* kSelectEntries =
-    "SELECT type, id, mal_id, title, status, score, progress, total_units,"
-    " volumes, total_volumes, rewatched, start_date, finish_date, updated_at,"
-    " anilist_id, english_title, changed_at FROM entry ORDER BY type, id";
-const char* kInsertEntry =
-    "INSERT OR REPLACE INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-int StoreVersion(const store::Database& db) {
-	auto version = db.Prepare("PRAGMA user_version");
-	return version.Step() ? static_cast<int>(version.IntAt(0)) : 0;
-}
-
-void BindDate(store::Statement& into, const std::optional<IsoDate>& date) {
-	if (date)
-		into.Bind(date->ToString());
-	else
-		into.BindNull();
-}
-
-store::Statement& BindEntry(store::Statement& into, const Entry& row) {
-	into.Bind(TypeKey(row.type)).Bind(row.id).Bind(row.mal_id).Bind(row.title);
-	into.Bind(StatusKey(row.status)).Bind(row.score).Bind(row.progress).Bind(row.total_units);
-	into.Bind(row.volumes).Bind(row.total_volumes).Bind(row.rewatched);
-	BindDate(into, row.start_date);
-	BindDate(into, row.finish_date);
-	BindDate(into, row.updated_at);
-	return into.Bind(row.anilist_id).Bind(row.english_title).Bind(row.changed_at);
-}
-
-Entry ReadEntry(const store::Statement& from) {
-	auto number = [&from](int column) { return static_cast<int>(from.IntAt(column)); };
-	Entry row;
-	row.type = from.TextAt(0) == "manga" ? MediaType::kManga : MediaType::kAnime;
-	row.id = number(1);
-	row.mal_id = number(2);
-	row.title = from.TextAt(3);
-	row.status = ParseStatus(from.TextAt(4)).value_or(WatchStatus::kPlanToWatch);
-	row.score = number(5);
-	row.progress = number(6);
-	row.total_units = number(7);
-	row.volumes = number(8);
-	row.total_volumes = number(9);
-	row.rewatched = number(10);
-	row.start_date = IsoDate::Parse(from.TextAt(11));
-	row.finish_date = IsoDate::Parse(from.TextAt(12));
-	row.updated_at = IsoDate::Parse(from.TextAt(13));
-	row.anilist_id = number(14);
-	row.english_title = from.TextAt(15);
-	row.changed_at = from.TextAt(16);
-	return row;
-}
-
 const Entry* FindById(const std::vector<Entry>& list, int id) {
 	auto found =
 	    std::find_if(list.begin(), list.end(), [id](const Entry& e) { return e.id == id; });
 	return found == list.end() ? nullptr : &*found;
-}
-
-Done BackUpStore(store::Database& db, const std::filesystem::path& file, int version) {
-	auto copy = file;
-	{
-		// VACUUM fails while another statement is still open.
-		auto now = db.Prepare("SELECT strftime('%Y%m%d-%H%M%S', 'now', 'localtime')");
-		if (not now.Step())
-			return std::unexpected(
-			    std::format("cannot back up {}: {}", file.string(), db.LastError()));
-		copy.replace_filename(std::format("catalist-v{}-{}.db", version, now.TextAt(0)));
-	}
-	auto vacuum = db.Prepare("VACUUM INTO ?");
-	if (not vacuum.Bind(copy.string()).Run())
-		return std::unexpected(std::format("cannot back up {} to {}: {}; it was not upgraded",
-		                                   file.string(), copy.string(), db.LastError()));
-	return Done{};
 }
 
 // A local id only numbers a title, so two titles are the same only when a
@@ -145,39 +31,25 @@ int NextId(const std::vector<Entry>& list) {
 	return highest == list.end() ? 1 : highest->id + 1;
 }
 
+void StampChanged(std::vector<Entry>& list, const std::vector<Entry>& saved,
+                  const std::string& stamp) {
+	for (auto& each : list) {
+		const Entry* was = FindById(saved, each.id);
+		if (not was or not(*was == each))
+			each.changed_at = stamp;
+	}
+}
+
 }  // namespace
 
-std::filesystem::path DataDirFor(const DataDirEnv& env) {
-	if (not env.catalist_data_dir.empty())
-		return env.catalist_data_dir;
-	std::filesystem::path xdg = env.xdg_data_home;
-	if (xdg.is_absolute())
-		return xdg / "catalist";
-	if (not env.home.empty())
-		return std::filesystem::path(env.home) / ".local" / "share" / "catalist";
-	return "catalist-data";
-}
-
-Catalogue::Catalogue(std::filesystem::path data_dir) : dataDir_(std::move(data_dir)) {}
-
-std::filesystem::path Catalogue::data_dir() const {
-	return dataDir_;
-}
-
-std::filesystem::path Catalogue::StorePath() const {
-	return dataDir_ / kStoreFile;
-}
+Catalogue::Catalogue(std::filesystem::path file) : file_(std::move(file)) {}
 
 std::vector<Entry>& Catalogue::GetList(MediaType type) {
-	return type == MediaType::kAnime ? animeEntries_ : mangaEntries_;
+	return type == MediaType::kAnime ? anime_ : manga_;
 }
 
 const std::vector<Entry>& Catalogue::GetList(MediaType type) const {
-	return type == MediaType::kAnime ? animeEntries_ : mangaEntries_;
-}
-
-const std::vector<Entry>& Catalogue::GetSaved(MediaType type) const {
-	return type == MediaType::kAnime ? savedAnime_ : savedManga_;
+	return type == MediaType::kAnime ? anime_ : manga_;
 }
 
 int Catalogue::AddEntry(Entry added) {
@@ -218,10 +90,8 @@ const std::vector<Entry>& Catalogue::GetEntries(MediaType type) const {
 }
 
 std::optional<Entry> Catalogue::GetById(MediaType type, int id) const {
-	const auto& list = GetList(type);
-	auto found =
-	    std::find_if(list.begin(), list.end(), [id](const Entry& e) { return e.id == id; });
-	return found == list.end() ? std::nullopt : std::optional<Entry>(*found);
+	const Entry* found = FindById(GetList(type), id);
+	return found ? std::optional<Entry>(*found) : std::nullopt;
 }
 
 std::optional<Entry> Catalogue::FindByIds(MediaType type, int anilist_id, int mal_id) const {
@@ -254,148 +124,95 @@ bool Catalogue::RemoveEntry(MediaType type, int id) {
 	return true;
 }
 
-bool Catalogue::RestoreEntry(const Entry& back) {
-	auto& list = GetList(back.type);
-	if (FindById(list, back.id))
-		return false;
-	auto after =
-	    std::find_if(list.begin(), list.end(), [&back](const Entry& e) { return e.id > back.id; });
-	list.insert(after, back);
-	return true;
-}
-
-Done Catalogue::OpenStore() {
-	if (db_.IsOpen())
-		return Done{};
+Result<bool> Catalogue::Load() {
+	anime_.clear();
+	manga_.clear();
+	savedAnime_.clear();
+	savedManga_.clear();
 	std::error_code ignored;
-	std::filesystem::create_directories(dataDir_, ignored);
-	if (not db_.Open(StorePath()))
-		return std::unexpected(
-		    std::format("cannot open {}: {}", StorePath().string(), db_.LastError()));
-	auto ready = SetUpStore();
-	if (not ready.has_value())
-		db_.Close();
-	return ready;
-}
-
-Done Catalogue::SetUpStore() {
-	int found = StoreVersion(db_);
-	if (found == kStoreVersion)
-		return Done{};
-	if (found > kStoreVersion or found < 0)
-		return std::unexpected(
-		    std::format("{} was written by a newer Catalist", StorePath().string()));
-	if (found != 0) {
-		auto saved = BackUpStore(db_, StorePath(), found);
-		if (not saved.has_value())
-			return saved;
-	}
-
-	store::Transaction setup(db_);
-	if (not setup.Active())
-		return std::unexpected(
-		    std::format("cannot write to {}: {}", StorePath().string(), db_.LastError()));
-	int version = StoreVersion(db_);
-	if (version == kStoreVersion)
-		return Done{};
-	bool ready = version == 0
-	                 ? db_.Run(kSchema)
-	                 : (version > 1 or db_.Run(kUpgradeFromV1)) and db_.Run(kUpgradeFromV2);
-	if (not ready)
-		return std::unexpected(
-		    std::format("cannot set up {}: {}", StorePath().string(), db_.LastError()));
-	if (not setup.Commit())
-		return std::unexpected(
-		    std::format("cannot write to {}: {}", StorePath().string(), db_.LastError()));
-	return Done{};
-}
-
-Done Catalogue::BeginWrite() {
-	auto opened = OpenStore();
-	if (not opened.has_value())
-		return opened;
-	write_.emplace(db_);
-	if (write_->Active())
-		return Done{};
-	write_.reset();
-	return std::unexpected(
-	    std::format("{} is in use by another program ({})", StorePath().string(), db_.LastError()));
-}
-
-Result<bool> Catalogue::LoadAll() {
-	std::error_code ignored;
-	bool stored = db_.IsOpen() or std::filesystem::exists(StorePath(), ignored);
-	if (not stored)
+	if (not std::filesystem::exists(file_, ignored))
 		return false;
-	auto opened = OpenStore();
-	if (not opened)
-		return std::unexpected(opened.error());
-	if (not ReadStore())
-		return std::unexpected(
-		    std::format("cannot read {}: {}", StorePath().string(), db_.LastError()));
+	auto text = ReadFile(file_);
+	if (not text)
+		return std::unexpected(std::format("cannot read {}", file_.string()));
+
+	auto records = csv_codec::SplitRecords(*text);
+	if (records.empty() or records[0] != csv_codec::kHeader)
+		return std::unexpected(std::format("{} is not a Catalist list", file_.string()));
+	for (size_t i = 1; i < records.size(); ++i) {
+		auto row = csv_codec::DecodeEntry(csv_codec::SplitFields(records[i]));
+		if (not row or FindById(GetList(row->type), row->id))
+			return std::unexpected(
+			    std::format("{}: row {} is damaged; fix it or restore the file", file_.string(), i));
+		GetList(row->type).push_back(*row);
+	}
+	savedAnime_ = anime_;
+	savedManga_ = manga_;
 	return true;
 }
 
-bool Catalogue::ReadStore() {
-	std::vector<Entry> anime;
-	std::vector<Entry> manga;
-	auto rows = db_.Prepare(kSelectEntries);
-	while (rows.Step()) {
-		Entry row = ReadEntry(rows);
-		(row.type == MediaType::kAnime ? anime : manga).push_back(std::move(row));
-	}
-	if (not rows.Ok())
-		return false;
+bool Catalogue::WriteCsv() const {
+	std::string text = std::string(csv_codec::kHeader) + "\n";
+	for (const auto* list : {&anime_, &manga_})
+		for (const auto& row : *list)
+			text += csv_codec::EncodeEntry(row) + "\n";
+	return WriteFile(file_, text);
+}
 
-	animeEntries_ = std::move(anime);
-	mangaEntries_ = std::move(manga);
-	RememberSaved();
+bool Catalogue::Save(const std::string& label, const std::string& stamp) {
+	if (anime_ == savedAnime_ and manga_ == savedManga_)
+		return true;
+	StampChanged(anime_, savedAnime_, stamp);
+	StampChanged(manga_, savedManga_, stamp);
+	if (not WriteCsv()) {
+		anime_ = savedAnime_;
+		manga_ = savedManga_;
+		return false;
+	}
+	undo_.push_back({label, stamp, savedAnime_, savedManga_});
+	if (undo_.size() > kHistoryLength)
+		undo_.erase(undo_.begin());
+	redo_.clear();
+	savedAnime_ = anime_;
+	savedManga_ = manga_;
 	return true;
 }
 
-void Catalogue::RememberSaved() {
-	savedAnime_ = animeEntries_;
-	savedManga_ = mangaEntries_;
-}
-
-bool Catalogue::Commit(const std::function<bool()>& work) {
-	if (not OpenStore().has_value())
-		return false;
-	if (not write_)
-		write_.emplace(db_);
-	bool done = write_->Active() and work() and write_->Commit();
-	write_.reset();
-	return done;
-}
-
-bool Catalogue::WriteRows() {
-	auto insert = db_.Prepare(kInsertEntry);
-	auto remove = db_.Prepare("DELETE FROM entry WHERE type = ? AND id = ?");
-	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
-		const auto& now = GetList(type);
-		const auto& before = GetSaved(type);
-		for (const auto& row : now) {
-			const Entry* was = FindById(before, row.id);
-			bool same = was and *was == row;
-			if (not same and not BindEntry(insert, row).Run())
-				return false;
-		}
-		for (const auto& row : before) {
-			bool gone = FindById(now, row.id) == nullptr;
-			if (not gone)
-				continue;
-			if (not remove.Bind(TypeKey(type)).Bind(row.id).Run())
-				return false;
-		}
+Result<std::optional<std::string>> Catalogue::Move(std::vector<Snapshot>& from,
+                                                   std::vector<Snapshot>& to) {
+	if (from.empty())
+		return std::optional<std::string>{};
+	Snapshot step = from.back();
+	Snapshot here{step.label, step.stamp, anime_, manga_};
+	anime_ = step.anime;
+	manga_ = step.manga;
+	if (not WriteCsv()) {
+		anime_ = here.anime;
+		manga_ = here.manga;
+		return std::unexpected(std::format("could not save {}", file_.string()));
 	}
-	return true;
+	from.pop_back();
+	to.push_back(std::move(here));
+	savedAnime_ = anime_;
+	savedManga_ = manga_;
+	return std::optional<std::string>(step.label);
 }
 
-bool Catalogue::SaveAll() {
-	bool done = Commit([this] { return WriteRows(); });
-	if (done)
-		RememberSaved();
-	return done;
+Result<std::optional<std::string>> Catalogue::Undo() {
+	return Move(undo_, redo_);
+}
+
+Result<std::optional<std::string>> Catalogue::Redo() {
+	return Move(redo_, undo_);
+}
+
+std::vector<HistoryStep> Catalogue::History() const {
+	std::vector<HistoryStep> steps;
+	for (const auto& each : redo_)
+		steps.push_back({each.label, each.stamp, true});
+	for (auto each = undo_.rbegin(); each != undo_.rend(); ++each)
+		steps.push_back({each->label, each->stamp, false});
+	return steps;
 }
 
 }  // namespace catalist

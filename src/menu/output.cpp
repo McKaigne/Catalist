@@ -1,4 +1,4 @@
-#include "cli/output.hpp"
+#include "menu/output.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -12,13 +12,6 @@ namespace {
 
 constexpr int kGap = 2;
 constexpr int kNarrowest = 10;
-
-std::string OneLine(std::string field) {
-	std::replace_if(
-	    field.begin(), field.end(), [](char c) { return c == '\t' or c == '\n' or c == '\r'; },
-	    ' ');
-	return field;
-}
 
 std::vector<int> ColumnWidths(const std::vector<TableColumn>& columns,
                               const std::vector<std::vector<Styled>>& rows, int width) {
@@ -69,17 +62,6 @@ std::string DateText(const std::optional<IsoDate>& value) {
 	return value ? value->ToString() : "-";
 }
 
-std::string OrDash(const std::string& value) {
-	return value.empty() ? "-" : value;
-}
-
-std::string TsvLine(const std::vector<std::string>& fields) {
-	std::string line;
-	for (size_t i = 0; i < fields.size(); ++i)
-		line += (i > 0 ? "\t" : "") + OneLine(fields[i]);
-	return line + "\n";
-}
-
 std::string Stars(double out_of_ten) {
 	int halves = std::clamp(static_cast<int>(std::lround(out_of_ten)), 0, 10);
 	if (halves == 0)
@@ -96,13 +78,10 @@ std::string Paint(const std::string& value, const char* sgr, bool color) {
 	return color and sgr ? std::format("\x1b[{}m{}\x1b[0m", sgr, value) : value;
 }
 
-std::string Table(const std::vector<TableColumn>& columns,
-                  const std::vector<std::vector<Styled>>& rows, int width, bool color) {
+std::string Rows(const std::vector<TableColumn>& columns,
+                 const std::vector<std::vector<Styled>>& rows, int width, bool color) {
 	auto widths = ColumnWidths(columns, rows, width);
-	std::vector<Styled> header;
-	for (const auto& column : columns)
-		header.push_back({column.header, kDim});
-	std::string drawn = TableLine(columns, widths, header, color);
+	std::string drawn;
 	for (const auto& row : rows)
 		drawn += TableLine(columns, widths, row, color);
 	return drawn;

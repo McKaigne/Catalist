@@ -24,9 +24,7 @@ namespace catalist {
 
 [[nodiscard]] bool IsInteractive();
 [[nodiscard]] int TerminalColumns();
-[[nodiscard]] int TerminalRows();
-[[nodiscard]] bool ShowInPager(const std::string& text);
-[[nodiscard]] bool OutputIsPipe();
+[[nodiscard]] std::filesystem::path ProgramDir();
 
 }  // namespace catalist
 

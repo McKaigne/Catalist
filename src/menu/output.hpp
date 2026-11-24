@@ -1,5 +1,5 @@
-#ifndef CATALIST_CLI_OUTPUT_HPP_
-#define CATALIST_CLI_OUTPUT_HPP_
+#ifndef CATALIST_MENU_OUTPUT_HPP_
+#define CATALIST_MENU_OUTPUT_HPP_
 
 #include <optional>
 #include <string>
@@ -10,9 +10,6 @@
 namespace catalist::output {
 
 [[nodiscard]] std::string DateText(const std::optional<IsoDate>& value);
-[[nodiscard]] std::string OrDash(const std::string& value);
-
-[[nodiscard]] std::string TsvLine(const std::vector<std::string>& fields);
 
 // A score out of 10 as five Nerd Font stars (nf-md-star, nf-md-star_half_full
 // and nf-md-star_outline: full, a whole star half filled, and empty), each
@@ -40,9 +37,8 @@ struct Styled {
 	const char* sgr = nullptr;
 };
 
-[[nodiscard]] std::string Table(const std::vector<TableColumn>& columns,
-                                const std::vector<std::vector<Styled>>& rows, int width,
-                                bool color);
+[[nodiscard]] std::string Rows(const std::vector<TableColumn>& columns,
+                               const std::vector<std::vector<Styled>>& rows, int width, bool color);
 
 struct Section {
 	std::string heading;
@@ -54,4 +50,4 @@ struct Section {
 
 }  // namespace catalist::output
 
-#endif  // CATALIST_CLI_OUTPUT_HPP_
+#endif  // CATALIST_MENU_OUTPUT_HPP_

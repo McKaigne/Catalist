@@ -128,7 +128,6 @@ private:
 
 [[nodiscard]] Entry FindTitle(const Catalogue& db, MediaType type, const std::string& title);
 
-[[nodiscard]] std::string StoredRows(const std::filesystem::path& data_dir, MediaType type);
 
 }  // namespace catalist::test
 

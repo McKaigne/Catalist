@@ -1,18 +1,16 @@
-#ifndef CATALIST_TESTS_SUPPORT_CLI_FIXTURE_HPP_
-#define CATALIST_TESTS_SUPPORT_CLI_FIXTURE_HPP_
+#ifndef CATALIST_TESTS_SUPPORT_MENU_FIXTURE_HPP_
+#define CATALIST_TESTS_SUPPORT_MENU_FIXTURE_HPP_
 
 #include <doctest/doctest.h>
 
 #include <filesystem>
 #include <format>
-#include <functional>
 #include <sstream>
-#include <streambuf>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "cli/cli.hpp"
+#include "menu/app.hpp"
 #include "support/test_support.hpp"
 
 namespace catalist::test {
@@ -39,73 +37,32 @@ inline const char* const kMangaXml =
     "<my_status>Reading</my_status></manga>"
     "</myanimelist>";
 
-// Standard input that does `meanwhile` when it is first read, then gives the
-// answer.
-class AnswerAfter : public std::streambuf {
-public:
-	AnswerAfter(std::string answer, std::function<void()> meanwhile)
-	    : answer_(std::move(answer)), meanwhile_(std::move(meanwhile)) {}
-
-protected:
-	int_type underflow() override {
-		if (meanwhile_) {
-			std::exchange(meanwhile_, nullptr)();
-			setg(answer_.data(), answer_.data(), answer_.data() + answer_.size());
-		}
-		return gptr() < egptr() ? traits_type::to_int_type(*gptr()) : traits_type::eof();
-	}
-
-private:
-	std::string answer_;
-	std::function<void()> meanwhile_;
-};
-
-struct CliFixture : catalist::test::TempDirFixture {
-	CliFixture() : previous_dir(std::filesystem::current_path()) {
+struct MenuFixture : catalist::test::TempDirFixture {
+	MenuFixture() : previous_dir(std::filesystem::current_path()) {
 		std::filesystem::current_path(TempDir());
 	}
-	~CliFixture() { std::filesystem::current_path(previous_dir); }
+	~MenuFixture() { std::filesystem::current_path(previous_dir); }
 
-	int Run(const std::vector<std::string>& args, const std::string& input = "", int columns = 0) {
-		std::istringstream in_stream(input);
-		return RunOn(args, in_stream, not input.empty(), columns);
-	}
-
-	int RunAsked(const std::vector<std::string>& args, const std::string& answer,
-	             std::function<void()> meanwhile) {
-		AnswerAfter typed(answer, std::move(meanwhile));
-		std::istream in_stream(&typed);
-		return RunOn(args, in_stream, true, 0);
-	}
-
-	int RunOn(const std::vector<std::string>& args, std::istream& in_stream, bool interactive,
-	          int columns) {
-		catalist::Catalogue db("data");
+	int Run(const std::string& typed) {
+		catalist::Catalogue db("catalist.csv");
+		REQUIRE(db.Load().has_value());
+		std::istringstream in_stream(typed);
 		std::ostringstream out_stream;
-		std::ostringstream err_stream;
-		if (out_closed)
-			out_stream.setstate(std::ios::badbit);
-		catalist::CliContext ctx{db, in_stream, out_stream, err_stream, TestClock, web.Link()};
-		ctx.interactive = interactive;
-		ctx.columns = columns;
-		ctx.rows = rows;
-		ctx.pager = pager;
-		ctx.color = color;
-		int exit_code = catalist::RunCli(args, ctx);
+		catalist::App app{db, in_stream, out_stream, TestClock, web.Link()};
+		int exit_code = catalist::RunMenu(app);
 		out = out_stream.str();
-		err = err_stream.str();
 		return exit_code;
 	}
 
 	std::vector<catalist::Entry> Saved(MediaType type) {
-		catalist::Catalogue db("data");
-		REQUIRE(db.LoadAll().has_value());
+		catalist::Catalogue db("catalist.csv");
+		REQUIRE(db.Load().has_value());
 		return db.GetEntries(type);
 	}
 
 	catalist::Entry SavedTitle(MediaType type, const std::string& title) {
-		catalist::Catalogue db("data");
-		REQUIRE(db.LoadAll().has_value());
+		catalist::Catalogue db("catalist.csv");
+		REQUIRE(db.Load().has_value());
 		return catalist::test::FindTitle(db, type, title);
 	}
 
@@ -121,7 +78,7 @@ struct CliFixture : catalist::test::TempDirFixture {
 	}
 
 	void Seed() {
-		catalist::Catalogue db("data");
+		catalist::Catalogue db("catalist.csv");
 		db.AddEntry(MakeEntry()
 		                .Title("Sousou no Frieren")
 		                .MalId(52991)
@@ -153,32 +110,12 @@ struct CliFixture : catalist::test::TempDirFixture {
 		                .MalId(126287)
 		                .AnilistId(118586)
 		                .Status(WatchStatus::kPlanToWatch));
-		REQUIRE(db.SaveAll());
-	}
-
-	std::vector<catalist::TxRecord> Steps() {
-		catalist::Catalogue db("data");
-		REQUIRE(db.LoadAll().has_value());
-		return db.History(0).value();
-	}
-
-	void ChangeBehindTheHistory(MediaType type, const std::string& title, int progress) {
-		catalist::Catalogue db("data");
-		REQUIRE(db.LoadAll().has_value());
-		auto changed = catalist::test::FindTitle(db, type, title);
-		changed.progress = progress;
-		REQUIRE(db.UpdateEntry(changed));
-		REQUIRE(db.SaveAll());
+		REQUIRE(db.Save("seed", "2026-10-19 10:00:00"));
 	}
 
 	catalist::test::FakeWeb web;
 	std::filesystem::path previous_dir;
-	bool color = false;
-	bool out_closed = false;
-	int rows = 0;
-	std::function<bool(const std::string&)> pager;
 	std::string out;
-	std::string err;
 };
 
 inline bool Has(const std::string& text, const std::string& part) {
@@ -187,4 +124,4 @@ inline bool Has(const std::string& text, const std::string& part) {
 
 }  // namespace catalist::test
 
-#endif  // CATALIST_TESTS_SUPPORT_CLI_FIXTURE_HPP_
+#endif  // CATALIST_TESTS_SUPPORT_MENU_FIXTURE_HPP_

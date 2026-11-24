@@ -9,12 +9,9 @@
 
 int main(int argc, char** argv) {
 	auto sandbox_root = catalist::test::MakeUniqueTempDir("catalist-tests-env-");
-	auto data_dir = sandbox_root / "data";
 	auto home_dir = sandbox_root / "home";
-	std::filesystem::create_directories(data_dir);
 	std::filesystem::create_directories(home_dir);
 
-	::setenv("CATALIST_DATA_DIR", data_dir.c_str(), 1);
 	::setenv("HOME", home_dir.c_str(), 1);
 	::setenv("XDG_CONFIG_HOME", (home_dir / ".config").c_str(), 1);
 	::setenv("XDG_DATA_HOME", (home_dir / ".local" / "share").c_str(), 1);

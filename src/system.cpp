@@ -3,7 +3,6 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/ioctl.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -11,7 +10,6 @@
 #include <cerrno>
 #include <charconv>
 #include <chrono>
-#include <csignal>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
@@ -32,10 +30,19 @@ std::optional<std::string> ReadFile(const std::filesystem::path& file) {
 }
 
 bool WriteFile(const std::filesystem::path& file, const std::string& text) {
-	std::ofstream stream(file, std::ios::binary | std::ios::trunc);
+	// Written beside it and renamed, so a crash cannot leave half a file.
+	auto partial = file;
+	partial += ".tmp";
+	std::ofstream stream(partial, std::ios::binary | std::ios::trunc);
 	stream << text;
 	stream.close();
-	return stream.good();
+	std::error_code ec;
+	if (stream.good())
+		std::filesystem::rename(partial, file, ec);
+	if (stream.good() and not ec)
+		return true;
+	std::filesystem::remove(partial, ec);
+	return false;
 }
 
 std::string ExpandHome(const std::string& path) {
@@ -210,57 +217,10 @@ int TerminalColumns() {
 	return window.ws_col;
 }
 
-int TerminalRows() {
-	winsize window{};
-	if (not isatty(STDOUT_FILENO) or ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) != 0)
-		return 0;
-	return window.ws_row;
-}
-
-bool ShowInPager(const std::string& text) {
-	const char* chosen = std::getenv("PAGER");
-	std::string command = chosen and *chosen ? chosen : "less";
-	auto to_pager = MakePipe();
-	if (not to_pager)
-		return false;
-	pid_t child = fork();
-	if (child == 0) {
-		dup2(to_pager->read.Get(), STDIN_FILENO);
-		setenv("LESS", "FRX", 0);
-		// main ignores SIGPIPE, and a child would inherit that.
-		std::signal(SIGPIPE, SIG_DFL);
-		execlp("sh", "sh", "-c", command.c_str(), nullptr);
-		_exit(127);
-	}
-	to_pager->read.Reset();
-	if (child < 0)
-		return false;
-
-	// Ctrl-C belongs to the pager; dying here would leave it on a dead terminal.
-	auto previous = std::signal(SIGINT, SIG_IGN);
-	size_t written = 0;
-	while (written < text.size()) {
-		ssize_t count = write(to_pager->write.Get(), text.data() + written, text.size() - written);
-		if (count < 0 and errno == EINTR)
-			continue;
-		if (count <= 0)
-			break;
-		written += static_cast<size_t>(count);
-	}
-	to_pager->write.Reset();
-	int status = 0;
-	pid_t waited = -1;
-	do {
-		waited = waitpid(child, &status, 0);
-	} while (waited < 0 and errno == EINTR);
-	std::signal(SIGINT, previous);
-	return waited == child and not(WIFEXITED(status) and WEXITSTATUS(status) == 127);
-}
-
-bool OutputIsPipe() {
-	struct stat output {};
-	return fstat(STDOUT_FILENO, &output) == 0 and
-	       (S_ISFIFO(output.st_mode) or S_ISSOCK(output.st_mode));
+std::filesystem::path ProgramDir() {
+	std::error_code ec;
+	auto program = std::filesystem::read_symlink("/proc/self/exe", ec);
+	return ec ? std::filesystem::current_path() : program.parent_path();
 }
 
 }  // namespace catalist

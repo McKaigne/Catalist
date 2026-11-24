@@ -1,122 +1,70 @@
 #!/bin/sh
-# The command line as a script uses it, from a POSIX shell:
+# Runs the real program from a POSIX shell, in a temporary directory because
+# it keeps catalist.csv beside itself. A stub curl answers for AniList.
 #
-#   sh tests/smoke/smoke.sh build/catalist
-#
-# The lists are kept in a temporary directory, and a stub curl answers for
-# AniList, so nothing outside is read, written or asked.
+#   sh tests/smoke/smoke.sh ./catalist
 
-set -u
-
-if [ "$#" -ne 1 ]; then
-	printf 'usage: %s PROGRAM\n' "$0" >&2
-	exit 2
-fi
-case "$1" in
-/*) program=$1 ;;
-*) program=$(pwd)/$1 ;;
-esac
 here=$(cd "$(dirname "$0")" && pwd)
-work=$(mktemp -d "${TMPDIR:-/tmp}/catalist-smoke.XXXXXX") || exit 1
+work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-
-CATALIST_DATA_DIR=$work/data
-PATH=$here/stub:$PATH
-NO_COLOR=1
-export CATALIST_DATA_DIR PATH NO_COLOR
-
+cp "$1" "$work/catalist"
+PATH="$here/stub:$PATH"
+export PATH
 failures=0
 
 fail() {
-	printf 'FAIL: %s\n' "$1" >&2
+	echo "FAIL: $1" >&2
 	failures=$((failures + 1))
 }
 
-expect() {
-	if [ "$2" != "$3" ]; then
-		fail "$1: got '$2', wanted '$3'"
-	fi
+menu() {
+	printf "$1" | "$work/catalist"
 }
 
-catalist() {
-	"$program" "$@"
+has() {
+	case "$2" in
+	*"$3"*) ;;
+	*) fail "$1: no '$3'" ;;
+	esac
 }
 
-field() {
-	catalist ls | awk -F '\t' -v ref="$1" -v n="$2" '$1 == ref { print $n }'
-}
+"$work/catalist" ls >/dev/null 2>"$work/err"
+[ "$?" -eq 2 ] || fail "an argument is refused"
+grep -q 'takes no arguments' "$work/err" || fail "an argument: no note"
 
-catalist >"$work/out" 2>"$work/err"
-expect "no command: exit" "$?" 2
-expect "no command: output" "$(cat "$work/out")" ""
-grep -q 'no command given' "$work/err" || fail "no command: no note"
+shown=$(menu '0\n')
+[ "$?" -eq 0 ] || fail "exit code"
+has "first run" "$shown" "MAIN MENU"
+has "first run" "$shown" "Goodbye."
+[ ! -e "$work/catalist.csv" ] || fail "looking wrote a file"
 
-added=$(catalist add --pick=2 fullmetal)
-expect "add --pick" "$added" "$(printf 'a:1\tFullmetal Alchemist\tadded\t-\tplanned')"
-catalist add -q --status=watching "Odd Taxi"
-catalist add -q --status=watching Dandadan
-expect "add: the titles" "$(catalist ls -q | tr '\n' ' ')" "a:3 a:1 a:2 "
+shown=$(menu '1\n1\nfullmetal\n2\n1\n\n0\n')
+has "add" "$shown" "Fullmetal Alchemist added as planned."
+head -n 1 "$work/catalist.csv" | grep -q '^id,type,title,' || fail "csv header"
+grep -q '^1,anime,Fullmetal Alchemist,' "$work/catalist.csv" || fail "csv row"
 
-catalist ls -q -s watching | xargs "$program" + -q
-expect "ls -q | xargs +: Odd Taxi" "$(field a:2 6)" 1
-expect "ls -q | xargs +: Dandadan" "$(field a:3 6)" 1
+menu '1\n1\nOdd Taxi\n2\n\n0\n' >/dev/null
+shown=$(menu '3\n1\n\n0\n')
+has "count" "$shown" "progress 0 -> 1/13"
+shown=$(menu '0\n')
+has "reopened" "$shown" "2 anime, 0 manga, 1 in progress"
 
-catalist undo -q
-expect "undo: Odd Taxi" "$(field a:2 6)" 0
-expect "undo: Dandadan" "$(field a:3 6)" 0
-catalist redo -q
-expect "redo: Odd Taxi" "$(field a:2 6)" 1
-expect "redo: Dandadan" "$(field a:3 6)" 1
+shown=$(menu '4\ntaxi\n1\n\n0\n7\n1\n\n0\n0\n')
+has "undo" "$shown" "Undid 'Count one more: Odd Taxi'."
+grep -q ',Odd Taxi,,watching,0,1,' "$work/catalist.csv" || fail "undo reached the file"
 
-catalist + -q a:2 a:3
-catalist done -q a:1
-expect "undo -n: before" "$(field a:2 6) $(field a:1 4)" "2 completed"
-catalist undo -q -n 2
-expect "undo -n 2: Odd Taxi" "$(field a:2 6)" 1
-expect "undo -n 2: Dandadan" "$(field a:3 6)" 1
-expect "undo -n 2: Fullmetal" "$(field a:1 4)" planned
+shown=$(menu "8\n2\n$work/anime.xml\n\n0\n0\n")
+has "export" "$shown" "Saved $work/anime.xml."
+rm "$work/catalist.csv"
+shown=$(menu "8\n1\n$work/anime.xml\n\n0\n0\n")
+has "import" "$shown" "2 titles, 2 added"
 
-catalist rm -f -q Dandadan
-expect "rm -f" "$(catalist ls -q | tr '\n' ' ')" "a:1 a:2 "
-catalist undo -q
-expect "rm -f, undo" "$(field a:3 3)" Dandadan
+printf 'damaged\n' >"$work/catalist.csv"
+menu '0\n' >/dev/null 2>"$work/err"
+[ "$?" -eq 1 ] || fail "a damaged file stops the program"
+[ "$(cat "$work/catalist.csv")" = "damaged" ] || fail "a damaged file was overwritten"
 
-catalist export anime 2>/dev/null |
-	CATALIST_DATA_DIR=$work/other "$program" import -q -
-expect "export | import" "$(CATALIST_DATA_DIR=$work/other "$program" ls | cut -f 1,3)" \
-	"$(printf 'a:3\tDandadan\na:1\tFullmetal Alchemist\na:2\tOdd Taxi')"
-
-catalist export anime >"$work/anime.xml" 2>/dev/null
-mkfifo "$work/fifo"
-cat "$work/anime.xml" >"$work/fifo" &
-CATALIST_DATA_DIR=$work/piped "$program" import -q "$work/fifo"
-expect "import from a pipe: exit" "$?" 0
-wait
-expect "import from a pipe" "$(CATALIST_DATA_DIR=$work/piped "$program" ls | cut -f 1,3)" \
-	"$(printf 'a:3\tDandadan\na:1\tFullmetal Alchemist\na:2\tOdd Taxi')"
-
-awk 'BEGIN {
-	print "<myanimelist>"
-	for (i = 1; i <= 3000; i++)
-		printf "<anime><series_animedb_id>%d</series_animedb_id><series_title>Title %d</series_title><my_status>Watching</my_status></anime>\n", i, i
-	print "</myanimelist>"
-}' >"$work/many.xml"
-CATALIST_DATA_DIR=$work/many "$program" import -q "$work/many.xml"
-first=$(CATALIST_DATA_DIR=$work/many "$program" ls 2>"$work/err" | head -n 1 | cut -f 1)
-expect "ls | head -n 1" "$first" a:1
-expect "ls | head -n 1: standard error" "$(cat "$work/err")" ""
-
-if [ -w /dev/full ]; then
-	catalist export anime >/dev/full 2>"$work/err"
-	expect "export > full disk: exit" "$?" 1
-	grep -q 'could not write to standard output' "$work/err" ||
-		fail "export > full disk: no message"
-	catalist ls >/dev/full 2>/dev/null
-	expect "ls > full disk: exit" "$?" 1
-fi
-
-if [ "$failures" -ne 0 ]; then
-	printf '%s: %d failed\n' "$0" "$failures" >&2
+if [ "$failures" -gt 0 ]; then
+	echo "$0: $failures failed" >&2
 	exit 1
 fi
-printf '%s: all passed\n' "$0"

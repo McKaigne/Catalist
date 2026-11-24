@@ -1,38 +1,32 @@
 #include <clocale>
-#include <csignal>
 #include <cstdlib>
 #include <iostream>
 #include <string>
 
-#include "cli/cli.hpp"
+#include "menu/app.hpp"
 #include "storage/catalogue.hpp"
 #include "system.hpp"
 
-int main(int argc, char* argv[]) {
+int main(int argc, char*[]) {
 	std::setlocale(LC_ALL, "");
-	// `catalist export anime | head` must end quietly, not die on the signal.
-	std::signal(SIGPIPE, SIG_IGN);
+	if (argc > 1) {
+		std::cerr << "Catalist takes no arguments. Run it and use the menu.\n";
+		return 2;
+	}
 
-	auto env = [](const char* name) {
-		const char* value = std::getenv(name);
-		return std::string(value ? value : "");
-	};
-	catalist::DataDirEnv dirs{env("CATALIST_DATA_DIR"), env("XDG_DATA_HOME"), env("HOME")};
-	catalist::Catalogue db(catalist::DataDirFor(dirs));
+	catalist::Catalogue db(catalist::ProgramDir() / "catalist.csv");
+	auto loaded = db.Load();
+	if (not loaded.has_value()) {
+		std::cerr << "Error: " << loaded.error() << "\n";
+		return 1;
+	}
 
-	catalist::CliContext ctx{
-	    db, std::cin, std::cout, std::cerr, catalist::LocalTime, catalist::HttpFetch};
-	ctx.interactive = catalist::IsInteractive();
-	ctx.columns = catalist::TerminalColumns();
-	ctx.rows = catalist::TerminalRows();
-	ctx.pager = catalist::ShowInPager;
-	ctx.clear_screen = ctx.interactive and env("TERM") != "dumb";
-	ctx.color = ctx.columns > 0 and std::getenv("NO_COLOR") == nullptr and env("TERM") != "dumb";
-	int code = catalist::RunCli({argv + 1, argv + argc}, ctx);
-	// A reader that stopped early is no error; a full disk is.
-	std::cout.flush();
-	if (std::cout or catalist::OutputIsPipe())
-		return code;
-	std::cerr << "error: could not write to standard output\n";
-	return code != 0 ? code : 1;
+	catalist::App app{db, std::cin, std::cout, catalist::LocalTime, catalist::HttpFetch};
+	int columns = catalist::TerminalColumns();
+	const char* term = std::getenv("TERM");
+	bool plain = term and std::string(term) == "dumb";
+	app.columns = columns > 0 ? columns : 80;
+	app.color = columns > 0 and not plain and std::getenv("NO_COLOR") == nullptr;
+	app.clear_screen = catalist::IsInteractive() and not plain;
+	return catalist::RunMenu(app);
 }

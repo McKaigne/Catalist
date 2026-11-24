@@ -8,7 +8,6 @@
 #include <random>
 #include <stdexcept>
 
-#include "storage/csv_codec.hpp"
 #include "system.hpp"
 
 namespace catalist::test {
@@ -115,17 +114,6 @@ Entry FindTitle(const Catalogue& db, MediaType type, const std::string& title) {
 			return e;
 	}
 	throw std::runtime_error("no entry titled " + title);
-}
-
-std::string StoredRows(const std::filesystem::path& data_dir, MediaType type) {
-	Catalogue db(data_dir);
-	auto loaded = db.LoadAll();
-	if (not loaded.has_value())
-		throw std::runtime_error(loaded.error());
-	std::string rows;
-	for (const auto& row : db.GetEntries(type))
-		rows += csv_codec::EncodeEntry(row) + "\n";
-	return rows;
 }
 
 }  // namespace catalist::test

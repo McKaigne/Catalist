@@ -190,12 +190,12 @@ bool AtTotal(const Entry& target) {
 
 std::optional<std::string> StatusRefusal(const Entry& target, WatchStatus status) {
 	if (status == WatchStatus::kWatching and target.status == WatchStatus::kCompleted)
-		return std::format("{} is completed; to start it again: catalist rewatch",
+		return std::format("{} is completed; choose Rewatching to start it again",
 		                   DisplayName(target));
 	bool first_time =
 	    target.status != WatchStatus::kCompleted and target.status != WatchStatus::kRewatching;
 	if (status == WatchStatus::kRewatching and first_time)
-		return std::format("{} is not completed; to carry on with it: catalist resume",
+		return std::format("{} is not completed; choose Watching to carry on",
 		                   DisplayName(target));
 	return std::nullopt;
 }

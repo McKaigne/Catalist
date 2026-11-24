@@ -11,7 +11,6 @@
 
 #include "core/result.hpp"
 
-// A small read-only JSON document model for the replies of the title search.
 namespace catalist::json {
 
 struct Member;
@@ -34,16 +33,13 @@ public:
 
 	[[nodiscard]] std::optional<double> AsNumber() const;
 	[[nodiscard]] std::optional<bool> AsBool() const;
-	// Whole numbers only; 3.5 or a string is absent.
 	[[nodiscard]] std::optional<long long> AsInteger() const;
-	// A count, an id or a total: a whole number above 0, else 0.
 	[[nodiscard]] int AsCount() const;
 	[[nodiscard]] std::optional<std::string> AsString() const;
 
 	// A missing key, or indexing something that is not an object, yields null
 	// so that lookups along a path can be chained.
 	[[nodiscard]] const Value& operator[](std::string_view key) const;
-	// Elements of an array; empty for any other kind.
 	[[nodiscard]] const Array& Items() const;
 
 private:

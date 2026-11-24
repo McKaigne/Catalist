@@ -21,8 +21,6 @@ size_t Utf8SequenceLength(unsigned char lead) {
 	return 1;
 }
 
-// The code point of one glyph of SplitGlyphs; a broken sequence counts as
-// one ordinary character.
 std::uint32_t CodePoint(const std::string& glyph) {
 	auto lead = static_cast<unsigned char>(glyph[0]);
 	if (glyph.size() == 1)

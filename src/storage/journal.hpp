@@ -8,18 +8,8 @@
 #include "core/entry.hpp"
 #include "core/result.hpp"
 
-// The undo history as plain data: what one command changed, how two sets of
-// changes fold into one, and what taking a change back does to a list. Pure
-// functions; the catalogue stores the records and applies the outcome.
-//
-// Only what the person sets counts as a change: the title, the status, the
-// score, the progress, the total, the volumes, the rewatch count and the
-// two dates. What a web check fills in (ids, the volume total) is never
-// recorded and never undone.
 namespace catalist::journal {
 
-// One entry before and after a command. No `before`: the command added it.
-// No `after`: the command removed it.
 struct Change {
 	MediaType type = MediaType::kAnime;
 	int id = 0;
@@ -27,23 +17,15 @@ struct Change {
 	std::optional<Entry> after;
 };
 
-// The entries of one list that differ between `saved` and `current`, by
-// their id: those added or changed in the order of `current`, then those
-// removed.
 [[nodiscard]] std::vector<Change> Diff(const std::vector<Entry>& saved,
                                        const std::vector<Entry>& current);
 
-// One field of a change as text, the way a command reports it.
 struct FieldChange {
 	std::string field;
 	std::string before;
 	std::string after;
 };
 
-// The fields a change changed: progress, status, score, total, volumes,
-// rewatched, started, finished and title, in that order. An added entry is
-// the one field `added` (from "-" to its status), a removed one `removed`
-// (from its status to "-"). An absent date is "-".
 [[nodiscard]] std::vector<FieldChange> ChangedFields(const Change& made);
 
 // What stands in `list` once an entry goes from `from` back (or on) to `to`:

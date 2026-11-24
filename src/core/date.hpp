@@ -10,9 +10,7 @@ namespace catalist {
 
 class IsoDate {
 public:
-	// Accepts "YYYY-MM-DD", optionally followed by a 'T' or ' ' and a time.
 	static std::optional<IsoDate> Parse(std::string_view date_str);
-	// Absent unless the parts name a real calendar day in year 1 or later.
 	static std::optional<IsoDate> FromParts(int year, int month, int day);
 	static IsoDate FromLocalTm(const std::tm& local);
 
@@ -45,8 +43,6 @@ private:
 	int day_ = 0;
 };
 
-// "2026-10-20 21:30:00": a local date and time, as a step of the undo
-// history is stamped.
 [[nodiscard]] std::string StampOf(const std::tm& local);
 
 }  // namespace catalist

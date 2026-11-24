@@ -39,7 +39,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli undo takes back the last command, and redo ma
 	CHECK(Run({"redo"}) == 0);
 	CHECK(err == "Nothing to redo.\n");
 
-	// Several steps, newest first; what they did between them is printed once.
 	CHECK(Run({"undo", "-n", "2"}) == 0);
 	CHECK(err ==
 	      "Undid 'done --score=9 taxi' (2026-10-20 21:30:00).\n"
@@ -51,7 +50,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli undo takes back the last command, and redo ma
 	CHECK(err.empty());
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 13);
 
-	// A new change ends what could be redone.
 	REQUIRE(Run({"undo"}) == 0);
 	REQUIRE(Run({"hold", "berserk"}) == 0);
 	CHECK(Run({"redo"}) == 0);
@@ -104,7 +102,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli undo changes nothing when a title has changed
 	CHECK(SavedTitle(MediaType::kManga, "Berserk").progress == 364);
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 5);
 
-	// The step undone last is the first to be made again.
 	ChangeBehindTheHistory(MediaType::kAnime, "Odd Taxi", 1);
 	CHECK(Run({"redo"}) == 1);
 	CHECK(err.find("error: cannot redo '+ taxi' (2026-10-20 21:30:00): Odd Taxi (anime) has "
@@ -142,13 +139,11 @@ TEST_CASE_FIXTURE(CliFixture, "cli log lists the steps, newest first") {
 	      " 2  2026-10-20 21:30:00  done          1  set a:2 score=9\n"
 	      " 1  2026-10-20 21:30:00  done          2  + --all frieren, taxi\n");
 
-	// A long command is cut to 60 characters, never inside a character.
 	REQUIRE(Run({"set", "a:2", "title=" + std::string(40, 'x') + "葬送のフリーレン"}) == 0);
 	CHECK(Steps()[0].label == "set a:2 title=" + std::string(40, 'x') + "葬送のフリー");
 
 	CHECK(Run({"log", "taxi"}) == 2);
 	CHECK(Run({"log", "-n", "0"}) == 2);
-	// Nothing is stored yet: nothing to list, and nothing is created.
 	std::filesystem::remove_all("data");
 	CHECK(Run({"log"}) == 0);
 	CHECK(out.empty());

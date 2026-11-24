@@ -6,7 +6,6 @@ namespace catalist {
 
 namespace {
 
-// The sum of one count over a list, e.g. SumOf(list, &entry::progress).
 int SumOf(const std::vector<Entry>& list, int Entry::* count) {
 	int total = 0;
 	for (const auto& e : list)
@@ -18,8 +17,6 @@ std::string LastChange(const Entry& e) {
 	return e.changed_at.empty() ? FormatDate(e.updated_at) : e.changed_at;
 }
 
-// True when `a` comes before `b` in the natural order of `key`; ties fall
-// back to the title so the order never depends on how the list was stored.
 bool ComesBefore(const Entry& a, const Entry& b, SortKey key) {
 	switch (key) {
 		case SortKey::kUpdated:
@@ -51,8 +48,6 @@ bool ComesBefore(const Entry& a, const Entry& b, SortKey key) {
 }  // namespace
 
 void SortEntries(std::vector<Entry>& entries, SortKey key, bool reverse) {
-	// Stable, so titles that compare equal keep the order they came in and
-	// the same command prints the same lines every time.
 	std::stable_sort(entries.begin(), entries.end(),
 	                 [key, reverse](const Entry& a, const Entry& b) {
 		                 return reverse ? ComesBefore(b, a, key) : ComesBefore(a, b, key);

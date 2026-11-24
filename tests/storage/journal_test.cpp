@@ -70,7 +70,6 @@ TEST_CASE("journal diff leaves out what only the web fills in") {
 	checked.updated_at = RequireDate("2026-10-20");
 	CHECK(journal::Diff({Taxi()}, {checked}).empty());
 
-	// Every field the person sets is one that counts.
 	std::vector<Entry> each(9, Taxi());
 	each[0].title = "ODDTAXI";
 	each[1].status = WatchStatus::kOnHold;
@@ -125,7 +124,6 @@ TEST_CASE("journal changedFields names each field with its old and new value") {
 TEST_CASE("journal transition sets back only the fields the change set") {
 	Entry before = Taxi();
 	Entry after = WithProgress(Taxi(), 6);
-	// Since then the web found the volumes and the person rated the title.
 	Entry now = after;
 	now.total_volumes = 13;
 	now.score = 9;
@@ -138,7 +136,6 @@ TEST_CASE("journal transition sets back only the fields the change set") {
 	CHECK(undone.value()->total_volumes == 13);
 	CHECK(undone.value()->updated_at == RequireDate("2026-10-01"));
 
-	// Redo is the same step the other way.
 	auto redone = journal::Transition({*undone.value()}, before, after, false);
 	REQUIRE(redone.has_value());
 	CHECK(redone.value()->progress == 6);
@@ -158,7 +155,6 @@ TEST_CASE("journal transition refuses when the entry has changed since, unless f
 	REQUIRE(forced.has_value());
 	CHECK(forced.value()->progress == 5);
 
-	// An added Entry is taken away only as it was added.
 	refused = journal::Transition({now}, after, std::nullopt, false);
 	REQUIRE_FALSE(refused.has_value());
 	CHECK(refused.error() == "Odd Taxi (anime) has changed since: progress is now 7, not 6");
@@ -178,7 +174,6 @@ TEST_CASE("journal transition says when the entry is gone") {
 		REQUIRE_FALSE(gone.has_value());
 		CHECK(gone.error() == "Odd Taxi (anime) is no longer in your lists");
 	}
-	// Taking away what is gone already: only when forced.
 	CHECK_FALSE(journal::Transition({}, after, std::nullopt, false).has_value());
 	auto forced = journal::Transition({}, after, std::nullopt, true);
 	REQUIRE(forced.has_value());
@@ -193,21 +188,18 @@ TEST_CASE("journal transition brings a removed entry back under its id") {
 	CHECK(back.value()->title == "Odd Taxi");
 	CHECK(back.value()->anilist_id == 128547);
 
-	// Its ref went to another title.
 	Entry other = MakeEntry().Id(2).Title("Mushishi");
 	for (bool force : {false, true}) {
 		auto taken = journal::Transition({Frieren(), other}, std::nullopt, Taxi(), force);
 		REQUIRE_FALSE(taken.has_value());
 		CHECK(taken.error() == "Odd Taxi (anime) cannot come back: Mushishi has its place now");
 	}
-	// The title was added again.
 	Entry again = MakeEntry().Id(3).Title("ODDTAXI").AnilistId(128547);
 	auto twice = journal::Transition({Frieren(), again}, std::nullopt, Taxi(), false);
 	REQUIRE_FALSE(twice.has_value());
 	CHECK(twice.error() == "Odd Taxi is in your lists again, as ODDTAXI (anime)");
 	Entry by_mal = MakeEntry().Id(3).Title("ODDTAXI").MalId(44265);
 	CHECK_FALSE(journal::Transition({by_mal}, std::nullopt, Taxi(), true).has_value());
-	// Titles without site ids are never the same title.
 	Entry by_hand = MakeEntry().Id(7).Title("By hand");
 	Entry also_by_hand = MakeEntry().Id(8).Title("By hand");
 	CHECK(journal::Transition({also_by_hand}, std::nullopt, by_hand, false).has_value());

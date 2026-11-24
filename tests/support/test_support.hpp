@@ -30,33 +30,21 @@ private:
 	std::filesystem::path tempDir_;
 };
 
-// The text of a file, or "" when there is none.
 [[nodiscard]] std::string ReadText(const std::filesystem::path& file);
 void WriteText(const std::filesystem::path& file, const std::string& text);
-// Puts a directory where the file should go, so writing it fails.
 void MakeUnwritable(const std::filesystem::path& file);
 
-// Answers a request whose method, URL and body together ("POST url body")
-// contain a registered fragment with its reply (the longest such fragment),
-// and fails every other request, as if offline. Records every request.
 struct FakeWeb {
-	// Requests that hold `fragment` get this reply; any other gets none, as
-	// when there is no connection.
 	void Respond(const std::string& fragment, const std::string& body, int status = 200);
 	[[nodiscard]] std::optional<web::Reply> Fetch(const web::Request& sent);
 	[[nodiscard]] web::Fetcher Link();
 
-	// "POST url body" for each request, in the order sent.
 	std::vector<std::string> sent;
-	// The bodies of the requests that had one.
 	std::vector<std::string> posted;
 	std::map<std::string, web::Reply> bodies;
-	// Runs at each request, as the site is being asked.
 	std::function<void()> while_asked;
 };
 
-// Test data must spell dates correctly; a typo should fail loudly instead
-// of silently becoming "no date".
 IsoDate RequireDate(const std::string& text);
 
 class EntryBuilder {
@@ -135,17 +123,11 @@ private:
 
 [[nodiscard]] EntryBuilder MakeEntry();
 
-// The date every test runs on: 2026-10-20.
 [[nodiscard]] IsoDate TestToday();
-// The clock of the command-line tests: 2026-10-20 21:30:00, TestToday.
 [[nodiscard]] std::tm TestClock();
 
-// The entry titled `title`; fails the test when there is none.
 [[nodiscard]] Entry FindTitle(const Catalogue& db, MediaType type, const std::string& title);
 
-// One list as the catalogue in that directory has it stored, as rows of
-// csv_codec::EncodeEntry ("" when nothing is stored): what a new run would
-// read.
 [[nodiscard]] std::string StoredRows(const std::filesystem::path& data_dir, MediaType type);
 
 }  // namespace catalist::test

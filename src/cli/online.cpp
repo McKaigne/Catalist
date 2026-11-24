@@ -25,7 +25,6 @@ Entry FromMatch(Entry blank, const anilist::Match& match) {
 	return blank;
 }
 
-// "28 episodes", or "? chapters" while the total is not known.
 std::string LengthOf(const anilist::Match& match) {
 	return std::format("{} {}", match.total_units > 0 ? std::to_string(match.total_units) : "?",
 	                   UnitName(match.type, match.total_units));

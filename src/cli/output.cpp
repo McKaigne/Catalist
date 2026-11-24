@@ -11,7 +11,6 @@ namespace catalist::output {
 namespace {
 
 constexpr int kGap = 2;
-// The flexible column is never squeezed below this.
 constexpr int kNarrowest = 10;
 
 std::string OneLine(std::string field) {
@@ -21,7 +20,6 @@ std::string OneLine(std::string field) {
 	return field;
 }
 
-// The width each column needs, the flexible one cut back to fit `width`.
 std::vector<int> ColumnWidths(const std::vector<TableColumn>& columns,
                               const std::vector<std::vector<Styled>>& rows, int width) {
 	std::vector<int> widths;
@@ -41,8 +39,6 @@ std::vector<int> ColumnWidths(const std::vector<TableColumn>& columns,
 	return widths;
 }
 
-// The text in exactly `width` columns; the last one of a line is not
-// padded on its right.
 std::string Aligned(const std::string& value, int width, const TableColumn& column, bool last) {
 	int used = utf8::Width(value);
 	if (used > width)
@@ -53,8 +49,6 @@ std::string Aligned(const std::string& value, int width, const TableColumn& colu
 	return last ? value : value + padding;
 }
 
-// One line of the table. It ends at the last cell that holds anything, so
-// no line ends in spaces.
 std::string TableLine(const std::vector<TableColumn>& columns, const std::vector<int>& widths,
                       const std::vector<Styled>& cells, bool color) {
 	size_t count = std::min(columns.size(), cells.size());

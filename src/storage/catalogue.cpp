@@ -13,7 +13,6 @@ namespace {
 
 const char* kStoreFile = "catalist.db";
 
-// PRAGMA user_version of a store this code set up; 0 is a new, empty file.
 constexpr int kStoreVersion = 3;
 
 // `entry` holds both lists. `tx` and `change` are the undo history: one
@@ -77,7 +76,6 @@ void BindDate(store::Statement& into, const std::optional<IsoDate>& date) {
 		into.BindNull();
 }
 
-// In the order of kSelectEntries.
 store::Statement& BindEntry(store::Statement& into, const Entry& row) {
 	into.Bind(TypeKey(row.type)).Bind(row.id).Bind(row.mal_id).Bind(row.title);
 	into.Bind(StatusKey(row.status)).Bind(row.score).Bind(row.progress).Bind(row.total_units);
@@ -152,7 +150,6 @@ int NextId(const std::vector<Entry>& list) {
 std::filesystem::path DataDirFor(const DataDirEnv& env) {
 	if (not env.catalist_data_dir.empty())
 		return env.catalist_data_dir;
-	// The XDG specification: a relative path there is invalid and ignored.
 	std::filesystem::path xdg = env.xdg_data_home;
 	if (xdg.is_absolute())
 		return xdg / "catalist";
@@ -261,14 +258,11 @@ bool Catalogue::RestoreEntry(const Entry& back) {
 	auto& list = GetList(back.type);
 	if (FindById(list, back.id))
 		return false;
-	// In its place by id, the order the lists are read in.
 	auto after =
 	    std::find_if(list.begin(), list.end(), [&back](const Entry& e) { return e.id > back.id; });
 	list.insert(after, back);
 	return true;
 }
-
-// Opening and setting up the store.
 
 Done Catalogue::OpenStore() {
 	if (db_.IsOpen())
@@ -284,8 +278,6 @@ Done Catalogue::OpenStore() {
 	return ready;
 }
 
-// A new file gets its tables and an older one is brought up to date, in one
-// transaction: two programs starting at the same moment cannot both do it.
 Done Catalogue::SetUpStore() {
 	int found = StoreVersion(db_);
 	if (found == kStoreVersion)
@@ -330,8 +322,6 @@ Done Catalogue::BeginWrite() {
 	    std::format("{} is in use by another program ({})", StorePath().string(), db_.LastError()));
 }
 
-// Reading.
-
 Result<bool> Catalogue::LoadAll() {
 	std::error_code ignored;
 	bool stored = db_.IsOpen() or std::filesystem::exists(StorePath(), ignored);
@@ -354,7 +344,6 @@ bool Catalogue::ReadStore() {
 		Entry row = ReadEntry(rows);
 		(row.type == MediaType::kAnime ? anime : manga).push_back(std::move(row));
 	}
-	// An error ends a statement the way its last row does.
 	if (not rows.Ok())
 		return false;
 
@@ -369,15 +358,12 @@ void Catalogue::RememberSaved() {
 	savedManga_ = mangaEntries_;
 }
 
-// Writing.
-
 bool Catalogue::Commit(const std::function<bool()>& work) {
 	if (not OpenStore().has_value())
 		return false;
 	if (not write_)
 		write_.emplace(db_);
 	bool done = write_->Active() and work() and write_->Commit();
-	// A write that did not get that far is rolled back here.
 	write_.reset();
 	return done;
 }

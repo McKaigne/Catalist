@@ -10,8 +10,6 @@ using catalist::MediaType;
 using catalist::test::MakeEntry;
 namespace refs = catalist::refs;
 
-// Anime a:1 Sousou no Frieren, a:2 Odd Taxi, a:3 Frieren; manga m:1 Berserk,
-// m:2 Sousou no Frieren.
 struct RefsFixture : catalist::test::TempDirFixture {
 	RefsFixture() : db(TempDir()) {
 		db.AddEntry(MakeEntry().Title("Sousou no Frieren"));
@@ -21,7 +19,6 @@ struct RefsFixture : catalist::test::TempDirFixture {
 		db.AddEntry(MakeEntry().Title("Sousou no Frieren").Type(MediaType::kManga));
 	}
 
-	// The refs of what the text names, in order.
 	std::vector<std::string> Found(const std::string& text,
 	                               std::optional<MediaType> only = std::nullopt) {
 		std::vector<std::string> all;
@@ -67,7 +64,6 @@ TEST_CASE_FIXTURE(RefsFixture, "refs finds a title by its ref") {
 	CHECK(Found("m:1") == List{"m:1"});
 	CHECK(Found("a:9").empty());
 	CHECK(Found("a:0").empty());
-	// The ref of the other list names nothing in this one.
 	CHECK(Found("a:2", MediaType::kManga).empty());
 	CHECK(Found("a:2", MediaType::kAnime) == List{"a:2"});
 }
@@ -84,7 +80,6 @@ TEST_CASE_FIXTURE(RefsFixture, "refs finds titles by a part of them, in any case
 }
 
 TEST_CASE_FIXTURE(RefsFixture, "refs lets a title that is exactly the text win") {
-	// "frieren" is in three titles and is one of them.
 	CHECK(Found("frieren") == List{"a:3"});
 	CHECK(Found("Sousou no Frieren") == List{"a:1", "m:2"});
 	CHECK(Found("frieren", MediaType::kManga) == List{"m:2"});

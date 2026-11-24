@@ -13,8 +13,6 @@ namespace catalist::cli {
 
 namespace {
 
-// A field `set` can set: its name, another name it goes by, what its value
-// must be, and the rule that sets it (nothing when the value is not one).
 struct Settable {
 	std::string name;
 	std::string alias;
@@ -28,7 +26,6 @@ std::optional<Entry> WithCount(const Entry& target, CountField field, const std:
 	return count ? std::optional(SetCount(target, field, *count, today)) : std::nullopt;
 }
 
-// An empty value clears the date; `today` is today's.
 std::optional<Entry> WithDate(const Entry& target, bool start, const std::string& value,
                               const IsoDate& today) {
 	auto day = value == "today" ? std::optional(today) : IsoDate::Parse(value);
@@ -100,8 +97,6 @@ bool IsAssignment(const std::string& word) {
 	                   [](unsigned char c) { return std::isalpha(c); });
 }
 
-// The FIELD=VALUE words by field name; fails on the first that names no field
-// or holds no value for it.
 Result<std::map<std::string, std::string>> ReadAssignments(const std::vector<std::string>& words,
                                                            const IsoDate& today) {
 	std::map<std::string, std::string> values;
@@ -197,7 +192,6 @@ int RunSet(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	               [&](const Entry& e) { return WithValues(e, values.value(), today); });
 }
 
-// The status each of the status commands sets.
 const std::map<std::string, WatchStatus> kStatusCommands = {
     {"done", WatchStatus::kCompleted},  {"hold", WatchStatus::kOnHold},
     {"drop", WatchStatus::kDropped},    {"plan", WatchStatus::kPlanToWatch},
@@ -222,8 +216,6 @@ int RunStatus(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	    [&](const Entry& e) { return StatusRefusal(e, status); });
 }
 
-// Asks before titles are removed. False, with the reason on standard error,
-// when the answer is not yes or when there is nobody to ask.
 bool RemovalConfirmed(CliContext& ctx, const std::vector<Entry>& gone, bool ask) {
 	for (size_t i = 0; gone.size() > 1 and i < gone.size(); ++i)
 		ctx.err << "  " << TypeKey(gone[i].type) << "  " << DisplayName(gone[i]) << "\n";
@@ -269,7 +261,6 @@ int RunRemove(const Command& self, const args::Parsed& line, CliContext& ctx) {
 const std::vector<WatchStatus> kInProgress = {WatchStatus::kWatching, WatchStatus::kRewatching};
 const char* const kPickHelp = "With no TITLE at a terminal, you choose from a list.\n";
 
-// done, hold, drop, plan and resume differ in their name and their words.
 Command StatusCommand(const std::string& name, const std::string& summary,
                       const std::string& details) {
 	std::vector<args::Option> options = {kQuiet};

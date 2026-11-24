@@ -7,8 +7,6 @@
 
 #include "support/test_support.hpp"
 
-// The data directory, HOME and the XDG directories are redirected before any
-// test code runs, so no test can touch the developer's real lists.
 int main(int argc, char** argv) {
 	auto sandbox_root = catalist::test::MakeUniqueTempDir("catalist-tests-env-");
 	auto data_dir = sandbox_root / "data";

@@ -67,7 +67,6 @@ int RunList(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	                .only = OnlyType(line),
 	                .reverse = line.Has("r"),
 	                .refs_only = line.Has("q")};
-	// -s watching,on-hold: any of them; no -s, all of them.
 	std::istringstream given(line.Get("s"));
 	for (std::string word; std::getline(given, word, ',');) {
 		auto status = StatusNamed(word);
@@ -86,13 +85,11 @@ int RunList(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	return PrintList(ctx, query);
 }
 
-// One labelled line of a card, the labels `width` columns wide.
 void CardRow(CliContext& ctx, const std::string& label, const std::string& value, int width = 13) {
 	ctx.out << "  " << Paint(std::format("{:<{}}", label, width), output::kDim, ctx.color) << value
 	        << "\n";
 }
 
-// Everything about one title, for a terminal.
 void PrintCard(CliContext& ctx, const Entry& e) {
 	auto row = [&ctx](const std::string& label, const std::string& value) {
 		CardRow(ctx, label, value);
@@ -147,10 +144,6 @@ int RunShow(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	return 0;
 }
 
-// A list's numbers as a line: type, how many titles, how many in each status,
-// the mean of the scores given, the episodes or chapters done (units), the
-// volumes read, the rewatches, the days all of it took, and how many are
-// being rewatched (a later field, so it comes last).
 std::vector<std::string> StatsRow(const std::vector<Entry>& list, MediaType type) {
 	std::vector<std::string> row = {TypeKey(type), std::to_string(list.size())};
 	for (WatchStatus status : kStatuses)
@@ -166,9 +159,7 @@ std::vector<std::string> StatsRow(const std::vector<Entry>& list, MediaType type
 	return row;
 }
 
-// The numbers of one list, for a terminal.
 void PrintStatsCard(CliContext& ctx, const std::vector<Entry>& list, MediaType type) {
-	// Wide enough for "Plan to Watch".
 	constexpr int kLabelWidth = 15;
 	bool anime = type == MediaType::kAnime;
 	double mean = AverageScore(list);

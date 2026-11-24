@@ -20,7 +20,6 @@ TEST_CASE("json parses nested objects arrays and scalars") {
 	CHECK(doc["none"].IsNull());
 	CHECK(doc["neg"].AsInteger() == -20);
 	CHECK(doc["missing"]["deeper"].IsNull());
-	// A count is a whole number above 0; anything else counts as none.
 	CHECK(doc["data"].Items()[0]["node"]["id"].AsCount() == 5);
 	CHECK(doc["data"].Items()[0]["score"].AsCount() == 0);
 	CHECK(doc["neg"].AsCount() == 0);

@@ -15,8 +15,6 @@
 #include "cli/cli.hpp"
 #include "support/test_support.hpp"
 
-// What the tests of the command line share: a run of `catalist ...` against
-// a temporary directory, the lists it starts from, and two exports.
 namespace catalist::test {
 
 inline const char* const kAnimeXml =
@@ -62,24 +60,17 @@ private:
 	std::function<void()> meanwhile_;
 };
 
-// One `catalist ...` run with the data in data/ of a temporary directory,
-// which is the working directory while the test runs, so file names in the
-// output stay short. Each run gets a fresh catalogue, as each real
-// invocation does; AniList is a fake that knows only what a test tells it.
 struct CliFixture : catalist::test::TempDirFixture {
 	CliFixture() : previous_dir(std::filesystem::current_path()) {
 		std::filesystem::current_path(TempDir());
 	}
 	~CliFixture() { std::filesystem::current_path(previous_dir); }
 
-	// `input` is what the person types when asked; `columns` 0 is a pipe.
 	int Run(const std::vector<std::string>& args, const std::string& input = "", int columns = 0) {
 		std::istringstream in_stream(input);
 		return RunOn(args, in_stream, not input.empty(), columns);
 	}
 
-	// A run at a terminal during which another program does `meanwhile`,
-	// while the person thinks about the question.
 	int RunAsked(const std::vector<std::string>& args, const std::string& answer,
 	             std::function<void()> meanwhile) {
 		AnswerAfter typed(answer, std::move(meanwhile));
@@ -118,7 +109,6 @@ struct CliFixture : catalist::test::TempDirFixture {
 		return catalist::test::FindTitle(db, type, title);
 	}
 
-	// Teaches the fake AniList one anime of this name.
 	void KnowTitle(const std::string& name, int id) {
 		web.Respond(std::format(R"("search":"{}")", name),
 		            std::format(R"({{"data":{{"anime":{{"media":[{{"id":{0},"idMal":{0},)"
@@ -130,8 +120,6 @@ struct CliFixture : catalist::test::TempDirFixture {
 		catalist::test::WriteText(path, content);
 	}
 
-	// Four titles, two of them called Frieren (anime a:1 and manga m:2; Odd
-	// Taxi is a:2 and Berserk m:1), with both their ids.
 	void Seed() {
 		catalist::Catalogue db("data");
 		db.AddEntry(MakeEntry()
@@ -168,14 +156,12 @@ struct CliFixture : catalist::test::TempDirFixture {
 		REQUIRE(db.SaveAll());
 	}
 
-	// The steps of the undo history, newest first.
 	std::vector<catalist::TxRecord> Steps() {
 		catalist::Catalogue db("data");
 		REQUIRE(db.LoadAll().has_value());
 		return db.History(0).value();
 	}
 
-	// A change no command made, as another program makes one.
 	void ChangeBehindTheHistory(MediaType type, const std::string& title, int progress) {
 		catalist::Catalogue db("data");
 		REQUIRE(db.LoadAll().has_value());
@@ -187,8 +173,6 @@ struct CliFixture : catalist::test::TempDirFixture {
 
 	catalist::test::FakeWeb web;
 	std::filesystem::path previous_dir;
-	// How the next runs are set up: colours, and a standard output whose
-	// reader has gone.
 	bool color = false;
 	bool out_closed = false;
 	int rows = 0;

@@ -44,8 +44,6 @@ TEST_CASE("sortEntries puts each key in its natural order and reverse flips it")
 	CHECK(TitlesSortedBy(anime, SortKey::kStatus, false) ==
 	      TitleList{"Odd Taxi", "Sousou no Frieren", "Ghost, \"in\" the Shell",
 	                "A Very Long Title That Will Definitely Be Truncated"});
-	// By the date the list shows: finish when completed, else start, else the
-	// last change.
 	CHECK(TitlesSortedBy(anime, SortKey::kDate, false) ==
 	      TitleList{"A Very Long Title That Will Definitely Be Truncated", "Sousou no Frieren",
 	                "Odd Taxi", "Ghost, \"in\" the Shell"});
@@ -64,7 +62,6 @@ TEST_CASE("list statistics count, average and estimate time") {
 	CHECK(catalist::CountByStatus(anime, WatchStatus::kWatching) == 1);
 	CHECK(catalist::CountByStatus(anime, WatchStatus::kOnHold) == 0);
 	CHECK(catalist::CountByStatus(manga, WatchStatus::kOnHold) == 1);
-	// Unrated titles do not pull the mean down.
 	CHECK(catalist::AverageScore(anime) == doctest::Approx(8.0));
 	CHECK(catalist::AverageScore(manga) == doctest::Approx(9.5));
 	CHECK(catalist::TotalProgress(anime) == 36);

@@ -16,7 +16,6 @@ TEST_CASE("output writes one line of tab-separated fields") {
 TEST_CASE("output keeps a tab or a line break out of a field") {
 	CHECK(output::TsvLine(std::vector<std::string>{"a\tb", "c\nd", "e\r\nf"}) ==
 	      "a b\tc d\te  f\n");
-	// Nothing else is changed: no quotes, no escapes.
 	CHECK(output::TsvLine(std::vector<std::string>{"say \"hi\"", "back\\slash", "葬送"}) ==
 	      "say \"hi\"\tback\\slash\t葬送\n");
 }
@@ -44,7 +43,6 @@ TEST_CASE("output draws a table as wide as what it holds") {
 	      "REF   TITLE     SCORE  NEW\n"
 	      "a:1   Odd Taxi      8  +8\n"
 	      "m:12  Berserk       -\n");
-	// No rows: the header alone.
 	CHECK(output::Table(columns, {}, 80, false) == "REF  TITLE  SCORE  NEW\n");
 }
 
@@ -66,7 +64,6 @@ TEST_CASE("output cuts the flexible column to fit the terminal") {
 	      "REF  TITLE               SCORE\n"
 	      "a:1  Sousou no Frieren…     10\n"
 	      "a:2  葬送のフリーレン …      9\n");
-	// It is never cut to nothing, however narrow the terminal.
 	CHECK(output::Table(columns, rows, 5, false).find("a:1  Sousou no…     10\n") !=
 	      std::string::npos);
 }

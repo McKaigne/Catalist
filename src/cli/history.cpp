@@ -7,7 +7,6 @@ namespace catalist::cli {
 
 namespace {
 
-// undo and redo.
 int RunReplay(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	bool redoing = self.name == "redo";
 	if (not line.operands.empty())

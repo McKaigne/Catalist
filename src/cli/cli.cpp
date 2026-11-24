@@ -21,7 +21,6 @@ const Command* FindCommand(const std::string& name) {
 	return nullptr;
 }
 
-// "-s STATUS", "    --sort=KEY", "-h, --help".
 std::string OptionLabel(const args::Option& shown) {
 	std::string label = shown.letter ? std::format("-{}", shown.letter) : "  ";
 	if (not shown.name.empty())
@@ -44,7 +43,6 @@ void PrintCommandHelp(CliContext& ctx, const Command& cmd) {
 	ctx.out << "\nOptions:\n";
 	std::vector<args::Option> options = cmd.options;
 	options.push_back(HelpOption());
-	// The helps start in one column, two past the longest label.
 	size_t width = 18;
 	for (const auto& each : options)
 		width = std::max(width, OptionLabel(each).size() + 2);
@@ -91,7 +89,6 @@ int RunHelp(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	return UsageError(ctx, self, std::format("no command '{}'", name));
 }
 
-// A command line wrong before its command: no command, or one not known.
 int CommandError(CliContext& ctx, const std::string& what) {
 	ctx.err << std::format(
 	    "error: {}\nUsage: catalist [OPTION...] COMMAND [ARG...]\nRun 'catalist help' to see the "
@@ -100,8 +97,6 @@ int CommandError(CliContext& ctx, const std::string& what) {
 	return 2;
 }
 
-// The program alone at a terminal: what is being watched or read, the
-// title changed last first.
 int RunDefault(CliContext& ctx) {
 	return cli::PrintList(ctx, {.statuses = {WatchStatus::kWatching, WatchStatus::kRewatching},
 	                            .key = SortKey::kUpdated,
@@ -110,8 +105,6 @@ int RunDefault(CliContext& ctx) {
 
 }  // namespace
 
-// The commands in the order the help lists them, each group from its file
-// (see cli/common.hpp), then help.
 const std::vector<Command>& Commands() {
 	static const std::vector<Command> kAll = [] {
 		std::vector<Command> table;

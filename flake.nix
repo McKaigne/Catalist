@@ -59,15 +59,12 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          # The package's own build inputs (CMake, Ninja, SQLite), and what
-          # working on it wants besides.
           catalistDev = pkgs.mkShell {
             name = "catalist-dev";
             inputsFrom = [ self.packages.${system}.default ];
             packages = with pkgs; [
               doctest
               gdb
-              # sqlite3, to look inside catalist.db.
               sqlite
               curl
               git

@@ -14,8 +14,6 @@ namespace catalist::cli {
 
 namespace {
 
-// The titles of one MyAnimeList XML export, `-` being standard input. Fails
-// with what is wrong with the file.
 Result<std::vector<Entry>> ReadExport(CliContext& ctx, const std::string& file) {
 	bool piped = file == "-";
 	std::string name = piped ? "standard input" : file;
@@ -24,7 +22,6 @@ Result<std::vector<Entry>> ReadExport(CliContext& ctx, const std::string& file) 
 	          : ReadFile(file);
 	if (not content)
 		return std::unexpected(std::format("cannot read {}", name));
-	// MyAnimeList hands out its exports gzipped.
 	if (content->rfind("\x1f\x8b", 0) == 0)
 		return std::unexpected(std::format("{} is compressed; unpack it first (gunzip{})", name,
 		                                   piped ? "" : " " + file));
@@ -35,7 +32,6 @@ Result<std::vector<Entry>> ReadExport(CliContext& ctx, const std::string& file) 
 	return found;
 }
 
-// A list read whole, before anything is added, and what to call it.
 struct Source {
 	std::string name;
 	std::vector<Entry> titles;
@@ -122,9 +118,6 @@ std::optional<std::set<const Entry*>> AskClashes(CliContext& ctx,
 	return take_file;
 }
 
-// Adds the titles of each source to the lists: a title there already keeps
-// what the person gave it and gets only what it lacks, unless it is one of
-// `take_file`. One step for undo.
 int AddSources(CliContext& ctx, const args::Parsed& line, const std::vector<Source>& sources,
                const std::set<const Entry*>& take_file) {
 	if (not LoadForWrite(ctx))
@@ -156,8 +149,6 @@ int AddSources(CliContext& ctx, const args::Parsed& line, const std::vector<Sour
 int RunImport(const Command& self, const args::Parsed& line, CliContext& ctx) {
 	if (line.operands.empty())
 		return UsageError(ctx, self, "give at least one file, or - for standard input");
-	// Everything is read before anything is added, so a bad file leaves the
-	// catalogue untouched.
 	std::vector<Source> sources;
 	for (const auto& file : line.operands) {
 		auto read = ReadExport(ctx, file);

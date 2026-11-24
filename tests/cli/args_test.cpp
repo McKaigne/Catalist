@@ -27,7 +27,6 @@ TEST_CASE("args reads flags, one at a time or grouped") {
 	REQUIRE(line.has_value());
 	CHECK(line.value().Has("a"));
 	CHECK(line.value().Has("m"));
-	// An Option with both forms is known by its long name.
 	CHECK(line.value().Has("force"));
 	CHECK_FALSE(line.value().Has("f"));
 }
@@ -39,7 +38,6 @@ TEST_CASE("args reads a short option's value attached or as the next argument") 
 		CHECK(line.value().Get("n") == "3");
 		CHECK(line.value().operands.empty());
 	}
-	// The value is whatever follows, even when it looks like an Option.
 	auto line = Parse({"-n", "-a"}, kOptions);
 	REQUIRE(line.has_value());
 	CHECK(line.value().Get("n") == "-a");
@@ -58,12 +56,10 @@ TEST_CASE("args reads long options, with = or with the next argument") {
 	CHECK(line.value().Get("sort") == "score");
 	CHECK(line.value().operands == Words{"frieren"});
 
-	// An empty value is a value; the last of a repeated Option counts.
 	line = Parse({"--sort=", "--sort=a=b"}, kOptions);
 	REQUIRE(line.has_value());
 	CHECK(line.value().Has("sort"));
 	CHECK(line.value().Get("sort") == "a=b");
-	// An Option that was not given reads as empty.
 	CHECK(line.value().Get("n").empty());
 }
 
@@ -82,7 +78,6 @@ TEST_CASE("args ends the options at --, and takes a lone - as an operand") {
 	CHECK(line.value().Has("a"));
 	CHECK(line.value().operands == Words{"-m", "--json"});
 
-	// Only the first -- is taken away.
 	line = Parse({"--", "--", "x"}, kOptions);
 	REQUIRE(line.has_value());
 	CHECK(line.value().operands == Words{"--", "x"});
@@ -109,7 +104,6 @@ TEST_CASE("args says what is wrong with an option") {
 	CHECK(Parse({"-an"}, kOptions).error() == "option '-n' needs a value (N)");
 	CHECK(Parse({"--sort"}, kOptions).error() == "option '--sort' needs a value (KEY)");
 	CHECK(Parse({"--json=yes"}, kOptions).error() == "option '--json' takes no value");
-	// A short Option has no long form unless it is given one.
 	CHECK_FALSE(Parse({"--a"}, kOptions).has_value());
 	CHECK(Parse({"--"}, kOptions).has_value());
 }

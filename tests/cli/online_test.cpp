@@ -17,7 +17,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli add finds the title on AniList and adds it") 
 	CHECK(Run({"add", "--status", "watching", "dandadan"}) == 0);
 	CHECK(out == "a:3\tDandadan\tadded\t-\twatching\n");
 	CHECK(err.empty());
-	// The search says all there is to know: AniList is asked once.
 	CHECK(web.posted.size() == 1);
 	auto added = SavedTitle(MediaType::kAnime, "Dandadan");
 	CHECK(added.anilist_id == 171018);
@@ -27,13 +26,11 @@ TEST_CASE_FIXTURE(CliFixture, "cli add finds the title on AniList and adds it") 
 	CHECK(catalist::FormatDate(added.start_date) == "2026-10-20");
 	CHECK(catalist::FormatDate(added.updated_at) == "2026-10-20");
 
-	// Once is enough.
 	CHECK(Run({"add", "dandadan"}) == 0);
 	CHECK(err == "Dandadan is in your anime list already (watching).\nNothing changed.\n");
 	CHECK(out.empty());
 	CHECK(Saved(MediaType::kAnime).size() == 3);
 
-	// One step for undo, and the ref is free again.
 	REQUIRE(Steps().size() == 1);
 	CHECK(Steps()[0].label == "add --status watching dandadan");
 	CHECK(Run({"undo"}) == 0);
@@ -78,7 +75,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli add with several matches asks, or wants --pic
 	CHECK(out.empty());
 	CHECK(Saved(MediaType::kAnime).size() == 2);
 
-	// At a terminal the person chooses; an empty answer cancels.
 	CHECK(Run({"add", "fullmetal"}, "\n") == 1);
 	CHECK(err.find("'fullmetal' matches 2 titles on AniList:\n") == 0);
 	CHECK(Has(err, "Which one? [1-2, Enter to cancel]: Cancelled.\n"));
@@ -90,7 +86,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli add with several matches asks, or wants --pic
 	CHECK(out == "a:4\tFullmetal Alchemist: Brotherhood\tadded\t-\tplanned\n");
 	CHECK(err.empty());
 	CHECK(Saved(MediaType::kAnime).size() == 4);
-	// --pick wins over the question.
 	CHECK(Run({"add", "--pick", "2", "fullmetal"}, "1\n") == 0);
 	CHECK(Has(err, "Fullmetal Alchemist is in your anime list already (planned).\n"));
 
@@ -111,7 +106,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli add says what went wrong") {
 	CHECK(Run({"add", "--pick", "0", "x"}) == 2);
 	CHECK(Run({"add", "--pick", "two", "x"}) == 2);
 	CHECK(err.find("error: --pick 'two' is not the number of a match\n") == 0);
-	// A wrong command line asks AniList nothing.
 	CHECK(web.posted.empty());
 
 	// The fake web answers nothing: offline.
@@ -142,7 +136,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli add looks at both types, numbered straight th
 	CHECK(out == "m:1\tBerserk\tadded\t-\tplanned\n");
 	CHECK(Run({"undo", "-q"}) == 0);
 
-	// Both are named exactly that, so the person is asked.
 	CHECK(Run({"add", "berserk"}, "1\n") == 0);
 	CHECK(err ==
 	      "'berserk' matches 2 titles on AniList:\n"
@@ -201,7 +194,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli search prints the matches and which are yours
 	      "2\tanime\tSousou no Frieren 2nd Season\t2026\t0\t0\t182255\t59978\t-\n");
 	CHECK(err.empty());
 
-	// A table at a terminal, with how to add one of them.
 	CHECK(Run({"search", "frieren"}, "", 100) == 0);
 	CHECK(out ==
 	      "ANIME\n"
@@ -209,7 +201,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli search prints the matches and which are yours
 	      "\U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04D0  Completed\n"
 	      "2  2026  Sousou no Frieren 2nd Season   ? episodes  -\n");
 	CHECK(err == "Add one with: catalist add --pick=N QUERY\n");
-	// Nothing is added, and no step is made.
 	CHECK(Saved(MediaType::kAnime).size() == 2);
 	CHECK(Steps().empty());
 }
@@ -238,7 +229,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli search says what went wrong") {
 	CHECK(err == "error: could not reach AniList; check the connection and try again\n");
 	CHECK(out.empty());
 
-	// No match is not a failure.
 	web.Respond(R"("search":"zzz")", R"({"data":{"anime":{"media":[]}}})");
 	CHECK(Run({"search", "zzz"}) == 0);
 	CHECK(out.empty());
@@ -246,11 +236,9 @@ TEST_CASE_FIXTURE(CliFixture, "cli search says what went wrong") {
 	CHECK(Run({"search", "zzz"}, "", 100) == 0);
 	CHECK(out.empty());
 	CHECK(err == "AniList has no title matching 'zzz'.\n");
-	// The words of a query need no quotes.
 	web.Respond(R"("search":"odd taxi")", R"({"data":{"anime":{"media":[]}}})");
 	CHECK(Run({"search", "odd", "taxi"}, "", 100) == 0);
 	CHECK(err == "AniList has no title matching 'odd taxi'.\n");
-	// Searching writes nothing, not even the data directory.
 	CHECK_FALSE(std::filesystem::exists("data"));
 }
 
@@ -266,19 +254,16 @@ TEST_CASE_FIXTURE(CliFixture, "cli add takes a score and the progress made alrea
 	Seed();
 	KnowTitle("Home Video", 900);
 	KnowTitle("Ping Pong", 901);
-	// A progress starts the title.
 	CHECK(Run({"add", "-q", "--progress=3", "--score=7", "Home Video"}) == 0);
 	auto added = SavedTitle(MediaType::kAnime, "Home Video");
 	CHECK(added.status == WatchStatus::kWatching);
 	CHECK(added.progress == 3);
 	CHECK(added.score == 7);
 	CHECK(catalist::FormatDate(added.start_date) == "2026-10-20");
-	// A status that is given stands.
 	CHECK(Run({"add", "-q", "--progress=2", "--status=on-hold", "Ping Pong"}) == 0);
 	auto held = SavedTitle(MediaType::kAnime, "Ping Pong");
 	CHECK(held.status == WatchStatus::kOnHold);
 	CHECK(held.progress == 2);
-	// One step for undo, as any add.
 	CHECK(Steps().size() == 2);
 
 	CHECK(Run({"add", "--score=11", "x"}) == 2);

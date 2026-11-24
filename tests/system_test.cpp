@@ -12,7 +12,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "readFile reads a file, and reports one that i
 	catalist::test::WriteText(TempDir() / "file.txt", "content");
 	CHECK(catalist::ReadFile(TempDir() / "file.txt") == "content");
 	CHECK_FALSE(catalist::ReadFile(TempDir() / "missing.txt").has_value());
-	// Reading a directory used to throw instead of reporting "no file".
 	std::filesystem::create_directories(TempDir() / "taken");
 	CHECK_FALSE(catalist::ReadFile(TempDir() / "taken").has_value());
 }
@@ -34,7 +33,6 @@ TEST_CASE("runProgram reports programs that fail or do not exist") {
 }
 
 TEST_CASE("localTime follows the computer's calendar and clock") {
-	// The test main pins TZ=UTC; the date must be a real one, not a default.
 	auto date = catalist::IsoDate::FromLocalTm(catalist::LocalTime());
 	CHECK(date.Year() >= 2024);
 	CHECK(catalist::IsoDate::Parse(date.ToString()) == date);

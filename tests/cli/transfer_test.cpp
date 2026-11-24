@@ -40,7 +40,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli import adds the titles and saves them") {
 	CHECK(manga[0].title == "Berserk");
 	CHECK(manga[0].progress == 364);
 
-	// All the files of one command are one step for undo.
 	REQUIRE(Steps().size() == 1);
 	CHECK(Steps()[0].label == "import lists/anime.xml lists/manga.xml");
 	CHECK(Steps()[0].changes == 3);
@@ -54,7 +53,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli import reads standard input for a FILE of -")
 	CHECK(Has(out, "\tOdd Taxi\tadded\t-\twatching\n"));
 	CHECK(err == "standard input: 2 titles, 2 added, 0 in your lists already\n");
 	CHECK(Saved(MediaType::kAnime).size() == 2);
-	// -q prints nothing, not even that.
 	CHECK(Run({"import", "-q", "-"}, kAnimeXml) == 0);
 	CHECK(out.empty());
 	CHECK(err.empty());
@@ -68,7 +66,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli import reads standard input for a FILE of -")
 TEST_CASE_FIXTURE(CliFixture, "cli import adds only the titles not tracked yet") {
 	Seed();
 	Put("lists/anime.xml", kAnimeXml);
-	// Both titles are there already.
 	CHECK(Run({"import", "lists/anime.xml"}) == 0);
 	CHECK(out.empty());
 	CHECK(Has(err, "2 titles, 0 added, 2 in your lists already\n"));
@@ -122,7 +119,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli importing twice adds a title without a site i
 	REQUIRE(Saved(MediaType::kAnime).size() == 1);
 	CHECK(Saved(MediaType::kAnime)[0].progress == 3);
 
-	// A stored title with a site id is another title, whatever its name.
 	Put("lists/taxi.xml", kAnimeXml);
 	CHECK(Run({"import", "lists/taxi.xml"}) == 0);
 	Put("lists/same_name.xml",
@@ -227,21 +223,18 @@ TEST_CASE_FIXTURE(CliFixture, "cli import asks title by title where the file dif
 	REQUIRE(Run({"set", "-q", "frieren", "score=4"}) == 0);
 	size_t steps = Steps().size();
 
-	// In a script, and with -q, yours stay and nobody is asked.
 	CHECK(Run({"import", "lists/anime.xml"}) == 0);
 	CHECK_FALSE(Has(err, "[k]eep"));
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").score == 3);
 	CHECK(Run({"import", "-q", "lists/anime.xml"}, "f\n") == 0);
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").score == 3);
 
-	// Quit changes nothing, and so does the input ending.
 	CHECK(Run({"import", "lists/anime.xml"}, "f\nq\n") == 1);
 	CHECK(Has(err, "Cancelled.\n"));
 	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").score == 4);
 	CHECK(Run({"import", "lists/anime.xml"}, "f\n") == 1);
 	CHECK(Steps().size() == steps);
 
-	// An answer that is none of them is asked again.
 	CHECK(Run({"import", "lists/anime.xml"}, "x\nk\nf\n") == 0);
 	CHECK(Has(err, "Sousou no Frieren (anime)\n  score     yours 4   file 10\n\n[k]eep"));
 	CHECK(Has(err, "Odd Taxi (anime)\n  score     yours 3      file 8\n"
@@ -252,7 +245,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli import asks title by title where the file dif
 	CHECK(taxi.progress == 5);
 	CHECK(Steps().size() == steps + 1);
 
-	// One step for undo.
 	CHECK(Run({"undo", "-q"}) == 0);
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").score == 3);
 

@@ -12,7 +12,6 @@ std::string TypeName(MediaType type) {
 	return type == MediaType::kAnime ? "ANIME" : "MANGA";
 }
 
-// A JSON string literal: quotes, backslashes and control characters escaped.
 std::string JsonString(const std::string& text) {
 	std::string quoted = "\"";
 	for (unsigned char c : text) {
@@ -26,7 +25,6 @@ std::string JsonString(const std::string& text) {
 	return quoted + "\"";
 }
 
-// The body of AniList's reply to a query, or what to tell the person.
 Result<std::string> Ask(const web::Fetcher& fetch, const std::string& query) {
 	auto got = fetch(
 	    {"POST", kApiUrl, {"Content-Type: application/json", "Accept: application/json"}, query});

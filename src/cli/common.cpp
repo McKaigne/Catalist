@@ -14,8 +14,6 @@ namespace {
 
 using output::Paint;
 
-// How a save of this run is entered in the undo history: under the command
-// as typed, cut to 60 characters.
 TxNote UndoNote(const CliContext& ctx) {
 	return {utf8::Clip(ctx.typed, 60), ctx.Stamp()};
 }
@@ -69,9 +67,6 @@ std::optional<std::vector<Entry>> PickTitle(CliContext& ctx, const Naming& how) 
 	return std::vector<Entry>{offered[*picked]};
 }
 
-// The titles one name names: one, or all it matches with --all. Nothing,
-// with the reason on standard error, when it matches none or when the
-// choice among several is not made.
 std::optional<std::vector<Entry>> Named(CliContext& ctx, const std::string& ref,
                                         const Naming& how) {
 	auto found = refs::Find(ctx.db, ref, how.only);
@@ -108,8 +103,6 @@ std::optional<std::vector<Entry>> Named(CliContext& ctx, const std::string& ref,
 	return std::vector<Entry>{found[*picked]};
 }
 
-// One changed field as a terminal shows it: "Odd Taxi  5 → 6/13" for the
-// progress, "Odd Taxi  score 8 → 9" for the rest.
 std::string ChangeText(const CliContext& ctx, const Entry& shown,
                        const journal::FieldChange& field) {
 	std::string title = Paint(DisplayName(shown), output::kBold, ctx.color);
@@ -164,7 +157,6 @@ std::vector<std::string> FullRowOf(const Entry& e) {
 	return row;
 }
 
-// The terminal's colour for each status.
 const char* StatusColor(WatchStatus status) {
 	switch (status) {
 		case WatchStatus::kWatching:
@@ -189,18 +181,14 @@ std::string UnitName(MediaType type, int count) {
 	return count == 1 ? "chapter" : "chapters";
 }
 
-// "1 title", "3 titles".
 std::string Titles(size_t count) {
 	return std::format("{} {}", count, count == 1 ? "title" : "titles");
 }
 
-// "5/28", or "5/?" while the total is not known.
 std::string OutOf(int done, int total) {
 	return std::format("{}/{}", done, total > 0 ? std::to_string(total) : std::string("?"));
 }
 
-// Rows as tab-separated lines. A write that fails, because the reader has
-// gone, ends it.
 void WriteRows(CliContext& ctx, const std::vector<std::vector<std::string>>& rows) {
 	for (const auto& row : rows) {
 		if (not ctx.out)
@@ -268,7 +256,6 @@ std::vector<std::string> NamesIn(const std::vector<std::string>& words) {
 	return names;
 }
 
-// -a and -m: the one list a command is kept to, or both.
 std::optional<MediaType> OnlyType(const args::Parsed& line) {
 	if (line.Has("a") == line.Has("m"))
 		return std::nullopt;
@@ -305,8 +292,6 @@ RefRequest ReadRefsIn(const Command& cmd, const args::Parsed& line, CliContext& 
 	return request;
 }
 
-// Asks which of the numbered choices was meant; nothing when the answer is
-// empty or not one of them.
 std::optional<size_t> AskWhich(CliContext& ctx, size_t count) {
 	ctx.err << std::format("Which one? [1-{}, Enter to cancel]: ", count) << std::flush;
 	std::string answer;
@@ -345,8 +330,6 @@ bool Load(CliContext& ctx) {
 	return loaded.has_value();
 }
 
-// Takes the catalogue for writing, then reads it: nothing another program
-// does can come between what the command reads and what it saves.
 bool LoadForWrite(CliContext& ctx) {
 	auto held = ctx.db.BeginWrite();
 	if (not held.has_value()) {
@@ -376,8 +359,6 @@ std::optional<std::vector<Entry>> TakeForWrite(CliContext& ctx, const std::vecto
 	return current;
 }
 
-// A line for every field that changed. Into a pipe: the ref, the title, the
-// field, its old value and its new one.
 void PrintChanges(CliContext& ctx, const std::vector<journal::Change>& changes) {
 	for (const auto& made : changes) {
 		const Entry& shown = made.after ? *made.after : *made.before;
@@ -392,8 +373,6 @@ void PrintChanges(CliContext& ctx, const std::vector<journal::Change>& changes) 
 	}
 }
 
-// Saves what a command changed as one undo step and prints it (not with
-// -q). A command that changed nothing says so and saves nothing.
 int SaveAndReport(CliContext& ctx, const args::Parsed& line,
                   const std::vector<journal::Change>& changes) {
 	bool any = std::any_of(changes.begin(), changes.end(), [](const journal::Change& made) {
@@ -445,7 +424,6 @@ int ChangeTitles(const Command& self, const args::Parsed& line, CliContext& ctx,
 	return ApplyTo(ctx, line, *current, change);
 }
 
-// The N of -n, or `otherwise` when it is not given.
 Result<int> CountGiven(const args::Parsed& line, int otherwise) {
 	if (not line.Has("n"))
 		return otherwise;

@@ -77,7 +77,6 @@ bool Database::Open(const std::filesystem::path& file) {
 	Close();
 	int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
 	if (sqlite3_open_v2(file.c_str(), &handle_, flags, nullptr) != SQLITE_OK) {
-		// A handle is returned even for a failed open, to carry the message.
 		openError_ = handle_ ? sqlite3_errmsg(handle_) : "out of memory";
 		Close();
 		return false;

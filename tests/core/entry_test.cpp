@@ -108,8 +108,6 @@ TEST_CASE("stepProgress with an unknown total never completes") {
 }
 
 TEST_CASE("stepProgress leaves a finished or empty entry exactly as it was") {
-	// Pressing + on a completed title used to stamp today as its start and
-	// finish date.
 	Entry done = MakeEntry()
 	                 .Status(WatchStatus::kCompleted)
 	                 .Progress(28)
@@ -232,7 +230,6 @@ TEST_CASE("setScore stays within zero and ten") {
 	CHECK(catalist::SetScore(MakeEntry().Score(9), 12, kToday).score == 10);
 	CHECK(catalist::SetScore(MakeEntry().Score(1), -2, kToday).score == 0);
 	CHECK(FormatDate(catalist::SetScore(MakeEntry(), 1, kToday).updated_at) == "2026-10-20");
-	// The score it has already: nothing changes, not even the date.
 	CHECK_FALSE(catalist::SetScore(MakeEntry().Score(10), 11, kToday).updated_at.has_value());
 }
 
@@ -259,7 +256,6 @@ TEST_CASE("setCount sets totals, volumes and rewatches within bounds") {
 	CHECK(with_total.total_units == 24);
 	CHECK(with_total.progress == 10);
 	CHECK(FormatDate(with_total.updated_at) == "2026-10-20");
-	// A total below the progress lowers the progress; 0 means unknown.
 	CHECK(catalist::SetCount(show, CountField::kTotalUnits, 6, kToday).progress == 6);
 	CHECK(catalist::SetCount(with_total, CountField::kTotalUnits, 0, kToday).progress == 10);
 	CHECK(catalist::SetCount(show, CountField::kTotalUnits, -5, kToday).total_units == 0);
@@ -323,7 +319,6 @@ TEST_CASE("takeImported puts the file's values in place of the user's") {
 	auto taken = catalist::TakeImported(mine, file);
 	CHECK(taken.status == WatchStatus::kWatching);
 	CHECK(taken.progress == 3);
-	// What the file does not hold stays, but a title in progress has no finish date.
 	CHECK(taken.score == 8);
 	CHECK(FormatDate(taken.start_date) == "2026-01-01");
 	CHECK_FALSE(taken.finish_date.has_value());
@@ -354,7 +349,6 @@ TEST_CASE("a rewatch starts over, keeps the first dates, and counts once it is d
 	CHECK(again.progress == 0);
 	CHECK(FormatDate(again.start_date) == "2026-01-01");
 	CHECK(FormatDate(again.finish_date) == "2026-02-01");
-	// Still a rewatch along the way, not plain watching.
 	auto along = catalist::StepProgress(again, 2, kToday);
 	CHECK(along.status == WatchStatus::kRewatching);
 	CHECK(along.rewatched == 0);
@@ -396,7 +390,6 @@ TEST_CASE("setTitle and the date setters stamp the entry only when they change i
 	CHECK_FALSE(cleared.start_date);
 	CHECK(cleared.updated_at == today);
 
-	// A date corrects the record; the status is the person's to set.
 	auto finished = catalist::SetFinishDate(before, RequireDate("2026-10-19"), today);
 	CHECK(finished.finish_date == RequireDate("2026-10-19"));
 	CHECK(finished.status == WatchStatus::kWatching);

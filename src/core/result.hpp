@@ -6,11 +6,9 @@
 
 namespace catalist {
 
-// A value, or a message saying why there is none.
 template <typename T>
 using Result = std::expected<T, std::string>;
 
-// Work that has no value to give: done, or the message saying why not.
 using Done = std::expected<void, std::string>;
 
 }  // namespace catalist

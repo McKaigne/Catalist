@@ -137,7 +137,6 @@ Entry ApplyStatusDates(Entry target, WatchStatus previous, const IsoDate& today)
 			target.finish_date.reset();
 			break;
 		case WatchStatus::kRewatching:
-			// Again from the start; the dates stay those of the first time.
 			if (previous == WatchStatus::kCompleted)
 				target.progress = 0;
 			if (not target.start_date)

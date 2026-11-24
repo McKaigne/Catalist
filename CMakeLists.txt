@@ -12,7 +12,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # clangd, the editor's language server, reads build/compile_commands.json.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# The lists are kept in an SQLite file.
 find_package(SQLite3 REQUIRED)
 if(TARGET SQLite3::SQLite3)
   set(CATALIST_SQLITE SQLite3::SQLite3)
@@ -26,24 +25,19 @@ set(CATALIST_WARNING_FLAGS -Wall -Wextra -Wpedantic)
 set(CATALIST_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 configure_file(src/core/version.hpp.in "${CATALIST_GENERATED_DIR}/core/version.hpp" @ONLY)
 
-# Everything but main(), so the tests link the same code the program runs.
 add_library(catalistLib STATIC
-  # The title, its dates and rules, and UTF-8 text: no I/O.
   src/core/date.cpp
   src/core/entry.cpp
   src/core/lists.cpp
   src/core/text.cpp
-  # The lists in SQLite, the undo history, and the MyAnimeList XML format.
   src/storage/catalogue.cpp
   src/storage/csv_codec.cpp
   src/storage/history.cpp
   src/storage/journal.cpp
   src/storage/mal_xml.cpp
   src/storage/store.cpp
-  # AniList, and the JSON it answers in.
   src/web/anilist.cpp
   src/web/json.cpp
-  # The command line.
   src/cli/args.cpp
   src/cli/cli.cpp
   src/cli/common.cpp
@@ -54,7 +48,6 @@ add_library(catalistLib STATIC
   src/cli/refs.cpp
   src/cli/tracking.cpp
   src/cli/transfer.cpp
-  # Everything that touches the world outside the program.
   src/system.cpp
 )
 target_include_directories(catalistLib PUBLIC src "${CATALIST_GENERATED_DIR}")
@@ -108,7 +101,5 @@ target_compile_options(catalistTests PRIVATE ${CATALIST_WARNING_FLAGS})
 
 doctest_discover_tests(catalistTests)
 
-# The command line from a POSIX shell, as scripts use it; a stub curl
-# stands in for the site.
 add_test(NAME smoke COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke/smoke.sh"
   $<TARGET_FILE:catalist>)

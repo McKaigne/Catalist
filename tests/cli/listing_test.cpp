@@ -13,7 +13,6 @@ using catalist::test::MakeEntry;
 TEST_CASE_FIXTURE(CliFixture, "cli ls prints tab-separated lines into a pipe") {
 	Seed();
 	CHECK(Run({"ls"}) == 0);
-	// In title order; nothing but the titles, and every field holds something.
 	CHECK(out ==
 	      "m:1\tmanga\tBerserk\twatching\t0\t364\t0\t0\t0\t2019-05-01\t-\t-\n"
 	      "a:2\tanime\tOdd Taxi\twatching\t8\t5\t13\t0\t0\t2026-10-01\t-\t-\n"
@@ -21,7 +20,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls prints tab-separated lines into a pipe") {
 	      "m:2\tmanga\tSousou no Frieren\tplanned\t0\t0\t0\t0\t0\t-\t-\t-\n");
 	CHECK(err.empty());
 
-	// Nothing listed: nothing printed, and that is not a failure.
 	CHECK(Run({"ls", "nothing like it"}) == 0);
 	CHECK(out.empty());
 	CHECK(err.empty());
@@ -49,11 +47,9 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls keeps to a list, a status or a part of the
 	CHECK(out == "m:2\n");
 	CHECK(Run({"ls", "-q", "-s", "on-hold"}) == 0);
 	CHECK(out.empty());
-	// After --, a title may start with a dash.
 	CHECK(Run({"ls", "-q", "--", "-zq"}) == 0);
 	CHECK(out.empty());
 
-	// Several statuses, with commas.
 	CHECK(Run({"ls", "-q", "-s", "completed,planned"}) == 0);
 	CHECK(out == "a:1\nm:2\n");
 	CHECK(Run({"ls", "-q", "-a", "-s", "watching,on-hold"}) == 0);
@@ -64,7 +60,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls keeps to a list, a status or a part of the
 	CHECK(err.find("error: -s needs a status\n") == 0);
 	CHECK(Run({"ls", "-s", "bored"}) == 2);
 	CHECK(err.find("error: unknown status 'bored'\n") == 0);
-	// The words of a query need no quotes.
 	CHECK(Run({"ls", "-q", "odd", "taxi"}) == 0);
 	CHECK(out == "a:2\n");
 	CHECK(Run({"ls", "-q", "frieren", "sousou"}) == 0);
@@ -78,7 +73,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls sorts by title, or by the key asked for") 
 	CHECK(Run({"ls", "-q", "--sort=title"}) == 0);
 	CHECK(out == "m:1\na:2\na:1\nm:2\n");
 	CHECK(Run({"ls", "-qr"}) == 0);
-	// Two titles that sort alike keep their order: anime, then manga.
 	CHECK(out == "a:1\nm:2\na:2\nm:1\n");
 	CHECK(Run({"ls", "-q", "--sort=score"}) == 0);
 	CHECK(out.find("a:1\na:2\n") == 0);
@@ -107,7 +101,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls keeps a tab or a quote in a title from bre
 
 TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {
 	Seed();
-	// Scores are five stars, a half star a point: full, half and empty.
 	const std::string eight = "\U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04D2";
 	const std::string ten = "\U000F04CE\U000F04CE\U000F04CE\U000F04CE\U000F04CE";
 	CHECK(Run({"ls"}, "", 100) == 0);
@@ -125,7 +118,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli ls draws a table at a terminal") {
 	          "Sousou no Frieren  Plan to Read  -      0/?\n");
 	CHECK(err.empty());
 
-	// A narrow terminal cuts the titles, not the other columns.
 	CHECK(Run({"ls", "-a"}, "", 40) == 0);
 	CHECK(out ==
 	      "ANIME\n"
@@ -158,12 +150,10 @@ TEST_CASE_FIXTURE(CliFixture, "cli show prints a title's line into a pipe") {
 
 TEST_CASE_FIXTURE(CliFixture, "cli show takes several titles, by ref or by title") {
 	Seed();
-	// Each once, in the order named.
 	CHECK(Run({"show", "a:1", "taxi,", "a:1", "ODD"}) == 0);
 	CHECK(out.find("a:1\t") == 0);
 	CHECK(Has(out, "\na:2\t"));
 	CHECK(std::count(out.begin(), out.end(), '\n') == 2);
-	// A title that starts with a dash goes after --.
 	CHECK(Run({"show", "--", "-zq"}) == 1);
 	CHECK(Has(err, "error: nothing in your lists matches '-zq'\n"));
 
@@ -194,7 +184,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli show draws a card at a terminal") {
 	CHECK(out.find("Sousou no Frieren\n  Type         Manga\n") == 0);
 	CHECK(Has(out, "  Status       Plan to Read\n  Score        -\n"));
 	CHECK(Has(out, "  Progress     0/? chapters\n  Volumes      0/?\n  Reread       0\n"));
-	// A blank line between two cards.
 	CHECK(Has(out, "  Updated      -\n\nBerserk\n"));
 }
 

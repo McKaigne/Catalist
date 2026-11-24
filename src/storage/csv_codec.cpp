@@ -29,7 +29,6 @@ MediaType TypeOf(const std::string& field) {
 	return field == "manga" ? MediaType::kManga : MediaType::kAnime;
 }
 
-// The history only holds names we wrote; an unknown one reads as planned.
 WatchStatus DecodeStatus(const std::string& field) {
 	return ParseStatus(field).value_or(WatchStatus::kPlanToWatch);
 }

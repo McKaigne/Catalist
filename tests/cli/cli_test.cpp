@@ -55,7 +55,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli help lists the commands, and each command has
 		CHECK(Run({"ls", flag}) == 0);
 		CHECK(out == from_help);
 	}
-	// Asked for among other options, help is all that happens.
 	CHECK(Run({"ls", "-qh", "--sort=title"}) == 0);
 	CHECK(out == from_help);
 	CHECK(Run({"help", "show"}) == 0);
@@ -76,7 +75,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli help lists the commands, and each command has
 	CHECK(Has(out,
 	          "Usage: catalist add [-amq] [--pick=N] [--status=STATUS] "
 	          "[--score=N] [--progress=N] TITLE...\n"));
-	// The helps line up past the longest option.
 	CHECK(Has(
 	    out,
 	    "      --status=STATUS  watching, completed, on-hold, dropped, planned or rewatching\n"));
@@ -124,7 +122,6 @@ TEST_CASE_FIXTURE(CliFixture,
 	CHECK(Run({"--frobnicate"}) == 2);
 	CHECK(err.find("error: unknown option '--frobnicate'\nUsage: catalist [OPTION...] COMMAND") ==
 	      0);
-	// The names the earlier command line had are gone.
 	for (const char* gone :
 	     {"list", "info", "version", "next", "edit", "remove", "delete", "login", "logout",
 	      "accounts", "sync", "link", "unlink", "track", "refresh", "provider", "completion"})
@@ -187,7 +184,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli says which title it could not find, and shows
 	CHECK(err.find("error: no title in your lists has the ref a:9\n") == 0);
 	CHECK(Run({"show", "-m", "a:2"}) == 1);
 	CHECK(err.find("error: no title in your manga list has the ref a:2\n") == 0);
-	// One REF that fails stops them all.
 	CHECK(Run({"show", "taxi,", "naruto"}) == 1);
 	CHECK(out.empty());
 	CHECK(Run({"show", "frieren", "--all"}) == 0);
@@ -213,7 +209,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli takes the one in-progress match, only at a te
 	CHECK(SavedTitle(MediaType::kManga, "Sousou no Frieren").progress == 1);
 	CHECK(Run({"+", "frieren"}) == 1);
 	CHECK(Has(err, "matches 2 titles"));
-	// rewatch prefers what it can start: the completed one.
 	CHECK(Run({"rewatch", "frieren"}, "unused\n") == 0);
 	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").status == WatchStatus::kRewatching);
 }
@@ -296,7 +291,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli asks which title was meant, or lists them int
 
 TEST_CASE_FIXTURE(CliFixture, "cli says when a command changed nothing, and records no step") {
 	Seed();
-	// Frieren is complete: there is no more to count.
 	CHECK(Run({"+", "a:1"}) == 0);
 	CHECK(out.empty());
 	CHECK(err ==
@@ -310,11 +304,9 @@ TEST_CASE_FIXTURE(CliFixture, "cli says when a command changed nothing, and reco
 	CHECK(Run({"done", "a:1"}, "", 100) == 0);
 	CHECK(err == "Nothing changed.\n");
 	CHECK(out.empty());
-	// -q prints nothing, not even that.
 	CHECK(Run({"+", "-q", "a:1"}) == 0);
 	CHECK(err.empty());
 	CHECK(Steps().empty());
-	// Only the titles that changed are printed.
 	CHECK(Run({"+", "--all", "frieren"}) == 0);
 	CHECK(out.find("m:2\t") == 0);
 	CHECK_FALSE(Has(out, "a:1\t"));
@@ -353,7 +345,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli alone at a terminal lists what is being watch
 	CHECK(Has(out, "Berserk"));
 	CHECK_FALSE(Has(out, "Frieren"));
 	CHECK(err.empty());
-	// The title changed last comes first within its section.
 	CHECK(Run({"resume", "-q", "a:1"}) == 1);
 	CHECK(Run({"-", "-q", "a:1"}) == 0);
 	CHECK(Run({}, "", 100) == 0);

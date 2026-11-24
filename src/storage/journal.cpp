@@ -11,8 +11,6 @@ std::string DateText(const std::optional<IsoDate>& day) {
 	return day ? day->ToString() : std::string("-");
 }
 
-// One field the person sets: its name, its value as text, and how to copy
-// it from one entry to another.
 struct Column {
 	const char* name;
 	std::string (*text)(const Entry& of);
@@ -64,7 +62,6 @@ std::string NameOf(const Entry& named) {
 
 using Outcome = Result<std::optional<Entry>>;
 
-// The entry comes back: its id and its site ids must be free.
 Outcome ComeBack(const std::vector<Entry>& list, const Entry& back) {
 	for (const auto& other : list) {
 		if (other.id == back.id)
@@ -79,8 +76,6 @@ Outcome ComeBack(const std::vector<Entry>& list, const Entry& back) {
 	return back;
 }
 
-// The first field the change set that no longer holds what it was set to,
-// as "progress is now 7, not 6"; empty when all of them do.
 std::string ChangedSince(const Entry& now, const Entry& from, const std::optional<Entry>& to) {
 	for (const auto& each : Columns()) {
 		bool was_set = not to or each.text(from) != each.text(*to);
@@ -132,7 +127,6 @@ Result<std::optional<Entry>> Transition(const std::vector<Entry>& list,
 
 	const Entry* now = FindById(list, from->id);
 	if (not now) {
-		// Gone already: nothing to remove, and nothing to set fields on.
 		if (force and not to)
 			return std::nullopt;
 		return std::unexpected(std::format("{} is no longer in your lists", NameOf(*from)));

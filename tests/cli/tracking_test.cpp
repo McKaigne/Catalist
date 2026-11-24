@@ -17,7 +17,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli + counts one more and says what changed") {
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 6);
 	CHECK(web.posted.empty());
 
-	// At a terminal the line is for reading.
 	CHECK(Run({"+", "a:2"}, "", 100) == 0);
 	CHECK(out == "Odd Taxi  6 → 7/13\n");
 	CHECK(Run({"inc", "-n", "2", "berserk"}, "", 100) == 0);
@@ -27,7 +26,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli + counts one more and says what changed") {
 	CHECK(out == "\x1b[1mOdd Taxi\x1b[0m  7 → 8/13\n");
 	color = false;
 
-	// The first one starts a title, the last one completes it.
 	CHECK(Run({"+", "m:2"}) == 0);
 	CHECK(out ==
 	      "m:2\tSousou no Frieren\tprogress\t0\t1\n"
@@ -45,7 +43,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli + counts one more and says what changed") {
 
 TEST_CASE_FIXTURE(CliFixture, "cli rewatch watches a completed title again") {
 	Seed();
-	// Sousou no Frieren (a:1) is completed, 28 of 28.
 	CHECK(Run({"rewatch", "a:1"}) == 0);
 	CHECK(out ==
 	      "a:1\tSousou no Frieren\tprogress\t28\t0\n"
@@ -53,7 +50,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli rewatch watches a completed title again") {
 	      "a:1\tSousou no Frieren\tstarted\t-\t2026-10-20\n");
 	CHECK(Run({"ls", "-q", "-s", "rewatching"}) == 0);
 	CHECK(out == "a:1\n");
-	// Plain catalist lists it beside what is being watched.
 	CHECK(Run({}, "", 100) == 0);
 	CHECK(Has(out, "Rewatching"));
 	CHECK(Run({"+", "-n", "28", "a:1"}) == 0);
@@ -69,11 +65,9 @@ TEST_CASE_FIXTURE(CliFixture, "cli - counts one less") {
 	CHECK(out == "a:2\tOdd Taxi\tprogress\t5\t4\n");
 	CHECK(Run({"dec", "-n", "3", "taxi"}) == 0);
 	CHECK(out == "a:2\tOdd Taxi\tprogress\t4\t1\n");
-	// Below the total a completed title is open again.
 	CHECK(Run({"-", "a:1"}) == 0);
 	CHECK(Has(out, "a:1\tSousou no Frieren\tprogress\t28\t27\n"));
 	CHECK(Has(out, "a:1\tSousou no Frieren\tstatus\tcompleted\twatching\n"));
-	// A title named - is not one: the command's own name comes first.
 	CHECK(Run({"-", "--", "-zq"}) == 1);
 	CHECK(err.find("error: nothing in your lists matches '-zq'\n") == 0);
 }
@@ -85,7 +79,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli + takes several titles") {
 	      "m:1\tBerserk\tprogress\t364\t365\n"
 	      "a:2\tOdd Taxi\tprogress\t5\t6\n");
 	CHECK(err.empty());
-	// One step for undo, named as the command was typed.
 	auto history = Steps();
 	REQUIRE(history.size() == 1);
 	CHECK(history[0].label == "+ m:1 a:2");
@@ -97,7 +90,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli + takes several titles") {
 	CHECK(err.empty());
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 7);
 	CHECK(SavedTitle(MediaType::kManga, "Sousou no Frieren").progress == 1);
-	// The same title named twice is counted once.
 	CHECK(Run({"+", "taxi,", "a:2"}) == 0);
 	CHECK(out == "a:2\tOdd Taxi\tprogress\t7\t8\n");
 }
@@ -136,7 +128,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli refuses a status a title cannot take") {
 	CHECK(Run({"rewatch", "--all", "a:1", "taxi"}) == 1);
 	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").status == WatchStatus::kCompleted);
 	CHECK(Steps().empty());
-	// Lowering the progress in the same command reopens it first.
 	CHECK(Run({"set", "a:1", "progress=3", "status=watching"}) == 0);
 	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").status == WatchStatus::kWatching);
 }
@@ -167,8 +158,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli set changes the fields of a title") {
 	CHECK_FALSE(taxi.finish_date);
 	CHECK(taxi.status == WatchStatus::kCompleted);
 
-	// The total first, so the progress can reach it; a field's name in any
-	// case, and the names the columns of ls have for the dates.
 	CHECK(Run({"set", "-m", "berserk", "Progress=380", "total=380", "VOLUMES=42",
 	           "started=2019-04-30", "finished=2026-10-19"}) == 0);
 	auto berserk = SavedTitle(MediaType::kManga, "Berserk");
@@ -179,17 +168,14 @@ TEST_CASE_FIXTURE(CliFixture, "cli set changes the fields of a title") {
 	CHECK(catalist::FormatDate(berserk.start_date) == "2019-04-30");
 	CHECK(catalist::FormatDate(berserk.finish_date) == "2026-10-19");
 
-	// The status last, so a status that is given stands.
 	CHECK(Run({"set", "a:1", "status=on-hold", "progress=3", "score=0"}) == 0);
 	auto frieren = SavedTitle(MediaType::kAnime, "Sousou no Frieren");
 	CHECK(frieren.status == WatchStatus::kOnHold);
 	CHECK(frieren.progress == 3);
 	CHECK(frieren.score == 0);
-	// A value may hold an equals sign, and a title spaces.
 	CHECK(Run({"set", "-q", "a:1", "title=1 + 1 = 2"}) == 0);
 	CHECK(out.empty());
 	CHECK(SavedTitle(MediaType::kAnime, "1 + 1 = 2").id == 1);
-	// Every title of that name.
 	CHECK(Run({"set", "--all", "1", "score=7"}) == 0);
 	CHECK(Has(out, "a:1\t1 + 1 = 2\tscore\t0\t7\n"));
 }
@@ -208,7 +194,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli set checks every value before touching anythi
 	CHECK(Run({"set", "taxi", "progress=6", "status=bored"}) == 2);
 	CHECK(err.find("error: status 'bored' is not watching, completed, on-hold, dropped, planned or "
 	               "rewatching\n") == 0);
-	// Nothing is guessed: a word that holds a status is not one.
 	CHECK(Run({"set", "taxi", "status=unwatched"}) == 2);
 	CHECK(Run({"set", "taxi", "status=4"}) == 2);
 	CHECK(Run({"ls", "-s", "rewatched"}) == 2);
@@ -233,14 +218,12 @@ TEST_CASE_FIXTURE(CliFixture, "cli set checks every value before touching anythi
 	CHECK(err.find("error: unknown field 'colour'\n") == 0);
 	CHECK(Run({"set", "taxi", "score=9", "nine"}) == 2);
 	CHECK(err.find("error: 'nine' is not FIELD=VALUE") == 0);
-	// The earlier form of the command.
 	CHECK(Run({"set", "taxi", "-p", "13"}) == 2);
 	CHECK(out.empty());
 	auto taxi = SavedTitle(MediaType::kAnime, "Odd Taxi");
 	CHECK(taxi.progress == 5);
 	CHECK(taxi.score == 8);
 
-	// The title is looked for once the values are known to be good.
 	CHECK(Run({"set", "naruto", "score=9"}) == 1);
 	CHECK(err.find("error: nothing in your lists matches 'naruto'\n") == 0);
 	CHECK(Run({"set", "frieren", "score=9"}) == 1);
@@ -273,7 +256,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli done, hold, drop, plan and resume set the sta
 	CHECK(Steps().size() == 5);
 	CHECK(Steps()[0].label == "plan m:1 a:2");
 	CHECK(Steps()[0].changes == 2);
-	// A manga of unknown length is done where it stands.
 	CHECK(Run({"done", "--score", "0", "--all", "frieren"}) == 0);
 	CHECK(out ==
 	      "a:1\tSousou no Frieren\tscore\t10\t0\n"
@@ -313,7 +295,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm asks first, and wants -f where nobody can 
 
 TEST_CASE_FIXTURE(CliFixture, "cli rm removes several titles as one step") {
 	Seed();
-	// One question for all of them.
 	CHECK(Run({"rm", "--all", "frieren"}, "yes\n") == 0);
 	CHECK(Has(err, "  anime  Sousou no Frieren\n"));
 	CHECK(Has(err, "  manga  Sousou no Frieren\n"));
@@ -323,7 +304,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm removes several titles as one step") {
 	REQUIRE(Steps().size() == 1);
 	CHECK(Steps()[0].changes == 2);
 
-	// In a script there is nobody to ask.
 	CHECK(Run({"rm", "a:2", "m:1"}) == 1);
 	CHECK(Has(err, "error: nobody to ask here: pass -f to remove these 2 titles\n"));
 	CHECK(Saved(MediaType::kAnime).size() == 1);
@@ -338,7 +318,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm removes nothing when a REF is wrong") {
 	Seed();
 	CHECK(Run({"rm", "-f", "taxi", "nope"}) == 1);
 	CHECK(Saved(MediaType::kAnime).size() == 2);
-	// Two titles are called Frieren.
 	CHECK(Run({"rm", "-f", "frieren"}) == 1);
 	CHECK(Saved(MediaType::kAnime).size() == 2);
 	CHECK(Saved(MediaType::kManga).size() == 2);
@@ -350,7 +329,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm removes nothing when a REF is wrong") {
 TEST_CASE_FIXTURE(CliFixture, "cli rm removes only the title the person confirmed") {
 	Seed();
 	KnowTitle("Newcomer", 900);
-	// The ref passes to a new title while the question is open.
 	CHECK(RunAsked({"rm", "a:2"}, "y\n", [this] {
 		      CHECK(Run({"rm", "-fq", "a:2"}) == 0);
 		      CHECK(Run({"add", "-q", "Newcomer"}) == 0);
@@ -358,8 +336,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli rm removes only the title the person confirme
 	CHECK(Has(err, "error: Odd Taxi (anime) was removed or replaced meanwhile; nothing was changed\n"));
 	CHECK(SavedTitle(MediaType::kAnime, "Newcomer").id == 2);
 
-	// New progress on the same title is no reason to refuse, and undo brings
-	// it back as it was when it went.
 	CHECK(RunAsked({"rm", "a:2"}, "y\n",
 	               [this] { CHECK(Run({"set", "-q", "a:2", "progress=4"}) == 0); }) == 0);
 	CHECK(Saved(MediaType::kAnime).size() == 1);
@@ -374,7 +350,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli holds no lock while the person chooses a titl
 	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").progress == 6);
 	CHECK(Saved(MediaType::kAnime)[0].status == WatchStatus::kOnHold);
 
-	// What another program changed meanwhile is kept.
 	CHECK(RunAsked({"set", "frieren", "score=9"}, "2\n",
 	               [this] { CHECK(Run({"set", "-q", "m:2", "progress=4"}) == 0); }) == 0);
 	auto manga = Saved(MediaType::kManga)[1];
@@ -399,7 +374,6 @@ TEST_CASE_FIXTURE(CliFixture, "cli takes a lone - for no title, though titles ho
 	CHECK(SavedTitle(MediaType::kAnime, "Re-Zero").status == WatchStatus::kPlanToWatch);
 	CHECK(Saved(MediaType::kAnime).size() == 3);
 	CHECK(Steps().size() == 1);
-	// Part of a title may still hold one.
 	CHECK(Run({"done", "-q", "re-z"}) == 0);
 	CHECK(SavedTitle(MediaType::kAnime, "Re-Zero").status == WatchStatus::kCompleted);
 }

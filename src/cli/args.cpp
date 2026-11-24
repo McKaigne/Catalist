@@ -25,21 +25,18 @@ const Option* FindShort(const std::vector<Option>& options, char letter) {
 	return found == options.end() ? nullptr : &*found;
 }
 
-// Reads the arguments one at a time; `next` is the one being read.
 struct Reader {
 	const std::vector<std::string>& arguments;
 	const std::vector<Option>& options;
 	size_t next = 0;
 	Parsed line{};
 
-	// The value of an option that has none attached: the next argument.
 	[[nodiscard]] std::optional<std::string> TakeValue() {
 		if (next >= arguments.size())
 			return std::nullopt;
 		return arguments[next++];
 	}
 
-	// --name, --name=value or --name value. Returns an error message, or "".
 	[[nodiscard]] std::string ReadLong(const std::string& argument) {
 		auto equals = argument.find('=');
 		std::string name = argument.substr(2, equals == std::string::npos ? equals : equals - 2);
@@ -59,7 +56,6 @@ struct Reader {
 		return "";
 	}
 
-	// -a, -am, -n 3, -n3 or -an3. Returns an error message, or "".
 	[[nodiscard]] std::string ReadShort(const std::string& argument) {
 		for (size_t at = 1; at < argument.size(); ++at) {
 			const Option* found = FindShort(options, argument[at]);
@@ -69,7 +65,6 @@ struct Reader {
 				line.options[KeyOf(*found)] = "";
 				continue;
 			}
-			// What is left of the argument is the value; else the next one.
 			auto value = at + 1 < argument.size() ? argument.substr(at + 1) : TakeValue();
 			if (not value)
 				return std::format("option '-{}' needs a value ({})", argument[at], found->value);

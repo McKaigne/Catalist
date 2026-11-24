@@ -4,9 +4,6 @@
 #include "storage/catalogue.hpp"
 #include "storage/csv_codec.hpp"
 
-// The undo history of the catalogue: each save with a note is a step in
-// `tx`, and its changes are rows of `change`, each entry before and after
-// as a csv_codec row (empty: the entry did not exist).
 namespace catalist {
 
 namespace {
@@ -19,8 +16,6 @@ std::string EncodeRow(const std::optional<Entry>& row) {
 	return row ? csv_codec::EncodeEntry(*row) : std::string();
 }
 
-// The changes of one step in the order they were made; nothing when they
-// cannot be read.
 std::optional<std::vector<journal::Change>> ReadChanges(const store::Database& db, long long tx) {
 	std::vector<journal::Change> changes;
 	auto rows = db.Prepare("SELECT type, id, before, after FROM change WHERE tx = ? ORDER BY seq");
@@ -45,8 +40,6 @@ bool WriteChanges(const store::Database& db, long long tx,
 	return true;
 }
 
-// The steps that `where` selects and orders (all of them when `limit` is
-// not positive); nothing when they cannot be read.
 std::optional<std::vector<TxRecord>> ReadSteps(const store::Database& db, const std::string& where,
                                                int limit) {
 	std::vector<TxRecord> steps;
@@ -61,7 +54,6 @@ std::optional<std::vector<TxRecord>> ReadSteps(const store::Database& db, const 
 	return rows.Ok() ? std::optional(steps) : std::nullopt;
 }
 
-// Enters the changes as a step, forgetting the oldest beyond the last 100.
 bool WriteJournal(store::Database& db, const TxNote& note,
                   const std::vector<journal::Change>& changes) {
 	// New work ends what could be redone.
@@ -97,8 +89,6 @@ bool Catalogue::SaveAll(const TxNote& note) {
 		RememberSaved();
 	return done;
 }
-
-// Undo and redo.
 
 Result<Replay> Catalogue::Undo(int count, bool force) {
 	return WalkHistory(false, count, force);
@@ -142,7 +132,6 @@ Result<Replay> Catalogue::WalkHistory(bool redoing, int count, bool force) {
 	if (steps->empty())
 		return {};
 
-	// The lists as they are, to go back to when a step cannot be taken.
 	std::vector<Entry> anime = animeEntries_;
 	std::vector<Entry> manga = mangaEntries_;
 	std::string problem;

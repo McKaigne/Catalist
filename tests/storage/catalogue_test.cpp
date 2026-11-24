@@ -51,7 +51,6 @@ TEST_CASE_FIXTURE(TempDirFixture,
 	Catalogue db(TempDir() / "data");
 	CHECK(db.AddEntry(MakeEntry().Title("One")) == 1);
 	CHECK(db.AddEntry(MakeEntry().Title("Two").MalId(5)) == 2);
-	// An id the caller sets is not kept: ids are only row numbers.
 	CHECK(db.AddEntry(MakeEntry().Id(500).Title("Three")) == 3);
 	CHECK(db.AddEntry(MakeEntry().Title("Manga").Type(MediaType::kManga)) == 1);
 
@@ -118,7 +117,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue loadAll says whether anything was s
 	auto loaded = db.LoadAll();
 	REQUIRE(loaded.has_value());
 	CHECK_FALSE(loaded.value());
-	// Looking at an empty Catalogue creates nothing.
 	CHECK_FALSE(std::filesystem::exists(TempDir() / "data"));
 
 	db.AddEntry(MakeEntry().Title("First"));
@@ -202,7 +200,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue saves both lists and reloads them")
 	db.AddEntry(MakeEntry().Title("Paper").Type(MediaType::kManga).Volumes(3).TotalVolumes(9));
 	REQUIRE(db.SaveAll());
 	CHECK(std::filesystem::exists(TempDir() / "data/catalist.db"));
-	// One file holds everything; no CSV or settings file is written.
 	CHECK_FALSE(std::filesystem::exists(TempDir() / "data/anime.csv"));
 	CHECK_FALSE(std::filesystem::exists(TempDir() / "data/settings"));
 
@@ -224,7 +221,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue writes only the rows it changed") {
 		db.AddEntry(MakeEntry().Title("Three"));
 		REQUIRE(db.SaveAll());
 	}
-	// Two programs have the lists open; each changes another title.
 	Catalogue first(dir);
 	Catalogue second(dir);
 	REQUIRE(first.LoadAll().value());
@@ -249,7 +245,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue writes only the rows it changed") {
 TEST_CASE_FIXTURE(TempDirFixture, "catalogue beginWrite holds the catalogue until the save") {
 	auto dir = TempDir() / "data";
 	{
-		// A command that gives up before saving leaves nothing behind.
 		Catalogue db(dir);
 		REQUIRE(db.BeginWrite().has_value());
 		REQUIRE(db.LoadAll().has_value());
@@ -262,7 +257,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue beginWrite holds the catalogue unti
 		CHECK(db.GetEntries(MediaType::kAnime).empty());
 		db.AddEntry(MakeEntry().Title("Kept"));
 		REQUIRE(db.SaveAll());
-		// The save ended the write: another program can write again.
 		Catalogue other(dir);
 		REQUIRE(other.BeginWrite().has_value());
 	}
@@ -295,8 +289,6 @@ catalist::TxNote NoteOf(const std::string& label) {
 	return {label, "2026-10-20 21:30:00"};
 }
 
-// Frieren (a:1, completed) and Odd Taxi (a:2, 5 of 13) and Berserk (m:1),
-// saved without a step in the history.
 void SeedForUndo(Catalogue& db) {
 	db.AddEntry(MakeEntry().Title("Sousou no Frieren").MalId(52991).AnilistId(154587).Score(10));
 	db.AddEntry(
@@ -305,7 +297,6 @@ void SeedForUndo(Catalogue& db) {
 	REQUIRE(db.SaveAll());
 }
 
-// Sets the progress of an anime and saves it as one step.
 void Watch(Catalogue& db, int id, int progress, const catalist::TxNote& note) {
 	auto title = *db.GetById(MediaType::kAnime, id);
 	title.progress = progress;
@@ -333,7 +324,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue enters a save with a note in the un
 
 	auto steps = db.History(0).value();
 	REQUIRE(steps.size() == 2);
-	// Newest first.
 	CHECK(steps[0].id == 2);
 	CHECK(steps[0].label == "set a:1 progress=3");
 	CHECK(steps[0].stamp == "2026-10-20 21:30:00");
@@ -344,7 +334,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue enters a save with a note in the un
 	CHECK(db.History(1).value().size() == 1);
 	CHECK(db.History(1).value()[0].id == 2);
 
-	// Nothing the person sets has changed: no step.
 	REQUIRE(db.SaveAll(NoteOf("nothing")));
 	auto taxi = *db.GetById(MediaType::kAnime, 2);
 	taxi.total_volumes = 13;
@@ -352,7 +341,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue enters a save with a note in the un
 	REQUIRE(db.SaveAll(NoteOf("web")));
 	CHECK(db.History(0).value().size() == 2);
 
-	// The history is in the file: another program reads the same.
 	Catalogue other(TempDir() / "data");
 	REQUIRE(other.LoadAll().value());
 	CHECK(other.GetById(MediaType::kAnime, 2)->total_volumes == 13);
@@ -390,7 +378,6 @@ TEST_CASE_FIXTURE(TempDirFixture,
 	CHECK(nothing.value().steps.empty());
 	CHECK(nothing.value().changes.empty());
 
-	// The step undone last is made again first.
 	auto redone = db.Redo(1, false);
 	REQUIRE(redone.has_value());
 	REQUIRE(redone.value().steps.size() == 1);
@@ -403,7 +390,6 @@ TEST_CASE_FIXTURE(TempDirFixture,
 	for (const auto& step : steps)
 		CHECK_FALSE(step.undone);
 
-	// Several at once, newest first; more than there are is all of them.
 	auto both = db.Undo(9, false);
 	REQUIRE(both.has_value());
 	REQUIRE(both.value().steps.size() == 2);
@@ -441,13 +427,11 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo changes nothing when a title h
 	SeedForUndo(db);
 	Watch(db, 2, 6, NoteOf("older"));
 	Watch(db, 1, 4, NoteOf("newer"));
-	// Changed outside the history, as a web check changes a total.
 	auto taxi = *db.GetById(MediaType::kAnime, 2);
 	taxi.progress = 9;
 	REQUIRE(db.UpdateEntry(taxi));
 	REQUIRE(db.SaveAll());
 
-	// The newer step could be taken back, the older one not: neither is.
 	auto refused = db.Undo(2, false);
 	REQUIRE_FALSE(refused.has_value());
 	CHECK(refused.error() ==
@@ -471,7 +455,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo changes nothing when a title h
 	CHECK(ProgressOf(db, 1) == 0);
 	CHECK(ProgressOf(db, 2) == 5);
 
-	// Redo checks the same way.
 	taxi = *db.GetById(MediaType::kAnime, 2);
 	taxi.progress = 1;
 	REQUIRE(db.UpdateEntry(taxi));
@@ -493,7 +476,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo brings a removed title back un
 	REQUIRE(db.RemoveEntry(MediaType::kAnime, 2));
 	REQUIRE(db.SaveAll(NoteOf("rm taxi")));
 
-	// In its place: the lists are kept in the order of their ids.
 	CHECK_FALSE(db.RestoreEntry(*db.GetById(MediaType::kAnime, 3)));
 	REQUIRE(db.Undo(1, false).has_value());
 	auto anime = db.GetEntries(MediaType::kAnime);
@@ -506,7 +488,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo brings a removed title back un
 		REQUIRE(saved.LoadAll().value());
 		CHECK(saved.GetById(MediaType::kAnime, 2)->title == "Odd Taxi");
 	}
-	// Redo removes it again; undo of an addition removes what was added.
 	REQUIRE(db.Redo(1, false).has_value());
 	CHECK_FALSE(db.GetById(MediaType::kAnime, 2));
 	int added = db.AddEntry(MakeEntry().Title("Dandadan").AnilistId(171018));
@@ -522,7 +503,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue undo cannot bring a title back to a
 	SeedForUndo(db);
 	REQUIRE(db.RemoveEntry(MediaType::kAnime, 2));
 	REQUIRE(db.SaveAll(NoteOf("rm taxi")));
-	// The highest id was freed, and the next title added got it.
 	CHECK(db.AddEntry(MakeEntry().Title("Mushishi")) == 2);
 	REQUIRE(db.SaveAll());
 
@@ -543,7 +523,6 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue forgets what was undone when new wo
 	Watch(db, 2, 6, NoteOf("first"));
 	Watch(db, 2, 7, NoteOf("second"));
 	REQUIRE(db.Undo(1, false).has_value());
-	// A save outside the history leaves what can be redone.
 	auto frieren = *db.GetById(MediaType::kAnime, 1);
 	frieren.total_volumes = 28;
 	REQUIRE(db.UpdateEntry(frieren));
@@ -581,7 +560,6 @@ TEST_CASE("catalogue data dir: CATALIST_DATA_DIR, then XDG_DATA_HOME, then ~/.lo
 	CHECK(data_dir(Dirs{"/custom", "/xdg/data", "/home/me"}) == "/custom");
 	CHECK(data_dir(Dirs{"", "/xdg/data", "/home/me"}) == "/xdg/data/catalist");
 	CHECK(data_dir(Dirs{"", "", "/home/me"}) == "/home/me/.local/share/catalist");
-	// A relative XDG_DATA_HOME is not valid, and is ignored.
 	CHECK(data_dir(Dirs{"", "relative/data", "/home/me"}) == "/home/me/.local/share/catalist");
 	CHECK(data_dir(Dirs{}) == "catalist-data");
 
@@ -632,7 +610,6 @@ TEST_CASE_FIXTURE(TempDirFixture,
 	CHECK(taxi->rewatched == 1);
 	CHECK(FormatDate(taxi->start_date) == "2026-10-01");
 	CHECK(FormatDate(taxi->updated_at) == "2026-10-02");
-	// The old undo rows have columns that are gone.
 	CHECK(db.History(0).value().empty());
 
 	catalist::store::Database raw;

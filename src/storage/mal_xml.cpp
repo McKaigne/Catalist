@@ -25,7 +25,6 @@ std::string DecodeXmlEntities(std::string text) {
 	return text;
 }
 
-// The trimmed text of the first <tag> in the block; empty when absent.
 std::string TagText(const std::string& block, const std::string& tag) {
 	std::string open_tag = std::format("<{}>", tag);
 	std::string close_tag = std::format("</{}>", tag);
@@ -45,7 +44,6 @@ std::string TagText(const std::string& block, const std::string& tag) {
 	    cdata_end >= cdata_start + cdata_open.length()) {
 		cdata_start += cdata_open.length();
 		text = text.substr(cdata_start, cdata_end - cdata_start);
-		// write() splits a literal "]]>" over two sections.
 		const std::string seam = "]]]]><![CDATA[>";
 		for (size_t at = text.find(seam); at != std::string::npos; at = text.find(seam, at + 3))
 			text.replace(at, seam.length(), "]]>");
@@ -59,7 +57,6 @@ std::string TagText(const std::string& block, const std::string& tag) {
 	return DecodeXmlEntities(text.substr(first, last - first + 1));
 }
 
-// A count is plain digits; anything else (or an absurd length) reads as 0.
 int TagNumber(const std::string& block, const std::string& tag) {
 	std::string digits = TagText(block, tag);
 	if (digits.length() > 8)
@@ -81,7 +78,6 @@ struct BlockTags {
 	const char* total;
 	const char* progress;
 	const char* repeats;
-	// Watching or reading it again: "1" or "YES".
 	const char* again;
 };
 
@@ -103,7 +99,6 @@ void ParseBlocks(const std::string& xml, const BlockTags& tags, std::vector<Entr
 		std::string block = xml.substr(at, end - at);
 		at = end + close_tag.length();
 
-		// One title: anything missing or unreadable stays at its default.
 		Entry item;
 		item.type = tags.type;
 		item.title = TagText(block, tags.title);
@@ -113,7 +108,6 @@ void ParseBlocks(const std::string& xml, const BlockTags& tags, std::vector<Entr
 		item.total_units = TagNumber(block, tags.total);
 		item.progress = TagNumber(block, tags.progress);
 		item.rewatched = TagNumber(block, tags.repeats);
-		// Only manga blocks carry volumes; for anime both read as 0.
 		item.total_volumes = TagNumber(block, "manga_volumes");
 		item.volumes = TagNumber(block, "my_read_volumes");
 		item.score = std::min(TagNumber(block, "my_score"), 10);

@@ -33,7 +33,6 @@ std::optional<std::string> ReadFile(const std::filesystem::path& file) {
 
 namespace {
 
-// Owns a file descriptor and closes it when it goes out of scope.
 class FileDescriptor {
 public:
 	explicit FileDescriptor(int descriptor = -1) : descriptor_(descriptor) {}
@@ -64,7 +63,6 @@ struct PipeEnds {
 	FileDescriptor write;
 };
 
-// Both ends close themselves in a child once it runs another program.
 std::optional<PipeEnds> MakePipe() {
 	int ends[2];
 	if (pipe(ends) != 0)
@@ -91,8 +89,6 @@ std::optional<std::string> RunProgram(const std::vector<std::string>& arguments,
 
 	pid_t child = fork();
 	if (child == 0) {
-		// In the child: the pipes become standard input and output, errors go
-		// nowhere, and every other descriptor closes on exec.
 		dup2(to_child->read.Get(), STDIN_FILENO);
 		dup2(from_child->write.Get(), STDOUT_FILENO);
 		FileDescriptor dev_null(open("/dev/null", O_WRONLY | O_CLOEXEC));
@@ -101,7 +97,6 @@ std::optional<std::string> RunProgram(const std::vector<std::string>& arguments,
 		execvp(argv[0], argv.data());
 		_exit(127);
 	}
-	// In the parent: only our ends stay open.
 	to_child->read.Reset();
 	from_child->write.Reset();
 	if (child < 0)
@@ -168,12 +163,10 @@ std::optional<web::Reply> HttpFetch(const web::Request& sent) {
 		arguments.insert(arguments.end(), {"-X", sent.method});
 	for (const auto& header : sent.headers)
 		arguments.insert(arguments.end(), {"-H", header});
-	// The body goes in on standard input, never on the command line.
 	if (not sent.body.empty())
 		arguments.insert(arguments.end(), {"--data-binary", "@-"});
 	arguments.push_back(sent.url);
 	auto output = RunProgram(arguments, sent.body);
-	// No status line: curl got no answer, or wrote something else.
 	size_t line_end = output ? output->rfind('\n') : std::string::npos;
 	if (line_end == std::string::npos)
 		return std::nullopt;

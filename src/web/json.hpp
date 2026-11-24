@@ -28,11 +28,9 @@ public:
 	Value(Array items) : data_(std::move(items)) {}
 	Value(Object members) : data_(std::move(members)) {}
 
-	[[nodiscard]] bool IsNull() const;
 	[[nodiscard]] bool IsArray() const;
 
 	[[nodiscard]] std::optional<double> AsNumber() const;
-	[[nodiscard]] std::optional<bool> AsBool() const;
 	[[nodiscard]] std::optional<long long> AsInteger() const;
 	[[nodiscard]] int AsCount() const;
 	[[nodiscard]] std::optional<std::string> AsString() const;

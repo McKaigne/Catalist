@@ -8,9 +8,9 @@
 
 namespace catalist {
 
-enum class SortKey { kUpdated, kScore, kStatus, kTitle, kProgress, kDate };
+enum class SortKey { kUpdated, kTitle };
 
-void SortEntries(std::vector<Entry>& entries, SortKey key, bool reverse);
+void SortEntries(std::vector<Entry>& entries, SortKey key);
 
 [[nodiscard]] size_t CountByStatus(const std::vector<Entry>& list, WatchStatus status);
 [[nodiscard]] double AverageScore(const std::vector<Entry>& list);

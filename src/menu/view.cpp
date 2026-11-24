@@ -24,7 +24,7 @@ void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t 
 		     {output::Stars(e.score), output::kYellow},
 		     {OutOf(e.progress, e.total_units)}});
 	}
-	app.out << output::Sections({{"", false, true}, {""}, {""}, {""}}, sections, app.columns,
+	app.out << output::Sections({{false, true}, {}, {}, {}}, sections, app.columns,
 	                            app.color);
 }
 
@@ -34,7 +34,7 @@ void ShowPages(App& app, const std::string& heading, std::vector<Entry> titles, 
 		Pause(app);
 		return;
 	}
-	SortEntries(titles, key, false);
+	SortEntries(titles, key);
 	std::stable_partition(titles.begin(), titles.end(),
 	                      [](const Entry& e) { return e.type == MediaType::kAnime; });
 	size_t pages = (titles.size() + kPageSize - 1) / kPageSize;
@@ -135,7 +135,6 @@ void PrintCard(App& app, const Entry& e) {
 		CardRow(app, label, value);
 	};
 	auto id_text = [](int id) { return id > 0 ? std::to_string(id) : std::string("-"); };
-	auto date_text = [](const std::optional<IsoDate>& day) { return output::DateText(day); };
 	std::string page = PageOf(e);
 
 	if (not e.english_title.empty())
@@ -155,9 +154,9 @@ void PrintCard(App& app, const Entry& e) {
 	if (e.type == MediaType::kManga)
 		row("Volumes", OutOf(e.volumes, e.total_volumes));
 	row(e.type == MediaType::kAnime ? "Rewatched" : "Reread", std::to_string(e.rewatched));
-	row("Started", date_text(e.start_date));
-	row("Finished", date_text(e.finish_date));
-	row("Updated", date_text(e.updated_at));
+	row("Started", output::DateText(e.start_date));
+	row("Finished", output::DateText(e.finish_date));
+	row("Updated", output::DateText(e.updated_at));
 }
 
 void ViewScreen(App& app) {

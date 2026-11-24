@@ -266,10 +266,6 @@ private:
 
 }  // namespace
 
-bool Value::IsNull() const {
-	return std::holds_alternative<std::nullptr_t>(data_);
-}
-
 bool Value::IsArray() const {
 	return std::holds_alternative<Array>(data_);
 }
@@ -277,12 +273,6 @@ bool Value::IsArray() const {
 std::optional<double> Value::AsNumber() const {
 	if (auto number = std::get_if<double>(&data_))
 		return *number;
-	return std::nullopt;
-}
-
-std::optional<bool> Value::AsBool() const {
-	if (auto flag = std::get_if<bool>(&data_))
-		return *flag;
 	return std::nullopt;
 }
 

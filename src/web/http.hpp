@@ -9,15 +9,14 @@
 namespace catalist::web {
 
 struct Request {
-	std::string method = "GET";
 	std::string url;
-	std::vector<std::string> headers{};
-	std::string body{};
+	std::vector<std::string> headers;
+	std::string body;
 };
 
 struct Reply {
 	int status = 200;
-	std::string body{};
+	std::string body;
 };
 
 using Fetcher = std::function<std::optional<Reply>(const Request&)>;

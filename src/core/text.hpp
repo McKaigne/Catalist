@@ -8,8 +8,6 @@ namespace catalist::utf8 {
 
 [[nodiscard]] std::vector<std::string> SplitGlyphs(const std::string& text);
 
-[[nodiscard]] std::string Clip(const std::string& text, size_t max_glyphs);
-
 [[nodiscard]] int Width(const std::string& text);
 
 [[nodiscard]] std::string Fit(const std::string& text, int columns);

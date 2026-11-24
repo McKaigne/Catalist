@@ -1,6 +1,5 @@
 #include "menu/common.hpp"
 
-#include <algorithm>
 #include <format>
 
 #include "core/lists.hpp"
@@ -129,7 +128,6 @@ std::vector<Entry> InProgress(const Catalogue& db) {
 		for (const auto& each : db.GetEntries(type))
 			if (each.status == WatchStatus::kWatching or each.status == WatchStatus::kRewatching)
 				open.push_back(each);
-	SortEntries(open, SortKey::kUpdated, false);
 	return open;
 }
 
@@ -147,7 +145,7 @@ std::optional<WatchStatus> AskStatus(App& app, const std::string& heading, int c
 
 std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
 	constexpr size_t kMostOffered = 20;
-	SortEntries(titles, SortKey::kUpdated, false);
+	SortEntries(titles, SortKey::kUpdated);
 	size_t more = titles.size() > kMostOffered ? titles.size() - kMostOffered : 0;
 	titles.resize(titles.size() - more);
 	std::vector<std::vector<output::Styled>> rows;
@@ -156,7 +154,7 @@ std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
 		                {DisplayName(titles[i])},
 		                {TypeKey(titles[i].type)},
 		                {OutOf(titles[i].progress, titles[i].total_units)}});
-	app.out << output::Rows({{"", true}, {"", false, true}, {""}, {""}}, rows, app.columns,
+	app.out << output::Rows({{true}, {false, true}, {}, {}}, rows, app.columns,
 	                        app.color);
 	if (more > 0)
 		app.out << std::format("and {} more: type more of the name to reach them\n", more);

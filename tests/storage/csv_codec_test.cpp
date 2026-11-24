@@ -7,7 +7,6 @@
 
 #include "support/test_support.hpp"
 
-using catalist::FormatDate;
 using catalist::MediaType;
 using catalist::WatchStatus;
 using catalist::test::MakeEntry;

@@ -17,41 +17,14 @@ std::string LastChange(const Entry& e) {
 	return e.changed_at.empty() ? FormatDate(e.updated_at) : e.changed_at;
 }
 
-bool ComesBefore(const Entry& a, const Entry& b, SortKey key) {
-	switch (key) {
-		case SortKey::kUpdated:
-			if (LastChange(a) != LastChange(b))
-				return LastChange(a) > LastChange(b);
-			break;
-		case SortKey::kScore:
-			if (a.score != b.score)
-				return a.score > b.score;
-			break;
-		case SortKey::kProgress:
-			if (a.progress != b.progress)
-				return a.progress > b.progress;
-			break;
-		case SortKey::kDate:
-			if (ListDate(a) != ListDate(b))
-				return ListDate(a) > ListDate(b);
-			break;
-		case SortKey::kStatus:
-			if (a.status != b.status)
-				return static_cast<int>(a.status) < static_cast<int>(b.status);
-			break;
-		case SortKey::kTitle:
-			break;
-	}
-	return DisplayName(a) < DisplayName(b);
-}
-
 }  // namespace
 
-void SortEntries(std::vector<Entry>& entries, SortKey key, bool reverse) {
-	std::stable_sort(entries.begin(), entries.end(),
-	                 [key, reverse](const Entry& a, const Entry& b) {
-		                 return reverse ? ComesBefore(b, a, key) : ComesBefore(a, b, key);
-	                 });
+void SortEntries(std::vector<Entry>& entries, SortKey key) {
+	std::stable_sort(entries.begin(), entries.end(), [key](const Entry& a, const Entry& b) {
+		if (key == SortKey::kUpdated and LastChange(a) != LastChange(b))
+			return LastChange(a) > LastChange(b);
+		return DisplayName(a) < DisplayName(b);
+	});
 }
 
 size_t CountByStatus(const std::vector<Entry>& list, WatchStatus status) {

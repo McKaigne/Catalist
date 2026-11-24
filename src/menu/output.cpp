@@ -15,9 +15,7 @@ constexpr int kNarrowest = 10;
 
 std::vector<int> ColumnWidths(const std::vector<TableColumn>& columns,
                               const std::vector<std::vector<Styled>>& rows, int width) {
-	std::vector<int> widths;
-	for (const auto& column : columns)
-		widths.push_back(utf8::Width(column.header));
+	std::vector<int> widths(columns.size(), 0);
 	for (const auto& row : rows)
 		for (size_t i = 0; i < columns.size() and i < row.size(); ++i)
 			widths[i] = std::max(widths[i], utf8::Width(row[i].text));

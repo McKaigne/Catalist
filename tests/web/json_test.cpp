@@ -15,11 +15,9 @@ TEST_CASE("json parses nested objects arrays and scalars") {
 	CHECK(doc["data"].Items()[0]["node"]["title"].AsString() == "A\"b");
 	CHECK(doc["data"].Items()[0]["score"].AsNumber() == doctest::Approx(7.5));
 	CHECK_FALSE(doc["data"].Items()[0]["score"].AsInteger().has_value());
-	CHECK_FALSE(doc["ok"].IsNull());
 	CHECK_FALSE(doc["ok"].AsNumber().has_value());
-	CHECK(doc["none"].IsNull());
 	CHECK(doc["neg"].AsInteger() == -20);
-	CHECK(doc["missing"]["deeper"].IsNull());
+	CHECK_FALSE(doc["missing"]["deeper"].AsString().has_value());
 	CHECK(doc["data"].Items()[0]["node"]["id"].AsCount() == 5);
 	CHECK(doc["data"].Items()[0]["score"].AsCount() == 0);
 	CHECK(doc["neg"].AsCount() == 0);

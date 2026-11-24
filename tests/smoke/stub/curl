@@ -1,7 +1,7 @@
 #!/bin/sh
 # Stands in for curl in the smoke tests, so they never go online. It knows
-# AniList's answer about three titles: a search for "fullmetal" finds two
-# anime, and "Odd Taxi" and "Dandadan" one each. As curl -w '\n%{http_code}' does, the status
+# AniList's answer about two titles: a search for "fullmetal" finds two
+# anime, and "Odd Taxi" one. As curl -w '\n%{http_code}' does, the status
 # follows the body on a line of its own; anything else is AniList's 404.
 
 body=
@@ -14,10 +14,6 @@ done
 case "$body" in
 *'"search":"Odd Taxi"'*)
 	printf '%s\n' '{"data":{"anime":{"media":[{"id":128547,"idMal":44265,"title":{"romaji":"Odd Taxi"},"episodes":13}]},"manga":{"media":[]}}}'
-	printf '200'
-	;;
-*'"search":"Dandadan"'*)
-	printf '%s\n' '{"data":{"anime":{"media":[{"id":171018,"idMal":57334,"title":{"romaji":"Dandadan"},"episodes":12}]},"manga":{"media":[]}}}'
 	printf '200'
 	;;
 *'"search":"fullmetal"'*)

@@ -78,21 +78,12 @@ void WriteText(const std::filesystem::path& file, const std::string& text) {
 		throw std::runtime_error("could not write " + file.string());
 }
 
-void MakeUnwritable(const std::filesystem::path& file) {
-	std::filesystem::create_directories(file);
-}
-
 void FakeWeb::Respond(const std::string& fragment, const std::string& body, int status) {
 	bodies[fragment] = {status, body};
 }
 
 std::optional<web::Reply> FakeWeb::Fetch(const web::Request& asked) {
-	std::string request = std::format("{} {} {}", asked.method, asked.url, asked.body);
-	sent.push_back(request);
-	if (while_asked)
-		while_asked();
-	if (not asked.body.empty())
-		posted.push_back(asked.body);
+	std::string request = std::format("{} {}", asked.url, asked.body);
 	const web::Reply* answer = nullptr;
 	size_t matched = 0;
 	for (const auto& [fragment, body] : bodies) {

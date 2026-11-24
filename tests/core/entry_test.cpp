@@ -3,7 +3,6 @@
 #include <doctest/doctest.h>
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "support/test_support.hpp"
@@ -266,9 +265,6 @@ TEST_CASE("setCount sets totals, volumes and rewatches within bounds") {
 	Entry open = MakeEntry().Type(catalist::MediaType::kManga);
 	CHECK(catalist::SetCount(open, CountField::kVolumes, 40, kToday).volumes == 40);
 
-	CHECK(catalist::SetCount(show, CountField::kRewatched, 2, kToday).rewatched == 2);
-	CHECK(catalist::SetCount(show, CountField::kRewatched, -1, kToday).rewatched == 0);
-	CHECK_FALSE(catalist::SetCount(show, CountField::kRewatched, 0, kToday).updated_at.has_value());
 }
 
 TEST_CASE("countOf reads each count") {
@@ -276,7 +272,6 @@ TEST_CASE("countOf reads each count") {
 	CHECK(catalist::CountOf(e, CountField::kProgress) == 1);
 	CHECK(catalist::CountOf(e, CountField::kTotalUnits) == 2);
 	CHECK(catalist::CountOf(e, CountField::kVolumes) == 3);
-	CHECK(catalist::CountOf(e, CountField::kRewatched) == 4);
 }
 
 TEST_CASE("mergeImported refreshes totals and fills only what the user left empty") {

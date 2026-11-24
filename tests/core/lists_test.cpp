@@ -18,42 +18,32 @@ namespace {
 
 using TitleList = std::vector<std::string>;
 
-TitleList TitlesSortedBy(std::vector<catalist::Entry> entries, SortKey key, bool reverse) {
-	catalist::SortEntries(entries, key, reverse);
+TitleList TitlesSortedBy(std::vector<catalist::Entry> entries, SortKey key) {
+	catalist::SortEntries(entries, key);
 	TitleList titles;
 	for (const auto& e : entries)
-		titles.push_back(e.title);
+		titles.push_back(catalist::DisplayName(e));
 	return titles;
 }
 
 }  // namespace
 
-TEST_CASE("sortEntries puts each key in its natural order and reverse flips it") {
-	auto anime = SampleList(MediaType::kAnime);
-	const TitleList by_rating = {"Sousou no Frieren", "Odd Taxi", "Ghost, \"in\" the Shell",
-	                             "A Very Long Title That Will Definitely Be "
-	                             "Truncated"};
-	CHECK(TitlesSortedBy(anime, SortKey::kScore, false) == by_rating);
-	CHECK(TitlesSortedBy(anime, SortKey::kScore, true) ==
-	      TitleList(by_rating.rbegin(), by_rating.rend()));
-	CHECK(TitlesSortedBy(anime, SortKey::kProgress, false) == by_rating);
-
-	CHECK(TitlesSortedBy(anime, SortKey::kTitle, false) ==
-	      TitleList{"A Very Long Title That Will Definitely Be Truncated",
-	                "Ghost, \"in\" the Shell", "Odd Taxi", "Sousou no Frieren"});
-	CHECK(TitlesSortedBy(anime, SortKey::kStatus, false) ==
-	      TitleList{"Odd Taxi", "Sousou no Frieren", "Ghost, \"in\" the Shell",
-	                "A Very Long Title That Will Definitely Be Truncated"});
-	CHECK(TitlesSortedBy(anime, SortKey::kDate, false) ==
-	      TitleList{"A Very Long Title That Will Definitely Be Truncated", "Sousou no Frieren",
-	                "Odd Taxi", "Ghost, \"in\" the Shell"});
+TEST_CASE("sortEntries orders by the shown name") {
+	std::vector<catalist::Entry> entries = {MakeEntry().Title("Zeta").EnglishTitle("Alpha"),
+	                                        MakeEntry().Title("Bravo")};
+	CHECK(TitlesSortedBy(entries, SortKey::kTitle) == TitleList{"Alpha", "Bravo"});
 }
 
-TEST_CASE("sortEntries breaks ties by title") {
-	std::vector<catalist::Entry> scored = {MakeEntry().Title("Charlie").Score(7),
-	                                       MakeEntry().Title("Alpha").Score(7),
-	                                       MakeEntry().Title("Bravo").Score(9)};
-	CHECK(TitlesSortedBy(scored, SortKey::kScore, false) == TitleList{"Bravo", "Alpha", "Charlie"});
+TEST_CASE("sortEntries puts the latest change first, then breaks ties by name") {
+	catalist::Entry day = MakeEntry().Title("Day only").UpdatedAt("2026-11-24");
+	catalist::Entry early = MakeEntry().Title("Early");
+	early.changed_at = "2026-11-24 09:00:00";
+	catalist::Entry late = MakeEntry().Title("Late");
+	late.changed_at = "2026-11-24 10:00:00";
+	catalist::Entry tied = MakeEntry().Title("Also late");
+	tied.changed_at = late.changed_at;
+	CHECK(TitlesSortedBy({day, early, late, tied}, SortKey::kUpdated) ==
+	      TitleList{"Also late", "Late", "Early", "Day only"});
 }
 
 TEST_CASE("list statistics count, average and estimate time") {

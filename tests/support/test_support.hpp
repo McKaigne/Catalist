@@ -32,17 +32,13 @@ private:
 
 [[nodiscard]] std::string ReadText(const std::filesystem::path& file);
 void WriteText(const std::filesystem::path& file, const std::string& text);
-void MakeUnwritable(const std::filesystem::path& file);
 
 struct FakeWeb {
 	void Respond(const std::string& fragment, const std::string& body, int status = 200);
 	[[nodiscard]] std::optional<web::Reply> Fetch(const web::Request& sent);
 	[[nodiscard]] web::Fetcher Link();
 
-	std::vector<std::string> sent;
-	std::vector<std::string> posted;
 	std::map<std::string, web::Reply> bodies;
-	std::function<void()> while_asked;
 };
 
 IsoDate RequireDate(const std::string& text);

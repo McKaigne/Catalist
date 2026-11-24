@@ -89,16 +89,6 @@ std::vector<std::string> SplitGlyphs(const std::string& text) {
 	return glyphs;
 }
 
-std::string Clip(const std::string& text, size_t max_glyphs) {
-	auto glyphs = SplitGlyphs(text);
-	if (glyphs.size() <= max_glyphs)
-		return text;
-	std::string clipped;
-	for (size_t i = 0; i < max_glyphs; ++i)
-		clipped += glyphs[i];
-	return clipped;
-}
-
 int Width(const std::string& text) {
 	int columns = 0;
 	for (const auto& glyph : SplitGlyphs(text))

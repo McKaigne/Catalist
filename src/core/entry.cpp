@@ -93,12 +93,6 @@ std::string FormatDate(const std::optional<IsoDate>& date) {
 	return date ? date->ToString() : "";
 }
 
-std::optional<IsoDate> ListDate(const Entry& shown) {
-	if (shown.status == WatchStatus::kCompleted and shown.finish_date)
-		return shown.finish_date;
-	return shown.start_date ? shown.start_date : shown.updated_at;
-}
-
 }  // namespace catalist
 
 namespace catalist {
@@ -246,8 +240,6 @@ int CountOf(const Entry& target, CountField field) {
 			return target.total_units;
 		case CountField::kVolumes:
 			return target.volumes;
-		case CountField::kRewatched:
-			return target.rewatched;
 	}
 	return 0;
 }
@@ -265,10 +257,8 @@ Entry SetCount(Entry target, CountField field, int value, const IsoDate& today) 
 		target.total_units = value;
 		if (value > 0)
 			target.progress = std::min(target.progress, value);
-	} else if (field == CountField::kVolumes) {
-		target.volumes = value;
 	} else {
-		target.rewatched = value;
+		target.volumes = value;
 	}
 	target.updated_at = today;
 	return target;

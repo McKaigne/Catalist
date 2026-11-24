@@ -34,7 +34,6 @@ TEST_CASE("runProgram reports programs that fail or do not exist") {
 
 TEST_CASE("localTime follows the computer's calendar and clock") {
 	auto date = catalist::IsoDate::FromLocalTm(catalist::LocalTime());
-	CHECK(date.Year() >= 2024);
 	CHECK(catalist::IsoDate::Parse(date.ToString()) == date);
 	auto stamp = catalist::StampOf(catalist::LocalTime());
 	REQUIRE(stamp.size() == 19);

@@ -27,7 +27,7 @@ std::string JsonString(const std::string& text) {
 
 Result<std::string> Ask(const web::Fetcher& fetch, const std::string& query) {
 	auto got = fetch(
-	    {"POST", kApiUrl, {"Content-Type: application/json", "Accept: application/json"}, query});
+	    {kApiUrl, {"Content-Type: application/json", "Accept: application/json"}, query});
 	if (not got)
 		return std::unexpected("could not reach AniList; check the connection and try again");
 	int status = got->status;

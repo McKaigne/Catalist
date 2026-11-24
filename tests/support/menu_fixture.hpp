@@ -7,7 +7,6 @@
 #include <format>
 #include <sstream>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "menu/app.hpp"
@@ -27,14 +26,6 @@ inline const char* const kAnimeXml =
     "<series_episodes>13</series_episodes>"
     "<my_watched_episodes>5</my_watched_episodes><my_score>8</my_score>"
     "<my_status>Watching</my_status></anime>"
-    "</myanimelist>";
-
-inline const char* const kMangaXml =
-    "<myanimelist>"
-    "<manga><manga_mangadb_id>2</manga_mangadb_id>"
-    "<manga_title><![CDATA[Berserk]]></manga_title>"
-    "<my_read_chapters>364</my_read_chapters><my_score>10</my_score>"
-    "<my_status>Reading</my_status></manga>"
     "</myanimelist>";
 
 struct MenuFixture : catalist::test::TempDirFixture {

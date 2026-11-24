@@ -9,8 +9,6 @@ namespace catalist {
 template <typename T>
 using Result = std::expected<T, std::string>;
 
-using Done = std::expected<void, std::string>;
-
 }  // namespace catalist
 
 #endif  // CATALIST_CORE_RESULT_HPP_

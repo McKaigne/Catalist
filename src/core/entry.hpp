@@ -47,8 +47,6 @@ std::string TypeToString(MediaType type);
 
 [[nodiscard]] std::string FormatDate(const std::optional<IsoDate>& date);
 
-[[nodiscard]] std::optional<IsoDate> ListDate(const Entry& shown);
-
 }  // namespace catalist
 
 namespace catalist {
@@ -63,7 +61,7 @@ namespace catalist {
 
 [[nodiscard]] Entry SetScore(Entry target, int score, const IsoDate& today);
 
-enum class CountField { kProgress, kTotalUnits, kVolumes, kRewatched };
+enum class CountField { kProgress, kTotalUnits, kVolumes };
 
 [[nodiscard]] int CountOf(const Entry& target, CountField field);
 

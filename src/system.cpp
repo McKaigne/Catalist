@@ -59,13 +59,6 @@ public:
 	~FileDescriptor() { Reset(); }
 	FileDescriptor(FileDescriptor&& other) noexcept
 	    : descriptor_(std::exchange(other.descriptor_, -1)) {}
-	FileDescriptor& operator=(FileDescriptor&& other) noexcept {
-		Reset();
-		descriptor_ = std::exchange(other.descriptor_, -1);
-		return *this;
-	}
-	FileDescriptor(const FileDescriptor&) = delete;
-	FileDescriptor& operator=(const FileDescriptor&) = delete;
 
 	[[nodiscard]] int Get() const { return descriptor_; }
 	void Reset() {
@@ -179,13 +172,9 @@ const std::vector<std::string> kCurl = {"curl", "-sL", "--connect-timeout", "4",
 
 std::optional<web::Reply> HttpFetch(const web::Request& sent) {
 	std::vector<std::string> arguments = kCurl;
-	if (sent.method != "GET")
-		arguments.insert(arguments.end(), {"-X", sent.method});
 	for (const auto& header : sent.headers)
 		arguments.insert(arguments.end(), {"-H", header});
-	if (not sent.body.empty())
-		arguments.insert(arguments.end(), {"--data-binary", "@-"});
-	arguments.push_back(sent.url);
+	arguments.insert(arguments.end(), {"--data-binary", "@-", sent.url});
 	auto output = RunProgram(arguments, sent.body);
 	size_t line_end = output ? output->rfind('\n') : std::string::npos;
 	if (line_end == std::string::npos)

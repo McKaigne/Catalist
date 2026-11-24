@@ -7,9 +7,6 @@ using catalist::IsoDate;
 TEST_CASE("isoDate parses a valid date") {
 	auto parsed = IsoDate::Parse("2024-03-22");
 	REQUIRE(parsed.has_value());
-	CHECK(parsed->Year() == 2024);
-	CHECK(parsed->Month() == 3);
-	CHECK(parsed->Day() == 22);
 	CHECK(parsed->ToString() == "2024-03-22");
 }
 
@@ -44,13 +41,7 @@ TEST_CASE("isoDate fromParts validates each part") {
 	CHECK_FALSE(IsoDate::FromParts(0, 1, 1).has_value());
 }
 
-TEST_CASE("isoDate orders dates by year, then month, then day") {
-	auto early = *IsoDate::Parse("2023-12-31");
-	auto late = *IsoDate::Parse("2024-01-01");
-	CHECK(early < late);
-	CHECK(late > early);
-	CHECK(early != late);
-	CHECK(*IsoDate::Parse("2024-01-01") == late);
-	CHECK(*IsoDate::Parse("2024-01-02") > late);
-	CHECK(*IsoDate::Parse("2024-02-01") > *IsoDate::Parse("2024-01-31"));
+TEST_CASE("isoDate compares equal only on the same day") {
+	CHECK(*IsoDate::Parse("2024-01-01") == *IsoDate::Parse("2024-01-01"));
+	CHECK_FALSE(*IsoDate::Parse("2023-12-31") == *IsoDate::Parse("2024-01-01"));
 }

@@ -26,12 +26,6 @@ TEST_CASE("utf8 fit clips at a whole glyph and pads to the width") {
 	CHECK(utf8::Width(utf8::Fit("葬送のフリーレン", 6)) == 6);
 }
 
-TEST_CASE("utf8 clip keeps whole glyphs") {
-	CHECK(utf8::Clip("葬送のフリーレン", 2) == "葬送");
-	CHECK(utf8::Clip("short", 10) == "short");
-	CHECK(utf8::Clip(std::string("ab\xE3\x81"), 3) == std::string("ab\xE3\x81"));
-}
-
 TEST_CASE("utf8 folded ignores case and punctuation") {
 	CHECK(utf8::Folded("Frieren: Beyond Journey's End") == "frieren beyond journeys end");
 	CHECK(utf8::Folded("  Re:ZERO -Starting Life-  ") == "re zero starting life");

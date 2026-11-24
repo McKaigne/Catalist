@@ -55,7 +55,7 @@ void PrintMatches(App& app, const std::vector<anilist::Match>& matches) {
 		     {output::Stars(match.score), output::kYellow},
 		     {mine ? StatusLabel(mine->status, match.type) : "", output::kGreen}});
 	}
-	app.out << output::Sections({{"", true}, {""}, {"", false, true}, {"", true}, {""}, {""}}, sections,
+	app.out << output::Sections({{true}, {}, {false, true}, {true}, {}, {}}, sections,
 	                            app.columns, app.color);
 }
 

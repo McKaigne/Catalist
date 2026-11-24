@@ -34,6 +34,12 @@ TEST_CASE("sortEntries orders by the shown name") {
 	CHECK(TitlesSortedBy(entries, SortKey::kTitle) == TitleList{"Alpha", "Bravo"});
 }
 
+TEST_CASE("sortEntries ignores capitals and punctuation") {
+	std::vector<catalist::Entry> entries = {MakeEntry().Title("Zom 100"), MakeEntry().Title("citrus"),
+	                                        MakeEntry().Title("\"Alpha\"")};
+	CHECK(TitlesSortedBy(entries, SortKey::kTitle) == TitleList{"\"Alpha\"", "citrus", "Zom 100"});
+}
+
 TEST_CASE("sortEntries puts the latest change first, then breaks ties by name") {
 	catalist::Entry day = MakeEntry().Title("Day only").UpdatedAt("2026-11-24");
 	catalist::Entry early = MakeEntry().Title("Early");

@@ -21,9 +21,12 @@ namespace catalist::output {
 
 inline const char* const kBold = "1";
 inline const char* const kDim = "2";
+inline const char* const kRed = "31";
 inline const char* const kGreen = "32";
 inline const char* const kYellow = "33";
+inline const char* const kMagenta = "35";
 inline const char* const kCyan = "36";
+inline const char* const kGray = "90";
 
 struct TableColumn {
 	bool align_right = false;

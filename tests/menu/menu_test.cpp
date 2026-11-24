@@ -284,3 +284,22 @@ TEST_CASE_FIXTURE(MenuFixture, "menu puts the title in the edit breadcrumb and n
 	               " 5. Set Status\n 6. Set Total\n 7. Set Volumes\n 8. Set Start Date\n"
 	               " 9. Set Finish Date\n10. Rename Title\n 0. Back\n"));
 }
+
+TEST_CASE_FIXTURE(MenuFixture, "menu log progress can reach every title by page") {
+	{
+		catalist::Catalogue db("catalist.csv");
+		for (int i = 1; i <= 25; ++i)
+			db.AddEntry(catalist::test::MakeEntry()
+			                .MalId(i)
+			                .Title(std::format("Show {:02}", i))
+			                .Status(WatchStatus::kWatching));
+		REQUIRE(db.Save("2026-11-24 10:00:00"));
+	}
+	CHECK(Run("3\n21\n5\n\n0\n") == 0);
+	CHECK(Has(out, "Page 1 of 2\n21. Next Page\n22. Previous Page\n 0. Back\n"));
+	CHECK(Has(out, "Page 2 of 2\n6. Next Page\n7. Previous Page\n0. Back\n"));
+	CHECK(SavedTitle(MediaType::kAnime, "Show 25").progress == 1);
+	CHECK(Run("3\n21\n7\n1\n\n0\n") == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Show 25").progress == 1);
+	CHECK_FALSE(Has(out, "type more of the name"));
+}

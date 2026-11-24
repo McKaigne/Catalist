@@ -1,5 +1,6 @@
 #include "menu/common.hpp"
 
+#include <algorithm>
 #include <format>
 
 #include "core/lists.hpp"
@@ -22,10 +23,6 @@ struct FieldChange {
 	std::string after;
 };
 
-std::string DateOrDash(const std::optional<IsoDate>& day) {
-	return day ? day->ToString() : "-";
-}
-
 std::vector<FieldChange> ChangedFields(const Entry& was, const Entry& now) {
 	const FieldChange all[] = {
 	    {"progress", std::to_string(was.progress), OutOf(now.progress, now.total_units)},
@@ -34,8 +31,8 @@ std::vector<FieldChange> ChangedFields(const Entry& was, const Entry& now) {
 	    {"total", std::to_string(was.total_units), std::to_string(now.total_units)},
 	    {"volumes", std::to_string(was.volumes), std::to_string(now.volumes)},
 	    {"rewatched", std::to_string(was.rewatched), std::to_string(now.rewatched)},
-	    {"started", DateOrDash(was.start_date), DateOrDash(now.start_date)},
-	    {"finished", DateOrDash(was.finish_date), DateOrDash(now.finish_date)},
+	    {"started", output::DateText(was.start_date), output::DateText(now.start_date)},
+	    {"finished", output::DateText(was.finish_date), output::DateText(now.finish_date)},
 	    {"title", DisplayName(was), DisplayName(now)},
 	};
 	std::vector<FieldChange> changed;
@@ -78,17 +75,17 @@ void DrawMenu(App& app, const std::string& heading, const std::vector<std::strin
 const char* StatusColor(WatchStatus status) {
 	switch (status) {
 		case WatchStatus::kWatching:
-			return "32";
+			return output::kGreen;
 		case WatchStatus::kCompleted:
-			return "35";
+			return output::kMagenta;
 		case WatchStatus::kOnHold:
-			return "33";
+			return output::kYellow;
 		case WatchStatus::kDropped:
-			return "31";
+			return output::kRed;
 		case WatchStatus::kPlanToWatch:
-			return "90";
+			return output::kGray;
 		case WatchStatus::kRewatching:
-			return "36";
+			return output::kCyan;
 	}
 	return nullptr;
 }
@@ -144,25 +141,37 @@ std::optional<WatchStatus> AskStatus(App& app, const std::string& heading, int c
 }
 
 std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
-	constexpr size_t kMostOffered = 20;
 	SortEntries(titles, SortKey::kUpdated);
-	size_t more = titles.size() > kMostOffered ? titles.size() - kMostOffered : 0;
-	titles.resize(titles.size() - more);
-	std::vector<std::vector<output::Styled>> rows;
-	for (size_t i = 0; i < titles.size(); ++i)
-		rows.push_back({{std::format("{}.", i + 1)},
-		                {DisplayName(titles[i])},
-		                {TypeKey(titles[i].type)},
-		                {OutOf(titles[i].progress, titles[i].total_units)}});
-	app.out << output::Rows({{true}, {false, true}, {}, {}}, rows, app.columns,
-	                        app.color);
-	if (more > 0)
-		app.out << std::format("and {} more: type more of the name to reach them\n", more);
-	app.out << std::format("{:>{}}. Back\n\n", 0, std::to_string(titles.size()).size());
-	int choice = ReadChoice(app, static_cast<int>(titles.size()));
-	if (choice == 0)
-		return std::nullopt;
-	return titles[static_cast<size_t>(choice - 1)];
+	size_t pages = (titles.size() + kPageSize - 1) / kPageSize;
+	size_t page = 0;
+	while (true) {
+		size_t first = page * kPageSize;
+		size_t shown = std::min(kPageSize, titles.size() - first);
+		int highest = static_cast<int>(shown) + (pages > 1 ? 2 : 0);
+		size_t width = std::to_string(highest).size();
+		std::vector<std::vector<output::Styled>> rows;
+		for (size_t i = 0; i < shown; ++i) {
+			const Entry& e = titles[first + i];
+			rows.push_back({{std::format("{:>{}}.", i + 1, width)},
+			                {DisplayName(e)},
+			                {TypeKey(e.type)},
+			                {OutOf(e.progress, e.total_units)}});
+		}
+		app.out << output::Rows({{}, {.flexible = true}, {}, {}}, rows, app.columns, app.color);
+		if (pages > 1)
+			app.out << std::format("\nPage {} of {}\n{:>{}}. Next Page\n{:>{}}. Previous Page\n",
+			                       page + 1, pages, shown + 1, width, shown + 2, width);
+		app.out << std::format("{:>{}}. Back\n\n", 0, width);
+
+		int choice = ReadChoice(app, highest);
+		if (choice == 0)
+			return std::nullopt;
+		auto picked = static_cast<size_t>(choice);
+		if (picked <= shown)
+			return titles[first + picked - 1];
+		page = picked == shown + 1 ? std::min(page + 1, pages - 1) : (page > 0 ? page - 1 : 0);
+		app.out << "\n";
+	}
 }
 
 std::optional<Entry> ChooseTitle(App& app) {

@@ -21,8 +21,9 @@ ctest --test-dir build --output-on-failure
 #+end_src
 
 The program is built in =build/=. It always uses =catalist.csv= in the project
-folder, wherever you run it from, and git ignores that file. On Nix, run
-=nix develop= first to get the compiler and tools.
+folder, wherever you run it from, and git ignores that file. A copy installed
+elsewhere, such as with Nix, uses =catalist.csv= in the folder you run it from.
+On Nix, run =nix develop= first to get the compiler and tools.
 
 ** The menu
 #+begin_example

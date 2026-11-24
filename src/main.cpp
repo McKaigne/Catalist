@@ -8,6 +8,22 @@
 #include "storage/catalogue.hpp"
 #include "system.hpp"
 
+namespace {
+
+std::filesystem::path ListFile() {
+	// The tests point this at a temporary file, away from the real list.
+	if (const char* test_file = std::getenv("CATALIST_CSV"))
+		return test_file;
+	// An installed copy's build folder is gone: use the folder it is run from.
+	std::filesystem::path home = CATALIST_HOME;
+	std::error_code ignored;
+	if (not std::filesystem::is_directory(home, ignored))
+		home = std::filesystem::current_path();
+	return home / "catalist.csv";
+}
+
+}  // namespace
+
 int main(int argc, char*[]) {
 	std::setlocale(LC_ALL, "");
 	if (argc > 1) {
@@ -15,11 +31,7 @@ int main(int argc, char*[]) {
 		return 2;
 	}
 
-	// The tests point this at a temporary file, away from the real list.
-	const char* test_file = std::getenv("CATALIST_CSV");
-	std::filesystem::path file =
-	    test_file ? test_file : std::filesystem::path(CATALIST_HOME) / "catalist.csv";
-	catalist::Catalogue db(file);
+	catalist::Catalogue db(ListFile());
 	auto loaded = db.Load();
 	if (not loaded.has_value()) {
 		std::cerr << "Error: " << loaded.error() << "\n";

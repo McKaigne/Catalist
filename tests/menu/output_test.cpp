@@ -18,7 +18,8 @@ TEST_CASE("output paints only when colours are on") {
 }
 
 TEST_CASE("output aligns rows to what they hold") {
-	std::vector<output::TableColumn> columns = {{}, {false, true}, {true}, {}};
+	std::vector<output::TableColumn> columns = {
+	    {}, {.flexible = true}, {.align_right = true}, {}};
 	CHECK(output::Rows(columns,
 	                   {{{"1"}, {"Odd Taxi"}, {"8"}, {"+8"}}, {{"12"}, {"Berserk"}, {"-"}, {""}}},
 	                   80, false) ==
@@ -27,21 +28,22 @@ TEST_CASE("output aligns rows to what they hold") {
 }
 
 TEST_CASE("output counts a CJK glyph as two columns") {
-	std::vector<output::TableColumn> columns = {{false, true}, {true}};
+	std::vector<output::TableColumn> columns = {{.flexible = true}, {.align_right = true}};
 	CHECK(output::Rows(columns, {{{"葬送のフリーレン"}, {"10"}}, {{"Odd Taxi"}, {"8"}}}, 80, false) ==
 	      "葬送のフリーレン  10\n"
 	      "Odd Taxi           8\n");
 }
 
 TEST_CASE("output cuts the flexible column to fit the terminal") {
-	std::vector<output::TableColumn> columns = {{}, {false, true}, {true}};
+	std::vector<output::TableColumn> columns = {
+	    {}, {.flexible = true}, {.align_right = true}};
 	std::vector<std::vector<output::Styled>> rows = {
 	    {{"1"}, {"Sousou no Frieren: Beyond Journey's End"}, {"10"}}};
 	CHECK(output::Rows(columns, rows, 24, false) == "1  Sousou no Friere…  10\n");
 }
 
 TEST_CASE("output groups rows under headings, leaving out empty sections") {
-	std::vector<output::TableColumn> columns = {{false, true}, {}};
+	std::vector<output::TableColumn> columns = {{.flexible = true}, {}};
 	CHECK(output::Sections(columns,
 	                       {{"ANIME", {{{"Odd Taxi"}, {"5/13"}}}},
 	                        {"MANGA", {}},

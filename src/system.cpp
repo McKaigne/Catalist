@@ -9,6 +9,7 @@
 #include <array>
 #include <cerrno>
 #include <charconv>
+#include <csignal>
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
@@ -115,6 +116,10 @@ std::optional<std::string> RunProgram(const std::vector<std::string>& arguments,
 	if (child < 0)
 		return std::nullopt;
 
+	// A program that exits before reading its input fails the request; the
+	// write must not kill Catalist.
+	auto previous_handler = std::signal(SIGPIPE, SIG_IGN);
+
 	// Feed the input and collect the output together, so a program that
 	// answers before it has read everything cannot block on a full pipe.
 	FileDescriptor feed = std::move(to_child->write);
@@ -150,6 +155,7 @@ std::optional<std::string> RunProgram(const std::vector<std::string>& arguments,
 		}
 	}
 	feed.Reset();
+	std::signal(SIGPIPE, previous_handler);
 
 	int status = 0;
 	pid_t waited = -1;
@@ -174,7 +180,8 @@ std::optional<web::Reply> HttpFetch(const web::Request& sent) {
 	std::vector<std::string> arguments = kCurl;
 	for (const auto& header : sent.headers)
 		arguments.insert(arguments.end(), {"-H", header});
-	arguments.insert(arguments.end(), {"--data-binary", "@-", sent.url});
+	// Without -X, -L would turn the POST into a GET after a redirect.
+	arguments.insert(arguments.end(), {"-X", "POST", "--data-binary", "@-", sent.url});
 	auto output = RunProgram(arguments, sent.body);
 	size_t line_end = output ? output->rfind('\n') : std::string::npos;
 	if (line_end == std::string::npos)

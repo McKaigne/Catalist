@@ -1,5 +1,6 @@
 #include <format>
 
+#include "core/lists.hpp"
 #include "menu/common.hpp"
 #include "menu/input.hpp"
 #include "menu/output.hpp"
@@ -11,11 +12,15 @@ namespace {
 void DrawHome(App& app) {
 	ClearScreen(app);
 	app.out << output::Paint("Catalist", output::kBold, app.color) << "\n";
-	size_t anime = app.db.GetEntries(MediaType::kAnime).size();
-	size_t manga = app.db.GetEntries(MediaType::kManga).size();
-	app.out << std::format("{} anime, {} manga, {} in progress\n\n", anime, manga,
-	                       InProgress(app.db).size());
-	if (anime + manga == 0)
+	const auto& anime = app.db.GetEntries(MediaType::kAnime);
+	const auto& manga = app.db.GetEntries(MediaType::kManga);
+	size_t open = 0;
+	for (const auto* list : {&anime, &manga})
+		open += CountByStatus(*list, WatchStatus::kWatching) +
+		        CountByStatus(*list, WatchStatus::kRewatching);
+	app.out << std::format("{} anime, {} manga, {} in progress\n\n", anime.size(), manga.size(),
+	                       open);
+	if (anime.empty() and manga.empty())
 		app.out << "Your lists are empty. Choose 1 to add a title, or 7 to import a list.\n\n";
 }
 

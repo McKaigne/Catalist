@@ -11,6 +11,7 @@
 
 namespace catalist {
 
+inline constexpr size_t kPageSize = 20;
 inline constexpr int kStatusCount = 6;
 inline constexpr int kStatusesForNewTitle = 5;
 

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "core/text.hpp"
+
 namespace catalist {
 
 namespace {
@@ -23,7 +25,9 @@ void SortEntries(std::vector<Entry>& entries, SortKey key) {
 	std::stable_sort(entries.begin(), entries.end(), [key](const Entry& a, const Entry& b) {
 		if (key == SortKey::kUpdated and LastChange(a) != LastChange(b))
 			return LastChange(a) > LastChange(b);
-		return DisplayName(a) < DisplayName(b);
+		std::string name_a = utf8::Folded(DisplayName(a));
+		std::string name_b = utf8::Folded(DisplayName(b));
+		return name_a != name_b ? name_a < name_b : DisplayName(a) < DisplayName(b);
 	});
 }
 

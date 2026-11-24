@@ -11,7 +11,6 @@ namespace catalist {
 
 namespace {
 
-constexpr size_t kPageSize = 20;
 const char* const kViewCrumb = "Catalist / View Lists";
 
 void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t last) {
@@ -24,7 +23,7 @@ void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t 
 		     {output::Stars(e.score), output::kYellow},
 		     {OutOf(e.progress, e.total_units)}});
 	}
-	app.out << output::Sections({{false, true}, {}, {}, {}}, sections, app.columns,
+	app.out << output::Sections({{.flexible = true}, {}, {}, {}}, sections, app.columns,
 	                            app.color);
 }
 

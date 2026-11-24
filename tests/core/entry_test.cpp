@@ -249,7 +249,7 @@ TEST_CASE("setCount types progress in like a long step") {
 	CHECK_FALSE(reopened.finish_date.has_value());
 }
 
-TEST_CASE("setCount sets totals, volumes and rewatches within bounds") {
+TEST_CASE("setCount sets totals and volumes within bounds") {
 	Entry show = Watching(10, 0);
 	auto with_total = catalist::SetCount(show, CountField::kTotalUnits, 24, kToday);
 	CHECK(with_total.total_units == 24);
@@ -264,7 +264,6 @@ TEST_CASE("setCount sets totals, volumes and rewatches within bounds") {
 	CHECK(catalist::SetCount(book, CountField::kVolumes, 40, kToday).volumes == 11);
 	Entry open = MakeEntry().Type(catalist::MediaType::kManga);
 	CHECK(catalist::SetCount(open, CountField::kVolumes, 40, kToday).volumes == 40);
-
 }
 
 TEST_CASE("countOf reads each count") {

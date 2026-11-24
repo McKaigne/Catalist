@@ -15,8 +15,8 @@ These were built during this cycle and taken out to keep the program simple.
 Entries below that describe them no longer apply.
 - The command line: every command, option, ref and piped output format. The
   menus replace them.
-- SQLite, its automatic backups, and undo history that lasted between runs.
-  Undo and redo now last for one run.
+- SQLite and its automatic backups.
+- Undo, redo and the change history.
 - The pager: long lists are shown in numbered pages.
 - Account tracking: =login=, =logout=, =accounts=, =sync=, =link=, =unlink=,
   =track=, =rm --remote= and =ls --linked=/=--unlinked=. Tokens saved by a

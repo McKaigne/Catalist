@@ -12,14 +12,15 @@ namespace catalist {
 namespace {
 
 constexpr size_t kPageSize = 20;
+const char* const kViewCrumb = "Catalist / View Lists";
 
 void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t last) {
-	std::vector<output::Section> sections = {{"ANIME", {}}, {"MANGA", {}}};
+	std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
 	for (size_t i = first; i < last; ++i) {
 		const Entry& e = titles[i];
 		sections[e.type == MediaType::kAnime ? 0 : 1].rows.push_back(
 		    {{DisplayName(e)},
-		     {StatusToString(e.status, e.type), StatusColor(e.status)},
+		     {StatusLabel(e.status, e.type), StatusColor(e.status)},
 		     {output::Stars(e.score), output::kYellow},
 		     {OutOf(e.progress, e.total_units)}});
 	}
@@ -46,8 +47,8 @@ void ShowPages(App& app, const std::string& heading, std::vector<Entry> titles, 
 			Pause(app);
 			return;
 		}
-		app.out << std::format("\nPage {} of {}\n   1  Next page\n   2  Previous page\n   0  Back\n\n",
-		                       page + 1, pages);
+		app.out << std::format("\nPage {} of {}\n", page + 1, pages);
+		DrawOptions(app, {"Next Page", "Previous Page"});
 		switch (ReadChoice(app, 2)) {
 			case 1:
 				page = std::min(page + 1, pages - 1);
@@ -74,20 +75,27 @@ std::vector<Entry> TitlesWhere(const Catalogue& db, std::optional<MediaType> onl
 	return kept;
 }
 
-void FindByName(App& app) {
-	auto text = AskText(app, "Words in the title (Enter to go back): ");
+void SearchLists(App& app) {
+	ClearScreen(app);
+	std::string crumb = std::format("{} / Search Lists", kViewCrumb);
+	DrawHeading(app, crumb);
+	auto text = AskText(app, "Enter title (Enter to go back): ");
 	if (not text)
 		return;
 	std::vector<Entry> kept;
 	for (const auto& each : TitlesWhere(app.db, std::nullopt, std::nullopt))
 		if (TitleHolds(each, *text))
 			kept.push_back(each);
-	ShowPages(app, std::format("MATCHING '{}'", *text), kept, SortKey::kTitle);
+	ShowPages(app, std::format("{} / {}", crumb, *text), kept, SortKey::kTitle);
 }
 
 void ShowDetails(App& app) {
+	ClearScreen(app);
+	std::string crumb = std::format("{} / Title Details", kViewCrumb);
+	DrawHeading(app, crumb);
 	if (auto title = ChooseTitle(app)) {
-		app.out << "\n";
+		ClearScreen(app);
+		DrawHeading(app, std::format("{} / {}", crumb, DisplayName(*title)));
 		PrintCard(app, *title);
 		Pause(app);
 	}
@@ -111,7 +119,7 @@ void PrintStats(App& app, MediaType type) {
 	for (WatchStatus status : {WatchStatus::kWatching, WatchStatus::kCompleted, WatchStatus::kOnHold,
 	                           WatchStatus::kDropped, WatchStatus::kPlanToWatch,
 	                           WatchStatus::kRewatching})
-		row(StatusToString(status, type), std::to_string(CountByStatus(list, status)));
+		row(StatusLabel(status, type), std::to_string(CountByStatus(list, status)));
 	row("Mean score", mean > 0.0 ? std::format("{:.2f}", mean) : "-");
 	row(anime ? "Episodes" : "Chapters", std::to_string(TotalProgress(list)));
 	if (not anime)
@@ -130,7 +138,6 @@ void PrintCard(App& app, const Entry& e) {
 	auto date_text = [](const std::optional<IsoDate>& day) { return output::DateText(day); };
 	std::string page = PageOf(e);
 
-	app.out << output::Paint(DisplayName(e), output::kBold, app.color) << "\n";
 	if (not e.english_title.empty())
 		row("Romaji", e.title);
 	row("Type", TypeToString(e.type));
@@ -138,7 +145,7 @@ void PrintCard(App& app, const Entry& e) {
 	row("MyAnimeList", id_text(e.mal_id));
 	if (not page.empty())
 		row("Page", page);
-	row("Status", output::Paint(StatusToString(e.status, e.type), StatusColor(e.status), app.color));
+	row("Status", output::Paint(StatusLabel(e.status, e.type), StatusColor(e.status), app.color));
 	row("Score", e.score > 0 ? std::format("{}  {}/10",
 	                                       output::Paint(output::Stars(e.score), output::kYellow,
 	                                                     app.color),
@@ -157,34 +164,38 @@ void ViewScreen(App& app) {
 	int choice = 0;
 	do {
 		ClearScreen(app);
-		DrawMenu(app, "VIEW MY LISTS",
-		         {"In progress", "All titles", "Anime only", "Manga only", "By status",
-		          "Find by name", "Full details of a title"});
+		DrawMenu(app, kViewCrumb,
+		         {"In Progress", "All Titles", "Anime", "Manga", "By Status", "Search Lists",
+		          "Title Details"});
 		choice = ReadChoice(app, 7);
 		switch (choice) {
 			case 1:
-				ShowPages(app, "IN PROGRESS", InProgress(app.db), SortKey::kUpdated);
+				ShowPages(app, std::format("{} / In Progress", kViewCrumb), InProgress(app.db),
+				          SortKey::kUpdated);
 				break;
 			case 2:
-				ShowPages(app, "ALL TITLES", TitlesWhere(app.db, std::nullopt, std::nullopt),
-				          SortKey::kTitle);
+				ShowPages(app, std::format("{} / All Titles", kViewCrumb),
+				          TitlesWhere(app.db, std::nullopt, std::nullopt), SortKey::kTitle);
 				break;
 			case 3:
-				ShowPages(app, "ANIME", TitlesWhere(app.db, MediaType::kAnime, std::nullopt),
-				          SortKey::kTitle);
+				ShowPages(app, std::format("{} / Anime", kViewCrumb),
+				          TitlesWhere(app.db, MediaType::kAnime, std::nullopt), SortKey::kTitle);
 				break;
 			case 4:
-				ShowPages(app, "MANGA", TitlesWhere(app.db, MediaType::kManga, std::nullopt),
-				          SortKey::kTitle);
+				ShowPages(app, std::format("{} / Manga", kViewCrumb),
+				          TitlesWhere(app.db, MediaType::kManga, std::nullopt), SortKey::kTitle);
 				break;
 			case 5:
-				app.out << "\n";
-				if (auto status = AskStatus(app, "Which status?", kStatusCount))
-					ShowPages(app, StatusKey(*status), TitlesWhere(app.db, std::nullopt, status),
-					          SortKey::kTitle);
+				ClearScreen(app);
+				if (auto status = AskStatus(app, std::format("{} / By Status", kViewCrumb),
+				                            kStatusCount, std::nullopt))
+					ShowPages(app,
+					          std::format("{} / By Status / {}", kViewCrumb,
+					                      StatusLabel(*status, std::nullopt)),
+					          TitlesWhere(app.db, std::nullopt, status), SortKey::kTitle);
 				break;
 			case 6:
-				FindByName(app);
+				SearchLists(app);
 				break;
 			case 7:
 				ShowDetails(app);
@@ -197,7 +208,7 @@ void ViewScreen(App& app) {
 
 void StatsScreen(App& app) {
 	ClearScreen(app);
-	DrawHeading(app, "STATISTICS");
+	DrawHeading(app, "Catalist / Stats");
 	PrintStats(app, MediaType::kAnime);
 	app.out << "\n";
 	PrintStats(app, MediaType::kManga);

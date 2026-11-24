@@ -4,7 +4,6 @@
 #include <format>
 
 #include "core/lists.hpp"
-#include "core/text.hpp"
 #include "menu/find.hpp"
 #include "menu/input.hpp"
 #include "menu/output.hpp"
@@ -13,18 +12,9 @@ namespace catalist {
 
 namespace {
 
-struct StatusChoice {
-	const char* label;
-	WatchStatus status;
-};
-
-constexpr StatusChoice kStatusChoices[kStatusCount] = {
-    {"Planned", WatchStatus::kPlanToWatch},
-    {"Watching or reading", WatchStatus::kWatching},
-    {"Completed", WatchStatus::kCompleted},
-    {"On hold", WatchStatus::kOnHold},
-    {"Dropped", WatchStatus::kDropped},
-    {"Rewatching or rereading", WatchStatus::kRewatching},
+constexpr WatchStatus kStatusOrder[kStatusCount] = {
+    WatchStatus::kPlanToWatch, WatchStatus::kWatching, WatchStatus::kCompleted,
+    WatchStatus::kOnHold,      WatchStatus::kDropped,  WatchStatus::kRewatching,
 };
 
 struct FieldChange {
@@ -74,12 +64,16 @@ void DrawHeading(App& app, const std::string& heading) {
 	app.out << output::Paint(heading, output::kBold, app.color) << "\n\n";
 }
 
-void DrawMenu(App& app, const std::string& title, const std::vector<std::string>& items,
-              const std::string& leave) {
-	DrawHeading(app, title);
+void DrawOptions(App& app, const std::vector<std::string>& items, const std::string& leave) {
+	size_t width = std::to_string(items.size()).size();
 	for (size_t i = 0; i < items.size(); ++i)
-		app.out << std::format("  {:>2}  {}\n", i + 1, items[i]);
-	app.out << std::format("  {:>2}  {}\n\n", 0, leave);
+		app.out << std::format("{:>{}}. {}\n", i + 1, width, items[i]);
+	app.out << std::format("{:>{}}. {}\n\n", 0, width, leave);
+}
+
+void DrawMenu(App& app, const std::string& heading, const std::vector<std::string>& items) {
+	DrawHeading(app, heading);
+	DrawOptions(app, items);
 }
 
 const char* StatusColor(WatchStatus status) {
@@ -98,6 +92,25 @@ const char* StatusColor(WatchStatus status) {
 			return "36";
 	}
 	return nullptr;
+}
+
+std::string StatusLabel(WatchStatus status, std::optional<MediaType> type) {
+	bool manga = type == MediaType::kManga;
+	switch (status) {
+		case WatchStatus::kPlanToWatch:
+			return not type ? "Planned" : manga ? "Plan to Read" : "Plan to Watch";
+		case WatchStatus::kWatching:
+			return not type ? "Watching/Reading" : manga ? "Reading" : "Watching";
+		case WatchStatus::kCompleted:
+			return "Completed";
+		case WatchStatus::kOnHold:
+			return "On Hold";
+		case WatchStatus::kDropped:
+			return "Dropped";
+		case WatchStatus::kRewatching:
+			return not type ? "Rewatching/Rereading" : manga ? "Rereading" : "Rewatching";
+	}
+	return "";
 }
 
 std::string UnitName(MediaType type, int count) {
@@ -120,15 +133,16 @@ std::vector<Entry> InProgress(const Catalogue& db) {
 	return open;
 }
 
-std::optional<WatchStatus> AskStatus(App& app, const std::string& title, int count) {
+std::optional<WatchStatus> AskStatus(App& app, const std::string& heading, int count,
+                                     std::optional<MediaType> type) {
 	std::vector<std::string> labels;
 	for (int i = 0; i < count; ++i)
-		labels.emplace_back(kStatusChoices[i].label);
-	DrawMenu(app, title, labels);
+		labels.push_back(StatusLabel(kStatusOrder[i], type));
+	DrawMenu(app, heading, labels);
 	int choice = ReadChoice(app, count);
 	if (choice == 0)
 		return std::nullopt;
-	return kStatusChoices[choice - 1].status;
+	return kStatusOrder[choice - 1];
 }
 
 std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
@@ -138,14 +152,15 @@ std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
 	titles.resize(titles.size() - more);
 	std::vector<std::vector<output::Styled>> rows;
 	for (size_t i = 0; i < titles.size(); ++i)
-		rows.push_back({{std::format("  {:>2}", i + 1)},
+		rows.push_back({{std::format("{}.", i + 1)},
 		                {DisplayName(titles[i])},
 		                {TypeKey(titles[i].type)},
 		                {OutOf(titles[i].progress, titles[i].total_units)}});
-	app.out << output::Rows({{""}, {"", false, true}, {""}, {""}}, rows, app.columns, app.color);
+	app.out << output::Rows({{"", true}, {"", false, true}, {""}, {""}}, rows, app.columns,
+	                        app.color);
 	if (more > 0)
-		app.out << std::format("  and {} more: type more of the name to reach them\n", more);
-	app.out << "   0  Back\n\n";
+		app.out << std::format("and {} more: type more of the name to reach them\n", more);
+	app.out << std::format("{:>{}}. Back\n\n", 0, std::to_string(titles.size()).size());
 	int choice = ReadChoice(app, static_cast<int>(titles.size()));
 	if (choice == 0)
 		return std::nullopt;
@@ -154,7 +169,7 @@ std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
 
 std::optional<Entry> ChooseTitle(App& app) {
 	while (true) {
-		auto text = AskText(app, "Part of the title (Enter to go back): ");
+		auto text = AskText(app, "Enter title (Enter to go back): ");
 		if (not text)
 			return std::nullopt;
 		auto found = FindTitles(app.db, *text);
@@ -173,8 +188,7 @@ std::optional<Entry> ChooseTitle(App& app) {
 	}
 }
 
-void ChangeTitle(App& app, const Entry& title, const std::string& action,
-                 const std::function<Entry(const Entry&)>& change) {
+void ChangeTitle(App& app, const Entry& title, const std::function<Entry(const Entry&)>& change) {
 	auto current = app.db.GetById(title.type, title.id);
 	if (not current) {
 		Fail(app, "that title is no longer in your lists");
@@ -187,8 +201,7 @@ void ChangeTitle(App& app, const Entry& title, const std::string& action,
 		return;
 	}
 	app.db.UpdateEntry(after);
-	std::string label = utf8::Clip(std::format("{}: {}", action, DisplayName(after)), 60);
-	if (not app.db.Save(label, app.Stamp())) {
+	if (not app.db.Save(app.Stamp())) {
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 		return;
 	}

@@ -36,12 +36,12 @@ grep -q 'takes no arguments' "$work/err" || fail "an argument: no note"
 
 shown=$(menu '0\n')
 [ "$?" -eq 0 ] || fail "exit code"
-has "first run" "$shown" "MAIN MENU"
-has "first run" "$shown" "Goodbye."
+has "first run" "$shown" "1. Add Title"
+has "first run" "$shown" "Goodbye!"
 [ ! -e "$work/catalist.csv" ] || fail "looking wrote a file"
 
 shown=$(menu '1\n1\nfullmetal\n2\n1\n\n0\n')
-has "add" "$shown" "Fullmetal Alchemist added as planned."
+has "add" "$shown" "Fullmetal Alchemist added as Plan to Watch."
 head -n 1 "$work/catalist.csv" | grep -q '^id,type,title,' || fail "csv header"
 grep -q '^1,anime,Fullmetal Alchemist,' "$work/catalist.csv" || fail "csv row"
 
@@ -51,14 +51,12 @@ has "count" "$shown" "progress 0 -> 1/13"
 shown=$(menu '0\n')
 has "reopened" "$shown" "2 anime, 0 manga, 1 in progress"
 
-shown=$(menu '4\ntaxi\n1\n\n0\n7\n1\n\n0\n0\n')
-has "undo" "$shown" "Undid 'Count one more: Odd Taxi'."
-grep -q ',Odd Taxi,,watching,0,1,' "$work/catalist.csv" || fail "undo reached the file"
+grep -q ',Odd Taxi,,watching,0,1,' "$work/catalist.csv" || fail "count reached the file"
 
-shown=$(menu "8\n2\n$work/anime.xml\n\n0\n0\n")
+shown=$(menu "7\n2\n$work/anime.xml\n\n0\n0\n")
 has "export" "$shown" "Saved $work/anime.xml."
 rm "$work/catalist.csv"
-shown=$(menu "8\n1\n$work/anime.xml\n\n0\n0\n")
+shown=$(menu "7\n1\n$work/anime.xml\n\n0\n0\n")
 has "import" "$shown" "2 titles, 2 added"
 
 printf 'damaged\n' >"$work/catalist.csv"

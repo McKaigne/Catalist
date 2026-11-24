@@ -123,8 +123,7 @@ void ImportFile(App& app) {
 		if (take_file->contains(&title))
 			app.db.UpdateEntry(TakeImported(*app.db.GetById(title.type, id), title));
 	}
-	if (not app.db.Save(std::format("Import: {}", std::filesystem::path(path).filename().string()),
-	                    app.Stamp())) {
+	if (not app.db.Save(app.Stamp())) {
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 		return;
 	}
@@ -160,8 +159,7 @@ void TransferScreen(App& app) {
 	int choice = 0;
 	do {
 		ClearScreen(app);
-		DrawMenu(app, "IMPORT OR EXPORT",
-		         {"Import a MyAnimeList XML file", "Export anime", "Export manga"});
+		DrawMenu(app, "Catalist / Import / Export", {"Import XML", "Export Anime", "Export Manga"});
 		choice = ReadChoice(app, 3);
 		switch (choice) {
 			case 1:

@@ -10,18 +10,17 @@ namespace {
 void CountBy(App& app, const Entry& title, int delta) {
 	auto current = app.db.GetById(title.type, title.id);
 	if (current and delta > 0 and AtTotal(*current)) {
-		app.out << std::format("{} is at its total, {} {}. If there are more, use Set total.\n",
+		app.out << std::format("{} is at its total, {} {}. If there are more, use Set Total.\n",
 		                       DisplayName(*current), current->total_units,
 		                       UnitName(current->type, current->total_units));
 		return;
 	}
 	IsoDate today = app.Today();
-	ChangeTitle(app, title, delta > 0 ? "Count one more" : "Count one less",
-	            [&](const Entry& e) { return StepProgress(e, delta, today); });
+	ChangeTitle(app, title, [&](const Entry& e) { return StepProgress(e, delta, today); });
 }
 
-void AskCount(App& app, const Entry& title, const std::string& action, CountField field) {
-	auto text = AskText(app, std::format("{} (Enter to go back): ", action));
+void AskCount(App& app, const Entry& title, const std::string& prompt, CountField field) {
+	auto text = AskText(app, std::format("{} (Enter to go back): ", prompt));
 	if (not text)
 		return;
 	auto number = ParseNumber(*text);
@@ -30,8 +29,7 @@ void AskCount(App& app, const Entry& title, const std::string& action, CountFiel
 		return;
 	}
 	IsoDate today = app.Today();
-	ChangeTitle(app, title, action,
-	            [&](const Entry& e) { return SetCount(e, field, *number, today); });
+	ChangeTitle(app, title, [&](const Entry& e) { return SetCount(e, field, *number, today); });
 }
 
 void AskScore(App& app, const Entry& title) {
@@ -44,13 +42,14 @@ void AskScore(App& app, const Entry& title) {
 		return;
 	}
 	IsoDate today = app.Today();
-	ChangeTitle(app, title, "Set score",
-	            [&](const Entry& e) { return SetScore(e, *number, today); });
+	ChangeTitle(app, title, [&](const Entry& e) { return SetScore(e, *number, today); });
 }
 
 void AskNewStatus(App& app, const Entry& title) {
-	app.out << "\n";
-	auto status = AskStatus(app, "New status", kStatusCount);
+	ClearScreen(app);
+	auto status = AskStatus(app,
+	                        std::format("Catalist / Edit Title / {} / Set Status", DisplayName(title)),
+	                        kStatusCount, title.type);
 	if (not status)
 		return;
 	auto current = app.db.GetById(title.type, title.id);
@@ -61,8 +60,7 @@ void AskNewStatus(App& app, const Entry& title) {
 		return;
 	}
 	IsoDate today = app.Today();
-	ChangeTitle(app, title, "Change status",
-	            [&](const Entry& e) { return SetStatus(e, *status, today); });
+	ChangeTitle(app, title, [&](const Entry& e) { return SetStatus(e, *status, today); });
 }
 
 void AskDate(App& app, const Entry& title, bool start) {
@@ -79,7 +77,7 @@ void AskDate(App& app, const Entry& title, bool start) {
 		app.out << "Enter a real date such as 2026-10-20.\n";
 		return;
 	}
-	ChangeTitle(app, title, start ? "Set start date" : "Set finish date", [&](const Entry& e) {
+	ChangeTitle(app, title, [&](const Entry& e) {
 		return start ? SetStartDate(e, day, today) : SetFinishDate(e, day, today);
 	});
 }
@@ -89,14 +87,14 @@ void AskName(App& app, const Entry& title) {
 	if (not name)
 		return;
 	IsoDate today = app.Today();
-	ChangeTitle(app, title, "Rename", [&](const Entry& e) { return SetTitle(e, *name, today); });
+	ChangeTitle(app, title, [&](const Entry& e) { return SetTitle(e, *name, today); });
 }
 
 }  // namespace
 
-void CountNextScreen(App& app) {
+void LogProgressScreen(App& app) {
 	ClearScreen(app);
-	DrawHeading(app, "COUNT THE NEXT EPISODE OR CHAPTER");
+	DrawHeading(app, "Catalist / Log Progress");
 	auto open = InProgress(app.db);
 	if (open.empty()) {
 		app.out << "Nothing is in progress.\n";
@@ -112,7 +110,7 @@ void CountNextScreen(App& app) {
 
 void EditScreen(App& app) {
 	ClearScreen(app);
-	DrawHeading(app, "EDIT A TITLE");
+	DrawHeading(app, "Catalist / Edit Title");
 	auto chosen = ChooseTitle(app);
 	if (not chosen)
 		return;
@@ -122,12 +120,12 @@ void EditScreen(App& app) {
 		if (not current)
 			return;
 		ClearScreen(app);
+		DrawHeading(app, std::format("Catalist / Edit Title / {}", DisplayName(*current)));
 		PrintCard(app, *current);
 		app.out << "\n";
-		DrawMenu(app, "EDIT",
-		         {"Count one more", "Count one less", "Set progress", "Set score", "Change status",
-		          "Set total", "Set volumes (manga)", "Set start date", "Set finish date",
-		          "Rename"});
+		DrawOptions(app, {"+1 Progress", "-1 Progress", "Set Progress", "Set Score", "Set Status",
+		                  "Set Total", "Set Volumes", "Set Start Date", "Set Finish Date",
+		                  "Rename Title"});
 		choice = ReadChoice(app, 10);
 		switch (choice) {
 			case 1:
@@ -137,7 +135,7 @@ void EditScreen(App& app) {
 				CountBy(app, *current, -1);
 				break;
 			case 3:
-				AskCount(app, *current, "Set progress", CountField::kProgress);
+				AskCount(app, *current, "New progress", CountField::kProgress);
 				break;
 			case 4:
 				AskScore(app, *current);
@@ -146,11 +144,11 @@ void EditScreen(App& app) {
 				AskNewStatus(app, *current);
 				break;
 			case 6:
-				AskCount(app, *current, "Set total", CountField::kTotalUnits);
+				AskCount(app, *current, "New total", CountField::kTotalUnits);
 				break;
 			case 7:
 				if (current->type == MediaType::kManga)
-					AskCount(app, *current, "Set volumes", CountField::kVolumes);
+					AskCount(app, *current, "Volumes read", CountField::kVolumes);
 				else
 					app.out << "Only manga have volumes.\n";
 				break;
@@ -173,7 +171,7 @@ void EditScreen(App& app) {
 
 void RemoveScreen(App& app) {
 	ClearScreen(app);
-	DrawHeading(app, "REMOVE A TITLE");
+	DrawHeading(app, "Catalist / Remove Title");
 	auto title = ChooseTitle(app);
 	if (not title)
 		return;
@@ -184,7 +182,7 @@ void RemoveScreen(App& app) {
 		return;
 	}
 	app.db.RemoveEntry(title->type, title->id);
-	if (app.db.Save(std::format("Remove: {}", DisplayName(*title)), app.Stamp()))
+	if (app.db.Save(app.Stamp()))
 		app.out << std::format("{} removed.\n", name);
 	else
 		Fail(app, std::format("could not save {}", app.db.file().string()));

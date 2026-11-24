@@ -43,19 +43,19 @@ std::optional<anilist::Match> OnlyExact(const std::vector<anilist::Match>& match
 }
 
 void PrintMatches(App& app, const std::vector<anilist::Match>& matches) {
-	std::vector<output::Section> sections = {{"ANIME", {}}, {"MANGA", {}}};
+	std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
 	for (size_t i = 0; i < matches.size(); ++i) {
 		const auto& match = matches[i];
 		auto mine = app.db.FindByIds(match.type, match.anilist_id, match.mal_id);
 		sections[match.type == MediaType::kAnime ? 0 : 1].rows.push_back(
-		    {{std::format("  {:>2}", i + 1), output::kCyan},
+		    {{std::format("{}.", i + 1), output::kCyan},
 		     {match.year.empty() ? "-" : match.year},
 		     {ShownName(match)},
 		     {LengthOf(match)},
 		     {output::Stars(match.score), output::kYellow},
-		     {mine ? StatusToString(mine->status, match.type) : "", output::kGreen}});
+		     {mine ? StatusLabel(mine->status, match.type) : "", output::kGreen}});
 	}
-	app.out << output::Sections({{""}, {""}, {"", false, true}, {"", true}, {""}, {""}}, sections,
+	app.out << output::Sections({{"", true}, {""}, {"", false, true}, {"", true}, {""}, {""}}, sections,
 	                            app.columns, app.color);
 }
 
@@ -66,7 +66,7 @@ std::optional<anilist::Match> ChooseMatch(App& app, const std::vector<anilist::M
 	if (auto exact = OnlyExact(matches, query))
 		return exact;
 	PrintMatches(app, matches);
-	app.out << "\n   0  Back\n\n";
+	app.out << std::format("\n{:>{}}. Back\n\n", 0, std::to_string(matches.size()).size());
 	int choice = ReadChoice(app, static_cast<int>(matches.size()));
 	if (choice == 0)
 		return std::nullopt;
@@ -79,18 +79,19 @@ void SaveNewTitle(App& app, const anilist::Match& match, WatchStatus status) {
 	added.updated_at = today;
 	added = SetStatus(added, status, today);
 	app.db.AddEntry(added);
-	if (not app.db.Save(utf8::Clip(std::format("Add: {}", DisplayName(added)), 60), app.Stamp())) {
+	if (not app.db.Save(app.Stamp())) {
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 		return;
 	}
-	app.out << std::format("{} added as {}.\n", DisplayName(added), StatusKey(added.status));
+	app.out << std::format("{} added as {}.\n", DisplayName(added),
+	                       StatusLabel(added.status, added.type));
 }
 
 }  // namespace
 
 void AddScreen(App& app) {
 	ClearScreen(app);
-	DrawMenu(app, "ADD A TITLE", {"Anime and manga", "Anime only", "Manga only"});
+	DrawMenu(app, "Catalist / Add Title", {"Both", "Anime Only", "Manga Only"});
 	int where = ReadChoice(app, 3);
 	if (where == 0)
 		return;
@@ -100,7 +101,7 @@ void AddScreen(App& app) {
 	else if (where == 3)
 		only = MediaType::kManga;
 
-	auto name = AskText(app, "Title to find on AniList (Enter to go back): ");
+	auto name = AskText(app, "Search AniList (Enter to go back): ");
 	if (not name)
 		return;
 	auto found = anilist::Search(app.net, only, *name);
@@ -119,13 +120,13 @@ void AddScreen(App& app) {
 		return;
 	if (auto mine = app.db.FindByIds(match->type, match->anilist_id, match->mal_id)) {
 		app.out << std::format("{} is in your {} list already ({}).\n", DisplayName(*mine),
-		                       TypeKey(mine->type), StatusKey(mine->status));
+		                       TypeKey(mine->type), StatusLabel(mine->status, mine->type));
 		Pause(app);
 		return;
 	}
-	app.out << "\n";
-	auto status =
-	    AskStatus(app, std::format("Add {} as", ShownName(*match)), kStatusesForNewTitle);
+	ClearScreen(app);
+	auto status = AskStatus(app, std::format("Catalist / Add Title / {}", ShownName(*match)),
+	                        kStatusesForNewTitle, match->type);
 	if (not status)
 		return;
 	SaveNewTitle(app, *match, *status);

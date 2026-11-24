@@ -42,7 +42,7 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue saves both lists to one csv and rea
 	                .StartDate("2026-01-02")
 	                .FinishDate("2026-02-03"));
 	db.AddEntry(MakeEntry().Title("Paper").Type(MediaType::kManga).Volumes(3).TotalVolumes(9));
-	REQUIRE(db.Save("add", kStamp));
+	REQUIRE(db.Save(kStamp));
 
 	auto text = ReadText(file);
 	CHECK(text.starts_with(std::string(catalist::csv_codec::kHeader) + "\n"));
@@ -74,9 +74,8 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue refuses a damaged file and leaves i
 TEST_CASE_FIXTURE(TempDirFixture, "catalogue goes back to what the file holds when a save fails") {
 	Catalogue db(TempDir() / "no-such-dir" / "catalist.csv");
 	db.AddEntry(MakeEntry().Title("Nowhere to go"));
-	CHECK_FALSE(db.Save("add", kStamp));
+	CHECK_FALSE(db.Save(kStamp));
 	CHECK(db.GetEntries(MediaType::kAnime).empty());
-	CHECK(db.History().empty());
 }
 
 TEST_CASE_FIXTURE(TempDirFixture, "catalogue merges a title known by either site id") {
@@ -104,57 +103,11 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue stamps only the titles a save chang
 	Catalogue db(TempDir() / "catalist.csv");
 	db.AddEntry(MakeEntry().Title("A"));
 	db.AddEntry(MakeEntry().Title("B"));
-	REQUIRE(db.Save("add", "2026-11-24 10:00:00"));
+	REQUIRE(db.Save("2026-11-24 10:00:00"));
 	auto b = *db.GetById(MediaType::kAnime, 2);
 	b.score = 9;
 	db.UpdateEntry(b);
-	REQUIRE(db.Save("score", "2026-11-24 11:00:00"));
+	REQUIRE(db.Save("2026-11-24 11:00:00"));
 	CHECK(db.GetById(MediaType::kAnime, 1)->changed_at == "2026-11-24 10:00:00");
 	CHECK(db.GetById(MediaType::kAnime, 2)->changed_at == "2026-11-24 11:00:00");
-}
-
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue undoes and redoes, and the file follows") {
-	auto file = TempDir() / "catalist.csv";
-	Catalogue db(file);
-	CHECK_FALSE(db.Undo().value().has_value());
-	db.AddEntry(MakeEntry().Title("Taxi"));
-	REQUIRE(db.Save("add", kStamp));
-	auto taxi = *db.GetById(MediaType::kAnime, 1);
-	taxi.score = 7;
-	db.UpdateEntry(taxi);
-	REQUIRE(db.Save("score", kStamp));
-
-	CHECK(db.Undo().value() == "score");
-	CHECK(db.GetById(MediaType::kAnime, 1)->score == 0);
-	Catalogue read(file);
-	REQUIRE(read.Load().value());
-	CHECK(read.GetById(MediaType::kAnime, 1)->score == 0);
-	auto steps = db.History();
-	REQUIRE(steps.size() == 2);
-	CHECK(steps[0].label == "score");
-	CHECK(steps[0].undone);
-	CHECK_FALSE(steps[1].undone);
-
-	CHECK(db.Redo().value() == "score");
-	CHECK(db.GetById(MediaType::kAnime, 1)->score == 7);
-	CHECK_FALSE(db.Redo().value().has_value());
-
-	REQUIRE(db.Undo().has_value());
-	db.RemoveEntry(MediaType::kAnime, 1);
-	REQUIRE(db.Save("remove", kStamp));
-	CHECK_FALSE(db.Redo().value().has_value());
-	CHECK(db.Undo().value() == "remove");
-	CHECK(db.GetById(MediaType::kAnime, 1).has_value());
-}
-
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue keeps the last 100 steps") {
-	Catalogue db(TempDir() / "catalist.csv");
-	db.AddEntry(MakeEntry().Title("Taxi"));
-	for (size_t i = 1; i <= Catalogue::kHistoryLength + 5; ++i) {
-		auto taxi = *db.GetById(MediaType::kAnime, 1);
-		taxi.progress = static_cast<int>(i);
-		db.UpdateEntry(taxi);
-		REQUIRE(db.Save(std::to_string(i), kStamp));
-	}
-	CHECK(db.History().size() == Catalogue::kHistoryLength);
 }

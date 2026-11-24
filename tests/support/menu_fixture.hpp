@@ -110,7 +110,7 @@ struct MenuFixture : catalist::test::TempDirFixture {
 		                .MalId(126287)
 		                .AnilistId(118586)
 		                .Status(WatchStatus::kPlanToWatch));
-		REQUIRE(db.Save("seed", "2026-10-19 10:00:00"));
+		REQUIRE(db.Save("2026-10-19 10:00:00"));
 	}
 
 	catalist::test::FakeWeb web;

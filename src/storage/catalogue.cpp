@@ -159,7 +159,7 @@ bool Catalogue::WriteCsv() const {
 	return WriteFile(file_, text);
 }
 
-bool Catalogue::Save(const std::string& label, const std::string& stamp) {
+bool Catalogue::Save(const std::string& stamp) {
 	if (anime_ == savedAnime_ and manga_ == savedManga_)
 		return true;
 	StampChanged(anime_, savedAnime_, stamp);
@@ -169,50 +169,9 @@ bool Catalogue::Save(const std::string& label, const std::string& stamp) {
 		manga_ = savedManga_;
 		return false;
 	}
-	undo_.push_back({label, stamp, savedAnime_, savedManga_});
-	if (undo_.size() > kHistoryLength)
-		undo_.erase(undo_.begin());
-	redo_.clear();
 	savedAnime_ = anime_;
 	savedManga_ = manga_;
 	return true;
-}
-
-Result<std::optional<std::string>> Catalogue::Move(std::vector<Snapshot>& from,
-                                                   std::vector<Snapshot>& to) {
-	if (from.empty())
-		return std::optional<std::string>{};
-	Snapshot step = from.back();
-	Snapshot here{step.label, step.stamp, anime_, manga_};
-	anime_ = step.anime;
-	manga_ = step.manga;
-	if (not WriteCsv()) {
-		anime_ = here.anime;
-		manga_ = here.manga;
-		return std::unexpected(std::format("could not save {}", file_.string()));
-	}
-	from.pop_back();
-	to.push_back(std::move(here));
-	savedAnime_ = anime_;
-	savedManga_ = manga_;
-	return std::optional<std::string>(step.label);
-}
-
-Result<std::optional<std::string>> Catalogue::Undo() {
-	return Move(undo_, redo_);
-}
-
-Result<std::optional<std::string>> Catalogue::Redo() {
-	return Move(redo_, undo_);
-}
-
-std::vector<HistoryStep> Catalogue::History() const {
-	std::vector<HistoryStep> steps;
-	for (const auto& each : redo_)
-		steps.push_back({each.label, each.stamp, true});
-	for (auto each = undo_.rbegin(); each != undo_.rend(); ++each)
-		steps.push_back({each->label, each->stamp, false});
-	return steps;
 }
 
 }  // namespace catalist

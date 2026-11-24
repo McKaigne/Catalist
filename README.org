@@ -26,31 +26,30 @@ folder, wherever you run it from, and git ignores that file. On Nix, run
 
 ** The menu
 #+begin_example
-MAIN MENU
+Catalist
+354 anime, 326 manga, 247 in progress
 
-   1  Add a title
-   2  View my lists
-   3  Count the next episode or chapter
-   4  Edit a title
-   5  Remove a title
-   6  Statistics
-   7  Undo and history
-   8  Import or export
-   0  Exit
+1. Add Title
+2. View Lists
+3. Log Progress
+4. Edit Title
+5. Remove Title
+6. Stats
+7. Import / Export
+0. Exit
 
-Enter your choice [0-8]:
+Enter choice [0-7]:
 #+end_example
 
-- *Add a title:* search AniList for anime, manga or both, choose a match and
-  its status.
-- *View my lists:* in progress, all titles, anime, manga, by status, by name,
-  or the full details of one title. Long lists are shown 20 rows a page.
-- *Count the next episode or chapter:* choose from what is in progress.
-- *Edit a title:* progress, score, status, total, volumes, dates and name.
-- *Remove a title:* asks first.
-- *Statistics:* counts, mean score and an estimate of days spent.
-- *Undo and history:* undo, redo and recent changes, for the current run.
-- *Import or export:* MyAnimeList XML. Unpack =.xml.gz= files with =gunzip=
+- *Add Title:* search AniList for anime, manga or both, choose a match and its
+  status.
+- *View Lists:* In Progress, All Titles, Anime, Manga, By Status, Search Lists
+  and Title Details. Long lists are shown 20 rows a page.
+- *Log Progress:* add one episode or chapter to a title in progress.
+- *Edit Title:* progress, score, status, total, volumes, dates and name.
+- *Remove Title:* asks first.
+- *Stats:* counts, mean score and an estimate of days spent.
+- *Import / Export:* MyAnimeList XML. Unpack =.xml.gz= files with =gunzip=
   first. Where an import differs from your lists, you choose title by title.
 
 To find a title, type any part of its English or romaji name. The words can be

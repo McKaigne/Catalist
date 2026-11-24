@@ -51,7 +51,7 @@ std::optional<int> ParseNumber(const std::string& text) {
 
 int ReadChoice(App& app, int highest) {
 	while (true) {
-		auto answer = ReadLine(app, std::format("Enter your choice [0-{}]: ", highest));
+		auto answer = ReadLine(app, std::format("Enter choice [0-{}]: ", highest));
 		if (not answer)
 			return 0;
 		auto number = ParseNumber(*answer);

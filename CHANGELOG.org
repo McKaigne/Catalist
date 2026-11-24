@@ -5,14 +5,19 @@ The format is based on [[https://keepachangelog.com/en/1.1.0/][Keep a Changelog]
 and this project adheres to [[https://semver.org/][Semantic Versioning]].
 
 ** [Unreleased]
-Catalist is now a small, local-first tracker for the command line: one
-SQLite file, commands made for daily tracking with undo and redo, AniList to
-find titles on, and MyAnimeList XML to move lists. The full-screen terminal
-interface is now a separate program, Catalist-TUI, kept as an archive.
+Catalist is now a menu-driven console program: run it, choose a number, and
+press 0 to exit. Lists are kept in one =catalist.csv= beside the program,
+AniList finds new titles, and MyAnimeList XML moves lists. The full-screen
+terminal interface is a separate program, Catalist-TUI, kept as an archive.
 
 *** Removed before release
 These were built during this cycle and taken out to keep the program simple.
 Entries below that describe them no longer apply.
+- The command line: every command, option, ref and piped output format. The
+  menus replace them.
+- SQLite, its automatic backups, and undo history that lasted between runs.
+  Undo and redo now last for one run.
+- The pager: long lists are shown in numbered pages.
 - Account tracking: =login=, =logout=, =accounts=, =sync=, =link=, =unlink=,
   =track=, =rm --remote= and =ls --linked=/=--unlinked=. Tokens saved by a
   development build stay on disk until you delete them; the README says

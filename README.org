@@ -1,170 +1,79 @@
 * Catalist
-A small, local-first anime and manga tracker for the command line, written
-in *C++23*. Every change can be undone and redone.
+A menu-driven anime and manga tracker for the console, written in *C++23*.
+Run it, choose a number, and press =0= to exit.
 
-Your lists live on your computer in one SQLite file. Catalist goes online
-only for =add= and =search=, which ask the public API of
-[[https://anilist.co][AniList]]; no account is needed. Lists move in and out
-as MyAnimeList XML, which AniList and MyAnimeList both read.
+Your lists live in one file, =catalist.csv=, in the same folder as the
+program. Catalist goes online only to add a title, which it finds through the
+public API of [[https://anilist.co][AniList]]; no account is needed. Lists
+move in and out as MyAnimeList XML, which AniList and MyAnimeList both read.
 
-** Install
-*** Nix
-#+begin_src sh
-nix run github:McKaigne/Catalist -- help
-# or, in a clone:
-nix run . -- help
-#+end_src
-
-*** CMake
-You need GCC 13 or later, CMake 3.20 or later, Ninja or Make, SQLite 3.35 or
-later (=libsqlite3-dev= on Debian and Ubuntu), and doctest for the tests
-(=doctest-dev=; =-DBUILD_TESTING=OFF= builds without them). At run time,
-=curl= reaches AniList, which =add= and =search= need. Scores are
-drawn as stars from a [[https://www.nerdfonts.com][Nerd Font]]; in a terminal
-font without them they show as boxes.
+** Build and run
+You need GCC 13 or later, CMake 3.20 or later, and Ninja or Make. =curl= is
+used at run time to reach AniList. doctest is needed for the tests
+(=-DBUILD_TESTING=OFF= builds without them). Scores are drawn as stars from a
+[[https://www.nerdfonts.com][Nerd Font]]; other fonts show them as boxes.
 
 #+begin_src sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
-./build/catalist help
+./catalist
 ctest --test-dir build --output-on-failure
-sudo cmake --install build
 #+end_src
 
-*** Development
-=nix develop= (or =direnv allow=) opens the =catalist-dev= shell: the
-compiler, CMake, Ninja, SQLite and its =sqlite3= tool, doctest and gdb. In
-that shell =CATALIST_DATA_DIR= is =build/dev-data=, so what you try out never
-touches your own lists. GCC does the building; =.clang-format= and the
-=build/compile_commands.json= CMake writes are for the editor's clang-format
-and clangd.
+The build puts the program in the project folder, so =./catalist= and
+=catalist.csv= sit side by side. Both are ignored by git. On Nix, run
+=nix develop= first to get the compiler and tools.
 
-#+begin_src sh
-nix develop
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
-ctest --test-dir build --output-on-failure
-./build/catalist ls
-#+end_src
+** The menu
+#+begin_example
+MAIN MENU
 
-** First steps
-#+begin_src sh
-catalist import animelist.xml mangalist.xml   # bring in a MyAnimeList export
-catalist search frieren                       # look without adding
-catalist add frieren                          # add a match from AniList
-catalist add -m --status=watching berserk     # a manga you are reading
-catalist add odd taxi, dandadan               # several at once
-catalist ls                                   # both lists
-catalist + frieren                            # one more episode
-catalist + frieren -n 4                       # four more
-catalist +                                    # choose from what is in progress
-catalist set frieren score=10                 # change any field
-catalist done taxi                            # mark it completed
-catalist undo                                 # take the last command back
-#+end_src
+   1  Add a title
+   2  View my lists
+   3  Count the next episode or chapter
+   4  Edit a title
+   5  Remove a title
+   6  Statistics
+   7  Undo and history
+   8  Import or export
+   0  Exit
 
-=catalist= alone lists what you are watching or reading, the title changed
-last first.
+Enter your choice [0-8]:
+#+end_example
 
-- *Names:* a command takes any part of a title's English or romaji name, the
-  words in any order, ignoring capitals and punctuation. =catalist + odd taxi=
-  is one title, and commas separate several: =catalist + odd taxi, frieren=.
-  At a terminal, when several titles match, the only one in progress is taken,
-  otherwise you choose. With no name, =+=, =-=, =done=, =hold=, =drop=,
-  =resume= and =rewatch= offer a list. A typo gets a suggestion. Scripts stay
-  strict: several matches are an error unless =--all= takes them all, and =-a=
-  and =-m= look in one list only.
-- *Refs:* piped output starts each line with a ref such as =a:12= (an anime)
-  or =m:3= (a manga), for scripts. Commands accept them too.
-- *Options* group (=-amq=), take their value joined or apart (=-n3=, =-n 3=,
-  =--sort=title=), may come before or after the names, and =--= ends them.
-- *Output:* at a terminal, ANIME and MANGA sections showing English names, in
-  colour unless =NO_COLOR= is set, and a list taller than the screen opens in
-  =$PAGER= or =less=. Into a pipe, one line a title with a tab between the
-  fields. Messages go to stderr. Exit codes: 0 done, 1 failed, 2 wrong command
-  line.
-- *Statuses* are =watching=, =completed=, =on-hold=, =dropped=, =planned= and
-  =rewatching= (=reading= and =rereading= say the same). Only a completed or
-  rewatching title has a finish date. Stopping a rewatch returns the title to
-  completed.
-- *Scores* are whole numbers from 0 to 10 (0 is none), drawn at a terminal
-  as five stars. Pipes keep the number.
-- *Undo:* every command that changes the lists is one step. =undo= takes it
-  back, =redo= makes it again, and =log= lists the last 100. A step is taken
-  back only when its titles are still as it left them; =-f= takes it back
-  all the same.
+- *Add a title:* search AniList for anime, manga or both, choose a match and
+  its status.
+- *View my lists:* in progress, all titles, anime, manga, by status, by name,
+  or the full details of one title. Long lists are shown 20 rows a page.
+- *Count the next episode or chapter:* choose from what is in progress.
+- *Edit a title:* progress, score, status, total, volumes, dates and name.
+- *Remove a title:* asks first.
+- *Statistics:* counts, mean score and an estimate of days spent.
+- *Undo and history:* undo, redo and recent changes, for the current run.
+- *Import or export:* MyAnimeList XML. Unpack =.xml.gz= files with =gunzip=
+  first. Where an import differs from your lists, you choose title by title.
 
-** Commands
-- ~catalist ls [-amrq] [-s STATUS] [--sort=KEY] [QUERY...]~: List your titles.
-- ~catalist show [-am] [--all] TITLE...~: Show titles in full.
-- ~catalist stats [-am]~: Show the numbers of your lists.
-- ~catalist + [-amq] [--all] [-n N] [TITLE...]~: Count one more episode or chapter. Also ~inc~.
-- ~catalist - [-amq] [--all] [-n N] [TITLE...]~: Count one less episode or chapter. Also ~dec~.
-- ~catalist set [-amq] [--all] TITLE FIELD=VALUE...~: Set fields of a title.
-- ~catalist done [-amq] [--all] [--score=N] [TITLE...]~: Mark titles completed.
-- ~catalist hold [-amq] [--all] [TITLE...]~: Put titles on hold.
-- ~catalist drop [-amq] [--all] [TITLE...]~: Mark titles dropped.
-- ~catalist plan [-amq] [--all] TITLE...~: Mark titles planned.
-- ~catalist resume [-amq] [--all] [TITLE...]~: Take titles up again.
-- ~catalist rewatch [-amq] [--all] [TITLE...]~: Watch or read titles again.
-- ~catalist rm [-amfq] [--all] TITLE...~: Remove titles.
-- ~catalist add [-amq] [--pick=N] [--status=STATUS] [--score=N] [--progress=N] TITLE...~: Add a title found on AniList.
-- ~catalist search [-am] QUERY...~: Search AniList without adding anything: up to five anime and five manga, or ten with =-a= or =-m=. Adult titles are left out.
-- ~catalist import [-q] FILE...~: Add titles from MyAnimeList XML files.
-- ~catalist export anime|manga~: Print a list as MyAnimeList XML.
-- ~catalist undo [-fq] [-n N]~: Take back what the last command changed.
-- ~catalist redo [-fq] [-n N]~: Make again what undo took back.
-- ~catalist log [-n N]~: List what can be undone.
-- ~catalist help [COMMAND]~: Show help for a command.
-
-Before the command, =-V= (=--version=) prints the version and =-h= (=--help=)
-shows the commands.
-
-** Importing and exporting
-#+begin_src sh
-catalist import animelist.xml mangalist.xml   # MyAnimeList XML exports
-catalist export anime > anime.xml
-catalist export manga > manga.xml
-#+end_src
-
-MyAnimeList's export page gives =.xml.gz= files: unpack them with =gunzip=
-first. An import fills in what a title in your lists lacks. Where the file and
-your lists differ, a terminal asks title by title: keep yours, take the file,
-do either for the rest, or quit and change nothing. Scripts and =-q= keep
-yours. An import is one step for undo. Titles without a MyAnimeList id are left out
-of an export, with a note on stderr.
+To find a title, type any part of its English or romaji name. The words can be
+in any order, and capitals and punctuation do not matter.
 
 ** Data and backups
-Your lists are in =~/.local/share/catalist/catalist.db= (or
-=$XDG_DATA_HOME/catalist=, or the directory in =CATALIST_DATA_DIR=). Each
-change is one SQLite transaction, so a crash never leaves half a change.
-
-*To back up, copy =catalist.db=.* It is the only complete copy of your
-lists, because XML export leaves out titles with no MyAnimeList id.
-
-A file from an earlier version is upgraded the first time it is opened, after
-a dated copy such as =catalist-v2-20261123-101500.db= is saved beside it. If
-the copy fails, nothing is upgraded. A version 1 file also loses its undo
-history.
-
-A development build with =login= kept site tokens in
-=~/.local/state/catalist/accounts= (or =$XDG_STATE_HOME/catalist/accounts=,
-or =accounts= in =CATALIST_DATA_DIR=). Catalist no longer reads or removes
-that file. If you have one, revoke Catalist's access in each site's account
-settings, then delete it.
+*To back up, copy =catalist.csv=.* Each save writes the whole file to
+=catalist.csv.tmp= and renames it, so a crash cannot leave half a file. If the
+file is damaged, Catalist says which row and stops without changing it.
 
 ** Source layout
 #+begin_example
-src/main.cpp      reads the environment and runs the command line
-src/system.*      what touches the outside world: files, curl, the clock, the terminal
-src/core/         a title and its rules, dates, results, UTF-8 text (no I/O)
-src/storage/      the lists in SQLite, the undo history, MyAnimeList XML
+src/main.cpp      starts the program
+src/system.*      files, curl, the clock and the terminal
+src/core/         a title and its rules, dates, results, UTF-8 text
+src/storage/      the lists in CSV, and MyAnimeList XML
 src/web/          AniList, and the JSON it answers in
-src/cli/          the command line: parser, title names, output, and the commands
-tests/            unit tests, one folder per source folder; tests/smoke runs the program from sh
+src/menu/         the menus and their screens
+tests/            unit tests, one folder per source folder, and a smoke test
 #+end_example
 
-See [[file:CHANGELOG.org][CHANGELOG.org]] for release notes.
+=DECISIONS.org= records every decision with the code behind it. See
+[[file:CHANGELOG.org][CHANGELOG.org]] for release notes.
 
 ** License
 MIT

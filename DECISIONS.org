@@ -2,7 +2,7 @@
 #+OPTIONS: toc:2 num:nil
 #+STARTUP: overview
 
-Code blocks are copied from commit =b0d3ea6=. The =Source:= line above each block gives its file and lines.
+Code blocks are copied from commit =2e47f0f=. The =Source:= line above each block gives its file and lines.
 
 * Notes for building the PDF
 Follow the WVSU CICT documentation template and the CC 202 Final Project Requirements. Use the template's header on every page: West Visayas State University, College of Information and Communications Technology, La Paz, Iloilo City. The sections below are already in the template's order.
@@ -18,16 +18,16 @@ The score stars are Nerd Font glyphs. They show as boxes in a PDF without that f
 | Requirement                 | State | Where                                                 |
 |-----------------------------+-------+-------------------------------------------------------|
 | C++ language only           | Met   | All code is C++23. It runs the =curl= program to go online |
-| Create                      | Met   | Add a title, Import                                   |
-| Read                        | Met   | View my lists, Statistics                             |
-| Update                      | Met   | Count the next episode, Edit a title                  |
-| Delete                      | Met   | Remove a title                                        |
+| Create                      | Met   | Add Title, Import XML                                 |
+| Read                        | Met   | View Lists, Stats                                     |
+| Update                      | Met   | Log Progress, Edit Title                              |
+| Delete                      | Met   | Remove Title                                          |
 | Decision statements         | Met   | =if-else= throughout, =switch= in every menu          |
 | Loops                       | Met   | =for=, =while= in =ReadChoice=, =do-while= in =RunMenu= |
 | Input validation and errors | Met   | =ReadChoice=, =AskCount=, =AskScore=, =AskDate=       |
 | User-friendly menu          | Met   | Numbered main menu and submenus                       |
 | Exit option                 | Met   | =0= on the main menu                                  |
-| Clean, readable code        | Met   | Google naming, 118 passing tests                  |
+| Clean, readable code        | Met   | Google naming, 117 passing tests                  |
 
 * Title Page
 *APP NAME:* Catalist
@@ -38,7 +38,7 @@ The score stars are Nerd Font glyphs. They show as boxes in a PDF without that f
 Catalist: A Menu-Driven Anime and Manga Tracker
 
 * Abstract
-Catalist is a menu-driven C++23 console application for keeping track of anime and manga. Through numbered menus, a person can add, view, update and remove titles, see statistics, and undo a mistake. The lists are saved in one CSV file in the project folder. New titles are found through AniList's public API without an account, and lists can be moved in and out as MyAnimeList XML.
+Catalist is a menu-driven C++23 console application for keeping track of anime and manga. Through numbered menus, a person can add, view, update and remove titles, and see statistics. The lists are saved in one CSV file in the project folder. New titles are found through AniList's public API without an account, and lists can be moved in and out as MyAnimeList XML.
 
 * Introduction
 People who follow anime and manga often track dozens or hundreds of titles at once. Catalist keeps those lists in a simple console program, where the most common action, recording one more episode or chapter, takes a few number keys.
@@ -47,7 +47,7 @@ People who follow anime and manga often track dozens or hundreds of titles at on
 Catalist is the final project for CC 202 Computer Programming 1, which calls for a complete C++ console application with CRUD operations, decision statements, loops, input validation and a user-friendly menu with an Exit option.
 
 * Problem
-Tracking sites need a browser, an account and a connection for every small update. A list kept in a text file or spreadsheet has none of those costs, but it does not know episode totals, cannot undo a mistake, and makes statistics manual work.
+Tracking sites need a browser, an account and a connection for every small update. A list kept in a text file or spreadsheet has none of those costs, but it does not know episode totals and makes statistics manual work.
 
 * Current Solution
 AniList and MyAnimeList are the main tracking websites. Both keep a person's list on their servers and require an account to track titles.
@@ -56,7 +56,6 @@ AniList and MyAnimeList are the main tracking websites. Both keep a person's lis
 Catalist keeps the list in a readable CSV file on the person's computer and goes online only to add a title.
 - Every action is a numbered menu choice.
 - Titles are found by any part of their name.
-- Changes can be undone while the program is running.
 - No account is needed.
 - Lists can move to and from AniList and MyAnimeList through XML.
 
@@ -70,14 +69,14 @@ Specifically:
 4. To be able to find titles through AniList and exchange lists through MyAnimeList XML.
 
 * Scope and Limitations
-*Scope:* anime and manga lists, progress, scores, statuses, dates, statistics, AniList search, MyAnimeList XML import and export, and undo within a run.
+*Scope:* anime and manga lists, progress, scores, statuses, dates, statistics, AniList search and MyAnimeList XML import and export.
 
 *Limitations:*
 - It runs on Linux and is built with GCC.
 - Adding a title needs an internet connection and the =curl= program.
 - It does not sync with accounts on any site.
 - Episode totals are not refreshed after a title is added.
-- Undo history ends when the program exits.
+- A saved change cannot be undone from the program.
 - Only one copy of the program should have the list open at a time.
 - Exports leave out titles without a MyAnimeList id.
 - Score stars need a Nerd Font.
@@ -90,18 +89,17 @@ Each decision below is followed by the code that makes it happen.
 *** 1.1 A numbered main menu with Exit
 Running =catalist= opens a main menu. Each number opens a screen, and =0= exits. The loop is a =do-while= around a =switch=.
 
-Source: =src/menu/menu.cpp:40-81=
+Source: =src/menu/menu.cpp:38-75=
 #+begin_src cpp
 int RunMenu(App& app) {
 	int choice = 0;
 	do {
 		DrawHome(app);
-		DrawMenu(app, "MAIN MENU",
-		         {"Add a title", "View my lists", "Count the next episode or chapter",
-		          "Edit a title", "Remove a title", "Statistics", "Undo and history",
-		          "Import or export"},
-		         "Exit");
-		choice = ReadChoice(app, 8);
+		DrawOptions(app,
+		            {"Add Title", "View Lists", "Log Progress", "Edit Title", "Remove Title", "Stats",
+		             "Import / Export"},
+		            "Exit");
+		choice = ReadChoice(app, 7);
 		switch (choice) {
 			case 1:
 				AddScreen(app);
@@ -110,7 +108,7 @@ int RunMenu(App& app) {
 				ViewScreen(app);
 				break;
 			case 3:
-				CountNextScreen(app);
+				LogProgressScreen(app);
 				break;
 			case 4:
 				EditScreen(app);
@@ -122,16 +120,13 @@ int RunMenu(App& app) {
 				StatsScreen(app);
 				break;
 			case 7:
-				HistoryScreen(app);
-				break;
-			case 8:
 				TransferScreen(app);
 				break;
 			default:
 				break;
 		}
 	} while (choice != 0);
-	app.out << "Goodbye.\n";
+	app.out << "Goodbye!\n";
 	return 0;
 }
 #+end_src
@@ -139,14 +134,21 @@ int RunMenu(App& app) {
 *** 1.2 Every menu is drawn the same way
 Each menu lists its numbered options and a =0= to go back or exit.
 
-Source: =src/menu/common.cpp:77-83=
+Source: =src/menu/common.cpp:74-77=
 #+begin_src cpp
-void DrawMenu(App& app, const std::string& title, const std::vector<std::string>& items,
-              const std::string& leave) {
-	DrawHeading(app, title);
+void DrawMenu(App& app, const std::string& heading, const std::vector<std::string>& items) {
+	DrawHeading(app, heading);
+	DrawOptions(app, items);
+}
+#+end_src
+
+Source: =src/menu/common.cpp:67-72=
+#+begin_src cpp
+void DrawOptions(App& app, const std::vector<std::string>& items, const std::string& leave) {
+	size_t width = std::to_string(items.size()).size();
 	for (size_t i = 0; i < items.size(); ++i)
-		app.out << std::format("  {:>2}  {}\n", i + 1, items[i]);
-	app.out << std::format("  {:>2}  {}\n\n", 0, leave);
+		app.out << std::format("{:>{}}. {}\n", i + 1, width, items[i]);
+	app.out << std::format("{:>{}}. {}\n\n", 0, width, leave);
 }
 #+end_src
 
@@ -157,7 +159,7 @@ Source: =src/menu/input.cpp:52-62=
 #+begin_src cpp
 int ReadChoice(App& app, int highest) {
 	while (true) {
-		auto answer = ReadLine(app, std::format("Enter your choice [0-{}]: ", highest));
+		auto answer = ReadLine(app, std::format("Enter choice [0-{}]: ", highest));
 		if (not answer)
 			return 0;
 		auto number = ParseNumber(*answer);
@@ -182,18 +184,17 @@ if (argc > 1) {
 *** 1.5 The home screen shows what is in progress
 Above the menu are the list totals and the five titles changed last. With empty lists it says what to do first.
 
-Source: =src/menu/menu.cpp:15-36=
+Source: =src/menu/menu.cpp:14-34=
 #+begin_src cpp
 void DrawHome(App& app) {
 	ClearScreen(app);
-	app.out << output::Paint(std::format("CATALIST v{}", kVersionString), output::kBold, app.color)
-	        << "\n";
+	app.out << output::Paint("Catalist", output::kBold, app.color) << "\n";
 	size_t anime = app.db.GetEntries(MediaType::kAnime).size();
 	size_t manga = app.db.GetEntries(MediaType::kManga).size();
 	auto open = InProgress(app.db);
 	app.out << std::format("{} anime, {} manga, {} in progress\n\n", anime, manga, open.size());
 	if (anime + manga == 0)
-		app.out << "Your lists are empty. Choose 1 to add a title, or 8 to import a list.\n\n";
+		app.out << "Your lists are empty. Choose 1 to add a title, or 7 to import a list.\n\n";
 	if (open.empty())
 		return;
 	open.resize(std::min(open.size(), kHomeRows));
@@ -202,15 +203,175 @@ void DrawHome(App& app) {
 		rows.push_back({{DisplayName(each)},
 		                {TypeKey(each.type)},
 		                {OutOf(each.progress, each.total_units)}});
-	app.out << output::Sections({{"", false, true}, {""}, {""}}, {{"CONTINUE", rows}}, app.columns,
+	app.out << output::Sections({{"", false, true}, {""}, {""}}, {{"Continue", rows}}, app.columns,
 	                            app.color)
 	        << "\n";
 }
 #+end_src
 
-** 2. Finding a title
+** 2. Menu names
 
-*** 2.1 Titles are found by words
+*** 2.1 Short Title Case names, and the word Title
+Menu options are two or three words in Title Case. One anime or manga is called a Title. The main menu is Add Title, View Lists, Log Progress, Edit Title, Remove Title, Stats, Import / Export and Exit.
+
+Source: =src/menu/menu.cpp:42-45=
+#+begin_src cpp
+DrawOptions(app,
+            {"Add Title", "View Lists", "Log Progress", "Edit Title", "Remove Title", "Stats",
+             "Import / Export"},
+            "Exit");
+#+end_src
+
+*** 2.2 Breadcrumb headings
+Each screen is headed by its path, separated by slashes, such as =Catalist / View Lists / By Status=. The main screen just says Catalist, and Edit Title includes the title's name.
+
+Source: =src/menu/view.cpp:15=
+#+begin_src cpp
+const char* const kViewCrumb = "Catalist / View Lists";
+#+end_src
+
+Source: =src/menu/edit.cpp:123=
+#+begin_src cpp
+DrawHeading(app, std::format("Catalist / Edit Title / {}", DisplayName(*current)));
+#+end_src
+
+*** 2.3 Numbers are written as 1.
+Options read =1. Add Title=, with =0.= for Exit or Back.
+
+Source: =src/menu/common.cpp:67-72=
+#+begin_src cpp
+void DrawOptions(App& app, const std::vector<std::string>& items, const std::string& leave) {
+	size_t width = std::to_string(items.size()).size();
+	for (size_t i = 0; i < items.size(); ++i)
+		app.out << std::format("{:>{}}. {}\n", i + 1, width, items[i]);
+	app.out << std::format("{:>{}}. {}\n\n", 0, width, leave);
+}
+#+end_src
+
+*** 2.4 The menu prompt
+Every menu asks =Enter choice [0-7]:= with its own range.
+
+Source: =src/menu/input.cpp:54=
+#+begin_src cpp
+auto answer = ReadLine(app, std::format("Enter choice [0-{}]: ", highest));
+#+end_src
+
+*** 2.5 Add Title options
+Both, Anime Only and Manga Only, then =Search AniList (Enter to go back):=.
+
+Source: =src/menu/add.cpp:94=
+#+begin_src cpp
+DrawMenu(app, "Catalist / Add Title", {"Both", "Anime Only", "Manga Only"});
+#+end_src
+
+Source: =src/menu/add.cpp:104=
+#+begin_src cpp
+auto name = AskText(app, "Search AniList (Enter to go back): ");
+#+end_src
+
+*** 2.6 View Lists options
+In Progress, All Titles, Anime, Manga, By Status, Search Lists and Title Details.
+
+Source: =src/menu/view.cpp:167-169=
+#+begin_src cpp
+DrawMenu(app, kViewCrumb,
+         {"In Progress", "All Titles", "Anime", "Manga", "By Status", "Search Lists",
+          "Title Details"});
+#+end_src
+
+*** 2.7 Edit Title options
++1 Progress, -1 Progress, Set Progress, Set Score, Set Status, Set Total, Set Volumes, Set Start Date, Set Finish Date and Rename Title.
+
+Source: =src/menu/edit.cpp:126-128=
+#+begin_src cpp
+DrawOptions(app, {"+1 Progress", "-1 Progress", "Set Progress", "Set Score", "Set Status",
+                  "Set Total", "Set Volumes", "Set Start Date", "Set Finish Date",
+                  "Rename Title"});
+#+end_src
+
+*** 2.8 Status names match the title's type
+Anime says Plan to Watch, Watching and Rewatching. Manga says Plan to Read, Reading and Rereading. By Status covers both, so it says Planned, Watching/Reading and Rewatching/Rereading.
+
+Source: =src/menu/common.cpp:97-114=
+#+begin_src cpp
+std::string StatusLabel(WatchStatus status, std::optional<MediaType> type) {
+	bool manga = type == MediaType::kManga;
+	switch (status) {
+		case WatchStatus::kPlanToWatch:
+			return not type ? "Planned" : manga ? "Plan to Read" : "Plan to Watch";
+		case WatchStatus::kWatching:
+			return not type ? "Watching/Reading" : manga ? "Reading" : "Watching";
+		case WatchStatus::kCompleted:
+			return "Completed";
+		case WatchStatus::kOnHold:
+			return "On Hold";
+		case WatchStatus::kDropped:
+			return "Dropped";
+		case WatchStatus::kRewatching:
+			return not type ? "Rewatching/Rereading" : manga ? "Rereading" : "Rewatching";
+	}
+	return "";
+}
+#+end_src
+
+*** 2.9 Import / Export options
+Import XML, Export Anime and Export Manga.
+
+Source: =src/menu/transfer.cpp:162=
+#+begin_src cpp
+DrawMenu(app, "Catalist / Import / Export", {"Import XML", "Export Anime", "Export Manga"});
+#+end_src
+
+*** 2.10 Page controls
+Long lists offer Next Page, Previous Page and Back.
+
+Source: =src/menu/view.cpp:51=
+#+begin_src cpp
+DrawOptions(app, {"Next Page", "Previous Page"});
+#+end_src
+
+*** 2.11 The title prompt
+Picking one of your titles asks =Enter title (Enter to go back):=.
+
+Source: =src/menu/common.cpp:172=
+#+begin_src cpp
+auto text = AskText(app, "Enter title (Enter to go back): ");
+#+end_src
+
+*** 2.12 The pause
+After an action the program waits at =Press Enter to continue...=.
+
+Source: =src/menu/input.cpp:64-66=
+#+begin_src cpp
+void Pause(App& app) {
+	(void)ReadLine(app, "\nPress Enter to continue...");
+}
+#+end_src
+
+*** 2.13 Exit and Back
+The main menu leaves with Exit and says Goodbye! Every other menu leaves with Back.
+
+Source: =src/menu/menu.cpp:73=
+#+begin_src cpp
+app.out << "Goodbye!\n";
+#+end_src
+
+*** 2.14 Section labels
+Lists are grouped under Anime and Manga, and the main screen's recent titles under Continue.
+
+Source: =src/menu/view.cpp:18=
+#+begin_src cpp
+std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
+#+end_src
+
+Source: =src/menu/menu.cpp:31=
+#+begin_src cpp
+app.out << output::Sections({{"", false, true}, {""}, {""}}, {{"Continue", rows}}, app.columns,
+#+end_src
+
+** 3. Finding a title
+
+*** 3.1 Titles are found by words
 Type any part of the English or romaji name. Words can be in any order, and capitals and punctuation are ignored, so =frieren beyond journeys end= finds "Frieren: Beyond Journey's End".
 
 Source: =src/menu/find.cpp:30-38=
@@ -255,7 +416,7 @@ std::string Folded(const std::string& text) {
 }
 #+end_src
 
-*** 2.2 An exact name wins
+*** 3.2 An exact name wins
 If a title is exactly what was typed, titles that only contain it are not offered.
 
 Source: =src/menu/find.cpp:40-55=
@@ -278,10 +439,10 @@ std::vector<Entry> FindTitles(const Catalogue& db, const std::string& text) {
 }
 #+end_src
 
-*** 2.3 Several matches become a numbered list
+*** 3.3 Several matches become a numbered list
 You choose by number. At most 20 are shown, latest changed first, because the real list has 247 titles in progress.
 
-Source: =src/menu/common.cpp:134-153=
+Source: =src/menu/common.cpp:148-168=
 #+begin_src cpp
 std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
 	constexpr size_t kMostOffered = 20;
@@ -290,14 +451,15 @@ std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
 	titles.resize(titles.size() - more);
 	std::vector<std::vector<output::Styled>> rows;
 	for (size_t i = 0; i < titles.size(); ++i)
-		rows.push_back({{std::format("  {:>2}", i + 1)},
+		rows.push_back({{std::format("{}.", i + 1)},
 		                {DisplayName(titles[i])},
 		                {TypeKey(titles[i].type)},
 		                {OutOf(titles[i].progress, titles[i].total_units)}});
-	app.out << output::Rows({{""}, {"", false, true}, {""}, {""}}, rows, app.columns, app.color);
+	app.out << output::Rows({{"", true}, {"", false, true}, {""}, {""}}, rows, app.columns,
+	                        app.color);
 	if (more > 0)
-		app.out << std::format("  and {} more: type more of the name to reach them\n", more);
-	app.out << "   0  Back\n\n";
+		app.out << std::format("and {} more: type more of the name to reach them\n", more);
+	app.out << std::format("{:>{}}. Back\n\n", 0, std::to_string(titles.size()).size());
 	int choice = ReadChoice(app, static_cast<int>(titles.size()));
 	if (choice == 0)
 		return std::nullopt;
@@ -305,10 +467,10 @@ std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
 }
 #+end_src
 
-*** 2.4 A typo gets a suggestion
+*** 3.4 A typo gets a suggestion
 Catalist asks "Did you mean ...?" and changes nothing until you answer yes.
 
-Source: =src/menu/common.cpp:168-170=
+Source: =src/menu/common.cpp:183-185=
 #+begin_src cpp
 auto closest = ClosestTitle(app.db, *text);
 if (closest and AskYes(app, std::format("Did you mean {}?", DisplayName(*closest))))
@@ -333,10 +495,10 @@ std::optional<int> TypoCost(const std::vector<std::string>& words, const std::st
 }
 #+end_src
 
-** 3. Display
+** 4. Display
 
-*** 3.1 English is the main name
-Screens show the English name, or romaji when there is none. Romaji appears only on a title's full details.
+*** 4.1 English is the main name
+Screens show the English name, or romaji when there is none. Romaji appears only on Title Details and Edit Title.
 
 Source: =src/core/entry.cpp:68-70=
 #+begin_src cpp
@@ -345,24 +507,24 @@ const std::string& DisplayName(const Entry& shown) {
 }
 #+end_src
 
-Source: =src/menu/view.cpp:134-135=
+Source: =src/menu/view.cpp:141-142=
 #+begin_src cpp
 if (not e.english_title.empty())
 	row("Romaji", e.title);
 #+end_src
 
-*** 3.2 Anime and manga are separate sections
+*** 4.2 Anime and manga are separate sections
 Lists have an ANIME section and a MANGA section.
 
-Source: =src/menu/view.cpp:16-28=
+Source: =src/menu/view.cpp:17-29=
 #+begin_src cpp
 void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t last) {
-	std::vector<output::Section> sections = {{"ANIME", {}}, {"MANGA", {}}};
+	std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
 	for (size_t i = first; i < last; ++i) {
 		const Entry& e = titles[i];
 		sections[e.type == MediaType::kAnime ? 0 : 1].rows.push_back(
 		    {{DisplayName(e)},
-		     {StatusToString(e.status, e.type), StatusColor(e.status)},
+		     {StatusLabel(e.status, e.type), StatusColor(e.status)},
 		     {output::Stars(e.score), output::kYellow},
 		     {OutOf(e.progress, e.total_units)}});
 	}
@@ -371,10 +533,10 @@ void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t 
 }
 #+end_src
 
-*** 3.3 Long lists are paged
+*** 4.3 Long lists are paged
 Lists show 20 titles a page, with numbered options for next, previous and back.
 
-Source: =src/menu/view.cpp:30-62=
+Source: =src/menu/view.cpp:31-63=
 #+begin_src cpp
 void ShowPages(App& app, const std::string& heading, std::vector<Entry> titles, SortKey key) {
 	if (titles.empty()) {
@@ -395,8 +557,8 @@ void ShowPages(App& app, const std::string& heading, std::vector<Entry> titles, 
 			Pause(app);
 			return;
 		}
-		app.out << std::format("\nPage {} of {}\n   1  Next page\n   2  Previous page\n   0  Back\n\n",
-		                       page + 1, pages);
+		app.out << std::format("\nPage {} of {}\n", page + 1, pages);
+		DrawOptions(app, {"Next Page", "Previous Page"});
 		switch (ReadChoice(app, 2)) {
 			case 1:
 				page = std::min(page + 1, pages - 1);
@@ -411,7 +573,7 @@ void ShowPages(App& app, const std::string& heading, std::vector<Entry> titles, 
 }
 #+end_src
 
-*** 3.4 Recent order uses the exact time
+*** 4.4 Recent order uses the exact time
 Each change stores its date and time, so the title you just updated comes first. Titles not changed yet fall back to their day.
 
 Source: =src/storage/catalogue.cpp:34-41=
@@ -433,17 +595,17 @@ std::string LastChange(const Entry& e) {
 }
 #+end_src
 
-*** 3.5 Full lists are in title order
+*** 4.5 Full lists are in title order
 In-progress lists are latest first. The others are alphabetical.
 
-Source: =src/menu/view.cpp:169-170=
+Source: =src/menu/view.cpp:177-178=
 #+begin_src cpp
-ShowPages(app, "ALL TITLES", TitlesWhere(app.db, std::nullopt, std::nullopt),
-          SortKey::kTitle);
+ShowPages(app, std::format("{} / All Titles", kViewCrumb),
+          TitlesWhere(app.db, std::nullopt, std::nullopt), SortKey::kTitle);
 #+end_src
 
-*** 3.6 Long names are cut to fit
-Every title stays on one row, shortened to the terminal's width. Full details print the whole name.
+*** 4.6 Long names are cut to fit
+Every title stays on one row, shortened to the terminal's width. Title Details prints the whole name.
 
 Source: =src/menu/output.cpp:29-30=
 #+begin_src cpp
@@ -451,14 +613,14 @@ if (columns[i].flexible and total > width)
 	widths[i] = std::max(kNarrowest, widths[i] - (total - width));
 #+end_src
 
-*** 3.7 Statistics stay separate
+*** 4.7 Stats stay separate
 Anime and manga are counted apart, because episodes and chapters are different units.
 
-Source: =src/menu/view.cpp:198-205=
+Source: =src/menu/view.cpp:209-216=
 #+begin_src cpp
 void StatsScreen(App& app) {
 	ClearScreen(app);
-	DrawHeading(app, "STATISTICS");
+	DrawHeading(app, "Catalist / Stats");
 	PrintStats(app, MediaType::kAnime);
 	app.out << "\n";
 	PrintStats(app, MediaType::kManga);
@@ -466,7 +628,7 @@ void StatsScreen(App& app) {
 }
 #+end_src
 
-*** 3.8 Days spent stays an estimate
+*** 4.8 Days spent stays an estimate
 24 minutes an episode and 5 minutes a chapter.
 
 Source: =src/core/lists.cpp:86-92=
@@ -480,10 +642,10 @@ double DaysSpent(const std::vector<Entry>& list) {
 }
 #+end_src
 
-*** 3.9 Scores are whole numbers from 0 to 10
+*** 4.9 Scores are whole numbers from 0 to 10
 They match MyAnimeList exports and are drawn as five stars, each point a half star.
 
-Source: =src/menu/edit.cpp:37-49=
+Source: =src/menu/edit.cpp:35-46=
 #+begin_src cpp
 void AskScore(App& app, const Entry& title) {
 	auto text = AskText(app, "Score from 0 to 10 (Enter to go back): ");
@@ -495,8 +657,7 @@ void AskScore(App& app, const Entry& title) {
 		return;
 	}
 	IsoDate today = app.Today();
-	ChangeTitle(app, title, "Set score",
-	            [&](const Entry& e) { return SetScore(e, *number, today); });
+	ChangeTitle(app, title, [&](const Entry& e) { return SetScore(e, *number, today); });
 }
 #+end_src
 
@@ -515,9 +676,9 @@ std::string Stars(double out_of_ten) {
 }
 #+end_src
 
-** 4. Status and date rules
+** 5. Status and date rules
 
-*** 4.1 Only completed titles have a finish date
+*** 5.1 Only completed titles have a finish date
 On hold and dropped set no finish date, and resuming leaves none behind. A title being rewatched keeps its first one.
 
 Source: =src/core/entry.cpp:117-147=
@@ -555,7 +716,7 @@ Entry ApplyStatusDates(Entry target, WatchStatus previous, const IsoDate& today)
 }
 #+end_src
 
-*** 4.2 A finished rewatch keeps the first date
+*** 5.2 A finished rewatch keeps the first date
 The rewatch count goes up by one, and the original finish date stays.
 
 Source: =src/core/entry.cpp:127-128=
@@ -564,7 +725,7 @@ if (previous != WatchStatus::kRewatching or not target.finish_date)
 	target.finish_date = today;
 #+end_src
 
-*** 4.3 Stopping a rewatch returns to completed
+*** 5.3 Stopping a rewatch returns to completed
 On hold, dropped or planned during a rewatch puts the title back at completed with full progress, and the count does not go up. Watching changes nothing. With an unknown total the rewatch's count stays.
 
 Source: =src/core/entry.cpp:211-230=
@@ -591,29 +752,31 @@ Entry SetStatus(Entry target, WatchStatus status, const IsoDate& today) {
 }
 #+end_src
 
-*** 4.4 A status that makes no sense is refused
+*** 5.4 A status that makes no sense is refused
 A completed title cannot go back to watching, and an unfinished title cannot be rewatched. Nothing changes.
 
 Source: =src/core/entry.cpp:191-201=
 #+begin_src cpp
 std::optional<std::string> StatusRefusal(const Entry& target, WatchStatus status) {
 	if (status == WatchStatus::kWatching and target.status == WatchStatus::kCompleted)
-		return std::format("{} is completed; choose Rewatching to start it again",
-		                   DisplayName(target));
+		return std::format("{} is completed; choose {} to start it again", DisplayName(target),
+		                   StatusToString(WatchStatus::kRewatching, target.type));
 	bool first_time =
 	    target.status != WatchStatus::kCompleted and target.status != WatchStatus::kRewatching;
 	if (status == WatchStatus::kRewatching and first_time)
-		return std::format("{} is not completed; choose Watching to carry on",
-		                   DisplayName(target));
+		return std::format("{} is not completed; choose {} to carry on", DisplayName(target),
+		                   StatusToString(WatchStatus::kWatching, target.type));
 	return std::nullopt;
 }
 #+end_src
 
-Source: =src/menu/edit.cpp:51-66=
+Source: =src/menu/edit.cpp:48-64=
 #+begin_src cpp
 void AskNewStatus(App& app, const Entry& title) {
-	app.out << "\n";
-	auto status = AskStatus(app, "New status", kStatusCount);
+	ClearScreen(app);
+	auto status = AskStatus(app,
+	                        std::format("Catalist / Edit Title / {} / Set Status", DisplayName(title)),
+	                        kStatusCount, title.type);
 	if (not status)
 		return;
 	auto current = app.db.GetById(title.type, title.id);
@@ -624,31 +787,29 @@ void AskNewStatus(App& app, const Entry& title) {
 		return;
 	}
 	IsoDate today = app.Today();
-	ChangeTitle(app, title, "Change status",
-	            [&](const Entry& e) { return SetStatus(e, *status, today); });
+	ChangeTitle(app, title, [&](const Entry& e) { return SetStatus(e, *status, today); });
 }
 #+end_src
 
-*** 4.5 Counting stops at a known total and explains
-It says the title is at its total and points to Set total.
+*** 5.5 Counting stops at a known total and explains
+It says the title is at its total and points to Set Total.
 
-Source: =src/menu/edit.cpp:10-21=
+Source: =src/menu/edit.cpp:10-20=
 #+begin_src cpp
 void CountBy(App& app, const Entry& title, int delta) {
 	auto current = app.db.GetById(title.type, title.id);
 	if (current and delta > 0 and AtTotal(*current)) {
-		app.out << std::format("{} is at its total, {} {}. If there are more, use Set total.\n",
+		app.out << std::format("{} is at its total, {} {}. If there are more, use Set Total.\n",
 		                       DisplayName(*current), current->total_units,
 		                       UnitName(current->type, current->total_units));
 		return;
 	}
 	IsoDate today = app.Today();
-	ChangeTitle(app, title, delta > 0 ? "Count one more" : "Count one less",
-	            [&](const Entry& e) { return StepProgress(e, delta, today); });
+	ChangeTitle(app, title, [&](const Entry& e) { return StepProgress(e, delta, today); });
 }
 #+end_src
 
-*** 4.6 Counting resumes a paused title
+*** 5.6 Counting resumes a paused title
 Counting an episode moves a planned, on-hold or dropped title to watching.
 
 Source: =src/core/entry.cpp:165-168=
@@ -659,7 +820,7 @@ if (IsPaused(target.status)) {
 }
 #+end_src
 
-*** 4.7 The last episode completes the title
+*** 5.7 The last episode completes the title
 The status becomes completed and the finish date is today.
 
 Source: =src/core/entry.cpp:149-159=
@@ -677,7 +838,7 @@ Entry WithProgress(Entry target, int progress, const IsoDate& today) {
 }
 #+end_src
 
-*** 4.8 Counting back reopens a completed title
+*** 5.8 Counting back reopens a completed title
 It goes back to watching or reading and its finish date is cleared.
 
 Source: =src/core/entry.cpp:175-183=
@@ -693,7 +854,7 @@ Entry StepBackward(Entry target, int new_progress, const IsoDate& today) {
 }
 #+end_src
 
-*** 4.9 Planned keeps progress
+*** 5.9 Planned keeps progress
 Only the status changes and the finish date clears, so your place is not lost.
 
 Source: =src/core/entry.cpp:136-137=
@@ -702,22 +863,22 @@ case WatchStatus::kPlanToWatch:
 	target.finish_date.reset();
 #+end_src
 
-*** 4.10 Totals and volumes are edited by hand
+*** 5.10 Totals and volumes are edited by hand
 Catalist does not re-check AniList after adding, so an airing show's total is fixed from the Edit menu.
 
-Source: =src/menu/edit.cpp:149=
+Source: =src/menu/edit.cpp:147=
 #+begin_src cpp
-AskCount(app, *current, "Set total", CountField::kTotalUnits);
+AskCount(app, *current, "New total", CountField::kTotalUnits);
 #+end_src
 
-Source: =src/menu/edit.cpp:153=
+Source: =src/menu/edit.cpp:151=
 #+begin_src cpp
-AskCount(app, *current, "Set volumes", CountField::kVolumes);
+AskCount(app, *current, "Volumes read", CountField::kVolumes);
 #+end_src
 
-** 5. Adding a title
+** 6. Adding a title
 
-*** 5.1 Both types, five results each
+*** 6.1 Both types, five results each
 Searching anime and manga shows up to 5 of each, numbered straight through. Searching one type shows up to 10.
 
 Source: =src/web/anilist.cpp:44-59=
@@ -740,7 +901,7 @@ std::string SearchRequest(std::optional<MediaType> only, const std::string& quer
 }
 #+end_src
 
-*** 5.2 Adult titles are hidden
+*** 6.2 Adult titles are hidden
 The request asks AniList for =isAdult:false=.
 
 Source: =src/web/anilist.cpp:52=
@@ -748,7 +909,7 @@ Source: =src/web/anilist.cpp:52=
     "{}:Page(perPage:{}){{media(search:$search,type:{},isAdult:false,sort:SEARCH_MATCH){{"
 #+end_src
 
-*** 5.3 One exact name is taken without asking
+*** 6.3 One exact name is taken without asking
 If exactly one match has the name you typed, ignoring capitals and punctuation, it is used. Otherwise you choose.
 
 Source: =src/menu/add.cpp:35-43=
@@ -773,7 +934,7 @@ std::optional<anilist::Match> ChooseMatch(App& app, const std::vector<anilist::M
 	if (auto exact = OnlyExact(matches, query))
 		return exact;
 	PrintMatches(app, matches);
-	app.out << "\n   0  Back\n\n";
+	app.out << std::format("\n{:>{}}. Back\n\n", 0, std::to_string(matches.size()).size());
 	int choice = ReadChoice(app, static_cast<int>(matches.size()));
 	if (choice == 0)
 		return std::nullopt;
@@ -781,10 +942,10 @@ std::optional<anilist::Match> ChooseMatch(App& app, const std::vector<anilist::M
 }
 #+end_src
 
-*** 5.4 Adding needs AniList
+*** 6.4 Adding needs AniList
 There is no offline add. Without a connection the screen shows the error and changes nothing.
 
-Source: =src/menu/add.cpp:106-111=
+Source: =src/menu/add.cpp:107-112=
 #+begin_src cpp
 auto found = anilist::Search(app.net, only, *name);
 if (not found.has_value()) {
@@ -794,10 +955,10 @@ if (not found.has_value()) {
 }
 #+end_src
 
-*** 5.5 You choose the new title's status
-Planned is the first option.
+*** 6.5 You choose the new title's status
+Plan to Watch or Plan to Read is the first option.
 
-Source: =src/menu/add.cpp:76-87=
+Source: =src/menu/add.cpp:76-88=
 #+begin_src cpp
 void SaveNewTitle(App& app, const anilist::Match& match, WatchStatus status) {
 	IsoDate today = app.Today();
@@ -805,30 +966,31 @@ void SaveNewTitle(App& app, const anilist::Match& match, WatchStatus status) {
 	added.updated_at = today;
 	added = SetStatus(added, status, today);
 	app.db.AddEntry(added);
-	if (not app.db.Save(utf8::Clip(std::format("Add: {}", DisplayName(added)), 60), app.Stamp())) {
+	if (not app.db.Save(app.Stamp())) {
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 		return;
 	}
-	app.out << std::format("{} added as {}.\n", DisplayName(added), StatusKey(added.status));
+	app.out << std::format("{} added as {}.\n", DisplayName(added),
+	                       StatusLabel(added.status, added.type));
 }
 #+end_src
 
-*** 5.6 A tracked title is left alone
+*** 6.6 A tracked title is left alone
 The screen reports it by name and changes nothing.
 
-Source: =src/menu/add.cpp:120-125=
+Source: =src/menu/add.cpp:121-126=
 #+begin_src cpp
 if (auto mine = app.db.FindByIds(match->type, match->anilist_id, match->mal_id)) {
 	app.out << std::format("{} is in your {} list already ({}).\n", DisplayName(*mine),
-	                       TypeKey(mine->type), StatusKey(mine->status));
+	                       TypeKey(mine->type), StatusLabel(mine->status, mine->type));
 	Pause(app);
 	return;
 }
 #+end_src
 
-** 6. Import, export, undo and remove
+** 7. Import, export and remove
 
-*** 6.1 An import asks title by title
+*** 7.1 An import asks title by title
 Where the file and your lists differ, you choose keep, file, keep rest, file rest or quit. Quit changes nothing.
 
 Source: =src/menu/transfer.cpp:24-47=
@@ -898,7 +1060,7 @@ std::optional<std::set<const Entry*>> AskClashes(App& app, const std::vector<Ent
 }
 #+end_src
 
-*** 6.2 Choosing the file replaces your values
+*** 7.2 Choosing the file replaces your values
 Its status and every count or date it holds replace yours.
 
 Source: =src/core/entry.cpp:323-337=
@@ -920,10 +1082,10 @@ Entry TakeImported(Entry existing, const Entry& incoming) {
 }
 #+end_src
 
-*** 6.3 Export writes one list to a file
+*** 7.3 Export writes one list to a file
 It asks before replacing a file that exists.
 
-Source: =src/menu/transfer.cpp:135-155=
+Source: =src/menu/transfer.cpp:134-154=
 #+begin_src cpp
 void ExportList(App& app, MediaType type) {
 	auto typed = AskText(app, std::format("File to save the {} list in (Enter to go back): ",
@@ -948,67 +1110,14 @@ void ExportList(App& app, MediaType type) {
 }
 #+end_src
 
-*** 6.4 Undo and redo last for one run
-With a plain CSV there is no history file. Each change keeps a copy of the lists in memory until the program exits.
-
-Source: =src/menu/history.cpp:11-19=
-#+begin_src cpp
-void TakeStep(App& app, bool redoing) {
-	auto taken = redoing ? app.db.Redo() : app.db.Undo();
-	if (not taken.has_value())
-		Fail(app, taken.error());
-	else if (not taken.value())
-		app.out << std::format("Nothing to {}.\n", redoing ? "redo" : "undo");
-	else
-		app.out << std::format("{} '{}'.\n", redoing ? "Redid" : "Undid", *taken.value());
-}
-#+end_src
-
-Source: =src/storage/catalogue.cpp:181-199=
-#+begin_src cpp
-Result<std::optional<std::string>> Catalogue::Move(std::vector<Snapshot>& from,
-                                                   std::vector<Snapshot>& to) {
-	if (from.empty())
-		return std::optional<std::string>{};
-	Snapshot step = from.back();
-	Snapshot here{step.label, step.stamp, anime_, manga_};
-	anime_ = step.anime;
-	manga_ = step.manga;
-	if (not WriteCsv()) {
-		anime_ = here.anime;
-		manga_ = here.manga;
-		return std::unexpected(std::format("could not save {}", file_.string()));
-	}
-	from.pop_back();
-	to.push_back(std::move(here));
-	savedAnime_ = anime_;
-	savedManga_ = manga_;
-	return std::optional<std::string>(step.label);
-}
-#+end_src
-
-*** 6.5 100 undo steps
-Catalist keeps the last 100 steps of a run.
-
-Source: =src/storage/catalogue.hpp:22=
-#+begin_src cpp
-static constexpr size_t kHistoryLength = 100;
-#+end_src
-
-Source: =src/storage/catalogue.cpp:173-174=
-#+begin_src cpp
-if (undo_.size() > kHistoryLength)
-	undo_.erase(undo_.begin());
-#+end_src
-
-*** 6.6 Remove always asks
+*** 7.4 Remove always asks
 A title is removed only after a yes.
 
-Source: =src/menu/edit.cpp:174-192=
+Source: =src/menu/edit.cpp:172-190=
 #+begin_src cpp
 void RemoveScreen(App& app) {
 	ClearScreen(app);
-	DrawHeading(app, "REMOVE A TITLE");
+	DrawHeading(app, "Catalist / Remove Title");
 	auto title = ChooseTitle(app);
 	if (not title)
 		return;
@@ -1019,7 +1128,7 @@ void RemoveScreen(App& app) {
 		return;
 	}
 	app.db.RemoveEntry(title->type, title->id);
-	if (app.db.Save(std::format("Remove: {}", DisplayName(*title)), app.Stamp()))
+	if (app.db.Save(app.Stamp()))
 		app.out << std::format("{} removed.\n", name);
 	else
 		Fail(app, std::format("could not save {}", app.db.file().string()));
@@ -1027,9 +1136,9 @@ void RemoveScreen(App& app) {
 }
 #+end_src
 
-** 7. Storage
+** 8. Storage
 
-*** 7.1 One CSV file in the Catalist folder
+*** 8.1 One CSV file in the Catalist folder
 Both lists are in =catalist.csv= in the project folder, wherever the program is run from. The program itself is built in =build/=. SQLite was removed.
 
 Source: =src/main.cpp:19-22=
@@ -1040,7 +1149,7 @@ std::filesystem::path file =
 catalist::Catalogue db(file);
 #+end_src
 
-*** 7.2 The file format
+*** 8.2 The file format
 One header row, then one row per title. Commas and quotes in names are escaped as in standard CSV.
 
 Source: =src/storage/csv_codec.hpp:13-15=
@@ -1061,7 +1170,7 @@ std::string EncodeEntry(const Entry& e) {
 }
 #+end_src
 
-*** 7.3 A crash cannot leave half a file
+*** 8.3 A crash cannot leave half a file
 Each save writes a temporary file and renames it over the real one.
 
 Source: =src/system.cpp:32-46=
@@ -1083,7 +1192,7 @@ bool WriteFile(const std::filesystem::path& file, const std::string& text) {
 }
 #+end_src
 
-*** 7.4 A damaged file is never saved over
+*** 8.4 A damaged file is never saved over
 Catalist names the bad row and stops.
 
 Source: =src/storage/catalogue.cpp:127-152=
@@ -1155,7 +1264,8 @@ These were decided during development, then replaced when the course requirement
 - Commands such as =catalist + frieren= and =catalist ls=: replaced by the menus.
 - Refs such as =a:12=, options, comma-separated titles, piped output and script behavior: removed with the command line.
 - An external pager: replaced by numbered pages.
-- SQLite storage, automatic database backups and undo history that survived between runs: replaced by one CSV file and undo within a run.
+- SQLite storage and automatic database backups: replaced by one CSV file.
+- Undo, redo and the change history: removed because they made the program too complex.
 
 ** One-time English name fill
 Once, before the move to CSV, the real list was matched against AniList by MyAnimeList id. Of 680 titles, 671 gained an AniList id and 441 gained a different English name. Nine keep their romaji name only. That one-off script is not part of the program.
@@ -1171,20 +1281,18 @@ flowchart TD
     F --> G{Valid number?}
     G -- No --> F
     G -- Yes --> H{Which choice?}
-    H -- 1 --> I[Add a title]
-    H -- 2 --> J[View my lists]
-    H -- 3 --> K[Count next episode]
-    H -- 4 --> L[Edit a title]
-    H -- 5 --> M[Remove a title]
-    H -- 6 --> N[Statistics]
-    H -- 7 --> O[Undo and history]
-    H -- 8 --> P[Import or export]
+    H -- 1 --> I[Add Title]
+    H -- 2 --> J[View Lists]
+    H -- 3 --> K[Log Progress]
+    H -- 4 --> L[Edit Title]
+    H -- 5 --> M[Remove Title]
+    H -- 6 --> N[Stats]
+    H -- 7 --> P[Import / Export]
     H -- 0 --> Q[Goodbye and exit]
     I --> R[Save to catalist.csv]
     K --> R
     L --> R
     M --> R
-    O --> R
     P --> R
     R --> E
     J --> E
@@ -1199,7 +1307,7 @@ IF the file is damaged THEN show the error and stop
 DO
     SHOW totals, recent titles and the main menu
     READ choice
-    WHILE choice is not a number from 0 to 8
+    WHILE choice is not a number from 0 to 7
         SHOW an error and READ choice again
 
     SWITCH choice
@@ -1208,178 +1316,173 @@ DO
         CASE 3: choose a title in progress, count one more, save
         CASE 4: find a title, show the edit menu, apply the change, save
         CASE 5: find a title, confirm, remove, save
-        CASE 6: show statistics
-        CASE 7: undo, redo, or show recent changes
-        CASE 8: import or export a MyAnimeList XML file
+        CASE 6: show stats
+        CASE 7: import or export a MyAnimeList XML file
 WHILE choice is not 0
 
-SHOW "Goodbye."
+SHOW "Goodbye!"
 #+end_example
 
 * Screenshots of the Running Program
 TODO: capture these at a terminal with a Nerd Font, then caption them Figure 1, Figure 2 and so on.
 1. The main menu.
-2. Add a title: AniList results under ANIME and MANGA.
-3. View my lists, with a page of titles.
-4. Count the next episode or chapter.
-5. Edit a title: the details card and edit menu.
-6. Remove a title: the confirmation.
-7. Statistics.
-8. Undo and history.
-9. Import: the keep or file prompt.
-10. Exit.
+2. Add Title: AniList results under Anime and Manga.
+3. View Lists, with a page of titles.
+4. Log Progress.
+5. Edit Title: the details card and options.
+6. Remove Title: the confirmation.
+7. Stats.
+8. Import XML: the keep or file prompt.
+9. Exit.
 
 * Testing and Sample Runs
-The project has 118 automated tests, including a smoke test that runs the real program, and all of them pass at this commit. They use temporary data and a stand-in for AniList.
+The project has 117 automated tests, including a smoke test that runs the real program, and all of them pass at this commit. They use temporary data and a stand-in for AniList.
 
-These runs are real output from a small sample list. The Add run uses the same stand-in for AniList. =[main menu]= marks where the menu was drawn again.
+These runs are real output from a small sample list. The Add Title run uses the same stand-in for AniList. =[main menu]= marks where the menu was drawn again.
 
 ** The main menu and Exit
 #+begin_example
-CATALIST v0.3.0
+Catalist
 2 anime, 1 manga, 2 in progress
 
-CONTINUE
+Continue
 Berserk            manga  364/?
 Sousou no Frieren  anime  12/28
 
-MAIN MENU
+1. Add Title
+2. View Lists
+3. Log Progress
+4. Edit Title
+5. Remove Title
+6. Stats
+7. Import / Export
+0. Exit
 
-   1  Add a title
-   2  View my lists
-   3  Count the next episode or chapter
-   4  Edit a title
-   5  Remove a title
-   6  Statistics
-   7  Undo and history
-   8  Import or export
-   0  Exit
-
-Enter your choice [0-8]: 0
-Goodbye.
+Enter choice [0-7]: 0
+Goodbye!
 #+end_example
 
 ** A choice that is not on the menu
 #+begin_example
 [main menu]
-Enter your choice [0-8]: 9
-Enter a number from 0 to 8.
-Enter your choice [0-8]: abc
-Enter a number from 0 to 8.
-Enter your choice [0-8]: 0
-Goodbye.
+Enter choice [0-7]: 9
+Enter a number from 0 to 7.
+Enter choice [0-7]: abc
+Enter a number from 0 to 7.
+Enter choice [0-7]: 0
+Goodbye!
 #+end_example
 
 ** Create: adding a title from AniList
 #+begin_example
 [main menu]
-Enter your choice [0-8]: 1
-ADD A TITLE
+Enter choice [0-7]: 1
+Catalist / Add Title
 
-   1  Anime and manga
-   2  Anime only
-   3  Manga only
-   0  Back
+1. Both
+2. Anime Only
+3. Manga Only
+0. Back
 
-Enter your choice [0-3]: 1
-Title to find on AniList (Enter to go back): fullmetal
-ANIME
-   1  2009  Fullmetal Alchemist: Brotherhood  64 episodes  -
-   2  2003  Fullmetal Alchemist               51 episodes  -
+Enter choice [0-3]: 1
+Search AniList (Enter to go back): fullmetal
+Anime
+1.  2009  Fullmetal Alchemist: Brotherhood  64 episodes  -
+2.  2003  Fullmetal Alchemist               51 episodes  -
 
-   0  Back
+0. Back
 
-Enter your choice [0-2]: 2
+Enter choice [0-2]: 2
+Catalist / Add Title / Fullmetal Alchemist
 
-Add Fullmetal Alchemist as
+1. Plan to Watch
+2. Watching
+3. Completed
+4. On Hold
+5. Dropped
+0. Back
 
-   1  Planned
-   2  Watching or reading
-   3  Completed
-   4  On hold
-   5  Dropped
-   0  Back
-
-Enter your choice [0-5]: 1
-Fullmetal Alchemist added as planned.
+Enter choice [0-5]: 1
+Fullmetal Alchemist added as Plan to Watch.
 
 Press Enter to continue...
 [main menu]
-Enter your choice [0-8]: 0
-Goodbye.
+Enter choice [0-7]: 0
+Goodbye!
 #+end_example
 
 ** Read: viewing what is in progress
 #+begin_example
 [main menu]
-Enter your choice [0-8]: 2
-VIEW MY LISTS
+Enter choice [0-7]: 2
+Catalist / View Lists
 
-   1  In progress
-   2  All titles
-   3  Anime only
-   4  Manga only
-   5  By status
-   6  Find by name
-   7  Full details of a title
-   0  Back
+1. In Progress
+2. All Titles
+3. Anime
+4. Manga
+5. By Status
+6. Search Lists
+7. Title Details
+0. Back
 
-Enter your choice [0-7]: 1
-IN PROGRESS (2)
+Enter choice [0-7]: 1
+Catalist / View Lists / In Progress (2)
 
-ANIME
+Anime
 Sousou no Frieren  Watching  󰓎󰓎󰓎󰓎󰓎  12/28
 
-MANGA
+Manga
 Berserk            Reading   󰓎󰓎󰓎󰓎󰓐  364/?
 
 Press Enter to continue...
-VIEW MY LISTS
+Catalist / View Lists
 
-   1  In progress
-   2  All titles
-   3  Anime only
-   4  Manga only
-   5  By status
-   6  Find by name
-   7  Full details of a title
-   0  Back
+1. In Progress
+2. All Titles
+3. Anime
+4. Manga
+5. By Status
+6. Search Lists
+7. Title Details
+0. Back
 
-Enter your choice [0-7]: 0
+Enter choice [0-7]: 0
 [main menu]
-Enter your choice [0-8]: 0
-Goodbye.
+Enter choice [0-7]: 0
+Goodbye!
 #+end_example
 
-** Update: counting the next episode
+** Update: Log Progress
 #+begin_example
 [main menu]
-Enter your choice [0-8]: 3
-COUNT THE NEXT EPISODE OR CHAPTER
+Enter choice [0-7]: 3
+Catalist / Log Progress
 
-   1  Berserk            manga  364/?
-   2  Sousou no Frieren  anime  12/28
-   0  Back
+1.  Berserk            manga  364/?
+2.  Sousou no Frieren  anime  12/28
+0. Back
 
-Enter your choice [0-2]: 1
+Enter choice [0-2]: 1
 Berserk  progress 364 -> 365/?
 Berserk  started - -> 2026-11-24
 
 Press Enter to continue...
 [main menu]
-Enter your choice [0-8]: 0
-Goodbye.
+Enter choice [0-7]: 0
+Goodbye!
 #+end_example
 
 ** Update: a typo, then a new score
 #+begin_example
 [main menu]
-Enter your choice [0-8]: 4
-EDIT A TITLE
+Enter choice [0-7]: 4
+Catalist / Edit Title
 
-Part of the title (Enter to go back): freiren
+Enter title (Enter to go back): freiren
 Did you mean Sousou no Frieren? [y/N]: y
-Sousou no Frieren
+Catalist / Edit Title / Sousou no Frieren
+
   Type         Anime
   AniList      -
   MyAnimeList  52991
@@ -1391,26 +1494,25 @@ Sousou no Frieren
   Finished     -
   Updated      -
 
-EDIT
+ 1. +1 Progress
+ 2. -1 Progress
+ 3. Set Progress
+ 4. Set Score
+ 5. Set Status
+ 6. Set Total
+ 7. Set Volumes
+ 8. Set Start Date
+ 9. Set Finish Date
+10. Rename Title
+ 0. Back
 
-   1  Count one more
-   2  Count one less
-   3  Set progress
-   4  Set score
-   5  Change status
-   6  Set total
-   7  Set volumes (manga)
-   8  Set start date
-   9  Set finish date
-  10  Rename
-   0  Back
-
-Enter your choice [0-10]: 4
+Enter choice [0-10]: 4
 Score from 0 to 10 (Enter to go back): 9
 Sousou no Frieren  score 10 -> 9
 
 Press Enter to continue...
-Sousou no Frieren
+Catalist / Edit Title / Sousou no Frieren
+
   Type         Anime
   AniList      -
   MyAnimeList  52991
@@ -1422,34 +1524,33 @@ Sousou no Frieren
   Finished     -
   Updated      2026-11-24
 
-EDIT
+ 1. +1 Progress
+ 2. -1 Progress
+ 3. Set Progress
+ 4. Set Score
+ 5. Set Status
+ 6. Set Total
+ 7. Set Volumes
+ 8. Set Start Date
+ 9. Set Finish Date
+10. Rename Title
+ 0. Back
 
-   1  Count one more
-   2  Count one less
-   3  Set progress
-   4  Set score
-   5  Change status
-   6  Set total
-   7  Set volumes (manga)
-   8  Set start date
-   9  Set finish date
-  10  Rename
-   0  Back
-
-Enter your choice [0-10]: 0
+Enter choice [0-10]: 0
 [main menu]
-Enter your choice [0-8]: 0
-Goodbye.
+Enter choice [0-7]: 0
+Goodbye!
 #+end_example
 
 ** A status the title cannot take
 #+begin_example
 [main menu]
-Enter your choice [0-8]: 4
-EDIT A TITLE
+Enter choice [0-7]: 4
+Catalist / Edit Title
 
-Part of the title (Enter to go back): taxi
-Odd Taxi
+Enter title (Enter to go back): taxi
+Catalist / Edit Title / Odd Taxi
+
   Type         Anime
   AniList      -
   MyAnimeList  44265
@@ -1461,37 +1562,35 @@ Odd Taxi
   Finished     2026-01-05
   Updated      -
 
-EDIT
+ 1. +1 Progress
+ 2. -1 Progress
+ 3. Set Progress
+ 4. Set Score
+ 5. Set Status
+ 6. Set Total
+ 7. Set Volumes
+ 8. Set Start Date
+ 9. Set Finish Date
+10. Rename Title
+ 0. Back
 
-   1  Count one more
-   2  Count one less
-   3  Set progress
-   4  Set score
-   5  Change status
-   6  Set total
-   7  Set volumes (manga)
-   8  Set start date
-   9  Set finish date
-  10  Rename
-   0  Back
+Enter choice [0-10]: 5
+Catalist / Edit Title / Odd Taxi / Set Status
 
-Enter your choice [0-10]: 5
+1. Plan to Watch
+2. Watching
+3. Completed
+4. On Hold
+5. Dropped
+6. Rewatching
+0. Back
 
-New status
-
-   1  Planned
-   2  Watching or reading
-   3  Completed
-   4  On hold
-   5  Dropped
-   6  Rewatching or rereading
-   0  Back
-
-Enter your choice [0-6]: 2
+Enter choice [0-6]: 2
 Error: Odd Taxi is completed; choose Rewatching to start it again
 
 Press Enter to continue...
-Odd Taxi
+Catalist / Edit Title / Odd Taxi
+
   Type         Anime
   AniList      -
   MyAnimeList  44265
@@ -1503,74 +1602,51 @@ Odd Taxi
   Finished     2026-01-05
   Updated      -
 
-EDIT
+ 1. +1 Progress
+ 2. -1 Progress
+ 3. Set Progress
+ 4. Set Score
+ 5. Set Status
+ 6. Set Total
+ 7. Set Volumes
+ 8. Set Start Date
+ 9. Set Finish Date
+10. Rename Title
+ 0. Back
 
-   1  Count one more
-   2  Count one less
-   3  Set progress
-   4  Set score
-   5  Change status
-   6  Set total
-   7  Set volumes (manga)
-   8  Set start date
-   9  Set finish date
-  10  Rename
-   0  Back
-
-Enter your choice [0-10]: 0
+Enter choice [0-10]: 0
 [main menu]
-Enter your choice [0-8]: 0
-Goodbye.
+Enter choice [0-7]: 0
+Goodbye!
 #+end_example
 
-** Delete: removing a title, then undo
+** Delete: Remove Title
 #+begin_example
 [main menu]
-Enter your choice [0-8]: 5
-REMOVE A TITLE
+Enter choice [0-7]: 5
+Catalist / Remove Title
 
-Part of the title (Enter to go back): taxi
+Enter title (Enter to go back): taxi
 Remove Odd Taxi (anime) from your lists? [y/N]: y
 Odd Taxi (anime) removed.
 
 Press Enter to continue...
 [main menu]
-Enter your choice [0-8]: 7
-UNDO AND HISTORY
-
-   1  Undo the last change
-   2  Redo
-   3  Show recent changes
-   0  Back
-
-Enter your choice [0-3]: 1
-Undid 'Remove: Odd Taxi'.
-
-Press Enter to continue...
-UNDO AND HISTORY
-
-   1  Undo the last change
-   2  Redo
-   3  Show recent changes
-   0  Back
-
-Enter your choice [0-3]: 0
-[main menu]
-Enter your choice [0-8]: 0
-Goodbye.
+Enter choice [0-7]: 0
+Goodbye!
 #+end_example
 
-** Statistics
+** Stats
 #+begin_example
 [main menu]
-Enter your choice [0-8]: 6
-STATISTICS
+Enter choice [0-7]: 6
+Catalist / Stats
 
 Anime
   Titles         2
   Watching       1
   Completed      1
-  On-Hold        0
+  On Hold        0
   Dropped        0
   Plan to Watch  0
   Rewatching     0
@@ -1583,7 +1659,7 @@ Manga
   Titles         1
   Reading        1
   Completed      0
-  On-Hold        0
+  On Hold        0
   Dropped        0
   Plan to Read   0
   Rereading      0
@@ -1595,14 +1671,14 @@ Manga
 
 Press Enter to continue...
 [main menu]
-Enter your choice [0-8]: 0
-Goodbye.
+Enter choice [0-7]: 0
+Goodbye!
 #+end_example
 
 * Conclusion and Recommendations
 Catalist meets the CC 202 requirements as a menu-driven C++ console application with full CRUD, validated input and a clear Exit option. Its rules for status, dates and matching are covered by automated tests.
 
-Recommended next steps are refreshing episode totals for airing shows and keeping undo history between runs.
+A recommended next step is refreshing episode totals for airing shows.
 
 * References
 - AniList API documentation: https://docs.anilist.co

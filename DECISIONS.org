@@ -2,7 +2,7 @@
 #+OPTIONS: toc:2 num:nil
 #+STARTUP: overview
 
-Code blocks are copied from commit =15c08c2=. The =Source:= line above each block gives its file and lines.
+Code blocks are copied from commit =7d51471=. The =Source:= line above each block gives its file and lines.
 
 * Notes for building the PDF
 Follow the WVSU CICT documentation template and the CC 202 Final Project Requirements. Use the template's header on every page: West Visayas State University, College of Information and Communications Technology, La Paz, Iloilo City. The sections below are already in the template's order.
@@ -89,7 +89,7 @@ Each decision below is followed by the code that makes it happen.
 *** 1.1 A numbered main menu with Exit
 Running =catalist= opens a main menu. Each number opens a screen, and =0= exits. The loop is a =do-while= around a =switch=.
 
-Source: =src/menu/menu.cpp:38-75=
+Source: =src/menu/menu.cpp:24-61=
 #+begin_src cpp
 int RunMenu(App& app) {
 	int choice = 0;
@@ -181,31 +181,20 @@ if (argc > 1) {
 }
 #+end_src
 
-*** 1.5 The home screen shows what is in progress
-Above the menu are the list totals and the five titles changed last. With empty lists it says what to do first.
+*** 1.5 The home screen shows the totals
+Above the menu are the numbers of anime, manga and titles in progress. With empty lists it says what to do first.
 
-Source: =src/menu/menu.cpp:14-34=
+Source: =src/menu/menu.cpp:11-20=
 #+begin_src cpp
 void DrawHome(App& app) {
 	ClearScreen(app);
 	app.out << output::Paint("Catalist", output::kBold, app.color) << "\n";
 	size_t anime = app.db.GetEntries(MediaType::kAnime).size();
 	size_t manga = app.db.GetEntries(MediaType::kManga).size();
-	auto open = InProgress(app.db);
-	app.out << std::format("{} anime, {} manga, {} in progress\n\n", anime, manga, open.size());
+	app.out << std::format("{} anime, {} manga, {} in progress\n\n", anime, manga,
+	                       InProgress(app.db).size());
 	if (anime + manga == 0)
 		app.out << "Your lists are empty. Choose 1 to add a title, or 7 to import a list.\n\n";
-	if (open.empty())
-		return;
-	open.resize(std::min(open.size(), kHomeRows));
-	std::vector<std::vector<output::Styled>> rows;
-	for (const auto& each : open)
-		rows.push_back({{DisplayName(each)},
-		                {TypeKey(each.type)},
-		                {OutOf(each.progress, each.total_units)}});
-	app.out << output::Sections({{"", false, true}, {""}, {""}}, {{"Continue", rows}}, app.columns,
-	                            app.color)
-	        << "\n";
 }
 #+end_src
 
@@ -214,7 +203,7 @@ void DrawHome(App& app) {
 *** 2.1 Short Title Case names, and the word Title
 Menu options are two or three words in Title Case. One anime or manga is called a Title. The main menu is Add Title, View Lists, Log Progress, Edit Title, Remove Title, Stats, Import & Export and Exit.
 
-Source: =src/menu/menu.cpp:42-45=
+Source: =src/menu/menu.cpp:28-31=
 #+begin_src cpp
 DrawOptions(app,
             {"Add Title", "View Lists", "Log Progress", "Edit Title", "Remove Title", "Stats",
@@ -351,22 +340,17 @@ void Pause(App& app) {
 *** 2.13 Exit and Back
 The main menu leaves with Exit and says Goodbye! Every other menu leaves with Back.
 
-Source: =src/menu/menu.cpp:73=
+Source: =src/menu/menu.cpp:59=
 #+begin_src cpp
 app.out << "Goodbye!\n";
 #+end_src
 
 *** 2.14 Section labels
-Lists are grouped under Anime and Manga, and the main screen's recent titles under Continue.
+Lists are grouped under Anime and Manga.
 
 Source: =src/menu/view.cpp:18=
 #+begin_src cpp
 std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
-#+end_src
-
-Source: =src/menu/menu.cpp:31=
-#+begin_src cpp
-app.out << output::Sections({{"", false, true}, {""}, {""}}, {{"Continue", rows}}, app.columns,
 #+end_src
 
 ** 3. Finding a title
@@ -1266,6 +1250,7 @@ These were decided during development, then replaced when the course requirement
 - An external pager: replaced by numbered pages.
 - SQLite storage and automatic database backups: replaced by one CSV file.
 - Undo, redo and the change history: removed because they made the program too complex.
+- The Continue section on the main screen: removed to keep the screen simple.
 
 ** One-time English name fill
 Once, before the move to CSV, the real list was matched against AniList by MyAnimeList id. Of 680 titles, 671 gained an AniList id and 441 gained a different English name. Nine keep their romaji name only. That one-off script is not part of the program.
@@ -1344,10 +1329,6 @@ These runs are real output from a small sample list. The Add Title run uses the 
 #+begin_example
 Catalist
 2 anime, 1 manga, 2 in progress
-
-Continue
-Berserk            manga  364/?
-Sousou no Frieren  anime  12/28
 
 1. Add Title
 2. View Lists

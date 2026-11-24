@@ -217,10 +217,4 @@ int TerminalColumns() {
 	return window.ws_col;
 }
 
-std::filesystem::path ProgramDir() {
-	std::error_code ec;
-	auto program = std::filesystem::read_symlink("/proc/self/exe", ec);
-	return ec ? std::filesystem::current_path() : program.parent_path();
-}
-
 }  // namespace catalist

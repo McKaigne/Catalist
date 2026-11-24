@@ -2,8 +2,8 @@
 A menu-driven anime and manga tracker for the console, written in *C++23*.
 Run it, choose a number, and press =0= to exit.
 
-Your lists live in one file, =catalist.csv=, in the same folder as the
-program. Catalist goes online only to add a title, which it finds through the
+Your lists live in one file, =catalist.csv=, in the Catalist project
+folder. Catalist goes online only to add a title, which it finds through the
 public API of [[https://anilist.co][AniList]]; no account is needed. Lists
 move in and out as MyAnimeList XML, which AniList and MyAnimeList both read.
 
@@ -16,12 +16,12 @@ used at run time to reach AniList. doctest is needed for the tests
 #+begin_src sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
-./catalist
+./build/catalist
 ctest --test-dir build --output-on-failure
 #+end_src
 
-The build puts the program in the project folder, so =./catalist= and
-=catalist.csv= sit side by side. Both are ignored by git. On Nix, run
+The program is built in =build/=. It always uses =catalist.csv= in the project
+folder, wherever you run it from, and git ignores that file. On Nix, run
 =nix develop= first to get the compiler and tools.
 
 ** The menu

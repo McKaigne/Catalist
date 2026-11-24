@@ -1,5 +1,6 @@
 #include <clocale>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -14,7 +15,11 @@ int main(int argc, char*[]) {
 		return 2;
 	}
 
-	catalist::Catalogue db(catalist::ProgramDir() / "catalist.csv");
+	// The tests point this at a temporary file, away from the real list.
+	const char* test_file = std::getenv("CATALIST_CSV");
+	std::filesystem::path file =
+	    test_file ? test_file : std::filesystem::path(CATALIST_HOME) / "catalist.csv";
+	catalist::Catalogue db(file);
 	auto loaded = db.Load();
 	if (not loaded.has_value()) {
 		std::cerr << "Error: " << loaded.error() << "\n";

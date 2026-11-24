@@ -24,7 +24,6 @@ namespace catalist {
 
 [[nodiscard]] bool IsInteractive();
 [[nodiscard]] int TerminalColumns();
-[[nodiscard]] std::filesystem::path ProgramDir();
 
 }  // namespace catalist
 

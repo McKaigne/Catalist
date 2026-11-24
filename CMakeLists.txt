@@ -45,7 +45,7 @@ target_compile_options(catalistLib PRIVATE ${CATALIST_WARNING_FLAGS})
 add_executable(catalist src/main.cpp)
 target_link_libraries(catalist PRIVATE catalistLib)
 target_compile_options(catalist PRIVATE ${CATALIST_WARNING_FLAGS})
-set_target_properties(catalist PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_definitions(catalist PRIVATE CATALIST_HOME="${CMAKE_CURRENT_SOURCE_DIR}")
 
 install(TARGETS catalist DESTINATION ${CMAKE_INSTALL_BINDIR})
 

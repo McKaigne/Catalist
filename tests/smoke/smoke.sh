@@ -1,13 +1,15 @@
 #!/bin/sh
-# Runs the real program from a POSIX shell, in a temporary directory because
-# it keeps catalist.csv beside itself. A stub curl answers for AniList.
+# Runs the real program from a POSIX shell, on a temporary list. A stub curl
+# answers for AniList.
 #
-#   sh tests/smoke/smoke.sh ./catalist
+#   sh tests/smoke/smoke.sh build/catalist
 
 here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-cp "$1" "$work/catalist"
+program=$1
+CATALIST_CSV=$work/catalist.csv
+export CATALIST_CSV
 PATH="$here/stub:$PATH"
 export PATH
 failures=0
@@ -18,7 +20,7 @@ fail() {
 }
 
 menu() {
-	printf "$1" | "$work/catalist"
+	printf "$1" | "$program"
 }
 
 has() {
@@ -28,7 +30,7 @@ has() {
 	esac
 }
 
-"$work/catalist" ls >/dev/null 2>"$work/err"
+"$program" ls >/dev/null 2>"$work/err"
 [ "$?" -eq 2 ] || fail "an argument is refused"
 grep -q 'takes no arguments' "$work/err" || fail "an argument: no note"
 

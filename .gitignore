@@ -13,7 +13,6 @@ result
 .cache/
 
 # Local runtime data
-/catalist
 /catalist.csv
 /catalist.csv.tmp
 watchlist.tsv

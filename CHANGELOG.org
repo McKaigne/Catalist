@@ -6,7 +6,7 @@ and this project adheres to [[https://semver.org/][Semantic Versioning]].
 
 ** [Unreleased]
 Catalist is now a menu-driven console program: run it, choose a number, and
-press 0 to exit. Lists are kept in one =catalist.csv= beside the program,
+press 0 to exit. Lists are kept in one =catalist.csv= in the project folder,
 AniList finds new titles, and MyAnimeList XML moves lists. The full-screen
 terminal interface is a separate program, Catalist-TUI, kept as an archive.
 

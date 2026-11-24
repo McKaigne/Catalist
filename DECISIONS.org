@@ -2,7 +2,7 @@
 #+OPTIONS: toc:2 num:nil
 #+STARTUP: overview
 
-Code blocks are copied from commit =2e47f0f=. The =Source:= line above each block gives its file and lines.
+Code blocks are copied from commit =15c08c2=. The =Source:= line above each block gives its file and lines.
 
 * Notes for building the PDF
 Follow the WVSU CICT documentation template and the CC 202 Final Project Requirements. Use the template's header on every page: West Visayas State University, College of Information and Communications Technology, La Paz, Iloilo City. The sections below are already in the template's order.
@@ -97,7 +97,7 @@ int RunMenu(App& app) {
 		DrawHome(app);
 		DrawOptions(app,
 		            {"Add Title", "View Lists", "Log Progress", "Edit Title", "Remove Title", "Stats",
-		             "Import / Export"},
+		             "Import & Export"},
 		            "Exit");
 		choice = ReadChoice(app, 7);
 		switch (choice) {
@@ -212,13 +212,13 @@ void DrawHome(App& app) {
 ** 2. Menu names
 
 *** 2.1 Short Title Case names, and the word Title
-Menu options are two or three words in Title Case. One anime or manga is called a Title. The main menu is Add Title, View Lists, Log Progress, Edit Title, Remove Title, Stats, Import / Export and Exit.
+Menu options are two or three words in Title Case. One anime or manga is called a Title. The main menu is Add Title, View Lists, Log Progress, Edit Title, Remove Title, Stats, Import & Export and Exit.
 
 Source: =src/menu/menu.cpp:42-45=
 #+begin_src cpp
 DrawOptions(app,
             {"Add Title", "View Lists", "Log Progress", "Edit Title", "Remove Title", "Stats",
-             "Import / Export"},
+             "Import & Export"},
             "Exit");
 #+end_src
 
@@ -314,12 +314,12 @@ std::string StatusLabel(WatchStatus status, std::optional<MediaType> type) {
 }
 #+end_src
 
-*** 2.9 Import / Export options
+*** 2.9 Import & Export options
 Import XML, Export Anime and Export Manga.
 
 Source: =src/menu/transfer.cpp:162=
 #+begin_src cpp
-DrawMenu(app, "Catalist / Import / Export", {"Import XML", "Export Anime", "Export Manga"});
+DrawMenu(app, "Catalist / Import & Export", {"Import XML", "Export Anime", "Export Manga"});
 #+end_src
 
 *** 2.10 Page controls
@@ -1287,7 +1287,7 @@ flowchart TD
     H -- 4 --> L[Edit Title]
     H -- 5 --> M[Remove Title]
     H -- 6 --> N[Stats]
-    H -- 7 --> P[Import / Export]
+    H -- 7 --> P[Import & Export]
     H -- 0 --> Q[Goodbye and exit]
     I --> R[Save to catalist.csv]
     K --> R
@@ -1355,7 +1355,7 @@ Sousou no Frieren  anime  12/28
 4. Edit Title
 5. Remove Title
 6. Stats
-7. Import / Export
+7. Import & Export
 0. Exit
 
 Enter choice [0-7]: 0

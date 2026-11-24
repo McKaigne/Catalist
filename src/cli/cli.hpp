@@ -27,6 +27,9 @@ struct CliContext {
 	int rows = 0;
 	std::function<bool(const std::string&)> pager{};
 	std::string typed{};
+	// Names the undo step instead of `typed`, for a command the menu built.
+	std::string label{};
+	bool clear_screen = false;
 
 	[[nodiscard]] IsoDate Today() const { return IsoDate::FromLocalTm(clock()); }
 	[[nodiscard]] std::string Stamp() const { return StampOf(clock()); }

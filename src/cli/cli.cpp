@@ -69,8 +69,7 @@ void PrintHelp(CliContext& ctx) {
 	    "  catalist set frieren score=9\n"
 	    "  catalist undo\n"
 	    "\nRun 'catalist help COMMAND' for the options of a command. 'catalist' alone\n"
-	    "lists what you are watching or reading, the latest changed first. Your lists\n"
-	    "are kept in\n{}.\n",
+	    "opens the menu. Your lists are kept in\n{}.\n",
 	    ctx.db.data_dir().string());
 }
 
@@ -150,9 +149,10 @@ std::string UsageLine(const Command& shown) {
 }
 
 int RunCli(const std::vector<std::string>& args, CliContext& ctx) {
-	ctx.typed.clear();
+	ctx.typed = ctx.label;
 	for (const auto& word : args)
-		ctx.typed += (ctx.typed.empty() ? "" : " ") + word;
+		if (ctx.label.empty())
+			ctx.typed += (ctx.typed.empty() ? "" : " ") + word;
 	// -v is what many programs print their version with.
 	std::vector<args::Option> globals = GlobalOptions();
 	globals.push_back({'v', "", "", ""});
@@ -168,6 +168,8 @@ int RunCli(const std::vector<std::string>& args, CliContext& ctx) {
 		PrintHelp(ctx);
 		return 0;
 	}
+	if (before.operands.empty() and ctx.interactive)
+		return cli::RunMenu(ctx);
 	if (before.operands.empty())
 		return ctx.columns > 0 ? RunDefault(ctx) : CommandError(ctx, "no command given");
 

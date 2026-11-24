@@ -26,6 +26,7 @@ int main(int argc, char* argv[]) {
 	ctx.columns = catalist::TerminalColumns();
 	ctx.rows = catalist::TerminalRows();
 	ctx.pager = catalist::ShowInPager;
+	ctx.clear_screen = ctx.interactive and env("TERM") != "dumb";
 	ctx.color = ctx.columns > 0 and std::getenv("NO_COLOR") == nullptr and env("TERM") != "dumb";
 	int code = catalist::RunCli({argv + 1, argv + argc}, ctx);
 	// A reader that stopped early is no error; a full disk is.

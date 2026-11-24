@@ -31,6 +31,19 @@ std::optional<std::string> ReadFile(const std::filesystem::path& file) {
 	return std::string((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
 }
 
+bool WriteFile(const std::filesystem::path& file, const std::string& text) {
+	std::ofstream stream(file, std::ios::binary | std::ios::trunc);
+	stream << text;
+	stream.close();
+	return stream.good();
+}
+
+std::string ExpandHome(const std::string& path) {
+	const char* home = std::getenv("HOME");
+	bool tilde = path == "~" or path.starts_with("~/");
+	return tilde and home ? home + path.substr(1) : path;
+}
+
 namespace {
 
 class FileDescriptor {

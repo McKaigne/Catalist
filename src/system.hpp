@@ -12,6 +12,8 @@
 namespace catalist {
 
 [[nodiscard]] std::optional<std::string> ReadFile(const std::filesystem::path& file);
+[[nodiscard]] bool WriteFile(const std::filesystem::path& file, const std::string& text);
+[[nodiscard]] std::string ExpandHome(const std::string& path);
 
 [[nodiscard]] std::optional<std::string> RunProgram(const std::vector<std::string>& arguments,
                                                     const std::string& input = "");

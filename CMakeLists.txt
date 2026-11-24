@@ -43,6 +43,7 @@ add_library(catalistLib STATIC
   src/cli/common.cpp
   src/cli/history.cpp
   src/cli/listing.cpp
+  src/cli/menu.cpp
   src/cli/online.cpp
   src/cli/output.cpp
   src/cli/refs.cpp
@@ -88,6 +89,7 @@ add_executable(catalistTests
   tests/cli/cli_test.cpp
   tests/cli/history_test.cpp
   tests/cli/listing_test.cpp
+  tests/cli/menu_test.cpp
   tests/cli/online_test.cpp
   tests/cli/output_test.cpp
   tests/cli/refs_test.cpp

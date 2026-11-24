@@ -29,18 +29,7 @@ void SayNoMatch(CliContext& ctx, const std::string& ref, const Naming& how) {
 		ctx.err << "See what is there with: catalist ls\n";
 }
 
-void PrintChoices(CliContext& ctx, const std::vector<Entry>& titles) {
-	int width = 0;
-	for (const auto& each : titles)
-		width = std::max(width, utf8::Width(DisplayName(each)));
-	for (size_t i = 0; i < titles.size(); ++i)
-		ctx.err << std::format("  {:>2}  {}  {}  {}\n", i + 1,
-		                       utf8::Fit(DisplayName(titles[i]), width), TypeKey(titles[i].type),
-		                       OutOf(titles[i].progress, titles[i].total_units));
-}
-
 std::optional<std::vector<Entry>> PickTitle(CliContext& ctx, const Naming& how) {
-	constexpr size_t kMostOffered = 20;
 	std::vector<Entry> offered;
 	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
 		if (how.only and *how.only != type)
@@ -118,6 +107,16 @@ std::string ChangeText(const CliContext& ctx, const Entry& shown,
 }
 
 }  // namespace
+
+void PrintChoices(CliContext& ctx, const std::vector<Entry>& titles) {
+	int width = 0;
+	for (const auto& each : titles)
+		width = std::max(width, utf8::Width(DisplayName(each)));
+	for (size_t i = 0; i < titles.size(); ++i)
+		ctx.err << std::format("  {:>2}  {}  {}  {}\n", i + 1,
+		                       utf8::Fit(DisplayName(titles[i]), width), TypeKey(titles[i].type),
+		                       OutOf(titles[i].progress, titles[i].total_units));
+}
 
 int Fail(CliContext& ctx, const std::string& message) {
 	ctx.err << "error: " << message << "\n";

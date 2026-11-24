@@ -61,6 +61,8 @@ struct RefRequest {
                                     const std::vector<std::string>& words);
 
 [[nodiscard]] std::optional<size_t> AskWhich(CliContext& ctx, size_t count);
+void PrintChoices(CliContext& ctx, const std::vector<Entry>& titles);
+inline constexpr size_t kMostOffered = 20;
 
 [[nodiscard]] std::optional<std::vector<Entry>> Resolve(CliContext& ctx,
                                                         const std::vector<std::string>& given,
@@ -107,6 +109,7 @@ int PrintList(CliContext& ctx, const ListQuery& query);
 [[nodiscard]] std::vector<Command> OnlineCommands();
 [[nodiscard]] std::vector<Command> TransferCommands();
 [[nodiscard]] std::vector<Command> HistoryCommands();
+int RunMenu(CliContext& ctx);
 
 }  // namespace catalist::cli
 

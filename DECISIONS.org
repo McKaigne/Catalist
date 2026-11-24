@@ -2,7 +2,7 @@
 #+OPTIONS: toc:2 num:nil
 #+STARTUP: overview
 
-Code blocks are copied from commit =13d9ed6=. The =Source:= line above each block gives its file and lines.
+Code blocks are copied from commit =bb8b354=. The =Source:= line above each block gives its file and lines.
 
 * Notes for building the PDF
 Follow the WVSU CICT documentation template and the CC 202 Final Project Requirements. Use the template's header on every page: West Visayas State University, College of Information and Communications Technology, La Paz, Iloilo City. The sections below are already in the template's order.
@@ -27,7 +27,7 @@ The score stars are Nerd Font glyphs. They show as boxes in a PDF without that f
 | Input validation and errors | Met   | =ReadChoice=, =AskCount=, =AskScore=, =AskDate=       |
 | User-friendly menu          | Met   | Numbered main menu and submenus                       |
 | Exit option                 | Met   | =0= on the main menu                                  |
-| Clean, readable code        | Met   | Google naming, 116 passing tests                  |
+| Clean, readable code        | Met   | Google naming, 121 passing tests                  |
 
 * Title Page
 *APP NAME:* Catalist
@@ -89,7 +89,7 @@ Each decision below is followed by the code that makes it happen.
 *** 1.1 A numbered main menu with Exit
 Running =catalist= opens a main menu. Each number opens a screen, and =0= exits. The loop is a =do-while= around a =switch=.
 
-Source: =src/menu/menu.cpp:24-61=
+Source: =src/menu/menu.cpp:29-66=
 #+begin_src cpp
 int RunMenu(App& app) {
 	int choice = 0;
@@ -134,7 +134,7 @@ int RunMenu(App& app) {
 *** 1.2 Every menu is drawn the same way
 Each menu lists its numbered options and a =0= to go back or exit.
 
-Source: =src/menu/common.cpp:73-76=
+Source: =src/menu/common.cpp:70-73=
 #+begin_src cpp
 void DrawMenu(App& app, const std::string& heading, const std::vector<std::string>& items) {
 	DrawHeading(app, heading);
@@ -142,7 +142,7 @@ void DrawMenu(App& app, const std::string& heading, const std::vector<std::strin
 }
 #+end_src
 
-Source: =src/menu/common.cpp:66-71=
+Source: =src/menu/common.cpp:63-68=
 #+begin_src cpp
 void DrawOptions(App& app, const std::vector<std::string>& items, const std::string& leave) {
 	size_t width = std::to_string(items.size()).size();
@@ -173,7 +173,7 @@ int ReadChoice(App& app, int highest) {
 *** 1.4 The program takes no command-line arguments
 It is an interactive menu program, not a command-line tool.
 
-Source: =src/main.cpp:13-16=
+Source: =src/main.cpp:29-32=
 #+begin_src cpp
 if (argc > 1) {
 	std::cerr << "Catalist takes no arguments. Run it and use the menu.\n";
@@ -184,16 +184,20 @@ if (argc > 1) {
 *** 1.5 The home screen shows the totals
 Above the menu are the numbers of anime, manga and titles in progress. With empty lists it says what to do first.
 
-Source: =src/menu/menu.cpp:11-20=
+Source: =src/menu/menu.cpp:12-25=
 #+begin_src cpp
 void DrawHome(App& app) {
 	ClearScreen(app);
 	app.out << output::Paint("Catalist", output::kBold, app.color) << "\n";
-	size_t anime = app.db.GetEntries(MediaType::kAnime).size();
-	size_t manga = app.db.GetEntries(MediaType::kManga).size();
-	app.out << std::format("{} anime, {} manga, {} in progress\n\n", anime, manga,
-	                       InProgress(app.db).size());
-	if (anime + manga == 0)
+	const auto& anime = app.db.GetEntries(MediaType::kAnime);
+	const auto& manga = app.db.GetEntries(MediaType::kManga);
+	size_t open = 0;
+	for (const auto* list : {&anime, &manga})
+		open += CountByStatus(*list, WatchStatus::kWatching) +
+		        CountByStatus(*list, WatchStatus::kRewatching);
+	app.out << std::format("{} anime, {} manga, {} in progress\n\n", anime.size(), manga.size(),
+	                       open);
+	if (anime.empty() and manga.empty())
 		app.out << "Your lists are empty. Choose 1 to add a title, or 7 to import a list.\n\n";
 }
 #+end_src
@@ -203,7 +207,7 @@ void DrawHome(App& app) {
 *** 2.1 Short Title Case names, and the word Title
 Menu options are two or three words in Title Case. One anime or manga is called a Title. The main menu is Add Title, View Lists, Log Progress, Edit Title, Remove Title, Stats, Import & Export and Exit.
 
-Source: =src/menu/menu.cpp:28-31=
+Source: =src/menu/menu.cpp:33-36=
 #+begin_src cpp
 DrawOptions(app,
             {"Add Title", "View Lists", "Log Progress", "Edit Title", "Remove Title", "Stats",
@@ -214,7 +218,7 @@ DrawOptions(app,
 *** 2.2 Breadcrumb headings
 Each screen is headed by its path, separated by slashes, such as =Catalist / View Lists / By Status=. The main screen just says Catalist, and Edit Title includes the title's name.
 
-Source: =src/menu/view.cpp:15=
+Source: =src/menu/view.cpp:14=
 #+begin_src cpp
 const char* const kViewCrumb = "Catalist / View Lists";
 #+end_src
@@ -227,7 +231,7 @@ DrawHeading(app, std::format("Catalist / Edit Title / {}", DisplayName(*current)
 *** 2.3 Numbers are written as 1.
 Options read =1. Add Title=, with =0.= for Exit or Back.
 
-Source: =src/menu/common.cpp:66-71=
+Source: =src/menu/common.cpp:63-68=
 #+begin_src cpp
 void DrawOptions(App& app, const std::vector<std::string>& items, const std::string& leave) {
 	size_t width = std::to_string(items.size()).size();
@@ -261,7 +265,7 @@ auto name = AskText(app, "Search AniList (Enter to go back): ");
 *** 2.6 View Lists options
 In Progress, All Titles, Anime, Manga, By Status, Search Lists and Title Details.
 
-Source: =src/menu/view.cpp:166-168=
+Source: =src/menu/view.cpp:165-167=
 #+begin_src cpp
 DrawMenu(app, kViewCrumb,
          {"In Progress", "All Titles", "Anime", "Manga", "By Status", "Search Lists",
@@ -281,7 +285,7 @@ DrawOptions(app, {"+1 Progress", "-1 Progress", "Set Progress", "Set Score", "Se
 *** 2.8 Status names match the title's type
 Anime says Plan to Watch, Watching and Rewatching. Manga says Plan to Read, Reading and Rereading. By Status covers both, so it says Planned, Watching/Reading and Rewatching/Rereading.
 
-Source: =src/menu/common.cpp:96-113=
+Source: =src/menu/common.cpp:93-110=
 #+begin_src cpp
 std::string StatusLabel(WatchStatus status, std::optional<MediaType> type) {
 	bool manga = type == MediaType::kManga;
@@ -314,7 +318,7 @@ DrawMenu(app, "Catalist / Import & Export", {"Import XML", "Export Anime", "Expo
 *** 2.10 Page controls
 Long lists offer Next Page, Previous Page and Back.
 
-Source: =src/menu/view.cpp:51=
+Source: =src/menu/view.cpp:50=
 #+begin_src cpp
 DrawOptions(app, {"Next Page", "Previous Page"});
 #+end_src
@@ -322,7 +326,7 @@ DrawOptions(app, {"Next Page", "Previous Page"});
 *** 2.11 The title prompt
 Picking one of your titles asks =Enter title (Enter to go back):=.
 
-Source: =src/menu/common.cpp:170=
+Source: =src/menu/common.cpp:179=
 #+begin_src cpp
 auto text = AskText(app, "Enter title (Enter to go back): ");
 #+end_src
@@ -340,7 +344,7 @@ void Pause(App& app) {
 *** 2.13 Exit and Back
 The main menu leaves with Exit and says Goodbye! Every other menu leaves with Back.
 
-Source: =src/menu/menu.cpp:59=
+Source: =src/menu/menu.cpp:64=
 #+begin_src cpp
 app.out << "Goodbye!\n";
 #+end_src
@@ -348,7 +352,7 @@ app.out << "Goodbye!\n";
 *** 2.14 Section labels
 Lists are grouped under Anime and Manga.
 
-Source: =src/menu/view.cpp:18=
+Source: =src/menu/view.cpp:17=
 #+begin_src cpp
 std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
 #+end_src
@@ -424,37 +428,49 @@ std::vector<Entry> FindTitles(const Catalogue& db, const std::string& text) {
 #+end_src
 
 *** 3.3 Several matches become a numbered list
-You choose by number. At most 20 are shown, latest changed first, because the real list has 247 titles in progress.
+You choose by number, 20 a page, latest changed first. Next Page and Previous Page reach every title.
 
-Source: =src/menu/common.cpp:146-166=
+Source: =src/menu/common.cpp:143-175=
 #+begin_src cpp
 std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
-	constexpr size_t kMostOffered = 20;
 	SortEntries(titles, SortKey::kUpdated);
-	size_t more = titles.size() > kMostOffered ? titles.size() - kMostOffered : 0;
-	titles.resize(titles.size() - more);
-	std::vector<std::vector<output::Styled>> rows;
-	for (size_t i = 0; i < titles.size(); ++i)
-		rows.push_back({{std::format("{}.", i + 1)},
-		                {DisplayName(titles[i])},
-		                {TypeKey(titles[i].type)},
-		                {OutOf(titles[i].progress, titles[i].total_units)}});
-	app.out << output::Rows({{true}, {false, true}, {}, {}}, rows, app.columns,
-	                        app.color);
-	if (more > 0)
-		app.out << std::format("and {} more: type more of the name to reach them\n", more);
-	app.out << std::format("{:>{}}. Back\n\n", 0, std::to_string(titles.size()).size());
-	int choice = ReadChoice(app, static_cast<int>(titles.size()));
-	if (choice == 0)
-		return std::nullopt;
-	return titles[static_cast<size_t>(choice - 1)];
+	size_t pages = (titles.size() + kPageSize - 1) / kPageSize;
+	size_t page = 0;
+	while (true) {
+		size_t first = page * kPageSize;
+		size_t shown = std::min(kPageSize, titles.size() - first);
+		int highest = static_cast<int>(shown) + (pages > 1 ? 2 : 0);
+		size_t width = std::to_string(highest).size();
+		std::vector<std::vector<output::Styled>> rows;
+		for (size_t i = 0; i < shown; ++i) {
+			const Entry& e = titles[first + i];
+			rows.push_back({{std::format("{:>{}}.", i + 1, width)},
+			                {DisplayName(e)},
+			                {TypeKey(e.type)},
+			                {OutOf(e.progress, e.total_units)}});
+		}
+		app.out << output::Rows({{}, {.flexible = true}, {}, {}}, rows, app.columns, app.color);
+		if (pages > 1)
+			app.out << std::format("\nPage {} of {}\n{:>{}}. Next Page\n{:>{}}. Previous Page\n",
+			                       page + 1, pages, shown + 1, width, shown + 2, width);
+		app.out << std::format("{:>{}}. Back\n\n", 0, width);
+
+		int choice = ReadChoice(app, highest);
+		if (choice == 0)
+			return std::nullopt;
+		auto picked = static_cast<size_t>(choice);
+		if (picked <= shown)
+			return titles[first + picked - 1];
+		page = picked == shown + 1 ? std::min(page + 1, pages - 1) : (page > 0 ? page - 1 : 0);
+		app.out << "\n";
+	}
 }
 #+end_src
 
 *** 3.4 A typo gets a suggestion
 Catalist asks "Did you mean ...?" and changes nothing until you answer yes.
 
-Source: =src/menu/common.cpp:181-183=
+Source: =src/menu/common.cpp:190-192=
 #+begin_src cpp
 auto closest = ClosestTitle(app.db, *text);
 if (closest and AskYes(app, std::format("Did you mean {}?", DisplayName(*closest))))
@@ -491,7 +507,7 @@ const std::string& DisplayName(const Entry& shown) {
 }
 #+end_src
 
-Source: =src/menu/view.cpp:140-141=
+Source: =src/menu/view.cpp:139-140=
 #+begin_src cpp
 if (not e.english_title.empty())
 	row("Romaji", e.title);
@@ -500,7 +516,7 @@ if (not e.english_title.empty())
 *** 4.2 Anime and manga are separate sections
 Lists have an ANIME section and a MANGA section.
 
-Source: =src/menu/view.cpp:17-29=
+Source: =src/menu/view.cpp:16-28=
 #+begin_src cpp
 void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t last) {
 	std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
@@ -512,7 +528,7 @@ void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t 
 		     {output::Stars(e.score), output::kYellow},
 		     {OutOf(e.progress, e.total_units)}});
 	}
-	app.out << output::Sections({{false, true}, {}, {}, {}}, sections, app.columns,
+	app.out << output::Sections({{.flexible = true}, {}, {}, {}}, sections, app.columns,
 	                            app.color);
 }
 #+end_src
@@ -520,7 +536,7 @@ void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t 
 *** 4.3 Long lists are paged
 Lists show 20 titles a page, with numbered options for next, previous and back.
 
-Source: =src/menu/view.cpp:31-63=
+Source: =src/menu/view.cpp:30-62=
 #+begin_src cpp
 void ShowPages(App& app, const std::string& heading, std::vector<Entry> titles, SortKey key) {
 	if (titles.empty()) {
@@ -572,7 +588,7 @@ void StampChanged(std::vector<Entry>& list, const std::vector<Entry>& saved,
 }
 #+end_src
 
-Source: =src/core/lists.cpp:16-18=
+Source: =src/core/lists.cpp:18-20=
 #+begin_src cpp
 std::string LastChange(const Entry& e) {
 	return e.changed_at.empty() ? FormatDate(e.updated_at) : e.changed_at;
@@ -580,9 +596,9 @@ std::string LastChange(const Entry& e) {
 #+end_src
 
 *** 4.5 Full lists are in title order
-In-progress lists are latest first. The others are alphabetical.
+In-progress lists are latest first. The others are alphabetical, ignoring capitals and punctuation.
 
-Source: =src/menu/view.cpp:176-177=
+Source: =src/menu/view.cpp:175-176=
 #+begin_src cpp
 ShowPages(app, std::format("{} / All Titles", kViewCrumb),
           TitlesWhere(app.db, std::nullopt, std::nullopt), SortKey::kTitle);
@@ -600,7 +616,7 @@ if (columns[i].flexible and total > width)
 *** 4.7 Stats stay separate
 Anime and manga are counted apart, because episodes and chapters are different units.
 
-Source: =src/menu/view.cpp:208-215=
+Source: =src/menu/view.cpp:207-214=
 #+begin_src cpp
 void StatsScreen(App& app) {
 	ClearScreen(app);
@@ -615,7 +631,7 @@ void StatsScreen(App& app) {
 *** 4.8 Days spent stays an estimate
 24 minutes an episode and 5 minutes a chapter.
 
-Source: =src/core/lists.cpp:59-65=
+Source: =src/core/lists.cpp:63-69=
 #+begin_src cpp
 double DaysSpent(const std::vector<Entry>& list) {
 	constexpr double kMinutesPerDay = 1440.0;
@@ -1123,14 +1139,21 @@ void RemoveScreen(App& app) {
 ** 8. Storage
 
 *** 8.1 One CSV file in the Catalist folder
-Both lists are in =catalist.csv= in the project folder, wherever the program is run from. The program itself is built in =build/=. SQLite was removed.
+Both lists are in =catalist.csv= in the project folder, wherever the program is run from. The program itself is built in =build/=. A copy installed elsewhere uses the folder it is run from. SQLite was removed.
 
-Source: =src/main.cpp:19-22=
+Source: =src/main.cpp:13-23=
 #+begin_src cpp
-const char* test_file = std::getenv("CATALIST_CSV");
-std::filesystem::path file =
-    test_file ? test_file : std::filesystem::path(CATALIST_HOME) / "catalist.csv";
-catalist::Catalogue db(file);
+std::filesystem::path ListFile() {
+	// The tests point this at a temporary file, away from the real list.
+	if (const char* test_file = std::getenv("CATALIST_CSV"))
+		return test_file;
+	// An installed copy's build folder is gone: use the folder it is run from.
+	std::filesystem::path home = CATALIST_HOME;
+	std::error_code ignored;
+	if (not std::filesystem::is_directory(home, ignored))
+		home = std::filesystem::current_path();
+	return home / "catalist.csv";
+}
 #+end_src
 
 *** 8.2 The file format
@@ -1157,7 +1180,7 @@ std::string EncodeEntry(const Entry& e) {
 *** 8.3 A crash cannot leave half a file
 Each save writes a temporary file and renames it over the real one.
 
-Source: =src/system.cpp:32-46=
+Source: =src/system.cpp:33-47=
 #+begin_src cpp
 bool WriteFile(const std::filesystem::path& file, const std::string& text) {
 	// Written beside it and renamed, so a crash cannot leave half a file.
@@ -1321,7 +1344,7 @@ TODO: capture these at a terminal with a Nerd Font, then caption them Figure 1, 
 9. Exit.
 
 * Testing and Sample Runs
-The project has 116 automated tests, including a smoke test that runs the real program, and all of them pass at this commit. They use temporary data and a stand-in for AniList.
+The project has 121 automated tests, including a smoke test that runs the real program, and all of them pass at this commit. They use temporary data and a stand-in for AniList.
 
 These runs are real output from a small sample list. The Add Title run uses the same stand-in for AniList. =[main menu]= marks where the menu was drawn again.
 

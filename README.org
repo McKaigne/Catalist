@@ -35,7 +35,7 @@ Catalist
 4. Edit Title
 5. Remove Title
 6. Stats
-7. Import / Export
+7. Import & Export
 0. Exit
 
 Enter choice [0-7]:
@@ -49,7 +49,7 @@ Enter choice [0-7]:
 - *Edit Title:* progress, score, status, total, volumes, dates and name.
 - *Remove Title:* asks first.
 - *Stats:* counts, mean score and an estimate of days spent.
-- *Import / Export:* MyAnimeList XML. Unpack =.xml.gz= files with =gunzip=
+- *Import & Export:* MyAnimeList XML. Unpack =.xml.gz= files with =gunzip=
   first. Where an import differs from your lists, you choose title by title.
 
 To find a title, type any part of its English or romaji name. The words can be

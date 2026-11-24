@@ -159,7 +159,7 @@ void TransferScreen(App& app) {
 	int choice = 0;
 	do {
 		ClearScreen(app);
-		DrawMenu(app, "Catalist / Import / Export", {"Import XML", "Export Anime", "Export Manga"});
+		DrawMenu(app, "Catalist / Import & Export", {"Import XML", "Export Anime", "Export Manga"});
 		choice = ReadChoice(app, 3);
 		switch (choice) {
 			case 1:

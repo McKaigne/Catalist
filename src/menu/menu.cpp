@@ -41,7 +41,7 @@ int RunMenu(App& app) {
 		DrawHome(app);
 		DrawOptions(app,
 		            {"Add Title", "View Lists", "Log Progress", "Edit Title", "Remove Title", "Stats",
-		             "Import / Export"},
+		             "Import & Export"},
 		            "Exit");
 		choice = ReadChoice(app, 7);
 		switch (choice) {

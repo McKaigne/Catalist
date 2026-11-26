@@ -3,6 +3,7 @@
 
 #include <doctest/doctest.h>
 
+#include <cstdint>
 #include <filesystem>
 #include <format>
 #include <sstream>
@@ -28,6 +29,35 @@ inline const char* const kAnimeXml =
     "<my_status>Watching</my_status></anime>"
     "</myanimelist>";
 
+inline std::string Plain(const std::string& text) {
+	std::string plain;
+	for (size_t i = 0; i < text.size();) {
+		auto byte = static_cast<unsigned char>(text[i]);
+		if (byte < 0xEE or (byte > 0xEF and byte != 0xF3)) {
+			plain += text[i++];
+			continue;
+		}
+		size_t length = byte == 0xF3 ? 4 : 3;
+		std::uint32_t point = byte & (byte == 0xF3 ? 0x07 : 0x0F);
+		for (size_t k = 1; k < length; ++k)
+			point = (point << 6) | (static_cast<unsigned char>(text[i + k]) & 0x3F);
+		i += length;
+		bool icon = (point >= 0xE000 and point <= 0xF8FF) or point >= 0xF0000;
+		if (not icon) {
+			plain += text.substr(i - length, length);
+		} else if (point >= 0xF0C9E and point <= 0xF0CB0 and (point - 0xF0C9E) % 2 == 0) {
+			plain += static_cast<char>('0' + (point - 0xF0C9E) / 2);
+		} else if (point >= 0xF0BEC and point <= 0xF0C5F and (point - 0xF0BEC) % 3 == 0) {
+			plain += static_cast<char>('a' + (point - 0xF0BEC) / 3);
+		} else if (point == 0xF0CDF) {
+			plain += "->";
+		} else if (i < text.size() and text[i] == ' ') {
+			++i;
+		}
+	}
+	return plain;
+}
+
 struct MenuFixture : catalist::test::TempDirFixture {
 	MenuFixture() : previous_dir(std::filesystem::current_path()) {
 		std::filesystem::current_path(TempDir());
@@ -40,8 +70,10 @@ struct MenuFixture : catalist::test::TempDirFixture {
 		std::istringstream in_stream(typed);
 		std::ostringstream out_stream;
 		catalist::App app{db, in_stream, out_stream, TestClock, web.Link()};
+		app.columns = columns;
 		int exit_code = catalist::RunMenu(app);
-		out = out_stream.str();
+		raw = out_stream.str();
+		out = Plain(raw);
 		return exit_code;
 	}
 
@@ -106,7 +138,12 @@ struct MenuFixture : catalist::test::TempDirFixture {
 
 	catalist::test::FakeWeb web;
 	std::filesystem::path previous_dir;
+	// What the menu printed, then the same with every numeric or alpha circle
+	// read as its digit or letter, the arrow as "->", and every other icon
+	// dropped with the space after it.
+	std::string raw;
 	std::string out;
+	int columns = 80;
 };
 
 inline bool Has(const std::string& text, const std::string& part) {

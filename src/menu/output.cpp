@@ -1,7 +1,9 @@
 #include "menu/output.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <format>
 
 #include "core/text.hpp"
@@ -9,6 +11,13 @@
 namespace catalist::output {
 
 namespace {
+
+// The circles sit in their own runs: digit n is 0xF0C9E + 2n, letter c is
+// 0xF0BEC + 3(c - 'a').
+std::string Glyph(std::uint32_t point) {
+	return {static_cast<char>(0xF0 | (point >> 18)), static_cast<char>(0x80 | ((point >> 12) & 0x3F)),
+	        static_cast<char>(0x80 | ((point >> 6) & 0x3F)), static_cast<char>(0x80 | (point & 0x3F))};
+}
 
 constexpr int kGap = 2;
 constexpr int kNarrowest = 10;
@@ -70,6 +79,44 @@ std::string Stars(double out_of_ten) {
 		row += left >= 2 ? "\U000F04CE" : left == 1 ? "\U000F04D0" : "\U000F04D2";
 	}
 	return row;
+}
+
+std::string NumberHint(int number, int digits) {
+	std::string text = std::to_string(std::max(number, 0));
+	std::string hint(static_cast<size_t>(std::max(0, digits - static_cast<int>(text.size()))), ' ');
+	for (char digit : text)
+		hint += Glyph(0xF0C9E + 2 * static_cast<std::uint32_t>(digit - '0'));
+	return hint;
+}
+
+std::string LetterHint(char letter) {
+	char lower = static_cast<char>(std::tolower(static_cast<unsigned char>(letter)));
+	if (lower < 'a' or lower > 'z')
+		return std::string(1, letter);
+	return Glyph(0xF0BEC + 3 * static_cast<std::uint32_t>(lower - 'a'));
+}
+
+std::string Bar(int done, int total, int width, bool color) {
+	if (total <= 0 or width <= 0)
+		return "";
+	int filled = static_cast<int>(std::lround(width * std::clamp(done, 0, total) /
+	                                          static_cast<double>(total)));
+	std::string full;
+	std::string empty;
+	for (int i = 0; i < width; ++i) {
+		if (i < filled)
+			full += "\u2588";
+		else
+			empty += "\u2591";
+	}
+	return Paint(full, kGreen, color) + Paint(empty, kGray, color);
+}
+
+std::string Rule(int width, bool color) {
+	std::string line;
+	for (int i = 0; i < width; ++i)
+		line += "\u2500";
+	return Paint(line, kGray, color);
 }
 
 std::string Paint(const std::string& value, const char* sgr, bool color) {

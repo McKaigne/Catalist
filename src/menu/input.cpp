@@ -5,6 +5,7 @@
 #include <format>
 
 #include "core/text.hpp"
+#include "menu/output.hpp"
 
 namespace catalist {
 
@@ -35,7 +36,11 @@ std::optional<std::string> AskText(App& app, const std::string& prompt) {
 }
 
 bool AskYes(App& app, const std::string& question) {
-	auto answer = ReadLine(app, std::format("{} [y/N]: ", question));
+	auto answer = ReadLine(app, std::format("{} {} Yes  {} No: ", question,
+	                                        output::Paint(output::LetterHint('y'), output::kCyan,
+	                                                      app.color),
+	                                        output::Paint(output::LetterHint('n'), output::kCyan,
+	                                                      app.color)));
 	if (not answer)
 		return false;
 	std::string word = utf8::Lowercase(*answer);
@@ -51,18 +56,23 @@ std::optional<int> ParseNumber(const std::string& text) {
 
 int ReadChoice(App& app, int highest) {
 	while (true) {
-		auto answer = ReadLine(app, std::format("Enter choice [0-{}]: ", highest));
+		auto answer = ReadLine(
+		    app, std::format("{} Enter choice [{}-{}]: ",
+		                     output::Paint(output::icon::kPrompt, output::kMagenta, app.color),
+		                     output::NumberHint(0), output::NumberHint(highest)));
 		if (not answer)
 			return 0;
 		auto number = ParseNumber(*answer);
 		if (number and *number <= highest)
 			return *number;
-		app.out << std::format("Enter a number from 0 to {}.\n", highest);
+		app.out << std::format("{} Enter a number from 0 to {}.\n",
+		                       output::Paint(output::icon::kError, output::kYellow, app.color),
+		                       highest);
 	}
 }
 
 void Pause(App& app) {
-	(void)ReadLine(app, "\nPress Enter to continue...");
+	(void)ReadLine(app, output::Paint("\nPress Enter to continue...", output::kGray, app.color));
 }
 
 }  // namespace catalist

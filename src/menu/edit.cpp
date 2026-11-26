@@ -1,17 +1,23 @@
 #include <format>
+#include <iterator>
 
 #include "menu/common.hpp"
 #include "menu/input.hpp"
+#include "menu/output.hpp"
 
 namespace catalist {
 
 namespace {
 
+std::string RewatchValueName(MediaType type) {
+	return type == MediaType::kAnime ? "Set Rewatch Value" : "Set Reread Value";
+}
+
 void CountBy(App& app, const Entry& title, int delta) {
 	auto current = app.db.GetById(title.type, title.id);
 	if (current and delta > 0 and AtTotal(*current)) {
-		app.out << std::format("{} is at its total, {} {}. If there are more, use Set Total.\n",
-		                       DisplayName(*current), current->total_units,
+		app.out << std::format("{} {} is at its total, {} {}. If there are more, use Set Total.\n",
+		                       output::icon::kInfo, DisplayName(*current), current->total_units,
 		                       UnitName(current->type, current->total_units));
 		return;
 	}
@@ -25,7 +31,7 @@ void AskCount(App& app, const Entry& title, const std::string& prompt, CountFiel
 		return;
 	auto number = ParseNumber(*text);
 	if (not number) {
-		app.out << "Enter a whole number.\n";
+		Warn(app, "Enter a whole number.");
 		return;
 	}
 	IsoDate today = app.Today();
@@ -38,7 +44,7 @@ void AskScore(App& app, const Entry& title) {
 		return;
 	auto number = ParseNumber(*text);
 	if (not number or *number > 10) {
-		app.out << "Enter a number from 0 to 10.\n";
+		Warn(app, "Enter a number from 0 to 10.");
 		return;
 	}
 	IsoDate today = app.Today();
@@ -63,6 +69,27 @@ void AskNewStatus(App& app, const Entry& title) {
 	ChangeTitle(app, title, [&](const Entry& e) { return SetStatus(e, *status, today); });
 }
 
+void AskRewatchValue(App& app, const Entry& title) {
+	constexpr RewatchValue kValues[] = {RewatchValue::kVeryLow, RewatchValue::kLow,
+	                                    RewatchValue::kMedium, RewatchValue::kHigh,
+	                                    RewatchValue::kVeryHigh, RewatchValue::kNone};
+	ClearScreen(app);
+	std::vector<Option> labels;
+	for (RewatchValue value : kValues)
+		labels.push_back({output::icon::kRewatch,
+		                  value == RewatchValue::kNone ? "None" : RewatchValueLabel(value)});
+	DrawMenu(app, std::format("Catalist / Edit Title / {} / {}", DisplayName(title),
+	                          RewatchValueName(title.type)),
+	         labels);
+	int choice = ReadChoice(app, static_cast<int>(std::size(kValues)));
+	if (choice == 0)
+		return;
+	IsoDate today = app.Today();
+	ChangeTitle(app, title, [&](const Entry& e) {
+		return SetRewatchValue(e, kValues[choice - 1], today);
+	});
+}
+
 void AskDate(App& app, const Entry& title, bool start) {
 	auto text = AskText(app, "Date as YYYY-MM-DD, today, or none (Enter to go back): ");
 	if (not text)
@@ -74,7 +101,7 @@ void AskDate(App& app, const Entry& title, bool start) {
 	else if (*text != "none")
 		day = IsoDate::Parse(*text);
 	if (*text != "none" and not day) {
-		app.out << "Enter a real date such as 2026-10-20.\n";
+		Warn(app, "Enter a real date such as 2026-10-20.");
 		return;
 	}
 	ChangeTitle(app, title, [&](const Entry& e) {
@@ -97,7 +124,7 @@ void LogProgressScreen(App& app) {
 	DrawHeading(app, "Catalist / Log Progress");
 	auto open = InProgress(app.db);
 	if (open.empty()) {
-		app.out << "Nothing is in progress.\n";
+		app.out << std::format("{} Nothing is in progress.\n", output::icon::kInfo);
 		Pause(app);
 		return;
 	}
@@ -123,10 +150,19 @@ void EditScreen(App& app) {
 		DrawHeading(app, std::format("Catalist / Edit Title / {}", DisplayName(*current)));
 		PrintCard(app, *current);
 		app.out << "\n";
-		DrawOptions(app, {"+1 Progress", "-1 Progress", "Set Progress", "Set Score", "Set Status",
-		                  "Set Total", "Set Volumes", "Set Start Date", "Set Finish Date",
-		                  "Rename Title"});
-		choice = ReadChoice(app, 10);
+		namespace icon = output::icon;
+		DrawOptions(app, {{icon::kPlus, "+1 Progress"},
+		                  {icon::kMinus, "-1 Progress"},
+		                  {icon::kProgress, "Set Progress"},
+		                  {icon::kScore, "Set Score"},
+		                  {icon::kStatus, "Set Status"},
+		                  {icon::kTotal, "Set Total"},
+		                  {icon::kManga, "Set Volumes"},
+		                  {icon::kStart, "Set Start Date"},
+		                  {icon::kFinish, "Set Finish Date"},
+		                  {icon::kRename, "Rename Title"},
+		                  {icon::kRewatch, RewatchValueName(current->type)}});
+		choice = ReadChoice(app, 11);
 		switch (choice) {
 			case 1:
 				CountBy(app, *current, 1);
@@ -150,7 +186,7 @@ void EditScreen(App& app) {
 				if (current->type == MediaType::kManga)
 					AskCount(app, *current, "Volumes read", CountField::kVolumes);
 				else
-					app.out << "Only manga have volumes.\n";
+					app.out << std::format("{} Only manga have volumes.\n", output::icon::kInfo);
 				break;
 			case 8:
 				AskDate(app, *current, true);
@@ -160,6 +196,9 @@ void EditScreen(App& app) {
 				break;
 			case 10:
 				AskName(app, *current);
+				break;
+			case 11:
+				AskRewatchValue(app, *current);
 				break;
 			default:
 				break;
@@ -177,13 +216,13 @@ void RemoveScreen(App& app) {
 		return;
 	std::string name = std::format("{} ({})", DisplayName(*title), TypeKey(title->type));
 	if (not AskYes(app, std::format("Remove {} from your lists?", name))) {
-		app.out << "Cancelled.\n";
+		app.out << std::format("{} Cancelled.\n", output::icon::kInfo);
 		Pause(app);
 		return;
 	}
 	app.db.RemoveEntry(title->type, title->id);
 	if (app.db.Save(app.Stamp()))
-		app.out << std::format("{} removed.\n", name);
+		Done(app, std::format("{} removed.", name));
 	else
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 	Pause(app);

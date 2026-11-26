@@ -13,12 +13,12 @@ using catalist::test::MenuFixture;
 TEST_CASE_FIXTURE(MenuFixture, "menu shows the main menu and exits with 0") {
 	Seed();
 	CHECK(Run("0\n") == 0);
-	CHECK(out.starts_with("Catalist\n"));
-	CHECK(Has(out, "1. Add Title\n2. View Lists\n3. Log Progress\n4. Edit Title\n"
-	               "5. Remove Title\n6. Stats\n7. Import & Export\n0. Exit\n"));
+	CHECK(out.starts_with("    ___       ___"));
+	CHECK(Has(out, "  1  Add Title\n  2  View Lists\n  3  Log Progress\n  4  Edit Title\n"
+	               "  5  Remove Title\n  6  Stats\n  7  Import & Export\n  0  Exit\n"));
 	CHECK_FALSE(Has(out, "Continue"));
 	CHECK(Has(out, "Enter choice [0-7]: "));
-	CHECK(Has(out, "2 anime, 2 manga, 2 in progress"));
+	CHECK(Has(out, "2 anime    2 manga    2 in progress"));
 	CHECK(Has(out, "Goodbye!\n"));
 }
 
@@ -59,7 +59,7 @@ TEST_CASE_FIXTURE(MenuFixture, "menu shows the lists in sections") {
 	CHECK(Run("2\n6\ntaxi odd\n\n0\n0\n") == 0);
 	CHECK(Has(out, "Catalist / View Lists / Search Lists / taxi odd (1)"));
 	CHECK(Run("2\n7\ntaxi\n\n0\n0\n") == 0);
-	CHECK(Has(out, "MyAnimeList  44265"));
+	CHECK(Has(out, "MyAnimeList   44265"));
 }
 
 TEST_CASE_FIXTURE(MenuFixture, "menu pages a long list") {
@@ -92,7 +92,7 @@ TEST_CASE_FIXTURE(MenuFixture, "menu shows the English name, and romaji only on 
 	CHECK(Has(out, "Frieren: Beyond Journey's End"));
 	CHECK_FALSE(Has(out, "Sousou"));
 	CHECK(Run("2\n7\nbeyond\n\n0\n0\n") == 0);
-	CHECK(Has(out, "  Romaji       Sousou no Frieren\n"));
+	CHECK(Has(out, "  Romaji        Sousou no Frieren\n"));
 }
 
 TEST_CASE_FIXTURE(MenuFixture, "menu adds a title with the status chosen") {
@@ -208,7 +208,7 @@ TEST_CASE_FIXTURE(MenuFixture, "menu shows the numbers of the lists") {
 	Seed();
 	CHECK(Run("6\n\n0\n") == 0);
 	CHECK(Has(out, "Catalist / Stats"));
-	CHECK(Has(out, "Titles         2\n"));
+	CHECK(Has(out, "  Titles                2\n"));
 	CHECK(Has(out, "Days spent"));
 }
 
@@ -252,7 +252,7 @@ TEST_CASE_FIXTURE(MenuFixture, "menu import asks title by title where the file d
 	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").score == 4);
 
 	CHECK(Run("7\n1\nanime.xml\nx\nk\nf\n\n0\n0\n") == 0);
-	CHECK(Has(out, "Sousou no Frieren (anime)\n  score     yours 4   file 10\n\n[k]eep"));
+	CHECK(Has(out, "Sousou no Frieren (anime)\n  score     yours 4   file 10\n\nk Keep  f File  r Keep Rest  t File Rest  q Quit: "));
 	CHECK(Has(out, "Odd Taxi (anime)\n  score     yours 3      file 8\n"
 	               "  progress  yours 9/13   file 5/13\n"));
 	CHECK(SavedTitle(MediaType::kAnime, "Sousou no Frieren").score == 4);
@@ -266,23 +266,51 @@ TEST_CASE_FIXTURE(MenuFixture, "menu names statuses for the title's type") {
 	Seed();
 	CHECK(Run("4\ntaxi\n5\n0\n\n0\n0\n") == 0);
 	CHECK(Has(out, "Catalist / Edit Title / Odd Taxi / Set Status"));
-	CHECK(Has(out, "1. Plan to Watch\n2. Watching\n3. Completed\n4. On Hold\n5. Dropped\n"
-	               "6. Rewatching\n0. Back\n"));
+	CHECK(Has(out, "  1  Plan to Watch\n  2  Watching\n  3  Completed\n  4  On Hold\n"
+	               "  5  Dropped\n  6  Rewatching\n  0  Back\n"));
 	CHECK(Run("4\nberserk\n5\n0\n\n0\n0\n") == 0);
-	CHECK(Has(out, "1. Plan to Read\n2. Reading\n3. Completed\n4. On Hold\n5. Dropped\n"
-	               "6. Rereading\n0. Back\n"));
+	CHECK(Has(out, "  1  Plan to Read\n  2  Reading\n  3  Completed\n  4  On Hold\n"
+	               "  5  Dropped\n  6  Rereading\n  0  Back\n"));
 	CHECK(Run("2\n5\n0\n0\n0\n") == 0);
-	CHECK(Has(out, "1. Planned\n2. Watching/Reading\n3. Completed\n4. On Hold\n5. Dropped\n"
-	               "6. Rewatching/Rereading\n0. Back\n"));
+	CHECK(Has(out, "  1  Planned\n  2  Watching/Reading\n  3  Completed\n  4  On Hold\n"
+	               "  5  Dropped\n  6  Rewatching/Rereading\n  0  Back\n"));
 }
 
-TEST_CASE_FIXTURE(MenuFixture, "menu puts the title in the edit breadcrumb and numbers ten options") {
+TEST_CASE_FIXTURE(MenuFixture, "menu puts the title in the edit breadcrumb and numbers eleven options") {
 	Seed();
 	CHECK(Run("4\ntaxi\n0\n0\n") == 0);
 	CHECK(Has(out, "Catalist / Edit Title / Odd Taxi\n"));
-	CHECK(Has(out, " 1. +1 Progress\n 2. -1 Progress\n 3. Set Progress\n 4. Set Score\n"
-	               " 5. Set Status\n 6. Set Total\n 7. Set Volumes\n 8. Set Start Date\n"
-	               " 9. Set Finish Date\n10. Rename Title\n 0. Back\n"));
+	CHECK(Has(out, "   1  +1 Progress\n   2  -1 Progress\n   3  Set Progress\n"
+	               "   4  Set Score\n   5  Set Status\n   6  Set Total\n   7  Set Volumes\n"
+	               "   8  Set Start Date\n   9  Set Finish Date\n  10  Rename Title\n"
+	               "  11  Set Rewatch Value\n   0  Back\n"));
+	CHECK(Run("4\nberserk\n0\n0\n") == 0);
+	CHECK(Has(out, "  11  Set Reread Value\n"));
+}
+
+TEST_CASE_FIXTURE(MenuFixture, "menu sets the rewatch value and shows it on the card") {
+	Seed();
+	CHECK(Run("4\ntaxi\n11\n4\n\n0\n0\n") == 0);
+	CHECK(Has(out, "Catalist / Edit Title / Odd Taxi / Set Rewatch Value"));
+	CHECK(Has(out, "  1  Very Low\n  2  Low\n  3  Medium\n  4  High\n  5  Very High\n"
+	               "  6  None\n  0  Back\n"));
+	CHECK(Has(out, "Odd Taxi  rewatch value - -> High\n"));
+	CHECK(Has(out, "  Rewatch value High\n"));
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").rewatch_value == catalist::RewatchValue::kHigh);
+	CHECK(Run("4\ntaxi\n11\n6\n\n0\n0\n") == 0);
+	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").rewatch_value == catalist::RewatchValue::kNone);
+}
+
+TEST_CASE_FIXTURE(MenuFixture, "menu draws hints as circles and the home logo when it fits") {
+	Seed();
+	CHECK(Run("0\n") == 0);
+	CHECK(Has(raw, "\U000F0CA0  \U000F0417 Add Title\n"));
+	CHECK(Has(raw, "\U000F0C9E  \U000F0206 Exit\n"));
+	CHECK_FALSE(Has(out, R"(/::\~\:\)"));
+	columns = 120;
+	CHECK(Run("0\n") == 0);
+	CHECK(Has(out, R"(/::\~\:\)"));
+	CHECK(out.find(R"(/::\~\:\)") < out.find("Add Title"));
 }
 
 TEST_CASE_FIXTURE(MenuFixture, "menu log progress can reach every title by page") {
@@ -296,8 +324,8 @@ TEST_CASE_FIXTURE(MenuFixture, "menu log progress can reach every title by page"
 		REQUIRE(db.Save("2026-11-24 10:00:00"));
 	}
 	CHECK(Run("3\n21\n5\n\n0\n") == 0);
-	CHECK(Has(out, "Page 1 of 2\n21. Next Page\n22. Previous Page\n 0. Back\n"));
-	CHECK(Has(out, "Page 2 of 2\n6. Next Page\n7. Previous Page\n0. Back\n"));
+	CHECK(Has(out, "  Page 1 of 2\n  21  Next Page\n  22  Previous Page\n   0  Back\n"));
+	CHECK(Has(out, "  Page 2 of 2\n  6  Next Page\n  7  Previous Page\n  0  Back\n"));
 	CHECK(SavedTitle(MediaType::kAnime, "Show 25").progress == 1);
 	CHECK(Run("3\n21\n7\n1\n\n0\n") == 0);
 	CHECK(SavedTitle(MediaType::kAnime, "Show 25").progress == 1);

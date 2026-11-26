@@ -137,7 +137,8 @@ Result<bool> Catalogue::Load() {
 		return std::unexpected(std::format("cannot read {}", file_.string()));
 
 	auto records = csv_codec::SplitRecords(*text);
-	if (records.empty() or records[0] != csv_codec::kHeader)
+	if (records.empty() or
+	    (records[0] != csv_codec::kHeader and records[0] != csv_codec::kOldHeader))
 		return std::unexpected(std::format("{} is not a Catalist list", file_.string()));
 	for (size_t i = 1; i < records.size(); ++i) {
 		auto row = csv_codec::DecodeEntry(csv_codec::SplitFields(records[i]));

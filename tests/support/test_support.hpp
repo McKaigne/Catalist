@@ -97,6 +97,10 @@ public:
 		built_.rewatched = value;
 		return *this;
 	}
+	EntryBuilder& RewatchValue(catalist::RewatchValue value) {
+		built_.rewatch_value = value;
+		return *this;
+	}
 	EntryBuilder& StartDate(const std::string& value) {
 		built_.start_date = RequireDate(value);
 		return *this;

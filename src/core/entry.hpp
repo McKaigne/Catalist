@@ -12,6 +12,9 @@ enum class MediaType { kAnime, kManga };
 
 enum class WatchStatus { kWatching, kCompleted, kOnHold, kDropped, kPlanToWatch, kRewatching };
 
+// MyAnimeList's rewatch (reread) value, 1 to 5 in its XML.
+enum class RewatchValue { kNone, kVeryLow, kLow, kMedium, kHigh, kVeryHigh };
+
 struct Entry {
 	int id = 0;
 	int anilist_id = 0;
@@ -26,6 +29,7 @@ struct Entry {
 	int volumes = 0;
 	int total_volumes = 0;
 	int rewatched = 0;
+	RewatchValue rewatch_value = RewatchValue::kNone;
 	std::optional<IsoDate> start_date;
 	std::optional<IsoDate> finish_date;
 	std::optional<IsoDate> updated_at;
@@ -37,6 +41,10 @@ struct Entry {
 std::string StatusToString(WatchStatus status, MediaType type = MediaType::kAnime);
 [[nodiscard]] std::string StatusKey(WatchStatus status);
 [[nodiscard]] std::optional<WatchStatus> ParseStatus(const std::string& str);
+
+[[nodiscard]] std::string RewatchValueLabel(RewatchValue value);
+[[nodiscard]] std::string RewatchValueKey(RewatchValue value);
+[[nodiscard]] std::optional<RewatchValue> ParseRewatchValue(const std::string& key);
 
 std::string TypeToString(MediaType type);
 [[nodiscard]] std::string TypeKey(MediaType type);
@@ -60,6 +68,8 @@ namespace catalist {
 [[nodiscard]] Entry SetStatus(Entry target, WatchStatus status, const IsoDate& today);
 
 [[nodiscard]] Entry SetScore(Entry target, int score, const IsoDate& today);
+
+[[nodiscard]] Entry SetRewatchValue(Entry target, RewatchValue value, const IsoDate& today);
 
 enum class CountField { kProgress, kTotalUnits, kVolumes };
 

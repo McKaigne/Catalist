@@ -8,6 +8,7 @@
 
 #include "core/entry.hpp"
 #include "menu/app.hpp"
+#include "menu/output.hpp"
 
 namespace catalist {
 
@@ -15,14 +16,29 @@ inline constexpr size_t kPageSize = 20;
 inline constexpr int kStatusCount = 6;
 inline constexpr int kStatusesForNewTitle = 5;
 
+struct Option {
+	const char* icon;
+	std::string label;
+};
+
+inline const Option kBackOption = {output::icon::kBack, "Back"};
+
 void Fail(App& app, const std::string& message);
+void Done(App& app, const std::string& message);
+void Warn(App& app, const std::string& message);
 void ClearScreen(App& app);
+// The big logo on the home screen, the small one elsewhere, each only when it
+// fits the terminal.
+void DrawLogo(App& app, bool big);
+// Breadcrumbs joined by " / ".
 void DrawHeading(App& app, const std::string& heading);
-void DrawOptions(App& app, const std::vector<std::string>& items,
-                 const std::string& leave = "Back");
-void DrawMenu(App& app, const std::string& heading, const std::vector<std::string>& items);
+void DrawOption(App& app, int number, int digits, const Option& option);
+void DrawOptions(App& app, const std::vector<Option>& items, const Option& leave = kBackOption);
+void DrawMenu(App& app, const std::string& heading, const std::vector<Option>& items);
 
 [[nodiscard]] const char* StatusColor(WatchStatus status);
+[[nodiscard]] const char* StatusIcon(WatchStatus status);
+[[nodiscard]] const char* TypeIcon(MediaType type);
 // With no type, the name that covers both anime and manga.
 [[nodiscard]] std::string StatusLabel(WatchStatus status, std::optional<MediaType> type);
 [[nodiscard]] std::string UnitName(MediaType type, int count = 2);

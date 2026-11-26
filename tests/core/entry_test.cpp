@@ -403,3 +403,14 @@ TEST_CASE("parseStatus handles UTF-8 safely and done finishes a rewatch") {
 	CHECK(done.progress == 12);
 	CHECK(done.rewatched == 1);
 }
+
+TEST_CASE("an import fills an empty rewatch value, and taking the file replaces it") {
+	Entry mine = MakeEntry().MalId(1).Title("T");
+	Entry file = MakeEntry().MalId(1).Title("T").RewatchValue(catalist::RewatchValue::kHigh);
+	CHECK(catalist::MergeImported(mine, file).rewatch_value == catalist::RewatchValue::kHigh);
+	mine.rewatch_value = catalist::RewatchValue::kLow;
+	CHECK(catalist::MergeImported(mine, file).rewatch_value == catalist::RewatchValue::kLow);
+	CHECK(catalist::TakeImported(mine, file).rewatch_value == catalist::RewatchValue::kHigh);
+	file.rewatch_value = catalist::RewatchValue::kNone;
+	CHECK(catalist::TakeImported(mine, file).rewatch_value == catalist::RewatchValue::kLow);
+}

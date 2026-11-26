@@ -8,7 +8,8 @@ namespace catalist::csv_codec {
 
 namespace {
 
-constexpr size_t kFields = 17;
+constexpr size_t kFields = 18;
+constexpr size_t kOldFields = 17;
 
 std::optional<int> ParseCount(const std::string& field) {
 	int value = 0;
@@ -87,11 +88,13 @@ std::vector<std::string> SplitFields(std::string_view record) {
 }
 
 std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields) {
-	if (fields.size() != kFields or (fields[1] != "anime" and fields[1] != "manga") or
+	if ((fields.size() != kFields and fields.size() != kOldFields) or (fields[1] != "anime" and fields[1] != "manga") or
 	    fields[2].empty())
 		return std::nullopt;
 	auto status = ParseStatus(fields[4]);
-	if (not status)
+	auto rewatch_value = fields.size() == kFields ? ParseRewatchValue(fields[17])
+	                                              : std::optional(RewatchValue::kNone);
+	if (not status or not rewatch_value)
 		return std::nullopt;
 
 	Entry row;
@@ -99,6 +102,7 @@ std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields) {
 	row.title = fields[2];
 	row.english_title = fields[3];
 	row.status = *status;
+	row.rewatch_value = *rewatch_value;
 	row.changed_at = fields[14];
 	const std::pair<size_t, int*> counts[] = {
 	    {0, &row.id},      {5, &row.score},         {6, &row.progress},   {7, &row.total_units},
@@ -118,11 +122,12 @@ std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields) {
 }
 
 std::string EncodeEntry(const Entry& e) {
-	return std::format("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, TypeKey(e.type),
+	return std::format("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, TypeKey(e.type),
 	                   EscapeField(e.title), EscapeField(e.english_title), StatusKey(e.status),
 	                   e.score, e.progress, e.total_units, e.volumes, e.total_volumes, e.rewatched,
 	                   FormatDate(e.start_date), FormatDate(e.finish_date),
-	                   FormatDate(e.updated_at), e.changed_at, e.mal_id, e.anilist_id);
+	                   FormatDate(e.updated_at), e.changed_at, e.mal_id, e.anilist_id,
+	                   RewatchValueKey(e.rewatch_value));
 }
 
 }  // namespace catalist::csv_codec

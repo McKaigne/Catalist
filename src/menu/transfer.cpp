@@ -3,9 +3,12 @@
 #include <format>
 #include <set>
 #include <string_view>
+#include <utility>
 
 #include "menu/common.hpp"
+#include "core/text.hpp"
 #include "menu/input.hpp"
+#include "menu/output.hpp"
 #include "storage/mal_xml.hpp"
 #include "system.hpp"
 
@@ -41,6 +44,10 @@ std::vector<Clash> ClashesOf(const Entry& mine, const Entry& file) {
 	count("progress", &Entry::progress, true);
 	count("volumes", &Entry::volumes);
 	count("rewatched", &Entry::rewatched);
+	if (mine.rewatch_value != RewatchValue::kNone and file.rewatch_value != RewatchValue::kNone and
+	    mine.rewatch_value != file.rewatch_value)
+		clashes.push_back({"rewatch value", RewatchValueLabel(mine.rewatch_value),
+		                   RewatchValueLabel(file.rewatch_value)});
 	date("started", &Entry::start_date);
 	date("finished", &Entry::finish_date);
 	return clashes;
@@ -48,22 +55,38 @@ std::vector<Clash> ClashesOf(const Entry& mine, const Entry& file) {
 
 void PrintClashes(App& app, const Entry& mine, const std::vector<Clash>& clashes) {
 	size_t width = 0;
-	for (const auto& each : clashes)
+	size_t field_width = 9;
+	for (const auto& each : clashes) {
 		width = std::max(width, each.yours.size());
-	app.out << std::format("{} ({})\n", DisplayName(mine), TypeKey(mine.type));
+		field_width = std::max(field_width, each.field.size() + 1);
+	}
+	app.out << std::format("{} {} ({})\n", TypeIcon(mine.type),
+	                       output::Paint(DisplayName(mine), output::kBold, app.color),
+	                       TypeKey(mine.type));
 	for (const auto& each : clashes)
-		app.out << std::format("  {:<9} yours {:<{}}   file {}\n", each.field, each.yours, width,
-		                       each.file);
+		app.out << std::format("  {:<{}} yours {:<{}}   file {}\n", each.field, field_width,
+		                       each.yours, width, each.file);
 	app.out << "\n";
 }
 
+// k keeps yours, f takes the file's, r and t do the same for every title left,
+// q stops. K and F still mean r and t.
 char AskClash(App& app) {
+	std::string keys;
+	for (auto [key, label] : {std::pair{'k', "Keep"}, {'f', "File"}, {'r', "Keep Rest"},
+	                          {'t', "File Rest"}, {'q', "Quit"}})
+		keys += std::format("{} {}  ", output::Paint(output::LetterHint(key), output::kCyan,
+		                                             app.color),
+		                    label);
 	while (true) {
-		auto answer = ReadLine(app, "[k]eep  [f]ile  [K]eep rest  [F]ile rest  [q]uit: ");
+		auto answer = ReadLine(app, keys.substr(0, keys.size() - 2) + ": ");
 		if (not answer)
 			return 'q';
-		if (answer->size() == 1 and std::string_view("kfKFq").contains((*answer)[0]))
-			return (*answer)[0];
+		if (*answer == "K" or *answer == "F")
+			return *answer == "K" ? 'r' : 't';
+		std::string word = utf8::Lowercase(*answer);
+		if (word.size() == 1 and std::string_view("kfrtq").contains(word[0]))
+			return word[0];
 	}
 }
 
@@ -82,9 +105,9 @@ std::optional<std::set<const Entry*>> AskClashes(App& app, const std::vector<Ent
 		}
 		if (answer == 'q')
 			return std::nullopt;
-		if (answer == 'K' or answer == 'F')
+		if (answer == 'r' or answer == 't')
 			rest = answer;
-		if (answer == 'f' or answer == 'F')
+		if (answer == 'f' or answer == 't')
 			take_file.insert(&title);
 	}
 	return take_file;
@@ -111,7 +134,7 @@ void ImportFile(App& app) {
 	}
 	auto take_file = AskClashes(app, titles);
 	if (not take_file) {
-		app.out << "Cancelled. Nothing was imported.\n";
+		app.out << std::format("{} Cancelled. Nothing was imported.\n", output::icon::kInfo);
 		return;
 	}
 
@@ -127,8 +150,8 @@ void ImportFile(App& app) {
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 		return;
 	}
-	app.out << std::format("{}: {} titles, {} added, {} in your lists already.\n", path,
-	                       titles.size(), added, titles.size() - added);
+	Done(app, std::format("{}: {} titles, {} added, {} in your lists already.", path,
+	                      titles.size(), added, titles.size() - added));
 }
 
 void ExportList(App& app, MediaType type) {
@@ -140,7 +163,7 @@ void ExportList(App& app, MediaType type) {
 	std::error_code ignored;
 	if (std::filesystem::exists(path, ignored) and
 	    not AskYes(app, std::format("{} exists. Replace it?", path))) {
-		app.out << "Nothing was saved.\n";
+		app.out << std::format("{} Nothing was saved.\n", output::icon::kInfo);
 		return;
 	}
 	auto written = mal_xml::Write(app.db.GetEntries(type), type);
@@ -148,9 +171,10 @@ void ExportList(App& app, MediaType type) {
 		Fail(app, std::format("could not write {}", path));
 		return;
 	}
-	app.out << std::format("Saved {}.\n", path);
+	Done(app, std::format("Saved {}.", path));
 	if (written.skipped > 0)
-		app.out << std::format("{} without a MyAnimeList id left out.\n", written.skipped);
+		app.out << std::format("{} {} without a MyAnimeList id left out.\n", output::icon::kInfo,
+		                       written.skipped);
 }
 
 }  // namespace
@@ -159,7 +183,10 @@ void TransferScreen(App& app) {
 	int choice = 0;
 	do {
 		ClearScreen(app);
-		DrawMenu(app, "Catalist / Import & Export", {"Import XML", "Export Anime", "Export Manga"});
+		DrawMenu(app, "Catalist / Import & Export",
+		         {{output::icon::kImport, "Import XML"},
+		          {output::icon::kExport, "Export Anime"},
+		          {output::icon::kExport, "Export Manga"}});
 		choice = ReadChoice(app, 3);
 		switch (choice) {
 			case 1:

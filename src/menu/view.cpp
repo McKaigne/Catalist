@@ -14,22 +14,25 @@ namespace {
 const char* const kViewCrumb = "Catalist / View Lists";
 
 void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t last) {
-	std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
+	std::vector<output::Section> sections = {
+	    {std::format("{} Anime", output::icon::kAnime), {}},
+	    {std::format("{} Manga", output::icon::kManga), {}}};
 	for (size_t i = first; i < last; ++i) {
 		const Entry& e = titles[i];
 		sections[e.type == MediaType::kAnime ? 0 : 1].rows.push_back(
-		    {{DisplayName(e)},
+		    {{"  " + std::string(StatusIcon(e.status)), StatusColor(e.status)},
+		     {DisplayName(e)},
 		     {StatusLabel(e.status, e.type), StatusColor(e.status)},
 		     {output::Stars(e.score), output::kYellow},
-		     {OutOf(e.progress, e.total_units)}});
+		     {OutOf(e.progress, e.total_units), output::kCyan}});
 	}
-	app.out << output::Sections({{.flexible = true}, {}, {}, {}}, sections, app.columns,
-	                            app.color);
+	app.out << output::Sections({{}, {.flexible = true}, {}, {}, {.align_right = true}}, sections,
+	                            app.columns, app.color);
 }
 
 void ShowPages(App& app, const std::string& heading, std::vector<Entry> titles, SortKey key) {
 	if (titles.empty()) {
-		app.out << "No titles to list.\n";
+		app.out << std::format("{} No titles to list.\n", output::icon::kInfo);
 		Pause(app);
 		return;
 	}
@@ -46,8 +49,11 @@ void ShowPages(App& app, const std::string& heading, std::vector<Entry> titles, 
 			Pause(app);
 			return;
 		}
-		app.out << std::format("\nPage {} of {}\n", page + 1, pages);
-		DrawOptions(app, {"Next Page", "Previous Page"});
+		app.out << output::Paint(std::format("\n  Page {} of {}", page + 1, pages), output::kGray,
+		                         app.color)
+		        << "\n";
+		DrawOptions(app, {{output::icon::kNext, "Next Page"},
+		                  {output::icon::kPrevious, "Previous Page"}});
 		switch (ReadChoice(app, 2)) {
 			case 1:
 				page = std::min(page + 1, pages - 1);
@@ -78,7 +84,8 @@ void SearchLists(App& app) {
 	ClearScreen(app);
 	std::string crumb = std::format("{} / Search Lists", kViewCrumb);
 	DrawHeading(app, crumb);
-	auto text = AskText(app, "Enter title (Enter to go back): ");
+	auto text = AskText(app, std::format("{} Enter title (Enter to go back): ",
+	                                     output::Paint(output::icon::kSearch, output::kMagenta, app.color)));
 	if (not text)
 		return;
 	std::vector<Entry> kept;
@@ -100,62 +107,84 @@ void ShowDetails(App& app) {
 	}
 }
 
-void CardRow(App& app, const std::string& label, const std::string& value, int width = 13) {
-	app.out << "  " << output::Paint(std::format("{:<{}}", label, width), output::kDim, app.color)
-	        << value << "\n";
+void CardRow(App& app, const char* icon, const std::string& label, const std::string& value,
+             int width = 14) {
+	app.out << "  " << output::Paint(icon, output::kMagenta, app.color) << " "
+	        << output::Paint(std::format("{:<{}}", label, width), output::kDim, app.color) << value
+	        << "\n";
 }
 
 void PrintStats(App& app, MediaType type) {
-	constexpr int kLabelWidth = 15;
+	constexpr int kLabelWidth = 22;
+	constexpr int kBarWidth = 20;
 	const auto& list = app.db.GetEntries(type);
 	bool anime = type == MediaType::kAnime;
 	double mean = AverageScore(list);
-	auto row = [&app](const std::string& label, const std::string& value) {
-		CardRow(app, label, value, kLabelWidth);
+	int count = static_cast<int>(list.size());
+	auto row = [&app](const char* icon, const std::string& label, const std::string& value) {
+		CardRow(app, icon, label, value, kLabelWidth);
 	};
-	app.out << output::Paint(TypeToString(type), output::kBold, app.color) << "\n";
-	row("Titles", std::to_string(list.size()));
+	app.out << output::Paint(std::format("{} {}", TypeIcon(type), TypeToString(type)),
+	                         output::kBold, app.color)
+	        << "\n";
+	row(output::icon::kList, "Titles", std::to_string(count));
 	for (WatchStatus status : {WatchStatus::kWatching, WatchStatus::kCompleted, WatchStatus::kOnHold,
 	                           WatchStatus::kDropped, WatchStatus::kPlanToWatch,
-	                           WatchStatus::kRewatching})
-		row(StatusLabel(status, type), std::to_string(CountByStatus(list, status)));
-	row("Mean score", mean > 0.0 ? std::format("{:.2f}", mean) : "-");
-	row(anime ? "Episodes" : "Chapters", std::to_string(TotalProgress(list)));
+	                           WatchStatus::kRewatching}) {
+		int some = static_cast<int>(CountByStatus(list, status));
+		row(StatusIcon(status), StatusLabel(status, type),
+		    std::format("{:<7}{}", some, output::Bar(some, count, kBarWidth, app.color)));
+	}
+	row(output::icon::kScore, "Mean score",
+	    mean > 0.0 ? std::format("{:.2f}  {}", mean,
+	                             output::Paint(output::Stars(mean), output::kYellow, app.color))
+	               : "-");
+	row(output::icon::kProgress, anime ? "Episodes" : "Chapters",
+	    std::to_string(TotalProgress(list)));
 	if (not anime)
-		row("Volumes", std::to_string(TotalVolumes(list)));
-	row(anime ? "Rewatched" : "Reread", std::to_string(TotalRewatched(list)));
-	row("Days spent", std::format("{:.1f}", DaysSpent(list)));
+		row(output::icon::kManga, "Volumes", std::to_string(TotalVolumes(list)));
+	row(output::icon::kRewatch, anime ? "Rewatched" : "Reread",
+	    std::to_string(TotalRewatched(list)));
+	row(output::icon::kPlanned, "Days spent", std::format("{:.1f}", DaysSpent(list)));
 }
 
 }  // namespace
 
 void PrintCard(App& app, const Entry& e) {
-	auto row = [&app](const std::string& label, const std::string& value) {
-		CardRow(app, label, value);
+	namespace icon = output::icon;
+	auto row = [&app](const char* icon, const std::string& label, const std::string& value) {
+		CardRow(app, icon, label, value);
 	};
 	auto id_text = [](int id) { return id > 0 ? std::to_string(id) : std::string("-"); };
+	bool anime = e.type == MediaType::kAnime;
 	std::string page = PageOf(e);
 
 	if (not e.english_title.empty())
-		row("Romaji", e.title);
-	row("Type", TypeToString(e.type));
-	row("AniList", id_text(e.anilist_id));
-	row("MyAnimeList", id_text(e.mal_id));
+		row(icon::kRename, "Romaji", e.title);
+	row(TypeIcon(e.type), "Type", TypeToString(e.type));
+	row(icon::kInfo, "AniList", id_text(e.anilist_id));
+	row(icon::kInfo, "MyAnimeList", id_text(e.mal_id));
 	if (not page.empty())
-		row("Page", page);
-	row("Status", output::Paint(StatusLabel(e.status, e.type), StatusColor(e.status), app.color));
-	row("Score", e.score > 0 ? std::format("{}  {}/10",
-	                                       output::Paint(output::Stars(e.score), output::kYellow,
-	                                                     app.color),
-	                                       e.score)
-	                         : "-");
-	row("Progress", std::format("{} {}", OutOf(e.progress, e.total_units), UnitName(e.type)));
-	if (e.type == MediaType::kManga)
-		row("Volumes", OutOf(e.volumes, e.total_volumes));
-	row(e.type == MediaType::kAnime ? "Rewatched" : "Reread", std::to_string(e.rewatched));
-	row("Started", output::DateText(e.start_date));
-	row("Finished", output::DateText(e.finish_date));
-	row("Updated", output::DateText(e.updated_at));
+		row(icon::kSearch, "Page", output::Paint(page, output::kCyan, app.color));
+	row(StatusIcon(e.status), "Status",
+	    output::Paint(StatusLabel(e.status, e.type), StatusColor(e.status), app.color));
+	row(icon::kScore, "Score",
+	    e.score > 0 ? std::format("{}  {}/10",
+	                              output::Paint(output::Stars(e.score), output::kYellow, app.color),
+	                              e.score)
+	                : "-");
+	std::string bar = output::Bar(e.progress, e.total_units, 20, app.color);
+	row(icon::kProgress, "Progress",
+	    std::format("{}{}{} {}", bar, bar.empty() ? "" : "  ", OutOf(e.progress, e.total_units),
+	                UnitName(e.type)));
+	if (not anime)
+		row(icon::kManga, "Volumes", OutOf(e.volumes, e.total_volumes));
+	row(icon::kTotal, anime ? "Rewatched" : "Reread", std::to_string(e.rewatched));
+	row(icon::kRewatch, anime ? "Rewatch value" : "Reread value",
+	    RewatchValueLabel(e.rewatch_value));
+	row(icon::kStart, "Started", output::DateText(e.start_date));
+	row(icon::kFinish, "Finished", output::DateText(e.finish_date));
+	row(icon::kPlanned, "Updated", output::DateText(e.updated_at));
 }
 
 void ViewScreen(App& app) {
@@ -163,8 +192,13 @@ void ViewScreen(App& app) {
 	do {
 		ClearScreen(app);
 		DrawMenu(app, kViewCrumb,
-		         {"In Progress", "All Titles", "Anime", "Manga", "By Status", "Search Lists",
-		          "Title Details"});
+		         {{output::icon::kWatching, "In Progress"},
+		          {output::icon::kList, "All Titles"},
+		          {output::icon::kAnime, "Anime"},
+		          {output::icon::kManga, "Manga"},
+		          {output::icon::kFilter, "By Status"},
+		          {output::icon::kSearch, "Search Lists"},
+		          {output::icon::kInfo, "Title Details"}});
 		choice = ReadChoice(app, 7);
 		switch (choice) {
 			case 1:

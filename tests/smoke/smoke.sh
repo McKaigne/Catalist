@@ -36,7 +36,7 @@ grep -q 'takes no arguments' "$work/err" || fail "an argument: no note"
 
 shown=$(menu '0\n')
 [ "$?" -eq 0 ] || fail "exit code"
-has "first run" "$shown" "1. Add Title"
+has "first run" "$shown" "Add Title"
 has "first run" "$shown" "Goodbye!"
 [ ! -e "$work/catalist.csv" ] || fail "looking wrote a file"
 
@@ -47,9 +47,11 @@ grep -q '^1,anime,Fullmetal Alchemist,' "$work/catalist.csv" || fail "csv row"
 
 menu '1\n1\nOdd Taxi\n2\n\n0\n' >/dev/null
 shown=$(menu '3\n1\n\n0\n')
-has "count" "$shown" "progress 0 -> 1/13"
+arrow=$(printf '\363\260\263\237')
+has "count" "$shown" "progress 0 $arrow 1/13"
 shown=$(menu '0\n')
-has "reopened" "$shown" "2 anime, 0 manga, 1 in progress"
+has "reopened" "$shown" "2 anime"
+has "reopened" "$shown" "1 in progress"
 
 grep -q ',Odd Taxi,,watching,0,1,' "$work/catalist.csv" || fail "count reached the file"
 

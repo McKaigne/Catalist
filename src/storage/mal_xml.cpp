@@ -1,6 +1,7 @@
 #include "storage/mal_xml.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <format>
 
 namespace catalist::mal_xml {
@@ -70,6 +71,37 @@ int TagNumber(const std::string& block, const std::string& tag) {
 	return number;
 }
 
+// my_rewatching holds 1 or 0 for anime, my_rereading YES or NO for manga.
+enum class RepeatFlag { kNo, kYes };
+
+RepeatFlag ParseRepeatFlag(const std::string& text) {
+	std::string word = text;
+	std::transform(word.begin(), word.end(), word.begin(),
+	               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+	return word == "1" or word == "YES" or word == "TRUE" ? RepeatFlag::kYes : RepeatFlag::kNo;
+}
+
+std::string RepeatFlagText(RepeatFlag flag, MediaType type) {
+	bool yes = flag == RepeatFlag::kYes;
+	if (type == MediaType::kAnime)
+		return yes ? "1" : "0";
+	return yes ? "YES" : "NO";
+}
+
+RepeatFlag FlagOf(const Entry& item) {
+	return item.status == WatchStatus::kRewatching ? RepeatFlag::kYes : RepeatFlag::kNo;
+}
+
+RewatchValue ParseRewatchNumber(int number) {
+	if (number < 1 or number > 5)
+		return RewatchValue::kNone;
+	return static_cast<RewatchValue>(number);
+}
+
+std::string RewatchNumber(RewatchValue value) {
+	return value == RewatchValue::kNone ? "" : std::to_string(static_cast<int>(value));
+}
+
 struct BlockTags {
 	MediaType type;
 	const char* block;
@@ -79,14 +111,17 @@ struct BlockTags {
 	const char* progress;
 	const char* repeats;
 	const char* again;
+	const char* value;
 };
 
 const BlockTags kAnimeTags = {MediaType::kAnime,  "anime",           "series_animedb_id",
                               "series_title",     "series_episodes", "my_watched_episodes",
-                              "my_times_watched", "my_rewatching"};
+                              "my_times_watched", "my_rewatching",
+                              "my_rewatch_value"};
 const BlockTags kMangaTags = {MediaType::kManga, "manga",          "manga_mangadb_id",
                               "manga_title",     "manga_chapters", "my_read_chapters",
-                              "my_times_read",   "my_rereading"};
+                              "my_times_read",   "my_rereading",
+                              "my_reread_value"};
 
 void ParseBlocks(const std::string& xml, const BlockTags& tags, std::vector<Entry>& found) {
 	std::string open_tag = std::format("<{}>", tags.block);
@@ -112,9 +147,9 @@ void ParseBlocks(const std::string& xml, const BlockTags& tags, std::vector<Entr
 		item.volumes = TagNumber(block, "my_read_volumes");
 		item.score = std::min(TagNumber(block, "my_score"), 10);
 		item.status = ParseStatus(TagText(block, "my_status")).value_or(WatchStatus::kPlanToWatch);
-		std::string again = TagText(block, tags.again);
-		if (again == "1" or again == "YES")
+		if (ParseRepeatFlag(TagText(block, tags.again)) == RepeatFlag::kYes)
 			item.status = WatchStatus::kRewatching;
+		item.rewatch_value = ParseRewatchNumber(TagNumber(block, tags.value));
 		// MyAnimeList writes 0000-00-00 for "no date", which parses as absent.
 		item.start_date = IsoDate::Parse(TagText(block, "my_start_date"));
 		if (item.status == WatchStatus::kCompleted or item.status == WatchStatus::kRewatching)
@@ -153,7 +188,8 @@ std::string AnimeBlock(const Entry& item) {
 	block += XmlTag("series_episodes", std::to_string(item.total_units));
 	block += XmlTag("my_watched_episodes", std::to_string(item.progress));
 	block += XmlTag("my_times_watched", std::to_string(item.rewatched));
-	block += XmlTag("my_rewatching", item.status == WatchStatus::kRewatching ? "1" : "0");
+	block += XmlTag("my_rewatching", RepeatFlagText(FlagOf(item), item.type));
+	block += XmlTag("my_rewatch_value", RewatchNumber(item.rewatch_value));
 	return block;
 }
 
@@ -166,7 +202,8 @@ std::string MangaBlock(const Entry& item) {
 	block += XmlTag("my_read_volumes", std::to_string(item.volumes));
 	block += XmlTag("my_read_chapters", std::to_string(item.progress));
 	block += XmlTag("my_times_read", std::to_string(item.rewatched));
-	block += XmlTag("my_rereading", item.status == WatchStatus::kRewatching ? "YES" : "NO");
+	block += XmlTag("my_rereading", RepeatFlagText(FlagOf(item), item.type));
+	block += XmlTag("my_reread_value", RewatchNumber(item.rewatch_value));
 	return block;
 }
 

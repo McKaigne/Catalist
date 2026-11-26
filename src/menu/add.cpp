@@ -43,20 +43,27 @@ std::optional<anilist::Match> OnlyExact(const std::vector<anilist::Match>& match
 }
 
 void PrintMatches(App& app, const std::vector<anilist::Match>& matches) {
-	std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
+	std::vector<output::Section> sections = {
+	    {std::format("{} Anime", output::icon::kAnime), {}},
+	    {std::format("{} Manga", output::icon::kManga), {}}};
+	int digits = static_cast<int>(std::to_string(matches.size()).size());
 	for (size_t i = 0; i < matches.size(); ++i) {
 		const auto& match = matches[i];
 		auto mine = app.db.FindByIds(match.type, match.anilist_id, match.mal_id);
 		sections[match.type == MediaType::kAnime ? 0 : 1].rows.push_back(
-		    {{std::format("{}.", i + 1), output::kCyan},
+		    {{"  " + output::NumberHint(static_cast<int>(i + 1), digits), output::kCyan},
 		     {match.year.empty() ? "-" : match.year},
 		     {ShownName(match)},
 		     {LengthOf(match)},
 		     {output::Stars(match.score), output::kYellow},
-		     {mine ? StatusLabel(mine->status, match.type) : "", output::kGreen}});
+		     {mine ? std::format("{} {}", StatusIcon(mine->status),
+		                         StatusLabel(mine->status, match.type))
+		           : "",
+		      mine ? StatusColor(mine->status) : nullptr}});
 	}
-	app.out << output::Sections({{.align_right = true}, {}, {.flexible = true}, {.align_right = true}, {}, {}}, sections,
-	                            app.columns, app.color);
+	app.out << output::Sections(
+	    {{}, {}, {.flexible = true}, {.align_right = true}, {}, {}}, sections, app.columns,
+	    app.color);
 }
 
 std::optional<anilist::Match> ChooseMatch(App& app, const std::vector<anilist::Match>& matches,
@@ -66,7 +73,9 @@ std::optional<anilist::Match> ChooseMatch(App& app, const std::vector<anilist::M
 	if (auto exact = OnlyExact(matches, query))
 		return exact;
 	PrintMatches(app, matches);
-	app.out << std::format("\n{:>{}}. Back\n\n", 0, std::to_string(matches.size()).size());
+	app.out << "\n";
+	DrawOption(app, 0, static_cast<int>(std::to_string(matches.size()).size()), kBackOption);
+	app.out << "\n";
 	int choice = ReadChoice(app, static_cast<int>(matches.size()));
 	if (choice == 0)
 		return std::nullopt;
@@ -83,15 +92,18 @@ void SaveNewTitle(App& app, const anilist::Match& match, WatchStatus status) {
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 		return;
 	}
-	app.out << std::format("{} added as {}.\n", DisplayName(added),
-	                       StatusLabel(added.status, added.type));
+	Done(app, std::format("{} added as {}.", DisplayName(added),
+	                      StatusLabel(added.status, added.type)));
 }
 
 }  // namespace
 
 void AddScreen(App& app) {
 	ClearScreen(app);
-	DrawMenu(app, "Catalist / Add Title", {"Both", "Anime Only", "Manga Only"});
+	DrawMenu(app, "Catalist / Add Title",
+	         {{output::icon::kAddBoth, "Both"},
+	          {output::icon::kAnime, "Anime Only"},
+	          {output::icon::kManga, "Manga Only"}});
 	int where = ReadChoice(app, 3);
 	if (where == 0)
 		return;
@@ -101,7 +113,9 @@ void AddScreen(App& app) {
 	else if (where == 3)
 		only = MediaType::kManga;
 
-	auto name = AskText(app, "Search AniList (Enter to go back): ");
+	auto name = AskText(app, std::format("{} Search AniList (Enter to go back): ",
+	                                     output::Paint(output::icon::kSearch, output::kMagenta,
+	                                                   app.color)));
 	if (not name)
 		return;
 	auto found = anilist::Search(app.net, only, *name);
@@ -111,7 +125,8 @@ void AddScreen(App& app) {
 		return;
 	}
 	if (found.value().empty()) {
-		app.out << std::format("AniList has no title matching '{}'.\n", *name);
+		app.out << std::format("{} AniList has no title matching '{}'.\n", output::icon::kInfo,
+		                       *name);
 		Pause(app);
 		return;
 	}
@@ -119,7 +134,8 @@ void AddScreen(App& app) {
 	if (not match)
 		return;
 	if (auto mine = app.db.FindByIds(match->type, match->anilist_id, match->mal_id)) {
-		app.out << std::format("{} is in your {} list already ({}).\n", DisplayName(*mine),
+		app.out << std::format("{} {} is in your {} list already ({}).\n", output::icon::kInfo,
+		                       DisplayName(*mine),
 		                       TypeKey(mine->type), StatusLabel(mine->status, mine->type));
 		Pause(app);
 		return;

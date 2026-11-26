@@ -34,6 +34,15 @@ Entries below that describe them no longer apply.
   clangd and clang-format stay as editor tools.
 
 *** Added
+- The menus are drawn with Nerd Font icons: the big Catalist logo on the home
+  screen when the terminal is wide enough, the small logo and a breadcrumb rule
+  on every other screen, filled circle icons for options and statuses, circled
+  digits and letters for the hints, and progress bars on the title card and in
+  Stats.
+- The rewatch value (reread value for manga) from MyAnimeList XML is kept,
+  shown on the title card, set from Edit Title and written back on export. It
+  is a new last column, =rewatch_value=, in =catalist.csv=; a list saved
+  without it still loads.
 - At a terminal, a command with no title offers a list, a lone in-progress
   match is taken, and a typo gets a suggestion.
 - Tracking at parity with Mihon's: =catalist link= reads your entry on the
@@ -96,6 +105,9 @@ Entries below that describe them no longer apply.
   =done=, =hold=, =drop=, =plan= and =resume=.
 
 *** Changed
+- The import prompt's keys are now k, f, r, t and q (keep, file, keep rest,
+  file rest, quit); capital K and F still work. Yes or no questions show
+  circled Y and N instead of =[y/N]=.
 - Titles are named by words, not refs: any part of the English or romaji
   name, in any order, without regard to case or punctuation. Commas separate
   titles and options may follow them. Refs stay in piped output.

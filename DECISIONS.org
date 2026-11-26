@@ -27,7 +27,7 @@ The score stars are Nerd Font glyphs. They show as boxes in a PDF without that f
 | Input validation and errors | Met   | =ReadChoice=, =AskCount=, =AskScore=, =AskDate=       |
 | User-friendly menu          | Met   | Numbered main menu and submenus                       |
 | Exit option                 | Met   | =0= on the main menu                                  |
-| Clean, readable code        | Met   | Google naming, 121 passing tests                  |
+| Clean, readable code        | Met   | Google naming, 127 passing tests                  |
 
 * Title Page
 *APP NAME:* Catalist
@@ -89,16 +89,21 @@ Each decision below is followed by the code that makes it happen.
 *** 1.1 A numbered main menu with Exit
 Running =catalist= opens a main menu. Each number opens a screen, and =0= exits. The loop is a =do-while= around a =switch=.
 
-Source: =src/menu/menu.cpp:29-66=
+Source: =src/menu/menu.cpp:40-82=
 #+begin_src cpp
 int RunMenu(App& app) {
 	int choice = 0;
 	do {
 		DrawHome(app);
 		DrawOptions(app,
-		            {"Add Title", "View Lists", "Log Progress", "Edit Title", "Remove Title", "Stats",
-		             "Import & Export"},
-		            "Exit");
+		            {{output::icon::kAdd, "Add Title"},
+		             {output::icon::kList, "View Lists"},
+		             {output::icon::kLog, "Log Progress"},
+		             {output::icon::kEdit, "Edit Title"},
+		             {output::icon::kRemove, "Remove Title"},
+		             {output::icon::kStats, "Stats"},
+		             {output::icon::kTransfer, "Import & Export"}},
+		            {output::icon::kExit, "Exit"});
 		choice = ReadChoice(app, 7);
 		switch (choice) {
 			case 1:
@@ -126,46 +131,84 @@ int RunMenu(App& app) {
 				break;
 		}
 	} while (choice != 0);
-	app.out << "Goodbye!\n";
+	app.out << output::Paint("Goodbye!", output::kMagenta, app.color) << "\n";
 	return 0;
 }
 #+end_src
 
 *** 1.2 Every menu is drawn the same way
-Each menu lists its numbered options and a =0= to go back or exit.
+Each screen starts with the small Catalist logo, then its breadcrumb heading under a line. Each menu lists its options, each with a number hint and a Nerd Font icon, and a =0= to go back or exit.
 
-Source: =src/menu/common.cpp:70-73=
+Source: =src/menu/common.cpp:93-110=
 #+begin_src cpp
-void DrawMenu(App& app, const std::string& heading, const std::vector<std::string>& items) {
+void DrawHeading(App& app, const std::string& heading) {
+	DrawLogo(app, false);
+	const std::string separator = " / ";
+	std::string drawn = output::Paint(output::icon::kHome, output::kMagenta, app.color) + " ";
+	size_t start = 0;
+	while (true) {
+		size_t end = heading.find(separator, start);
+		bool last = end == std::string::npos;
+		std::string part = heading.substr(start, last ? std::string::npos : end - start);
+		drawn += output::Paint(part, last ? output::kBold : nullptr, app.color);
+		if (last)
+			break;
+		drawn += output::Paint(separator, output::kGray, app.color);
+		start = end + separator.size();
+	}
+	int width = std::min(app.columns, std::max(utf8::Width(heading) + 2, logo::kMiniWidth));
+	app.out << drawn << "\n" << output::Rule(width, app.color) << "\n\n";
+}
+#+end_src
+
+Source: =src/menu/common.cpp:112-117=
+#+begin_src cpp
+void DrawOption(App& app, int number, int digits, const Option& option) {
+	app.out << std::format("  {}  {} {}\n",
+	                       output::Paint(output::NumberHint(number, digits), output::kCyan,
+	                                     app.color),
+	                       output::Paint(option.icon, output::kMagenta, app.color), option.label);
+}
+#+end_src
+
+Source: =src/menu/common.cpp:127-130=
+#+begin_src cpp
+void DrawMenu(App& app, const std::string& heading, const std::vector<Option>& items) {
 	DrawHeading(app, heading);
 	DrawOptions(app, items);
 }
 #+end_src
 
-Source: =src/menu/common.cpp:63-68=
+Source: =src/menu/common.cpp:119-125=
 #+begin_src cpp
-void DrawOptions(App& app, const std::vector<std::string>& items, const std::string& leave) {
-	size_t width = std::to_string(items.size()).size();
+void DrawOptions(App& app, const std::vector<Option>& items, const Option& leave) {
+	int digits = static_cast<int>(std::to_string(items.size()).size());
 	for (size_t i = 0; i < items.size(); ++i)
-		app.out << std::format("{:>{}}. {}\n", i + 1, width, items[i]);
-	app.out << std::format("{:>{}}. {}\n\n", 0, width, leave);
+		DrawOption(app, static_cast<int>(i + 1), digits, items[i]);
+	DrawOption(app, 0, digits, leave);
+	app.out << "\n";
 }
 #+end_src
 
 *** 1.3 Choices are validated
 The program asks again until the answer is a number on the menu. If the input ends, that counts as =0=, so the program can always leave.
 
-Source: =src/menu/input.cpp:52-62=
+Source: =src/menu/input.cpp:57-72=
 #+begin_src cpp
 int ReadChoice(App& app, int highest) {
 	while (true) {
-		auto answer = ReadLine(app, std::format("Enter choice [0-{}]: ", highest));
+		auto answer = ReadLine(
+		    app, std::format("{} Enter choice [{}-{}]: ",
+		                     output::Paint(output::icon::kPrompt, output::kMagenta, app.color),
+		                     output::NumberHint(0), output::NumberHint(highest)));
 		if (not answer)
 			return 0;
 		auto number = ParseNumber(*answer);
 		if (number and *number <= highest)
 			return *number;
-		app.out << std::format("Enter a number from 0 to {}.\n", highest);
+		app.out << std::format("{} Enter a number from 0 to {}.\n",
+		                       output::Paint(output::icon::kError, output::kYellow, app.color),
+		                       highest);
 	}
 }
 #+end_src
@@ -181,24 +224,55 @@ if (argc > 1) {
 }
 #+end_src
 
-*** 1.5 The home screen shows the totals
-Above the menu are the numbers of anime, manga and titles in progress. With empty lists it says what to do first.
+*** 1.5 The home screen shows the big logo and the totals
+The home screen opens with the big Catalist logo. A terminal narrower than the big logo gets the small one, and one narrower than that gets no logo. Below it are the numbers of anime, manga and titles in progress. With empty lists it says what to do first.
 
-Source: =src/menu/menu.cpp:12-25=
+Source: =src/menu/common.cpp:74-91=
+#+begin_src cpp
+void DrawLogo(App& app, bool big) {
+	static const char* const kShades[] = {"38;5;117", "38;5;111", "38;5;141",
+	                                      "38;5;177", "38;5;213", "38;5;219"};
+	bool fits_big = big and app.columns >= logo::kBigWidth;
+	if (not fits_big and app.columns < logo::kMiniWidth)
+		return;
+	std::string art = fits_big ? logo::kBig : logo::kMini;
+	std::vector<std::string> lines;
+	for (size_t start = 1, end; start < art.size(); start = end + 1) {
+		end = art.find('\n', start);
+		lines.push_back(art.substr(start, end - start));
+	}
+	for (size_t i = 0; i < lines.size(); ++i)
+		app.out << output::Paint(lines[i], kShades[i * std::size(kShades) / lines.size()],
+		                         app.color)
+		        << "\n";
+	app.out << "\n";
+}
+#+end_src
+
+Source: =src/menu/menu.cpp:14-36=
 #+begin_src cpp
 void DrawHome(App& app) {
 	ClearScreen(app);
-	app.out << output::Paint("Catalist", output::kBold, app.color) << "\n";
+	DrawLogo(app, true);
 	const auto& anime = app.db.GetEntries(MediaType::kAnime);
 	const auto& manga = app.db.GetEntries(MediaType::kManga);
 	size_t open = 0;
 	for (const auto* list : {&anime, &manga})
 		open += CountByStatus(*list, WatchStatus::kWatching) +
 		        CountByStatus(*list, WatchStatus::kRewatching);
-	app.out << std::format("{} anime, {} manga, {} in progress\n\n", anime.size(), manga.size(),
-	                       open);
+	auto total = [&app](const char* icon, size_t count, const char* label) {
+		return std::format("{} {} {}", output::Paint(icon, output::kMagenta, app.color),
+		                   output::Paint(std::to_string(count), output::kBold, app.color), label);
+	};
+	app.out << std::format("  {}    {}    {}\n", total(output::icon::kAnime, anime.size(), "anime"),
+	                       total(output::icon::kManga, manga.size(), "manga"),
+	                       total(output::icon::kWatching, open, "in progress"));
+	int logo_width = app.columns >= logo::kBigWidth ? logo::kBigWidth : logo::kMiniWidth;
+	app.out << output::Rule(std::min(app.columns, logo_width), app.color) << "\n\n";
 	if (anime.empty() and manga.empty())
-		app.out << "Your lists are empty. Choose 1 to add a title, or 7 to import a list.\n\n";
+		app.out << std::format("{} Your lists are empty. Choose {} to add a title, or {} to import "
+		                       "a list.\n\n",
+		                       output::icon::kInfo, output::NumberHint(1), output::NumberHint(7));
 }
 #+end_src
 
@@ -207,85 +281,122 @@ void DrawHome(App& app) {
 *** 2.1 Short Title Case names, and the word Title
 Menu options are two or three words in Title Case. One anime or manga is called a Title. The main menu is Add Title, View Lists, Log Progress, Edit Title, Remove Title, Stats, Import & Export and Exit.
 
-Source: =src/menu/menu.cpp:33-36=
+Source: =src/menu/menu.cpp:44-52=
 #+begin_src cpp
 DrawOptions(app,
-            {"Add Title", "View Lists", "Log Progress", "Edit Title", "Remove Title", "Stats",
-             "Import & Export"},
-            "Exit");
+            {{output::icon::kAdd, "Add Title"},
+             {output::icon::kList, "View Lists"},
+             {output::icon::kLog, "Log Progress"},
+             {output::icon::kEdit, "Edit Title"},
+             {output::icon::kRemove, "Remove Title"},
+             {output::icon::kStats, "Stats"},
+             {output::icon::kTransfer, "Import & Export"}},
+            {output::icon::kExit, "Exit"});
 #+end_src
 
 *** 2.2 Breadcrumb headings
-Each screen is headed by its path, separated by slashes, such as =Catalist / View Lists / By Status=. The main screen just says Catalist, and Edit Title includes the title's name.
+Each screen is headed by its path, separated by slashes, such as =Catalist / View Lists / By Status=, after a home icon. The last part is bold. The main screen shows the big logo instead, and Edit Title includes the title's name.
 
 Source: =src/menu/view.cpp:14=
 #+begin_src cpp
 const char* const kViewCrumb = "Catalist / View Lists";
 #+end_src
 
-Source: =src/menu/edit.cpp:123=
+Source: =src/menu/edit.cpp:150=
 #+begin_src cpp
 DrawHeading(app, std::format("Catalist / Edit Title / {}", DisplayName(*current)));
 #+end_src
 
-*** 2.3 Numbers are written as 1.
-Options read =1. Add Title=, with =0.= for Exit or Back.
+*** 2.3 Number and letter hints are filled circles
+Options are numbered with Nerd Font numeric circles, one circle per digit, so option 10 is a 1 circle and a 0 circle. You still type the number. Letter answers, such as the import keys and yes or no, are shown as alpha circles.
 
-Source: =src/menu/common.cpp:63-68=
+Source: =src/menu/output.cpp:84-90=
 #+begin_src cpp
-void DrawOptions(App& app, const std::vector<std::string>& items, const std::string& leave) {
-	size_t width = std::to_string(items.size()).size();
-	for (size_t i = 0; i < items.size(); ++i)
-		app.out << std::format("{:>{}}. {}\n", i + 1, width, items[i]);
-	app.out << std::format("{:>{}}. {}\n\n", 0, width, leave);
+std::string NumberHint(int number, int digits) {
+	std::string text = std::to_string(std::max(number, 0));
+	std::string hint(static_cast<size_t>(std::max(0, digits - static_cast<int>(text.size()))), ' ');
+	for (char digit : text)
+		hint += Glyph(0xF0C9E + 2 * static_cast<std::uint32_t>(digit - '0'));
+	return hint;
+}
+#+end_src
+
+Source: =src/menu/output.cpp:92-97=
+#+begin_src cpp
+std::string LetterHint(char letter) {
+	char lower = static_cast<char>(std::tolower(static_cast<unsigned char>(letter)));
+	if (lower < 'a' or lower > 'z')
+		return std::string(1, letter);
+	return Glyph(0xF0BEC + 3 * static_cast<std::uint32_t>(lower - 'a'));
 }
 #+end_src
 
 *** 2.4 The menu prompt
-Every menu asks =Enter choice [0-7]:= with its own range.
+Every menu asks =Enter choice [0-7]:= with its own range, the numbers drawn as circles.
 
-Source: =src/menu/input.cpp:54=
+Source: =src/menu/input.cpp:59-62=
 #+begin_src cpp
-auto answer = ReadLine(app, std::format("Enter choice [0-{}]: ", highest));
+auto answer = ReadLine(
+    app, std::format("{} Enter choice [{}-{}]: ",
+                     output::Paint(output::icon::kPrompt, output::kMagenta, app.color),
+                     output::NumberHint(0), output::NumberHint(highest)));
 #+end_src
 
 *** 2.5 Add Title options
 Both, Anime Only and Manga Only, then =Search AniList (Enter to go back):=.
 
-Source: =src/menu/add.cpp:94=
+Source: =src/menu/add.cpp:103-106=
 #+begin_src cpp
-DrawMenu(app, "Catalist / Add Title", {"Both", "Anime Only", "Manga Only"});
+DrawMenu(app, "Catalist / Add Title",
+         {{output::icon::kAddBoth, "Both"},
+          {output::icon::kAnime, "Anime Only"},
+          {output::icon::kManga, "Manga Only"}});
 #+end_src
 
-Source: =src/menu/add.cpp:104=
+Source: =src/menu/add.cpp:116-118=
 #+begin_src cpp
-auto name = AskText(app, "Search AniList (Enter to go back): ");
+auto name = AskText(app, std::format("{} Search AniList (Enter to go back): ",
+                                     output::Paint(output::icon::kSearch, output::kMagenta,
+                                                   app.color)));
 #+end_src
 
 *** 2.6 View Lists options
 In Progress, All Titles, Anime, Manga, By Status, Search Lists and Title Details.
 
-Source: =src/menu/view.cpp:165-167=
+Source: =src/menu/view.cpp:194-201=
 #+begin_src cpp
 DrawMenu(app, kViewCrumb,
-         {"In Progress", "All Titles", "Anime", "Manga", "By Status", "Search Lists",
-          "Title Details"});
+         {{output::icon::kWatching, "In Progress"},
+          {output::icon::kList, "All Titles"},
+          {output::icon::kAnime, "Anime"},
+          {output::icon::kManga, "Manga"},
+          {output::icon::kFilter, "By Status"},
+          {output::icon::kSearch, "Search Lists"},
+          {output::icon::kInfo, "Title Details"}});
 #+end_src
 
 *** 2.7 Edit Title options
-+1 Progress, -1 Progress, Set Progress, Set Score, Set Status, Set Total, Set Volumes, Set Start Date, Set Finish Date and Rename Title.
++1 Progress, -1 Progress, Set Progress, Set Score, Set Status, Set Total, Set Volumes, Set Start Date, Set Finish Date, Rename Title and Set Rewatch Value (Set Reread Value for manga).
 
-Source: =src/menu/edit.cpp:126-128=
+Source: =src/menu/edit.cpp:154-164=
 #+begin_src cpp
-DrawOptions(app, {"+1 Progress", "-1 Progress", "Set Progress", "Set Score", "Set Status",
-                  "Set Total", "Set Volumes", "Set Start Date", "Set Finish Date",
-                  "Rename Title"});
+DrawOptions(app, {{icon::kPlus, "+1 Progress"},
+                  {icon::kMinus, "-1 Progress"},
+                  {icon::kProgress, "Set Progress"},
+                  {icon::kScore, "Set Score"},
+                  {icon::kStatus, "Set Status"},
+                  {icon::kTotal, "Set Total"},
+                  {icon::kManga, "Set Volumes"},
+                  {icon::kStart, "Set Start Date"},
+                  {icon::kFinish, "Set Finish Date"},
+                  {icon::kRename, "Rename Title"},
+                  {icon::kRewatch, RewatchValueName(current->type)}});
 #+end_src
 
 *** 2.8 Status names match the title's type
 Anime says Plan to Watch, Watching and Rewatching. Manga says Plan to Read, Reading and Rereading. By Status covers both, so it says Planned, Watching/Reading and Rewatching/Rereading.
 
-Source: =src/menu/common.cpp:93-110=
+Source: =src/menu/common.cpp:172-189=
 #+begin_src cpp
 std::string StatusLabel(WatchStatus status, std::optional<MediaType> type) {
 	bool manga = type == MediaType::kManga;
@@ -310,51 +421,104 @@ std::string StatusLabel(WatchStatus status, std::optional<MediaType> type) {
 *** 2.9 Import & Export options
 Import XML, Export Anime and Export Manga.
 
-Source: =src/menu/transfer.cpp:162=
+Source: =src/menu/transfer.cpp:186-189=
 #+begin_src cpp
-DrawMenu(app, "Catalist / Import & Export", {"Import XML", "Export Anime", "Export Manga"});
+DrawMenu(app, "Catalist / Import & Export",
+         {{output::icon::kImport, "Import XML"},
+          {output::icon::kExport, "Export Anime"},
+          {output::icon::kExport, "Export Manga"}});
 #+end_src
 
 *** 2.10 Page controls
 Long lists offer Next Page, Previous Page and Back.
 
-Source: =src/menu/view.cpp:50=
+Source: =src/menu/view.cpp:55-56=
 #+begin_src cpp
-DrawOptions(app, {"Next Page", "Previous Page"});
+DrawOptions(app, {{output::icon::kNext, "Next Page"},
+                  {output::icon::kPrevious, "Previous Page"}});
 #+end_src
 
 *** 2.11 The title prompt
 Picking one of your titles asks =Enter title (Enter to go back):=.
 
-Source: =src/menu/common.cpp:179=
+Source: =src/menu/common.cpp:267-268=
 #+begin_src cpp
-auto text = AskText(app, "Enter title (Enter to go back): ");
+auto text = AskText(app, std::format("{} Enter title (Enter to go back): ",
+                                     output::Paint(output::icon::kSearch, output::kMagenta, app.color)));
 #+end_src
 
 *** 2.12 The pause
 After an action the program waits at =Press Enter to continue...=.
 
-Source: =src/menu/input.cpp:64-66=
+Source: =src/menu/input.cpp:74-76=
 #+begin_src cpp
 void Pause(App& app) {
-	(void)ReadLine(app, "\nPress Enter to continue...");
+	(void)ReadLine(app, output::Paint("\nPress Enter to continue...", output::kGray, app.color));
 }
 #+end_src
 
 *** 2.13 Exit and Back
 The main menu leaves with Exit and says Goodbye! Every other menu leaves with Back.
 
-Source: =src/menu/menu.cpp:64=
+Source: =src/menu/menu.cpp:80=
 #+begin_src cpp
-app.out << "Goodbye!\n";
+app.out << output::Paint("Goodbye!", output::kMagenta, app.color) << "\n";
 #+end_src
 
 *** 2.14 Section labels
-Lists are grouped under Anime and Manga.
+Lists are grouped under Anime and Manga, each with its type's icon.
 
-Source: =src/menu/view.cpp:17=
+Source: =src/menu/view.cpp:17-19=
 #+begin_src cpp
-std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
+std::vector<output::Section> sections = {
+    {std::format("{} Anime", output::icon::kAnime), {}},
+    {std::format("{} Manga", output::icon::kManga), {}}};
+#+end_src
+
+*** 2.15 Nerd Font icons, filled circles first
+Options, statuses, types and messages carry Nerd Font icons. Where an icon has a circle form, the filled circle is used rather than the outline. Each status has its own icon and colour: play for Watching, check for Completed, pause for On Hold, a cross for Dropped, a clock for Planned and a sync circle for Rewatching. Scores stay as five stars.
+
+Source: =src/menu/common.cpp:150-166=
+#+begin_src cpp
+const char* StatusIcon(WatchStatus status) {
+	switch (status) {
+		case WatchStatus::kWatching:
+			return output::icon::kWatching;
+		case WatchStatus::kCompleted:
+			return output::icon::kCompleted;
+		case WatchStatus::kOnHold:
+			return output::icon::kOnHold;
+		case WatchStatus::kDropped:
+			return output::icon::kDropped;
+		case WatchStatus::kPlanToWatch:
+			return output::icon::kPlanned;
+		case WatchStatus::kRewatching:
+			return output::icon::kRewatching;
+	}
+	return output::icon::kInfo;
+}
+#+end_src
+
+*** 2.16 Bars show progress
+The title card draws a progress bar when the total is known, and Stats draws a bar for each status against the number of titles.
+
+Source: =src/menu/output.cpp:99-113=
+#+begin_src cpp
+std::string Bar(int done, int total, int width, bool color) {
+	if (total <= 0 or width <= 0)
+		return "";
+	int filled = static_cast<int>(std::lround(width * std::clamp(done, 0, total) /
+	                                          static_cast<double>(total)));
+	std::string full;
+	std::string empty;
+	for (int i = 0; i < width; ++i) {
+		if (i < filled)
+			full += "\u2588";
+		else
+			empty += "\u2591";
+	}
+	return Paint(full, kGreen, color) + Paint(empty, kGray, color);
+}
 #+end_src
 
 ** 3. Finding a title
@@ -430,7 +594,7 @@ std::vector<Entry> FindTitles(const Catalogue& db, const std::string& text) {
 *** 3.3 Several matches become a numbered list
 You choose by number, 20 a page, latest changed first. Next Page and Previous Page reach every title.
 
-Source: =src/menu/common.cpp:143-175=
+Source: =src/menu/common.cpp:222-263=
 #+begin_src cpp
 std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
 	SortEntries(titles, SortKey::kUpdated);
@@ -440,20 +604,29 @@ std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
 		size_t first = page * kPageSize;
 		size_t shown = std::min(kPageSize, titles.size() - first);
 		int highest = static_cast<int>(shown) + (pages > 1 ? 2 : 0);
-		size_t width = std::to_string(highest).size();
+		int digits = static_cast<int>(std::to_string(highest).size());
 		std::vector<std::vector<output::Styled>> rows;
 		for (size_t i = 0; i < shown; ++i) {
 			const Entry& e = titles[first + i];
-			rows.push_back({{std::format("{:>{}}.", i + 1, width)},
+			rows.push_back({{"  " + output::NumberHint(static_cast<int>(i + 1), digits),
+			                 output::kCyan},
+			                {TypeIcon(e.type), StatusColor(e.status)},
 			                {DisplayName(e)},
-			                {TypeKey(e.type)},
 			                {OutOf(e.progress, e.total_units)}});
 		}
-		app.out << output::Rows({{}, {.flexible = true}, {}, {}}, rows, app.columns, app.color);
-		if (pages > 1)
-			app.out << std::format("\nPage {} of {}\n{:>{}}. Next Page\n{:>{}}. Previous Page\n",
-			                       page + 1, pages, shown + 1, width, shown + 2, width);
-		app.out << std::format("{:>{}}. Back\n\n", 0, width);
+		app.out << output::Rows({{}, {}, {.flexible = true}, {.align_right = true}}, rows,
+		                        app.columns, app.color);
+		app.out << "\n";
+		if (pages > 1) {
+			app.out << output::Paint(std::format("  Page {} of {}", page + 1, pages),
+			                         output::kGray, app.color)
+			        << "\n";
+			DrawOption(app, static_cast<int>(shown + 1), digits, {output::icon::kNext, "Next Page"});
+			DrawOption(app, static_cast<int>(shown + 2), digits,
+			           {output::icon::kPrevious, "Previous Page"});
+		}
+		DrawOption(app, 0, digits, kBackOption);
+		app.out << "\n";
 
 		int choice = ReadChoice(app, highest);
 		if (choice == 0)
@@ -470,7 +643,7 @@ std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
 *** 3.4 A typo gets a suggestion
 Catalist asks "Did you mean ...?" and changes nothing until you answer yes.
 
-Source: =src/menu/common.cpp:190-192=
+Source: =src/menu/common.cpp:279-281=
 #+begin_src cpp
 auto closest = ClosestTitle(app.db, *text);
 if (closest and AskYes(app, std::format("Did you mean {}?", DisplayName(*closest))))
@@ -500,47 +673,50 @@ std::optional<int> TypoCost(const std::vector<std::string>& words, const std::st
 *** 4.1 English is the main name
 Screens show the English name, or romaji when there is none. Romaji appears only on Title Details and Edit Title.
 
-Source: =src/core/entry.cpp:68-70=
+Source: =src/core/entry.cpp:112-114=
 #+begin_src cpp
 const std::string& DisplayName(const Entry& shown) {
 	return shown.english_title.empty() ? shown.title : shown.english_title;
 }
 #+end_src
 
-Source: =src/menu/view.cpp:139-140=
+Source: =src/menu/view.cpp:162-163=
 #+begin_src cpp
 if (not e.english_title.empty())
-	row("Romaji", e.title);
+	row(icon::kRename, "Romaji", e.title);
 #+end_src
 
 *** 4.2 Anime and manga are separate sections
 Lists have an ANIME section and a MANGA section.
 
-Source: =src/menu/view.cpp:16-28=
+Source: =src/menu/view.cpp:16-31=
 #+begin_src cpp
 void PrintRows(App& app, const std::vector<Entry>& titles, size_t first, size_t last) {
-	std::vector<output::Section> sections = {{"Anime", {}}, {"Manga", {}}};
+	std::vector<output::Section> sections = {
+	    {std::format("{} Anime", output::icon::kAnime), {}},
+	    {std::format("{} Manga", output::icon::kManga), {}}};
 	for (size_t i = first; i < last; ++i) {
 		const Entry& e = titles[i];
 		sections[e.type == MediaType::kAnime ? 0 : 1].rows.push_back(
-		    {{DisplayName(e)},
+		    {{"  " + std::string(StatusIcon(e.status)), StatusColor(e.status)},
+		     {DisplayName(e)},
 		     {StatusLabel(e.status, e.type), StatusColor(e.status)},
 		     {output::Stars(e.score), output::kYellow},
-		     {OutOf(e.progress, e.total_units)}});
+		     {OutOf(e.progress, e.total_units), output::kCyan}});
 	}
-	app.out << output::Sections({{.flexible = true}, {}, {}, {}}, sections, app.columns,
-	                            app.color);
+	app.out << output::Sections({{}, {.flexible = true}, {}, {}, {.align_right = true}}, sections,
+	                            app.columns, app.color);
 }
 #+end_src
 
 *** 4.3 Long lists are paged
 Lists show 20 titles a page, with numbered options for next, previous and back.
 
-Source: =src/menu/view.cpp:30-62=
+Source: =src/menu/view.cpp:33-68=
 #+begin_src cpp
 void ShowPages(App& app, const std::string& heading, std::vector<Entry> titles, SortKey key) {
 	if (titles.empty()) {
-		app.out << "No titles to list.\n";
+		app.out << std::format("{} No titles to list.\n", output::icon::kInfo);
 		Pause(app);
 		return;
 	}
@@ -557,8 +733,11 @@ void ShowPages(App& app, const std::string& heading, std::vector<Entry> titles, 
 			Pause(app);
 			return;
 		}
-		app.out << std::format("\nPage {} of {}\n", page + 1, pages);
-		DrawOptions(app, {"Next Page", "Previous Page"});
+		app.out << output::Paint(std::format("\n  Page {} of {}", page + 1, pages), output::kGray,
+		                         app.color)
+		        << "\n";
+		DrawOptions(app, {{output::icon::kNext, "Next Page"},
+		                  {output::icon::kPrevious, "Previous Page"}});
 		switch (ReadChoice(app, 2)) {
 			case 1:
 				page = std::min(page + 1, pages - 1);
@@ -598,7 +777,7 @@ std::string LastChange(const Entry& e) {
 *** 4.5 Full lists are in title order
 In-progress lists are latest first. The others are alphabetical, ignoring capitals and punctuation.
 
-Source: =src/menu/view.cpp:175-176=
+Source: =src/menu/view.cpp:209-210=
 #+begin_src cpp
 ShowPages(app, std::format("{} / All Titles", kViewCrumb),
           TitlesWhere(app.db, std::nullopt, std::nullopt), SortKey::kTitle);
@@ -607,7 +786,7 @@ ShowPages(app, std::format("{} / All Titles", kViewCrumb),
 *** 4.6 Long names are cut to fit
 Every title stays on one row, shortened to the terminal's width. Title Details prints the whole name.
 
-Source: =src/menu/output.cpp:27-28=
+Source: =src/menu/output.cpp:36-37=
 #+begin_src cpp
 if (columns[i].flexible and total > width)
 	widths[i] = std::max(kNarrowest, widths[i] - (total - width));
@@ -616,7 +795,7 @@ if (columns[i].flexible and total > width)
 *** 4.7 Stats stay separate
 Anime and manga are counted apart, because episodes and chapters are different units.
 
-Source: =src/menu/view.cpp:207-214=
+Source: =src/menu/view.cpp:241-248=
 #+begin_src cpp
 void StatsScreen(App& app) {
 	ClearScreen(app);
@@ -645,7 +824,7 @@ double DaysSpent(const std::vector<Entry>& list) {
 *** 4.9 Scores are whole numbers from 0 to 10
 They match MyAnimeList exports and are drawn as five stars, each point a half star.
 
-Source: =src/menu/edit.cpp:35-46=
+Source: =src/menu/edit.cpp:41-52=
 #+begin_src cpp
 void AskScore(App& app, const Entry& title) {
 	auto text = AskText(app, "Score from 0 to 10 (Enter to go back): ");
@@ -653,7 +832,7 @@ void AskScore(App& app, const Entry& title) {
 		return;
 	auto number = ParseNumber(*text);
 	if (not number or *number > 10) {
-		app.out << "Enter a number from 0 to 10.\n";
+		Warn(app, "Enter a number from 0 to 10.");
 		return;
 	}
 	IsoDate today = app.Today();
@@ -661,7 +840,7 @@ void AskScore(App& app, const Entry& title) {
 }
 #+end_src
 
-Source: =src/menu/output.cpp:63-73=
+Source: =src/menu/output.cpp:72-82=
 #+begin_src cpp
 std::string Stars(double out_of_ten) {
 	int halves = std::clamp(static_cast<int>(std::lround(out_of_ten)), 0, 10);
@@ -681,7 +860,7 @@ std::string Stars(double out_of_ten) {
 *** 5.1 Only completed titles have a finish date
 On hold and dropped set no finish date, and resuming leaves none behind. A title being rewatched keeps its first one.
 
-Source: =src/core/entry.cpp:111-141=
+Source: =src/core/entry.cpp:155-185=
 #+begin_src cpp
 Entry ApplyStatusDates(Entry target, WatchStatus previous, const IsoDate& today) {
 	switch (target.status) {
@@ -719,7 +898,7 @@ Entry ApplyStatusDates(Entry target, WatchStatus previous, const IsoDate& today)
 *** 5.2 A finished rewatch keeps the first date
 The rewatch count goes up by one, and the original finish date stays.
 
-Source: =src/core/entry.cpp:121-122=
+Source: =src/core/entry.cpp:165-166=
 #+begin_src cpp
 if (previous != WatchStatus::kRewatching or not target.finish_date)
 	target.finish_date = today;
@@ -728,7 +907,7 @@ if (previous != WatchStatus::kRewatching or not target.finish_date)
 *** 5.3 Stopping a rewatch returns to completed
 On hold, dropped or planned during a rewatch puts the title back at completed with full progress, and the count does not go up. Watching changes nothing. With an unknown total the rewatch's count stays.
 
-Source: =src/core/entry.cpp:205-224=
+Source: =src/core/entry.cpp:249-268=
 #+begin_src cpp
 Entry SetStatus(Entry target, WatchStatus status, const IsoDate& today) {
 	if (status == target.status)
@@ -755,7 +934,7 @@ Entry SetStatus(Entry target, WatchStatus status, const IsoDate& today) {
 *** 5.4 A status that makes no sense is refused
 A completed title cannot go back to watching, and an unfinished title cannot be rewatched. Nothing changes.
 
-Source: =src/core/entry.cpp:185-195=
+Source: =src/core/entry.cpp:229-239=
 #+begin_src cpp
 std::optional<std::string> StatusRefusal(const Entry& target, WatchStatus status) {
 	if (status == WatchStatus::kWatching and target.status == WatchStatus::kCompleted)
@@ -770,7 +949,7 @@ std::optional<std::string> StatusRefusal(const Entry& target, WatchStatus status
 }
 #+end_src
 
-Source: =src/menu/edit.cpp:48-64=
+Source: =src/menu/edit.cpp:54-70=
 #+begin_src cpp
 void AskNewStatus(App& app, const Entry& title) {
 	ClearScreen(app);
@@ -794,13 +973,13 @@ void AskNewStatus(App& app, const Entry& title) {
 *** 5.5 Counting stops at a known total and explains
 It says the title is at its total and points to Set Total.
 
-Source: =src/menu/edit.cpp:10-20=
+Source: =src/menu/edit.cpp:16-26=
 #+begin_src cpp
 void CountBy(App& app, const Entry& title, int delta) {
 	auto current = app.db.GetById(title.type, title.id);
 	if (current and delta > 0 and AtTotal(*current)) {
-		app.out << std::format("{} is at its total, {} {}. If there are more, use Set Total.\n",
-		                       DisplayName(*current), current->total_units,
+		app.out << std::format("{} {} is at its total, {} {}. If there are more, use Set Total.\n",
+		                       output::icon::kInfo, DisplayName(*current), current->total_units,
 		                       UnitName(current->type, current->total_units));
 		return;
 	}
@@ -812,7 +991,7 @@ void CountBy(App& app, const Entry& title, int delta) {
 *** 5.6 Counting resumes a paused title
 Counting an episode moves a planned, on-hold or dropped title to watching.
 
-Source: =src/core/entry.cpp:159-162=
+Source: =src/core/entry.cpp:203-206=
 #+begin_src cpp
 if (IsPaused(target.status)) {
 	target.status = WatchStatus::kWatching;
@@ -823,7 +1002,7 @@ if (IsPaused(target.status)) {
 *** 5.7 The last episode completes the title
 The status becomes completed and the finish date is today.
 
-Source: =src/core/entry.cpp:143-153=
+Source: =src/core/entry.cpp:187-197=
 #+begin_src cpp
 Entry WithProgress(Entry target, int progress, const IsoDate& today) {
 	target.progress = progress;
@@ -841,7 +1020,7 @@ Entry WithProgress(Entry target, int progress, const IsoDate& today) {
 *** 5.8 Counting back reopens a completed title
 It goes back to watching or reading and its finish date is cleared.
 
-Source: =src/core/entry.cpp:169-177=
+Source: =src/core/entry.cpp:213-221=
 #+begin_src cpp
 Entry StepBackward(Entry target, int new_progress, const IsoDate& today) {
 	if (target.status == WatchStatus::kCompleted) {
@@ -857,7 +1036,7 @@ Entry StepBackward(Entry target, int new_progress, const IsoDate& today) {
 *** 5.9 Planned keeps progress
 Only the status changes and the finish date clears, so your place is not lost.
 
-Source: =src/core/entry.cpp:130-131=
+Source: =src/core/entry.cpp:174-175=
 #+begin_src cpp
 case WatchStatus::kPlanToWatch:
 	target.finish_date.reset();
@@ -866,12 +1045,12 @@ case WatchStatus::kPlanToWatch:
 *** 5.10 Totals and volumes are edited by hand
 Catalist does not re-check AniList after adding, so an airing show's total is fixed from the Edit menu.
 
-Source: =src/menu/edit.cpp:147=
+Source: =src/menu/edit.cpp:183=
 #+begin_src cpp
 AskCount(app, *current, "New total", CountField::kTotalUnits);
 #+end_src
 
-Source: =src/menu/edit.cpp:151=
+Source: =src/menu/edit.cpp:187=
 #+begin_src cpp
 AskCount(app, *current, "Volumes read", CountField::kVolumes);
 #+end_src
@@ -925,27 +1104,16 @@ std::optional<anilist::Match> OnlyExact(const std::vector<anilist::Match>& match
 }
 #+end_src
 
-Source: =src/menu/add.cpp:62-74=
+Source: =src/menu/add.cpp:69-70=
 #+begin_src cpp
 std::optional<anilist::Match> ChooseMatch(App& app, const std::vector<anilist::Match>& matches,
                                           const std::string& query) {
-	if (matches.size() == 1)
-		return matches[0];
-	if (auto exact = OnlyExact(matches, query))
-		return exact;
-	PrintMatches(app, matches);
-	app.out << std::format("\n{:>{}}. Back\n\n", 0, std::to_string(matches.size()).size());
-	int choice = ReadChoice(app, static_cast<int>(matches.size()));
-	if (choice == 0)
-		return std::nullopt;
-	return matches[static_cast<size_t>(choice - 1)];
-}
 #+end_src
 
 *** 6.4 Adding needs AniList
 There is no offline add. Without a connection the screen shows the error and changes nothing.
 
-Source: =src/menu/add.cpp:107-112=
+Source: =src/menu/add.cpp:121-126=
 #+begin_src cpp
 auto found = anilist::Search(app.net, only, *name);
 if (not found.has_value()) {
@@ -958,7 +1126,7 @@ if (not found.has_value()) {
 *** 6.5 You choose the new title's status
 Plan to Watch or Plan to Read is the first option.
 
-Source: =src/menu/add.cpp:76-88=
+Source: =src/menu/add.cpp:85-97=
 #+begin_src cpp
 void SaveNewTitle(App& app, const anilist::Match& match, WatchStatus status) {
 	IsoDate today = app.Today();
@@ -970,18 +1138,19 @@ void SaveNewTitle(App& app, const anilist::Match& match, WatchStatus status) {
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 		return;
 	}
-	app.out << std::format("{} added as {}.\n", DisplayName(added),
-	                       StatusLabel(added.status, added.type));
+	Done(app, std::format("{} added as {}.", DisplayName(added),
+	                      StatusLabel(added.status, added.type)));
 }
 #+end_src
 
 *** 6.6 A tracked title is left alone
 The screen reports it by name and changes nothing.
 
-Source: =src/menu/add.cpp:121-126=
+Source: =src/menu/add.cpp:136-142=
 #+begin_src cpp
 if (auto mine = app.db.FindByIds(match->type, match->anilist_id, match->mal_id)) {
-	app.out << std::format("{} is in your {} list already ({}).\n", DisplayName(*mine),
+	app.out << std::format("{} {} is in your {} list already ({}).\n", output::icon::kInfo,
+	                       DisplayName(*mine),
 	                       TypeKey(mine->type), StatusLabel(mine->status, mine->type));
 	Pause(app);
 	return;
@@ -991,9 +1160,32 @@ if (auto mine = app.db.FindByIds(match->type, match->anilist_id, match->mal_id))
 ** 7. Import, export and remove
 
 *** 7.1 An import asks title by title
-Where the file and your lists differ, you choose keep, file, keep rest, file rest or quit. Quit changes nothing.
+Where the file and your lists differ, you choose k (keep yours), f (take the file's), r (keep yours for every title left), t (take the file's for every title left) or q (quit). The keys are shown as alpha circles. Capital K and F still mean r and t. Quit changes nothing.
 
-Source: =src/menu/transfer.cpp:24-47=
+Source: =src/menu/transfer.cpp:74-91=
+#+begin_src cpp
+char AskClash(App& app) {
+	std::string keys;
+	for (auto [key, label] : {std::pair{'k', "Keep"}, {'f', "File"}, {'r', "Keep Rest"},
+	                          {'t', "File Rest"}, {'q', "Quit"}})
+		keys += std::format("{} {}  ", output::Paint(output::LetterHint(key), output::kCyan,
+		                                             app.color),
+		                    label);
+	while (true) {
+		auto answer = ReadLine(app, keys.substr(0, keys.size() - 2) + ": ");
+		if (not answer)
+			return 'q';
+		if (*answer == "K" or *answer == "F")
+			return *answer == "K" ? 'r' : 't';
+		std::string word = utf8::Lowercase(*answer);
+		if (word.size() == 1 and std::string_view("kfrtq").contains(word[0]))
+			return word[0];
+	}
+}
+#+end_src
+
+
+Source: =src/menu/transfer.cpp:27-54=
 #+begin_src cpp
 std::vector<Clash> ClashesOf(const Entry& mine, const Entry& file) {
 	std::vector<Clash> clashes;
@@ -1015,26 +1207,39 @@ std::vector<Clash> ClashesOf(const Entry& mine, const Entry& file) {
 	count("progress", &Entry::progress, true);
 	count("volumes", &Entry::volumes);
 	count("rewatched", &Entry::rewatched);
+	if (mine.rewatch_value != RewatchValue::kNone and file.rewatch_value != RewatchValue::kNone and
+	    mine.rewatch_value != file.rewatch_value)
+		clashes.push_back({"rewatch value", RewatchValueLabel(mine.rewatch_value),
+		                   RewatchValueLabel(file.rewatch_value)});
 	date("started", &Entry::start_date);
 	date("finished", &Entry::finish_date);
 	return clashes;
 }
 #+end_src
 
-Source: =src/menu/transfer.cpp:60-68=
+Source: =src/menu/transfer.cpp:74-91=
 #+begin_src cpp
 char AskClash(App& app) {
+	std::string keys;
+	for (auto [key, label] : {std::pair{'k', "Keep"}, {'f', "File"}, {'r', "Keep Rest"},
+	                          {'t', "File Rest"}, {'q', "Quit"}})
+		keys += std::format("{} {}  ", output::Paint(output::LetterHint(key), output::kCyan,
+		                                             app.color),
+		                    label);
 	while (true) {
-		auto answer = ReadLine(app, "[k]eep  [f]ile  [K]eep rest  [F]ile rest  [q]uit: ");
+		auto answer = ReadLine(app, keys.substr(0, keys.size() - 2) + ": ");
 		if (not answer)
 			return 'q';
-		if (answer->size() == 1 and std::string_view("kfKFq").contains((*answer)[0]))
-			return (*answer)[0];
+		if (*answer == "K" or *answer == "F")
+			return *answer == "K" ? 'r' : 't';
+		std::string word = utf8::Lowercase(*answer);
+		if (word.size() == 1 and std::string_view("kfrtq").contains(word[0]))
+			return word[0];
 	}
 }
 #+end_src
 
-Source: =src/menu/transfer.cpp:70-91=
+Source: =src/menu/transfer.cpp:93-114=
 #+begin_src cpp
 std::optional<std::set<const Entry*>> AskClashes(App& app, const std::vector<Entry>& titles) {
 	std::set<const Entry*> take_file;
@@ -1051,9 +1256,9 @@ std::optional<std::set<const Entry*>> AskClashes(App& app, const std::vector<Ent
 		}
 		if (answer == 'q')
 			return std::nullopt;
-		if (answer == 'K' or answer == 'F')
+		if (answer == 'r' or answer == 't')
 			rest = answer;
-		if (answer == 'f' or answer == 'F')
+		if (answer == 'f' or answer == 't')
 			take_file.insert(&title);
 	}
 	return take_file;
@@ -1063,11 +1268,13 @@ std::optional<std::set<const Entry*>> AskClashes(App& app, const std::vector<Ent
 *** 7.2 Choosing the file replaces your values
 Its status and every count or date it holds replace yours.
 
-Source: =src/core/entry.cpp:313-327=
+Source: =src/core/entry.cpp:367-383=
 #+begin_src cpp
 Entry TakeImported(Entry existing, const Entry& incoming) {
 	existing = MergeImported(existing, incoming);
 	existing.status = incoming.status;
+	if (incoming.rewatch_value != RewatchValue::kNone)
+		existing.rewatch_value = incoming.rewatch_value;
 	for (int Entry::* count :
 	     {&Entry::score, &Entry::progress, &Entry::volumes, &Entry::rewatched})
 		if (incoming.*count > 0)
@@ -1085,7 +1292,7 @@ Entry TakeImported(Entry existing, const Entry& incoming) {
 *** 7.3 Export writes one list to a file
 It asks before replacing a file that exists.
 
-Source: =src/menu/transfer.cpp:134-154=
+Source: =src/menu/transfer.cpp:157-178=
 #+begin_src cpp
 void ExportList(App& app, MediaType type) {
 	auto typed = AskText(app, std::format("File to save the {} list in (Enter to go back): ",
@@ -1096,7 +1303,7 @@ void ExportList(App& app, MediaType type) {
 	std::error_code ignored;
 	if (std::filesystem::exists(path, ignored) and
 	    not AskYes(app, std::format("{} exists. Replace it?", path))) {
-		app.out << "Nothing was saved.\n";
+		app.out << std::format("{} Nothing was saved.\n", output::icon::kInfo);
 		return;
 	}
 	auto written = mal_xml::Write(app.db.GetEntries(type), type);
@@ -1104,16 +1311,17 @@ void ExportList(App& app, MediaType type) {
 		Fail(app, std::format("could not write {}", path));
 		return;
 	}
-	app.out << std::format("Saved {}.\n", path);
+	Done(app, std::format("Saved {}.", path));
 	if (written.skipped > 0)
-		app.out << std::format("{} without a MyAnimeList id left out.\n", written.skipped);
+		app.out << std::format("{} {} without a MyAnimeList id left out.\n", output::icon::kInfo,
+		                       written.skipped);
 }
 #+end_src
 
 *** 7.4 Remove always asks
 A title is removed only after a yes.
 
-Source: =src/menu/edit.cpp:172-190=
+Source: =src/menu/edit.cpp:211-229=
 #+begin_src cpp
 void RemoveScreen(App& app) {
 	ClearScreen(app);
@@ -1123,16 +1331,78 @@ void RemoveScreen(App& app) {
 		return;
 	std::string name = std::format("{} ({})", DisplayName(*title), TypeKey(title->type));
 	if (not AskYes(app, std::format("Remove {} from your lists?", name))) {
-		app.out << "Cancelled.\n";
+		app.out << std::format("{} Cancelled.\n", output::icon::kInfo);
 		Pause(app);
 		return;
 	}
 	app.db.RemoveEntry(title->type, title->id);
 	if (app.db.Save(app.Stamp()))
-		app.out << std::format("{} removed.\n", name);
+		Done(app, std::format("{} removed.", name));
 	else
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 	Pause(app);
+}
+#+end_src
+
+*** 7.5 The rewatch flag and rewatch value are read as enums
+MyAnimeList XML marks a rewatch with =my_rewatching= (1 or 0) for anime and =my_rereading= (YES or NO) for manga. That flag is read into a =RepeatFlag= enum, and a yes makes the title's status Rewatching. The rewatch value, =my_rewatch_value= or =my_reread_value=, is MyAnimeList's 1 to 5 scale and is read into a =RewatchValue= enum. A blank or unknown number means no value. Export writes both back.
+
+Source: =src/core/entry.hpp:15-16=
+#+begin_src cpp
+// MyAnimeList's rewatch (reread) value, 1 to 5 in its XML.
+enum class RewatchValue { kNone, kVeryLow, kLow, kMedium, kHigh, kVeryHigh };
+#+end_src
+
+Source: =src/storage/mal_xml.cpp:77-82=
+#+begin_src cpp
+RepeatFlag ParseRepeatFlag(const std::string& text) {
+	std::string word = text;
+	std::transform(word.begin(), word.end(), word.begin(),
+	               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+	return word == "1" or word == "YES" or word == "TRUE" ? RepeatFlag::kYes : RepeatFlag::kNo;
+}
+#+end_src
+
+Source: =src/storage/mal_xml.cpp:95-99=
+#+begin_src cpp
+RewatchValue ParseRewatchNumber(int number) {
+	if (number < 1 or number > 5)
+		return RewatchValue::kNone;
+	return static_cast<RewatchValue>(number);
+}
+#+end_src
+
+Source: =src/storage/mal_xml.cpp:150-152=
+#+begin_src cpp
+if (ParseRepeatFlag(TagText(block, tags.again)) == RepeatFlag::kYes)
+	item.status = WatchStatus::kRewatching;
+item.rewatch_value = ParseRewatchNumber(TagNumber(block, tags.value));
+#+end_src
+
+*** 7.6 The rewatch value is shown and set by hand
+The title card shows the rewatch value (reread value for manga). Edit Title sets it from Very Low to Very High, or None. An import fills an empty value, and taking the file's values replaces it.
+
+Source: =src/menu/edit.cpp:72-91=
+#+begin_src cpp
+void AskRewatchValue(App& app, const Entry& title) {
+	constexpr RewatchValue kValues[] = {RewatchValue::kVeryLow, RewatchValue::kLow,
+	                                    RewatchValue::kMedium, RewatchValue::kHigh,
+	                                    RewatchValue::kVeryHigh, RewatchValue::kNone};
+	ClearScreen(app);
+	std::vector<Option> labels;
+	for (RewatchValue value : kValues)
+		labels.push_back({output::icon::kRewatch,
+		                  value == RewatchValue::kNone ? "None" : RewatchValueLabel(value)});
+	DrawMenu(app, std::format("Catalist / Edit Title / {} / {}", DisplayName(title),
+	                          RewatchValueName(title.type)),
+	         labels);
+	int choice = ReadChoice(app, static_cast<int>(std::size(kValues)));
+	if (choice == 0)
+		return;
+	IsoDate today = app.Today();
+	ChangeTitle(app, title, [&](const Entry& e) {
+		return SetRewatchValue(e, kValues[choice - 1], today);
+	});
 }
 #+end_src
 
@@ -1157,23 +1427,24 @@ std::filesystem::path ListFile() {
 #+end_src
 
 *** 8.2 The file format
-One header row, then one row per title. Commas and quotes in names are escaped as in standard CSV.
+One header row, then one row per title. Commas and quotes in names are escaped as in standard CSV. The last column, =rewatch_value=, is a word such as =very-high=, or blank for none. A list saved before that column existed still loads, and gains the column on its next save.
 
 Source: =src/storage/csv_codec.hpp:13-15=
 #+begin_src cpp
 inline constexpr const char* kHeader =
     "id,type,title,english_title,status,score,progress,total_units,volumes,total_volumes,"
-    "rewatched,start_date,finish_date,updated_at,changed_at,mal_id,anilist_id";
+    "rewatched,start_date,finish_date,updated_at,changed_at,mal_id,anilist_id,rewatch_value";
 #+end_src
 
-Source: =src/storage/csv_codec.cpp:120-126=
+Source: =src/storage/csv_codec.cpp:124-131=
 #+begin_src cpp
 std::string EncodeEntry(const Entry& e) {
-	return std::format("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, TypeKey(e.type),
+	return std::format("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", e.id, TypeKey(e.type),
 	                   EscapeField(e.title), EscapeField(e.english_title), StatusKey(e.status),
 	                   e.score, e.progress, e.total_units, e.volumes, e.total_volumes, e.rewatched,
 	                   FormatDate(e.start_date), FormatDate(e.finish_date),
-	                   FormatDate(e.updated_at), e.changed_at, e.mal_id, e.anilist_id);
+	                   FormatDate(e.updated_at), e.changed_at, e.mal_id, e.anilist_id,
+	                   RewatchValueKey(e.rewatch_value));
 }
 #+end_src
 
@@ -1202,7 +1473,7 @@ bool WriteFile(const std::filesystem::path& file, const std::string& text) {
 *** 8.4 A damaged file is never saved over
 Catalist names the bad row and stops.
 
-Source: =src/storage/catalogue.cpp:127-152=
+Source: =src/storage/catalogue.cpp:127-153=
 #+begin_src cpp
 Result<bool> Catalogue::Load() {
 	anime_.clear();
@@ -1217,7 +1488,8 @@ Result<bool> Catalogue::Load() {
 		return std::unexpected(std::format("cannot read {}", file_.string()));
 
 	auto records = csv_codec::SplitRecords(*text);
-	if (records.empty() or records[0] != csv_codec::kHeader)
+	if (records.empty() or
+	    (records[0] != csv_codec::kHeader and records[0] != csv_codec::kOldHeader))
 		return std::unexpected(std::format("{} is not a Catalist list", file_.string()));
 	for (size_t i = 1; i < records.size(); ++i) {
 		auto row = csv_codec::DecodeEntry(csv_codec::SplitFields(records[i]));
@@ -1232,14 +1504,16 @@ Result<bool> Catalogue::Load() {
 }
 #+end_src
 
-Source: =src/storage/csv_codec.cpp:89-118=
+Source: =src/storage/csv_codec.cpp:90-122=
 #+begin_src cpp
 std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields) {
-	if (fields.size() != kFields or (fields[1] != "anime" and fields[1] != "manga") or
+	if ((fields.size() != kFields and fields.size() != kOldFields) or (fields[1] != "anime" and fields[1] != "manga") or
 	    fields[2].empty())
 		return std::nullopt;
 	auto status = ParseStatus(fields[4]);
-	if (not status)
+	auto rewatch_value = fields.size() == kFields ? ParseRewatchValue(fields[17])
+	                                              : std::optional(RewatchValue::kNone);
+	if (not status or not rewatch_value)
 		return std::nullopt;
 
 	Entry row;
@@ -1247,6 +1521,7 @@ std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields) {
 	row.title = fields[2];
 	row.english_title = fields[3];
 	row.status = *status;
+	row.rewatch_value = *rewatch_value;
 	row.changed_at = fields[14];
 	const std::pair<size_t, int*> counts[] = {
 	    {0, &row.id},      {5, &row.score},         {6, &row.progress},   {7, &row.total_units},
@@ -1274,6 +1549,7 @@ These were decided during development, then replaced when the course requirement
 - SQLite storage and automatic database backups: replaced by one CSV file.
 - Undo, redo and the change history: removed because they made the program too complex.
 - The Continue section on the main screen: removed to keep the screen simple.
+- Plain-text menus (=1. Add Title=, a bold "Catalist" heading, =[y/N]=, =[k]eep=): replaced by the logos, Nerd Font icons and circled hints (2.3, 2.15). The import keys K and F became r and t, because circled letters have no capitals.
 
 ** One-time English name fill
 Once, before the move to CSV, the real list was matched against AniList by MyAnimeList id. Of 680 titles, 671 gained an AniList id and 441 gained a different English name. Nine keep their romaji name only. That one-off script is not part of the program.
@@ -1344,338 +1620,479 @@ TODO: capture these at a terminal with a Nerd Font, then caption them Figure 1, 
 9. Exit.
 
 * Testing and Sample Runs
-The project has 121 automated tests, including a smoke test that runs the real program, and all of them pass at this commit. They use temporary data and a stand-in for AniList.
+The project has 127 automated tests, including a smoke test that runs the real program, and all of them pass at this commit. They use temporary data and a stand-in for AniList.
 
-These runs are real output from a small sample list. The Add Title run uses the same stand-in for AniList. =[main menu]= marks where the menu was drawn again.
+These runs are real output from a small sample list, captured at an 80-column terminal (the first at 120 columns, so the big logo shows). The Add Title run uses the same stand-in for AniList. =[main menu]= marks where the home screen was drawn again, and =[logo]= marks the small Catalist logo at the top of each other screen. The icons need a Nerd Font to show.
 
 ** The main menu and Exit
 #+begin_example
-Catalist
-2 anime, 1 manga, 2 in progress
+      ___           ___           ___           ___           ___                   ___           ___
+     /\  \         /\  \         /\  \         /\  \         /\__\      ___        /\  \         /\  \
+    /::\  \       /::\  \        \:\  \       /::\  \       /:/  /     /\  \      /::\  \        \:\  \
+   /:/\:\  \     /:/\:\  \        \:\  \     /:/\:\  \     /:/  /      \:\  \    /:/\ \  \        \:\  \
+  /:/  \:\  \   /::\~\:\  \       /::\  \   /::\~\:\  \   /:/  /       /::\__\  _\:\~\ \  \       /::\  \
+ /:/__/ \:\__\ /:/\:\ \:\__\     /:/\:\__\ /:/\:\ \:\__\ /:/__/     __/:/\/__/ /\ \:\ \ \__\     /:/\:\__\
+ \:\  \  \/__/ \/__\:\/:/  /    /:/  \/__/ \/__\:\/:/  / \:\  \    /\/:/  /    \:\ \:\ \/__/    /:/  \/__/
+  \:\  \            \::/  /    /:/  /           \::/  /   \:\  \   \::/__/      \:\ \:\__\     /:/  /
+   \:\  \           /:/  /     \/__/            /:/  /     \:\  \   \:\__\       \:\/:/  /     \/__/
+    \:\__\         /:/  /                      /:/  /       \:\__\   \/__/        \::/  /
+     \/__/         \/__/                       \/__/         \/__/                 \/__/
 
-1. Add Title
-2. View Lists
-3. Log Progress
-4. Edit Title
-5. Remove Title
-6. Stats
-7. Import & Export
-0. Exit
+  󰔂 2 anime    󱓷 1 manga    󰐌 2 in progress
+──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-Enter choice [0-7]: 0
+  󰲠  󰐗 Add Title
+  󰲢  󰕲 View Lists
+  󰲤  󰐌 Log Progress
+  󰲦  󰛿 Edit Title
+  󰲨  󰚃 Remove Title
+  󰲪  󱕍 Stats
+  󰲬  󰿡 Import & Export
+  󰲞  󰈆 Exit
+
+󰁖 Enter choice [󰲞-󰲬]: 0
 Goodbye!
 #+end_example
 
 ** A choice that is not on the menu
 #+begin_example
 [main menu]
-Enter choice [0-7]: 9
-Enter a number from 0 to 7.
-Enter choice [0-7]: abc
-Enter a number from 0 to 7.
-Enter choice [0-7]: 0
+󰁖 Enter choice [󰲞-󰲬]: 9
+󰀨 Enter a number from 0 to 7.
+󰁖 Enter choice [󰲞-󰲬]: abc
+󰀨 Enter a number from 0 to 7.
+󰁖 Enter choice [󰲞-󰲬]: 0
 Goodbye!
 #+end_example
 
 ** Create: adding a title from AniList
 #+begin_example
 [main menu]
-Enter choice [0-7]: 1
-Catalist / Add Title
+󰁖 Enter choice [󰲞-󰲬]: 1
+[logo]
+󰟒 Catalist / Add Title
+────────────────────────────────────────────────────────────────────────────────
 
-1. Both
-2. Anime Only
-3. Manga Only
-0. Back
+  󰲠  󰍌 Both
+  󰲢  󰔂 Anime Only
+  󰲤  󱓷 Manga Only
+  󰲞  󰳝 Back
 
-Enter choice [0-3]: 1
-Search AniList (Enter to go back): fullmetal
-Anime
-1.  2009  Fullmetal Alchemist: Brotherhood  64 episodes  -
-2.  2003  Fullmetal Alchemist               51 episodes  -
+󰁖 Enter choice [󰲞-󰲤]: 1
+󰍉 Search AniList (Enter to go back): fullmetal
+󰔂 Anime
+  󰲠  2009  Fullmetal Alchemist: Brotherhood  64 episodes  -
+  󰲢  2003  Fullmetal Alchemist               51 episodes  -
 
-0. Back
+  󰲞  󰳝 Back
 
-Enter choice [0-2]: 2
-Catalist / Add Title / Fullmetal Alchemist
+󰁖 Enter choice [󰲞-󰲢]: 2
+[logo]
+󰟒 Catalist / Add Title / Fullmetal Alchemist
+────────────────────────────────────────────────────────────────────────────────
 
-1. Plan to Watch
-2. Watching
-3. Completed
-4. On Hold
-5. Dropped
-0. Back
+  󰲠  󰥔 Plan to Watch
+  󰲢  󰐌 Watching
+  󰲤  󰗠 Completed
+  󰲦  󰏥 On Hold
+  󰲨  󰅙 Dropped
+  󰲞  󰳝 Back
 
-Enter choice [0-5]: 1
-Fullmetal Alchemist added as Plan to Watch.
+󰁖 Enter choice [󰲞-󰲨]: 1
+󰗠 Fullmetal Alchemist added as Plan to Watch.
 
 Press Enter to continue...
 [main menu]
-Enter choice [0-7]: 0
+󰁖 Enter choice [󰲞-󰲬]: 0
 Goodbye!
 #+end_example
 
 ** Read: viewing what is in progress
 #+begin_example
 [main menu]
-Enter choice [0-7]: 2
-Catalist / View Lists
+󰁖 Enter choice [󰲞-󰲬]: 2
+[logo]
+󰟒 Catalist / View Lists
+────────────────────────────────────────────────────────────────────────────────
 
-1. In Progress
-2. All Titles
-3. Anime
-4. Manga
-5. By Status
-6. Search Lists
-7. Title Details
-0. Back
+  󰲠  󰐌 In Progress
+  󰲢  󰕲 All Titles
+  󰲤  󰔂 Anime
+  󰲦  󱓷 Manga
+  󰲨  󰈲 By Status
+  󰲪  󰍉 Search Lists
+  󰲬  󰋼 Title Details
+  󰲞  󰳝 Back
 
-Enter choice [0-7]: 1
-Catalist / View Lists / In Progress (2)
+󰁖 Enter choice [󰲞-󰲬]: 1
+[logo]
+󰟒 Catalist / View Lists / In Progress (2)
+────────────────────────────────────────────────────────────────────────────────
 
-Anime
-Sousou no Frieren  Watching  󰓎󰓎󰓎󰓎󰓎  12/28
+󰔂 Anime
+  󰐌  Sousou no Frieren  Watching  󰓎󰓎󰓎󰓎󰓎  12/28
 
-Manga
-Berserk            Reading   󰓎󰓎󰓎󰓎󰓐  364/?
+󱓷 Manga
+  󰐌  Berserk            Reading   󰓎󰓎󰓎󰓎󰓐  364/?
 
 Press Enter to continue...
-Catalist / View Lists
+[logo]
+󰟒 Catalist / View Lists
+────────────────────────────────────────────────────────────────────────────────
 
-1. In Progress
-2. All Titles
-3. Anime
-4. Manga
-5. By Status
-6. Search Lists
-7. Title Details
-0. Back
+  󰲠  󰐌 In Progress
+  󰲢  󰕲 All Titles
+  󰲤  󰔂 Anime
+  󰲦  󱓷 Manga
+  󰲨  󰈲 By Status
+  󰲪  󰍉 Search Lists
+  󰲬  󰋼 Title Details
+  󰲞  󰳝 Back
 
-Enter choice [0-7]: 0
+󰁖 Enter choice [󰲞-󰲬]: 0
 [main menu]
-Enter choice [0-7]: 0
+󰁖 Enter choice [󰲞-󰲬]: 0
 Goodbye!
 #+end_example
 
 ** Update: Log Progress
 #+begin_example
 [main menu]
-Enter choice [0-7]: 3
-Catalist / Log Progress
+󰁖 Enter choice [󰲞-󰲬]: 3
+[logo]
+󰟒 Catalist / Log Progress
+────────────────────────────────────────────────────────────────────────────────
 
-1.  Berserk            manga  364/?
-2.  Sousou no Frieren  anime  12/28
-0. Back
+  󰲠  󱓷  Berserk            364/?
+  󰲢  󰔂  Sousou no Frieren  12/28
 
-Enter choice [0-2]: 1
-Berserk  progress 364 -> 365/?
-Berserk  started - -> 2026-11-24
+  󰲞  󰳝 Back
+
+󰁖 Enter choice [󰲞-󰲢]: 1
+󰗠 Berserk  progress 364 󰳟 365/?
+󰗠 Berserk  started - 󰳟 2026-11-26
 
 Press Enter to continue...
 [main menu]
-Enter choice [0-7]: 0
+󰁖 Enter choice [󰲞-󰲬]: 0
 Goodbye!
 #+end_example
 
 ** Update: a typo, then a new score
 #+begin_example
 [main menu]
-Enter choice [0-7]: 4
-Catalist / Edit Title
+󰁖 Enter choice [󰲞-󰲬]: 4
+[logo]
+󰟒 Catalist / Edit Title
+────────────────────────────────────────────────────────────────────────────────
 
-Enter title (Enter to go back): freiren
-Did you mean Sousou no Frieren? [y/N]: y
-Catalist / Edit Title / Sousou no Frieren
+󰍉 Enter title (Enter to go back): freiren
+Did you mean Sousou no Frieren? 󰰴 Yes  󰰓 No: y
+[logo]
+󰟒 Catalist / Edit Title / Sousou no Frieren
+────────────────────────────────────────────────────────────────────────────────
 
-  Type         Anime
-  AniList      -
-  MyAnimeList  52991
-  Status       Watching
-  Score        󰓎󰓎󰓎󰓎󰓎  10/10
-  Progress     12/28 episodes
-  Rewatched    0
-  Started      -
-  Finished     -
-  Updated      -
+  󰔂 Type          Anime
+  󰋼 AniList       -
+  󰋼 MyAnimeList   52991
+  󰐌 Status        Watching
+  󰓏 Score         󰓎󰓎󰓎󰓎󰓎  10/10
+  󰦕 Progress      █████████░░░░░░░░░░░  12/28 episodes
+  󰐤 Rewatched     0
+  󱍸 Rewatch value -
+  󰃭 Started       -
+  󰃯 Finished      -
+  󰥔 Updated       -
 
- 1. +1 Progress
- 2. -1 Progress
- 3. Set Progress
- 4. Set Score
- 5. Set Status
- 6. Set Total
- 7. Set Volumes
- 8. Set Start Date
- 9. Set Finish Date
-10. Rename Title
- 0. Back
+   󰲠  󰐗 +1 Progress
+   󰲢  󰍶 -1 Progress
+   󰲤  󰦕 Set Progress
+   󰲦  󰓏 Set Score
+   󰲨  󰈻 Set Status
+   󰲪  󰐤 Set Total
+   󰲬  󱓷 Set Volumes
+   󰲮  󰃭 Set Start Date
+   󰲰  󰃯 Set Finish Date
+  󰲠󰲞  󰘎 Rename Title
+  󰲠󰲠  󱍸 Set Rewatch Value
+   󰲞  󰳝 Back
 
-Enter choice [0-10]: 4
+󰁖 Enter choice [󰲞-󰲠󰲠]: 4
 Score from 0 to 10 (Enter to go back): 9
-Sousou no Frieren  score 10 -> 9
+󰗠 Sousou no Frieren  score 10 󰳟 9
 
 Press Enter to continue...
-Catalist / Edit Title / Sousou no Frieren
+[logo]
+󰟒 Catalist / Edit Title / Sousou no Frieren
+────────────────────────────────────────────────────────────────────────────────
 
-  Type         Anime
-  AniList      -
-  MyAnimeList  52991
-  Status       Watching
-  Score        󰓎󰓎󰓎󰓎󰓐  9/10
-  Progress     12/28 episodes
-  Rewatched    0
-  Started      -
-  Finished     -
-  Updated      2026-11-24
+  󰔂 Type          Anime
+  󰋼 AniList       -
+  󰋼 MyAnimeList   52991
+  󰐌 Status        Watching
+  󰓏 Score         󰓎󰓎󰓎󰓎󰓐  9/10
+  󰦕 Progress      █████████░░░░░░░░░░░  12/28 episodes
+  󰐤 Rewatched     0
+  󱍸 Rewatch value -
+  󰃭 Started       -
+  󰃯 Finished      -
+  󰥔 Updated       2026-11-26
 
- 1. +1 Progress
- 2. -1 Progress
- 3. Set Progress
- 4. Set Score
- 5. Set Status
- 6. Set Total
- 7. Set Volumes
- 8. Set Start Date
- 9. Set Finish Date
-10. Rename Title
- 0. Back
+   󰲠  󰐗 +1 Progress
+   󰲢  󰍶 -1 Progress
+   󰲤  󰦕 Set Progress
+   󰲦  󰓏 Set Score
+   󰲨  󰈻 Set Status
+   󰲪  󰐤 Set Total
+   󰲬  󱓷 Set Volumes
+   󰲮  󰃭 Set Start Date
+   󰲰  󰃯 Set Finish Date
+  󰲠󰲞  󰘎 Rename Title
+  󰲠󰲠  󱍸 Set Rewatch Value
+   󰲞  󰳝 Back
 
-Enter choice [0-10]: 0
+󰁖 Enter choice [󰲞-󰲠󰲠]: 0
 [main menu]
-Enter choice [0-7]: 0
+󰁖 Enter choice [󰲞-󰲬]: 0
+Goodbye!
+#+end_example
+
+** Update: the rewatch value
+#+begin_example
+[main menu]
+󰁖 Enter choice [󰲞-󰲬]: 4
+[logo]
+󰟒 Catalist / Edit Title
+────────────────────────────────────────────────────────────────────────────────
+
+󰍉 Enter title (Enter to go back): taxi
+[logo]
+󰟒 Catalist / Edit Title / Odd Taxi
+────────────────────────────────────────────────────────────────────────────────
+
+  󰔂 Type          Anime
+  󰋼 AniList       -
+  󰋼 MyAnimeList   44265
+  󰗠 Status        Completed
+  󰓏 Score         󰓎󰓎󰓎󰓎󰓒  8/10
+  󰦕 Progress      ████████████████████  13/13 episodes
+  󰐤 Rewatched     0
+  󱍸 Rewatch value -
+  󰃭 Started       -
+  󰃯 Finished      2026-01-05
+  󰥔 Updated       -
+
+   󰲠  󰐗 +1 Progress
+   󰲢  󰍶 -1 Progress
+   󰲤  󰦕 Set Progress
+   󰲦  󰓏 Set Score
+   󰲨  󰈻 Set Status
+   󰲪  󰐤 Set Total
+   󰲬  󱓷 Set Volumes
+   󰲮  󰃭 Set Start Date
+   󰲰  󰃯 Set Finish Date
+  󰲠󰲞  󰘎 Rename Title
+  󰲠󰲠  󱍸 Set Rewatch Value
+   󰲞  󰳝 Back
+
+󰁖 Enter choice [󰲞-󰲠󰲠]: 11
+[logo]
+󰟒 Catalist / Edit Title / Odd Taxi / Set Rewatch Value
+────────────────────────────────────────────────────────────────────────────────
+
+  󰲠  󱍸 Very Low
+  󰲢  󱍸 Low
+  󰲤  󱍸 Medium
+  󰲦  󱍸 High
+  󰲨  󱍸 Very High
+  󰲪  󱍸 None
+  󰲞  󰳝 Back
+
+󰁖 Enter choice [󰲞-󰲪]: 4
+󰗠 Odd Taxi  rewatch value - 󰳟 High
+
+Press Enter to continue...
+[logo]
+󰟒 Catalist / Edit Title / Odd Taxi
+────────────────────────────────────────────────────────────────────────────────
+
+  󰔂 Type          Anime
+  󰋼 AniList       -
+  󰋼 MyAnimeList   44265
+  󰗠 Status        Completed
+  󰓏 Score         󰓎󰓎󰓎󰓎󰓒  8/10
+  󰦕 Progress      ████████████████████  13/13 episodes
+  󰐤 Rewatched     0
+  󱍸 Rewatch value High
+  󰃭 Started       -
+  󰃯 Finished      2026-01-05
+  󰥔 Updated       2026-11-26
+
+   󰲠  󰐗 +1 Progress
+   󰲢  󰍶 -1 Progress
+   󰲤  󰦕 Set Progress
+   󰲦  󰓏 Set Score
+   󰲨  󰈻 Set Status
+   󰲪  󰐤 Set Total
+   󰲬  󱓷 Set Volumes
+   󰲮  󰃭 Set Start Date
+   󰲰  󰃯 Set Finish Date
+  󰲠󰲞  󰘎 Rename Title
+  󰲠󰲠  󱍸 Set Rewatch Value
+   󰲞  󰳝 Back
+
+󰁖 Enter choice [󰲞-󰲠󰲠]: 0
+[main menu]
+󰁖 Enter choice [󰲞-󰲬]: 0
 Goodbye!
 #+end_example
 
 ** A status the title cannot take
 #+begin_example
 [main menu]
-Enter choice [0-7]: 4
-Catalist / Edit Title
+󰁖 Enter choice [󰲞-󰲬]: 4
+[logo]
+󰟒 Catalist / Edit Title
+────────────────────────────────────────────────────────────────────────────────
 
-Enter title (Enter to go back): taxi
-Catalist / Edit Title / Odd Taxi
+󰍉 Enter title (Enter to go back): taxi
+[logo]
+󰟒 Catalist / Edit Title / Odd Taxi
+────────────────────────────────────────────────────────────────────────────────
 
-  Type         Anime
-  AniList      -
-  MyAnimeList  44265
-  Status       Completed
-  Score        󰓎󰓎󰓎󰓎󰓒  8/10
-  Progress     13/13 episodes
-  Rewatched    0
-  Started      -
-  Finished     2026-01-05
-  Updated      -
+  󰔂 Type          Anime
+  󰋼 AniList       -
+  󰋼 MyAnimeList   44265
+  󰗠 Status        Completed
+  󰓏 Score         󰓎󰓎󰓎󰓎󰓒  8/10
+  󰦕 Progress      ████████████████████  13/13 episodes
+  󰐤 Rewatched     0
+  󱍸 Rewatch value -
+  󰃭 Started       -
+  󰃯 Finished      2026-01-05
+  󰥔 Updated       -
 
- 1. +1 Progress
- 2. -1 Progress
- 3. Set Progress
- 4. Set Score
- 5. Set Status
- 6. Set Total
- 7. Set Volumes
- 8. Set Start Date
- 9. Set Finish Date
-10. Rename Title
- 0. Back
+   󰲠  󰐗 +1 Progress
+   󰲢  󰍶 -1 Progress
+   󰲤  󰦕 Set Progress
+   󰲦  󰓏 Set Score
+   󰲨  󰈻 Set Status
+   󰲪  󰐤 Set Total
+   󰲬  󱓷 Set Volumes
+   󰲮  󰃭 Set Start Date
+   󰲰  󰃯 Set Finish Date
+  󰲠󰲞  󰘎 Rename Title
+  󰲠󰲠  󱍸 Set Rewatch Value
+   󰲞  󰳝 Back
 
-Enter choice [0-10]: 5
-Catalist / Edit Title / Odd Taxi / Set Status
+󰁖 Enter choice [󰲞-󰲠󰲠]: 5
+[logo]
+󰟒 Catalist / Edit Title / Odd Taxi / Set Status
+────────────────────────────────────────────────────────────────────────────────
 
-1. Plan to Watch
-2. Watching
-3. Completed
-4. On Hold
-5. Dropped
-6. Rewatching
-0. Back
+  󰲠  󰥔 Plan to Watch
+  󰲢  󰐌 Watching
+  󰲤  󰗠 Completed
+  󰲦  󰏥 On Hold
+  󰲨  󰅙 Dropped
+  󰲪  󱍸 Rewatching
+  󰲞  󰳝 Back
 
-Enter choice [0-6]: 2
-Error: Odd Taxi is completed; choose Rewatching to start it again
+󰁖 Enter choice [󰲞-󰲪]: 2
+󰀨 Error: Odd Taxi is completed; choose Rewatching to start it again
 
 Press Enter to continue...
-Catalist / Edit Title / Odd Taxi
+[logo]
+󰟒 Catalist / Edit Title / Odd Taxi
+────────────────────────────────────────────────────────────────────────────────
 
-  Type         Anime
-  AniList      -
-  MyAnimeList  44265
-  Status       Completed
-  Score        󰓎󰓎󰓎󰓎󰓒  8/10
-  Progress     13/13 episodes
-  Rewatched    0
-  Started      -
-  Finished     2026-01-05
-  Updated      -
+  󰔂 Type          Anime
+  󰋼 AniList       -
+  󰋼 MyAnimeList   44265
+  󰗠 Status        Completed
+  󰓏 Score         󰓎󰓎󰓎󰓎󰓒  8/10
+  󰦕 Progress      ████████████████████  13/13 episodes
+  󰐤 Rewatched     0
+  󱍸 Rewatch value -
+  󰃭 Started       -
+  󰃯 Finished      2026-01-05
+  󰥔 Updated       -
 
- 1. +1 Progress
- 2. -1 Progress
- 3. Set Progress
- 4. Set Score
- 5. Set Status
- 6. Set Total
- 7. Set Volumes
- 8. Set Start Date
- 9. Set Finish Date
-10. Rename Title
- 0. Back
+   󰲠  󰐗 +1 Progress
+   󰲢  󰍶 -1 Progress
+   󰲤  󰦕 Set Progress
+   󰲦  󰓏 Set Score
+   󰲨  󰈻 Set Status
+   󰲪  󰐤 Set Total
+   󰲬  󱓷 Set Volumes
+   󰲮  󰃭 Set Start Date
+   󰲰  󰃯 Set Finish Date
+  󰲠󰲞  󰘎 Rename Title
+  󰲠󰲠  󱍸 Set Rewatch Value
+   󰲞  󰳝 Back
 
-Enter choice [0-10]: 0
+󰁖 Enter choice [󰲞-󰲠󰲠]: 0
 [main menu]
-Enter choice [0-7]: 0
+󰁖 Enter choice [󰲞-󰲬]: 0
 Goodbye!
 #+end_example
 
 ** Delete: Remove Title
 #+begin_example
 [main menu]
-Enter choice [0-7]: 5
-Catalist / Remove Title
+󰁖 Enter choice [󰲞-󰲬]: 5
+[logo]
+󰟒 Catalist / Remove Title
+────────────────────────────────────────────────────────────────────────────────
 
-Enter title (Enter to go back): taxi
-Remove Odd Taxi (anime) from your lists? [y/N]: y
-Odd Taxi (anime) removed.
+󰍉 Enter title (Enter to go back): taxi
+Remove Odd Taxi (anime) from your lists? 󰰴 Yes  󰰓 No: y
+󰗠 Odd Taxi (anime) removed.
 
 Press Enter to continue...
 [main menu]
-Enter choice [0-7]: 0
+󰁖 Enter choice [󰲞-󰲬]: 0
 Goodbye!
 #+end_example
 
 ** Stats
 #+begin_example
 [main menu]
-Enter choice [0-7]: 6
-Catalist / Stats
+󰁖 Enter choice [󰲞-󰲬]: 6
+[logo]
+󰟒 Catalist / Stats
+────────────────────────────────────────────────────────────────────────────────
 
-Anime
-  Titles         2
-  Watching       1
-  Completed      1
-  On Hold        0
-  Dropped        0
-  Plan to Watch  0
-  Rewatching     0
-  Mean score     9.00
-  Episodes       25
-  Rewatched      0
-  Days spent     0.4
+󰔂 Anime
+  󰕲 Titles                2
+  󰐌 Watching              1      ██████████░░░░░░░░░░
+  󰗠 Completed             1      ██████████░░░░░░░░░░
+  󰏥 On Hold               0      ░░░░░░░░░░░░░░░░░░░░
+  󰅙 Dropped               0      ░░░░░░░░░░░░░░░░░░░░
+  󰥔 Plan to Watch         0      ░░░░░░░░░░░░░░░░░░░░
+  󱍸 Rewatching            0      ░░░░░░░░░░░░░░░░░░░░
+  󰓏 Mean score            9.00  󰓎󰓎󰓎󰓎󰓐
+  󰦕 Episodes              25
+  󱍸 Rewatched             0
+  󰥔 Days spent            0.4
 
-Manga
-  Titles         1
-  Reading        1
-  Completed      0
-  On Hold        0
-  Dropped        0
-  Plan to Read   0
-  Rereading      0
-  Mean score     9.00
-  Chapters       364
-  Volumes        0
-  Reread         0
-  Days spent     1.3
+󱓷 Manga
+  󰕲 Titles                1
+  󰐌 Reading               1      ████████████████████
+  󰗠 Completed             0      ░░░░░░░░░░░░░░░░░░░░
+  󰏥 On Hold               0      ░░░░░░░░░░░░░░░░░░░░
+  󰅙 Dropped               0      ░░░░░░░░░░░░░░░░░░░░
+  󰥔 Plan to Read          0      ░░░░░░░░░░░░░░░░░░░░
+  󱍸 Rereading             0      ░░░░░░░░░░░░░░░░░░░░
+  󰓏 Mean score            9.00  󰓎󰓎󰓎󰓎󰓐
+  󰦕 Chapters              364
+  󱓷 Volumes               0
+  󱍸 Reread                0
+  󰥔 Days spent            1.3
 
 Press Enter to continue...
 [main menu]
-Enter choice [0-7]: 0
+󰁖 Enter choice [󰲞-󰲬]: 0
 Goodbye!
 #+end_example
 

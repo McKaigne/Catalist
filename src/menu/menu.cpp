@@ -27,7 +27,8 @@ void DrawHome(App& app) {
 	app.out << std::format("  {}    {}    {}\n", total(output::icon::kAnime, anime.size(), "anime"),
 	                       total(output::icon::kManga, manga.size(), "manga"),
 	                       total(output::icon::kWatching, open, "in progress"));
-	app.out << output::Rule(std::min(app.columns, logo::kMiniWidth), app.color) << "\n\n";
+	int logo_width = app.columns >= logo::kBigWidth ? logo::kBigWidth : logo::kMiniWidth;
+	app.out << output::Rule(std::min(app.columns, logo_width), app.color) << "\n\n";
 	if (anime.empty() and manga.empty())
 		app.out << std::format("{} Your lists are empty. Choose {} to add a title, or {} to import "
 		                       "a list.\n\n",

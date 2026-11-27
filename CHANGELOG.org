@@ -34,11 +34,18 @@ Entries below that describe them no longer apply.
   clangd and clang-format stay as editor tools.
 
 *** Added
-- The menus are drawn with Nerd Font icons: the big Catalist logo on the home
-  screen when the terminal is wide enough, the small logo and a breadcrumb rule
-  on every other screen, plain icons for options, filled circle icons for
-  statuses, Back and the page controls, circled digits and letters for the
-  hints, and progress bars on the title card and in Stats.
+- The main menu is Anime, Manga, and Import & Export. Each list is numbered
+  20 a page; typing searches it, =f= filters by status, score or format, =s=
+  sorts by last updated, title, status, score, progress or start date (and
+  reverses), =a= adds from AniList, =t= shows that list's stats, and a
+  number opens the title. A title's page has its card and every action:
+  +1 episode or chapter, progress, status, score, Edit Details (total,
+  volumes, dates, name) and Remove. View Lists, Log Progress, Edit Title,
+  Remove Title and Stats are gone from the main menu.
+- Everything on screen is plain ASCII: the logo, =[W]= =[C]= =[H]= =[D]= =[P]=
+  =[R]= for the statuses, five =*= =+= =-= stars for a score, =#= and =-=
+  progress bars, and =...= for a cut name. The Nerd Font icons and circles
+  are gone, so any terminal and font works.
 - An anime's format (TV, TV Short, TV Special, Movie, Special, OVA, ONA or
   Music), which both AniList and MyAnimeList XML give. It shows in AniList
   search and on the title card, and export writes it back as =series_type=.

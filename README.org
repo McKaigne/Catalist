@@ -10,8 +10,8 @@ move in and out as MyAnimeList XML, which AniList and MyAnimeList both read.
 ** Build and run
 You need GCC 13 or later, CMake 3.20 or later, and Ninja or Make. =curl= is
 used at run time to reach AniList. doctest is needed for the tests
-(=-DBUILD_TESTING=OFF= builds without them). Scores are drawn as stars from a
-[[https://www.nerdfonts.com][Nerd Font]]; other fonts show them as boxes.
+(=-DBUILD_TESTING=OFF= builds without them). Every screen is plain ASCII, so
+any terminal and font will do.
 
 #+begin_src sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -26,10 +26,7 @@ elsewhere, such as with Nix, uses =catalist.csv= in the folder you run it from.
 On Nix, run =nix develop= first to get the compiler and tools.
 
 ** The menu
-The menus use Nerd Font icons, so run Catalist in a terminal with a Nerd Font.
-Options are numbered with circled digits; type the number. An anime's
-format (TV, Movie, OVA and so on) comes from AniList or the XML. A terminal at least
-106 columns wide shows the big logo on the home screen.
+A terminal at least 106 columns wide shows the big logo on the home screen.
 
 #+begin_example
     ___       ___       ___       ___       ___       ___       ___       ___
@@ -40,31 +37,34 @@ format (TV, Movie, OVA and so on) comes from AniList or the XML. A terminal at l
   \:\__\     /:/  /   \/__/      /:/  /   \:\__\    \:\__\    \::/  /   \/__/
    \/__/     \/__/               \/__/     \/__/     \/__/     \/__/
 
-  󰔂 354 anime    󱓷 326 manga    󰐊 247 in progress
-────────────────────────────────────────────────────────────────────────────────
+  354 anime    326 manga    247 in progress
+--------------------------------------------------------------------------------
 
-  󰲠  󰐕 Add Title
-  󰲢  󰕲 View Lists
-  󰲤  󰐊 Log Progress
-  󰲦  󰏫 Edit Title
-  󰲨  󰆴 Remove Title
-  󰲪  󱕍 Stats
-  󰲬  󰯍 Import & Export
-  󰲞  󰈆 Exit
+  1  Anime
+  2  Manga
+  3  Import & Export
+  0  Exit
 
-󰜴 Enter choice [󰲞-󰲬]:
+> Enter choice [0-3]:
 #+end_example
 
-- *Add Title:* search AniList for anime, manga or both, choose a match and its
-  status.
-- *View Lists:* In Progress, All Titles, Anime, Manga, By Status, Search Lists
-  and Title Details. Long lists are shown 20 rows a page.
-- *Log Progress:* add one episode or chapter to a title in progress.
-- *Edit Title:* progress, score, status, total, volumes, dates and name.
-- *Remove Title:* asks first.
-- *Stats:* counts, mean score and an estimate of days spent.
+- *Anime* and *Manga:* your list, numbered 20 a page, latest change first.
+  - Type a number to open that title, or any other text to search.
+  - =f= filters by status, score or (for anime) format; =s= sorts by last
+    updated, title, status, score, progress or start date, or reverses;
+    =c= clears both.
+  - =a= adds a title from AniList, =t= shows the list's stats, =n= and =p=
+    move between pages, =0= goes back.
+- *A title's page:* its card, then +1 Episode (or Chapter), Set Progress,
+  Set Status, Set Score, Edit Details (total, volumes, dates, name) and
+  Remove, which asks first.
 - *Import & Export:* MyAnimeList XML. Unpack =.xml.gz= files with =gunzip=
   first. Where an import differs from your lists, you choose title by title.
+
+Statuses are shown as =[W]= Watching or Reading, =[C]= Completed, =[H]= On
+Hold, =[D]= Dropped, =[P]= Planned and =[R]= Rewatching or Rereading. A score
+is five stars, =*= full, =+= half and =-= empty. An anime's format (TV, Movie,
+OVA and so on) comes from AniList or the XML.
 
 To find a title, type any part of its English or romaji name. The words can be
 in any order, and capitals and punctuation do not matter.

@@ -36,13 +36,14 @@ Entries below that describe them no longer apply.
 *** Added
 - The menus are drawn with Nerd Font icons: the big Catalist logo on the home
   screen when the terminal is wide enough, the small logo and a breadcrumb rule
-  on every other screen, filled circle icons for options and statuses, circled
-  digits and letters for the hints, and progress bars on the title card and in
-  Stats.
-- The rewatch value (reread value for manga) from MyAnimeList XML is kept,
-  shown on the title card, set from Edit Title and written back on export. It
-  is a new last column, =rewatch_value=, in =catalist.csv=; a list saved
-  without it still loads.
+  on every other screen, plain icons for options and statuses, circled digits
+  and letters for the hints, and progress bars on the title card and in Stats.
+- An anime's format (TV, TV Short, TV Special, Movie, Special, OVA, ONA or
+  Music), which both AniList and MyAnimeList XML give. It shows in AniList
+  search and on the title card, and export writes it back as =series_type=.
+  It is a new last column, =format=, in =catalist.csv=; a list saved without
+  it still loads. Catalist keeps only the title details both sources give, so
+  MyAnimeList's rewatch value is not kept.
 - At a terminal, a command with no title offers a list, a lone in-progress
   match is taken, and a typo gets a suggestion.
 - Tracking at parity with Mihon's: =catalist link= reads your entry on the

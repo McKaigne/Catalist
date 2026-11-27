@@ -27,7 +27,8 @@ On Nix, run =nix develop= first to get the compiler and tools.
 
 ** The menu
 The menus use Nerd Font icons, so run Catalist in a terminal with a Nerd Font.
-Options are numbered with circled digits; type the number. A terminal at least
+Options are numbered with circled digits; type the number. An anime's
+format (TV, Movie, OVA and so on) comes from AniList or the XML. A terminal at least
 106 columns wide shows the big logo on the home screen.
 
 #+begin_example
@@ -39,19 +40,19 @@ Options are numbered with circled digits; type the number. A terminal at least
   \:\__\     /:/  /   \/__/      /:/  /   \:\__\    \:\__\    \::/  /   \/__/
    \/__/     \/__/               \/__/     \/__/     \/__/     \/__/
 
-  󰔂 354 anime    󱓷 326 manga    󰐌 247 in progress
+  󰔂 354 anime    󱓷 326 manga    󰐊 247 in progress
 ────────────────────────────────────────────────────────────────────────────────
 
-  󰲠  󰐗 Add Title
+  󰲠  󰐕 Add Title
   󰲢  󰕲 View Lists
-  󰲤  󰐌 Log Progress
-  󰲦  󰛿 Edit Title
-  󰲨  󰚃 Remove Title
+  󰲤  󰐊 Log Progress
+  󰲦  󰏫 Edit Title
+  󰲨  󰆴 Remove Title
   󰲪  󱕍 Stats
-  󰲬  󰿡 Import & Export
+  󰲬  󰯍 Import & Export
   󰲞  󰈆 Exit
 
-󰁖 Enter choice [󰲞-󰲬]:
+󰜴 Enter choice [󰲞-󰲬]:
 #+end_example
 
 - *Add Title:* search AniList for anime, manga or both, choose a match and its
@@ -59,8 +60,7 @@ Options are numbered with circled digits; type the number. A terminal at least
 - *View Lists:* In Progress, All Titles, Anime, Manga, By Status, Search Lists
   and Title Details. Long lists are shown 20 rows a page.
 - *Log Progress:* add one episode or chapter to a title in progress.
-- *Edit Title:* progress, score, status, total, volumes, dates, name and
-  rewatch value.
+- *Edit Title:* progress, score, status, total, volumes, dates and name.
 - *Remove Title:* asks first.
 - *Stats:* counts, mean score and an estimate of days spent.
 - *Import & Export:* MyAnimeList XML. Unpack =.xml.gz= files with =gunzip=

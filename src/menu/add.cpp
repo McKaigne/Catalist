@@ -23,6 +23,7 @@ Entry FromMatch(const anilist::Match& match) {
 	made.mal_id = match.mal_id;
 	made.total_units = match.total_units;
 	made.total_volumes = match.total_volumes;
+	made.format = match.format;
 	made.status = WatchStatus::kPlanToWatch;
 	return made;
 }
@@ -53,6 +54,7 @@ void PrintMatches(App& app, const std::vector<anilist::Match>& matches) {
 		sections[match.type == MediaType::kAnime ? 0 : 1].rows.push_back(
 		    {{"  " + output::NumberHint(static_cast<int>(i + 1), digits), output::kCyan},
 		     {match.year.empty() ? "-" : match.year},
+		     {match.format == MediaFormat::kUnknown ? "" : MediaFormatLabel(match.format)},
 		     {ShownName(match)},
 		     {LengthOf(match)},
 		     {output::Stars(match.score), output::kYellow},
@@ -62,7 +64,7 @@ void PrintMatches(App& app, const std::vector<anilist::Match>& matches) {
 		      mine ? StatusColor(mine->status) : nullptr}});
 	}
 	app.out << output::Sections(
-	    {{}, {}, {.flexible = true}, {.align_right = true}, {}, {}}, sections, app.columns,
+	    {{}, {}, {}, {.flexible = true}, {.align_right = true}, {}, {}}, sections, app.columns,
 	    app.color);
 }
 

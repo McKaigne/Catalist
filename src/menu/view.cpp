@@ -162,6 +162,8 @@ void PrintCard(App& app, const Entry& e) {
 	if (not e.english_title.empty())
 		row(icon::kRename, "Romaji", e.title);
 	row(TypeIcon(e.type), "Type", TypeToString(e.type));
+	if (anime)
+		row(icon::kAnime, "Format", MediaFormatLabel(e.format));
 	row(icon::kInfo, "AniList", id_text(e.anilist_id));
 	row(icon::kInfo, "MyAnimeList", id_text(e.mal_id));
 	if (not page.empty())
@@ -180,8 +182,6 @@ void PrintCard(App& app, const Entry& e) {
 	if (not anime)
 		row(icon::kManga, "Volumes", OutOf(e.volumes, e.total_volumes));
 	row(icon::kTotal, anime ? "Rewatched" : "Reread", std::to_string(e.rewatched));
-	row(icon::kRewatch, anime ? "Rewatch value" : "Reread value",
-	    RewatchValueLabel(e.rewatch_value));
 	row(icon::kStart, "Started", output::DateText(e.start_date));
 	row(icon::kFinish, "Finished", output::DateText(e.finish_date));
 	row(icon::kPlanned, "Updated", output::DateText(e.updated_at));

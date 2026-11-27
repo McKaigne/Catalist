@@ -51,11 +51,11 @@ TEST_CASE("csvCodec writes a row and reads it back") {
 	                               .StartDate("2024-01-02")
 	                               .UpdatedAt("2024-02-03");
 	original.changed_at = "2024-02-03 10:00:00";
-	original.rewatch_value = catalist::RewatchValue::kVeryHigh;
+	original.format = catalist::MediaFormat::kTvShort;
 	auto row = csv_codec::EncodeEntry(original);
 	CHECK(row ==
 	      "5,manga,\"R, \"\"t\"\"\",English,on-hold,4,3,9,1,2,1,2024-01-02,,2024-02-03,"
-	      "2024-02-03 10:00:00,6,306,very-high");
+	      "2024-02-03 10:00:00,6,306,tv-short");
 	auto copy = csv_codec::DecodeEntry(csv_codec::SplitFields(row));
 	REQUIRE(copy.has_value());
 	CHECK(*copy == original);
@@ -71,10 +71,10 @@ TEST_CASE("csvCodec reads every status it writes") {
 	}
 }
 
-TEST_CASE("csvCodec reads a row from before the rewatch value") {
+TEST_CASE("csvCodec reads a row from before the format") {
 	auto old = csv_codec::DecodeEntry(csv_codec::SplitFields("1,anime,T,,planned,0,0,0,0,0,0,,,,,0,0"));
 	REQUIRE(old.has_value());
-	CHECK(old->rewatch_value == catalist::RewatchValue::kNone);
+	CHECK(old->format == catalist::MediaFormat::kUnknown);
 	CHECK_FALSE(csv_codec::DecodeEntry(
 	                csv_codec::SplitFields("1,anime,T,,planned,0,0,0,0,0,0,,,,,0,0,lots"))
 	                .has_value());

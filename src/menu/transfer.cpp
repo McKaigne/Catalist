@@ -44,10 +44,6 @@ std::vector<Clash> ClashesOf(const Entry& mine, const Entry& file) {
 	count("progress", &Entry::progress, true);
 	count("volumes", &Entry::volumes);
 	count("rewatched", &Entry::rewatched);
-	if (mine.rewatch_value != RewatchValue::kNone and file.rewatch_value != RewatchValue::kNone and
-	    mine.rewatch_value != file.rewatch_value)
-		clashes.push_back({"rewatch value", RewatchValueLabel(mine.rewatch_value),
-		                   RewatchValueLabel(file.rewatch_value)});
 	date("started", &Entry::start_date);
 	date("finished", &Entry::finish_date);
 	return clashes;

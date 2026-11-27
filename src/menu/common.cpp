@@ -33,8 +33,6 @@ std::vector<FieldChange> ChangedFields(const Entry& was, const Entry& now) {
 	    {"total", std::to_string(was.total_units), std::to_string(now.total_units)},
 	    {"volumes", std::to_string(was.volumes), std::to_string(now.volumes)},
 	    {"rewatched", std::to_string(was.rewatched), std::to_string(now.rewatched)},
-	    {"rewatch value", RewatchValueLabel(was.rewatch_value),
-	     RewatchValueLabel(now.rewatch_value)},
 	    {"started", output::DateText(was.start_date), output::DateText(now.start_date)},
 	    {"finished", output::DateText(was.finish_date), output::DateText(now.finish_date)},
 	    {"title", DisplayName(was), DisplayName(now)},

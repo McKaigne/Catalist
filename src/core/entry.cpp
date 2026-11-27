@@ -65,47 +65,61 @@ std::optional<WatchStatus> ParseStatus(const std::string& str) {
 	return std::nullopt;
 }
 
-std::string RewatchValueLabel(RewatchValue value) {
-	switch (value) {
-		case RewatchValue::kNone:
+std::string MediaFormatLabel(MediaFormat format) {
+	switch (format) {
+		case MediaFormat::kUnknown:
 			return "-";
-		case RewatchValue::kVeryLow:
-			return "Very Low";
-		case RewatchValue::kLow:
-			return "Low";
-		case RewatchValue::kMedium:
-			return "Medium";
-		case RewatchValue::kHigh:
-			return "High";
-		case RewatchValue::kVeryHigh:
-			return "Very High";
+		case MediaFormat::kTv:
+			return "TV";
+		case MediaFormat::kTvShort:
+			return "TV Short";
+		case MediaFormat::kTvSpecial:
+			return "TV Special";
+		case MediaFormat::kMovie:
+			return "Movie";
+		case MediaFormat::kSpecial:
+			return "Special";
+		case MediaFormat::kOva:
+			return "OVA";
+		case MediaFormat::kOna:
+			return "ONA";
+		case MediaFormat::kMusic:
+			return "Music";
 	}
 	return "-";
 }
 
-std::string RewatchValueKey(RewatchValue value) {
-	switch (value) {
-		case RewatchValue::kNone:
+std::string MediaFormatKey(MediaFormat format) {
+	switch (format) {
+		case MediaFormat::kUnknown:
 			return "";
-		case RewatchValue::kVeryLow:
-			return "very-low";
-		case RewatchValue::kLow:
-			return "low";
-		case RewatchValue::kMedium:
-			return "medium";
-		case RewatchValue::kHigh:
-			return "high";
-		case RewatchValue::kVeryHigh:
-			return "very-high";
+		case MediaFormat::kTv:
+			return "tv";
+		case MediaFormat::kTvShort:
+			return "tv-short";
+		case MediaFormat::kTvSpecial:
+			return "tv-special";
+		case MediaFormat::kMovie:
+			return "movie";
+		case MediaFormat::kSpecial:
+			return "special";
+		case MediaFormat::kOva:
+			return "ova";
+		case MediaFormat::kOna:
+			return "ona";
+		case MediaFormat::kMusic:
+			return "music";
 	}
 	return "";
 }
 
-std::optional<RewatchValue> ParseRewatchValue(const std::string& key) {
-	for (RewatchValue value : {RewatchValue::kNone, RewatchValue::kVeryLow, RewatchValue::kLow,
-	                           RewatchValue::kMedium, RewatchValue::kHigh, RewatchValue::kVeryHigh})
-		if (RewatchValueKey(value) == key)
-			return value;
+std::optional<MediaFormat> ParseMediaFormat(const std::string& key) {
+	for (MediaFormat format :
+	     {MediaFormat::kUnknown, MediaFormat::kTv, MediaFormat::kTvShort, MediaFormat::kTvSpecial,
+	      MediaFormat::kMovie, MediaFormat::kSpecial, MediaFormat::kOva, MediaFormat::kOna,
+	      MediaFormat::kMusic})
+		if (MediaFormatKey(format) == key)
+			return format;
 	return std::nullopt;
 }
 
@@ -276,14 +290,6 @@ Entry SetScore(Entry target, int score, const IsoDate& today) {
 	return target;
 }
 
-Entry SetRewatchValue(Entry target, RewatchValue value, const IsoDate& today) {
-	if (value == target.rewatch_value)
-		return target;
-	target.rewatch_value = value;
-	target.updated_at = today;
-	return target;
-}
-
 int CountOf(const Entry& target, CountField field) {
 	switch (field) {
 		case CountField::kProgress:
@@ -349,10 +355,10 @@ Entry MergeImported(Entry existing, const Entry& incoming) {
 		existing.mal_id = incoming.mal_id;
 	if (incoming.anilist_id > 0)
 		existing.anilist_id = incoming.anilist_id;
+	if (incoming.format != MediaFormat::kUnknown)
+		existing.format = incoming.format;
 	if (existing.score == 0 and incoming.score > 0)
 		existing.score = incoming.score;
-	if (existing.rewatch_value == RewatchValue::kNone)
-		existing.rewatch_value = incoming.rewatch_value;
 	if (existing.progress == 0 and incoming.progress > 0)
 		existing.progress = incoming.progress;
 	if (not existing.start_date and incoming.start_date)
@@ -367,8 +373,6 @@ Entry MergeImported(Entry existing, const Entry& incoming) {
 Entry TakeImported(Entry existing, const Entry& incoming) {
 	existing = MergeImported(existing, incoming);
 	existing.status = incoming.status;
-	if (incoming.rewatch_value != RewatchValue::kNone)
-		existing.rewatch_value = incoming.rewatch_value;
 	for (int Entry::* count :
 	     {&Entry::score, &Entry::progress, &Entry::volumes, &Entry::rewatched})
 		if (incoming.*count > 0)

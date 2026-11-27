@@ -12,8 +12,8 @@ namespace catalist::csv_codec {
 
 inline constexpr const char* kHeader =
     "id,type,title,english_title,status,score,progress,total_units,volumes,total_volumes,"
-    "rewatched,start_date,finish_date,updated_at,changed_at,mal_id,anilist_id,rewatch_value";
-// The header before rewatch_value was added; such a file still loads.
+    "rewatched,start_date,finish_date,updated_at,changed_at,mal_id,anilist_id,format";
+// The header before format was added; such a file still loads.
 inline constexpr const char* kOldHeader =
     "id,type,title,english_title,status,score,progress,total_units,volumes,total_volumes,"
     "rewatched,start_date,finish_date,updated_at,changed_at,mal_id,anilist_id";

@@ -47,13 +47,14 @@ grep -q '^1,anime,Fullmetal Alchemist,' "$work/catalist.csv" || fail "csv row"
 
 menu '1\n1\nOdd Taxi\n2\n\n0\n' >/dev/null
 shown=$(menu '3\n1\n\n0\n')
-arrow=$(printf '\363\260\263\237')
+arrow=$(printf '\363\260\201\224')
 has "count" "$shown" "progress 0 $arrow 1/13"
 shown=$(menu '0\n')
 has "reopened" "$shown" "2 anime"
 has "reopened" "$shown" "1 in progress"
 
 grep -q ',Odd Taxi,,watching,0,1,' "$work/catalist.csv" || fail "count reached the file"
+grep -q ",44265,128547,tv$" "$work/catalist.csv" || fail "the AniList format reached the file"
 
 shown=$(menu "7\n2\n$work/anime.xml\n\n0\n0\n")
 has "export" "$shown" "Saved $work/anime.xml."

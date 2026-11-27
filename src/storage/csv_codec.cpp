@@ -92,9 +92,9 @@ std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields) {
 	    fields[2].empty())
 		return std::nullopt;
 	auto status = ParseStatus(fields[4]);
-	auto rewatch_value = fields.size() == kFields ? ParseRewatchValue(fields[17])
-	                                              : std::optional(RewatchValue::kNone);
-	if (not status or not rewatch_value)
+	auto format =
+	    fields.size() == kFields ? ParseMediaFormat(fields[17]) : std::optional(MediaFormat::kUnknown);
+	if (not status or not format)
 		return std::nullopt;
 
 	Entry row;
@@ -102,7 +102,7 @@ std::optional<Entry> DecodeEntry(const std::vector<std::string>& fields) {
 	row.title = fields[2];
 	row.english_title = fields[3];
 	row.status = *status;
-	row.rewatch_value = *rewatch_value;
+	row.format = *format;
 	row.changed_at = fields[14];
 	const std::pair<size_t, int*> counts[] = {
 	    {0, &row.id},      {5, &row.score},         {6, &row.progress},   {7, &row.total_units},
@@ -127,7 +127,7 @@ std::string EncodeEntry(const Entry& e) {
 	                   e.score, e.progress, e.total_units, e.volumes, e.total_volumes, e.rewatched,
 	                   FormatDate(e.start_date), FormatDate(e.finish_date),
 	                   FormatDate(e.updated_at), e.changed_at, e.mal_id, e.anilist_id,
-	                   RewatchValueKey(e.rewatch_value));
+	                   MediaFormatKey(e.format));
 }
 
 }  // namespace catalist::csv_codec

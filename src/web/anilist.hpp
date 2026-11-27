@@ -21,6 +21,7 @@ struct Match {
 	std::string english;
 	int total_units = 0;
 	int total_volumes = 0;
+	MediaFormat format = MediaFormat::kUnknown;
 	std::string year;
 	double score = 0.0;
 };

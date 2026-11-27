@@ -276,35 +276,23 @@ TEST_CASE_FIXTURE(MenuFixture, "menu names statuses for the title's type") {
 	               "  5  Dropped\n  6  Rewatching/Rereading\n  0  Back\n"));
 }
 
-TEST_CASE_FIXTURE(MenuFixture, "menu puts the title in the edit breadcrumb and numbers eleven options") {
+TEST_CASE_FIXTURE(MenuFixture, "menu puts the title in the edit breadcrumb and numbers ten options") {
 	Seed();
 	CHECK(Run("4\ntaxi\n0\n0\n") == 0);
 	CHECK(Has(out, "Catalist / Edit Title / Odd Taxi\n"));
 	CHECK(Has(out, "   1  +1 Progress\n   2  -1 Progress\n   3  Set Progress\n"
 	               "   4  Set Score\n   5  Set Status\n   6  Set Total\n   7  Set Volumes\n"
 	               "   8  Set Start Date\n   9  Set Finish Date\n  10  Rename Title\n"
-	               "  11  Set Rewatch Value\n   0  Back\n"));
+	               "   0  Back\n"));
+	CHECK(Has(out, "  Format        -\n"));
 	CHECK(Run("4\nberserk\n0\n0\n") == 0);
-	CHECK(Has(out, "  11  Set Reread Value\n"));
+	CHECK(not Has(out, "Format"));
 }
 
-TEST_CASE_FIXTURE(MenuFixture, "menu sets the rewatch value and shows it on the card") {
-	Seed();
-	CHECK(Run("4\ntaxi\n11\n4\n\n0\n0\n") == 0);
-	CHECK(Has(out, "Catalist / Edit Title / Odd Taxi / Set Rewatch Value"));
-	CHECK(Has(out, "  1  Very Low\n  2  Low\n  3  Medium\n  4  High\n  5  Very High\n"
-	               "  6  None\n  0  Back\n"));
-	CHECK(Has(out, "Odd Taxi  rewatch value - -> High\n"));
-	CHECK(Has(out, "  Rewatch value High\n"));
-	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").rewatch_value == catalist::RewatchValue::kHigh);
-	CHECK(Run("4\ntaxi\n11\n6\n\n0\n0\n") == 0);
-	CHECK(SavedTitle(MediaType::kAnime, "Odd Taxi").rewatch_value == catalist::RewatchValue::kNone);
-}
-
-TEST_CASE_FIXTURE(MenuFixture, "menu draws hints as circles and the home logo when it fits") {
+TEST_CASE_FIXTURE(MenuFixture, "menu draws only the hints as circles, and the logo when it fits") {
 	Seed();
 	CHECK(Run("0\n") == 0);
-	CHECK(Has(raw, "\U000F0CA0  \U000F0417 Add Title\n"));
+	CHECK(Has(raw, "\U000F0CA0  \U000F0415 Add Title\n"));
 	CHECK(Has(raw, "\U000F0C9E  \U000F0206 Exit\n"));
 	CHECK_FALSE(Has(out, R"(/::\~\:\)"));
 	columns = 120;

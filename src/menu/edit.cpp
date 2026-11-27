@@ -9,10 +9,6 @@ namespace catalist {
 
 namespace {
 
-std::string RewatchValueName(MediaType type) {
-	return type == MediaType::kAnime ? "Set Rewatch Value" : "Set Reread Value";
-}
-
 void CountBy(App& app, const Entry& title, int delta) {
 	auto current = app.db.GetById(title.type, title.id);
 	if (current and delta > 0 and AtTotal(*current)) {
@@ -67,27 +63,6 @@ void AskNewStatus(App& app, const Entry& title) {
 	}
 	IsoDate today = app.Today();
 	ChangeTitle(app, title, [&](const Entry& e) { return SetStatus(e, *status, today); });
-}
-
-void AskRewatchValue(App& app, const Entry& title) {
-	constexpr RewatchValue kValues[] = {RewatchValue::kVeryLow, RewatchValue::kLow,
-	                                    RewatchValue::kMedium, RewatchValue::kHigh,
-	                                    RewatchValue::kVeryHigh, RewatchValue::kNone};
-	ClearScreen(app);
-	std::vector<Option> labels;
-	for (RewatchValue value : kValues)
-		labels.push_back({output::icon::kRewatch,
-		                  value == RewatchValue::kNone ? "None" : RewatchValueLabel(value)});
-	DrawMenu(app, std::format("Catalist / Edit Title / {} / {}", DisplayName(title),
-	                          RewatchValueName(title.type)),
-	         labels);
-	int choice = ReadChoice(app, static_cast<int>(std::size(kValues)));
-	if (choice == 0)
-		return;
-	IsoDate today = app.Today();
-	ChangeTitle(app, title, [&](const Entry& e) {
-		return SetRewatchValue(e, kValues[choice - 1], today);
-	});
 }
 
 void AskDate(App& app, const Entry& title, bool start) {
@@ -160,9 +135,8 @@ void EditScreen(App& app) {
 		                  {icon::kManga, "Set Volumes"},
 		                  {icon::kStart, "Set Start Date"},
 		                  {icon::kFinish, "Set Finish Date"},
-		                  {icon::kRename, "Rename Title"},
-		                  {icon::kRewatch, RewatchValueName(current->type)}});
-		choice = ReadChoice(app, 11);
+		                  {icon::kRename, "Rename Title"}});
+		choice = ReadChoice(app, 10);
 		switch (choice) {
 			case 1:
 				CountBy(app, *current, 1);
@@ -196,9 +170,6 @@ void EditScreen(App& app) {
 				break;
 			case 10:
 				AskName(app, *current);
-				break;
-			case 11:
-				AskRewatchValue(app, *current);
 				break;
 			default:
 				break;

@@ -49,7 +49,7 @@ inline std::string Plain(const std::string& text) {
 			plain += static_cast<char>('0' + (point - 0xF0C9E) / 2);
 		} else if (point >= 0xF0BEC and point <= 0xF0C5F and (point - 0xF0BEC) % 3 == 0) {
 			plain += static_cast<char>('a' + (point - 0xF0BEC) / 3);
-		} else if (point == 0xF0CDF) {
+		} else if (point == 0xF0054) {
 			plain += "->";
 		} else if (i < text.size() and text[i] == ' ') {
 			++i;

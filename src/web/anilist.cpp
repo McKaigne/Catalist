@@ -39,6 +39,19 @@ Result<std::string> Ask(const web::Fetcher& fetch, const std::string& query) {
 	return std::unexpected(std::format("AniList said no (HTTP {})", status));
 }
 
+// AniList's manga formats, MANGA, NOVEL and ONE_SHOT, are not kept.
+MediaFormat FormatOf(const std::string& name) {
+	const std::pair<const char*, MediaFormat> formats[] = {
+	    {"TV", MediaFormat::kTv},       {"TV_SHORT", MediaFormat::kTvShort},
+	    {"MOVIE", MediaFormat::kMovie}, {"SPECIAL", MediaFormat::kSpecial},
+	    {"OVA", MediaFormat::kOva},     {"ONA", MediaFormat::kOna},
+	    {"MUSIC", MediaFormat::kMusic}};
+	for (const auto& [key, format] : formats)
+		if (name == key)
+			return format;
+	return MediaFormat::kUnknown;
+}
+
 }  // namespace
 
 std::string SearchRequest(std::optional<MediaType> only, const std::string& query) {
@@ -50,7 +63,7 @@ std::string SearchRequest(std::optional<MediaType> only, const std::string& quer
 			continue;
 		pages += std::format(
 		    "{}:Page(perPage:{}){{media(search:$search,type:{},isAdult:false,sort:SEARCH_MATCH){{"
-		    "id idMal title{{romaji english}} episodes chapters volumes averageScore "
+		    "id idMal title{{romaji english}} episodes chapters volumes format averageScore "
 		    "startDate{{year}}}}}} ",
 		    TypeKey(type), only ? kOfOne : kEachOfBoth, TypeName(type));
 	}
@@ -81,6 +94,8 @@ Result<std::vector<Match>> ParseSearch(const std::string& body) {
 				continue;
 			match.total_units = item[type == MediaType::kAnime ? "episodes" : "chapters"].AsCount();
 			match.total_volumes = item["volumes"].AsCount();
+			if (type == MediaType::kAnime)
+				match.format = FormatOf(item["format"].AsString().value_or(""));
 			int year = item["startDate"]["year"].AsCount();
 			match.year = year > 0 ? std::to_string(year) : "";
 			match.score = item["averageScore"].AsNumber().value_or(0.0) / 10.0;

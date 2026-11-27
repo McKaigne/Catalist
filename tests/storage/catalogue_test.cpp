@@ -71,19 +71,19 @@ TEST_CASE_FIXTURE(TempDirFixture, "catalogue refuses a damaged file and leaves i
 	}
 }
 
-TEST_CASE_FIXTURE(TempDirFixture, "catalogue reads a list saved before the rewatch value") {
+TEST_CASE_FIXTURE(TempDirFixture, "catalogue reads a list saved before the format") {
 	auto file = TempDir() / "catalist.csv";
 	WriteText(file, std::string(catalist::csv_codec::kOldHeader) +
 	                    "\n1,anime,T,,planned,0,0,0,0,0,0,,,,,0,0\n");
 	Catalogue db(file);
 	REQUIRE(db.Load().value());
 	auto title = *db.GetById(MediaType::kAnime, 1);
-	title.rewatch_value = catalist::RewatchValue::kMedium;
+	title.format = catalist::MediaFormat::kMovie;
 	db.UpdateEntry(title);
 	REQUIRE(db.Save(kStamp));
 	auto text = ReadText(file);
 	CHECK(text.starts_with(std::string(catalist::csv_codec::kHeader) + "\n"));
-	CHECK(Has(text, ",0,0,medium\n"));
+	CHECK(Has(text, ",0,0,movie\n"));
 }
 
 TEST_CASE_FIXTURE(TempDirFixture, "catalogue goes back to what the file holds when a save fails") {

@@ -92,14 +92,28 @@ RepeatFlag FlagOf(const Entry& item) {
 	return item.status == WatchStatus::kRewatching ? RepeatFlag::kYes : RepeatFlag::kNo;
 }
 
-RewatchValue ParseRewatchNumber(int number) {
-	if (number < 1 or number > 5)
-		return RewatchValue::kNone;
-	return static_cast<RewatchValue>(number);
+// series_type also holds CM, PV and Unknown, which Catalist has no format for.
+MediaFormat ParseSeriesType(const std::string& text) {
+	const std::pair<const char*, MediaFormat> types[] = {
+	    {"TV", MediaFormat::kTv},           {"TV Special", MediaFormat::kTvSpecial},
+	    {"Movie", MediaFormat::kMovie},     {"Special", MediaFormat::kSpecial},
+	    {"OVA", MediaFormat::kOva},         {"ONA", MediaFormat::kOna},
+	    {"Music", MediaFormat::kMusic}};
+	for (const auto& [name, format] : types)
+		if (text == name)
+			return format;
+	return MediaFormat::kUnknown;
 }
 
-std::string RewatchNumber(RewatchValue value) {
-	return value == RewatchValue::kNone ? "" : std::to_string(static_cast<int>(value));
+std::string SeriesType(MediaFormat format) {
+	switch (format) {
+		case MediaFormat::kUnknown:
+			return "Unknown";
+		case MediaFormat::kTvShort:
+			return "TV";
+		default:
+			return MediaFormatLabel(format);
+	}
 }
 
 struct BlockTags {
@@ -111,17 +125,14 @@ struct BlockTags {
 	const char* progress;
 	const char* repeats;
 	const char* again;
-	const char* value;
 };
 
 const BlockTags kAnimeTags = {MediaType::kAnime,  "anime",           "series_animedb_id",
                               "series_title",     "series_episodes", "my_watched_episodes",
-                              "my_times_watched", "my_rewatching",
-                              "my_rewatch_value"};
+                              "my_times_watched", "my_rewatching"};
 const BlockTags kMangaTags = {MediaType::kManga, "manga",          "manga_mangadb_id",
                               "manga_title",     "manga_chapters", "my_read_chapters",
-                              "my_times_read",   "my_rereading",
-                              "my_reread_value"};
+                              "my_times_read",   "my_rereading"};
 
 void ParseBlocks(const std::string& xml, const BlockTags& tags, std::vector<Entry>& found) {
 	std::string open_tag = std::format("<{}>", tags.block);
@@ -149,7 +160,8 @@ void ParseBlocks(const std::string& xml, const BlockTags& tags, std::vector<Entr
 		item.status = ParseStatus(TagText(block, "my_status")).value_or(WatchStatus::kPlanToWatch);
 		if (ParseRepeatFlag(TagText(block, tags.again)) == RepeatFlag::kYes)
 			item.status = WatchStatus::kRewatching;
-		item.rewatch_value = ParseRewatchNumber(TagNumber(block, tags.value));
+		if (tags.type == MediaType::kAnime)
+			item.format = ParseSeriesType(TagText(block, "series_type"));
 		// MyAnimeList writes 0000-00-00 for "no date", which parses as absent.
 		item.start_date = IsoDate::Parse(TagText(block, "my_start_date"));
 		if (item.status == WatchStatus::kCompleted or item.status == WatchStatus::kRewatching)
@@ -185,11 +197,11 @@ std::string AnimeBlock(const Entry& item) {
 	std::string block = "\t<anime>\n";
 	block += XmlTag("series_animedb_id", std::to_string(item.mal_id));
 	block += XmlTag("series_title", Cdata(item.title));
+	block += XmlTag("series_type", SeriesType(item.format));
 	block += XmlTag("series_episodes", std::to_string(item.total_units));
 	block += XmlTag("my_watched_episodes", std::to_string(item.progress));
 	block += XmlTag("my_times_watched", std::to_string(item.rewatched));
 	block += XmlTag("my_rewatching", RepeatFlagText(FlagOf(item), item.type));
-	block += XmlTag("my_rewatch_value", RewatchNumber(item.rewatch_value));
 	return block;
 }
 
@@ -203,7 +215,6 @@ std::string MangaBlock(const Entry& item) {
 	block += XmlTag("my_read_chapters", std::to_string(item.progress));
 	block += XmlTag("my_times_read", std::to_string(item.rewatched));
 	block += XmlTag("my_rereading", RepeatFlagText(FlagOf(item), item.type));
-	block += XmlTag("my_reread_value", RewatchNumber(item.rewatch_value));
 	return block;
 }
 

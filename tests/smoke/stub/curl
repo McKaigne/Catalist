@@ -13,11 +13,11 @@ done
 
 case "$body" in
 *'"search":"Odd Taxi"'*)
-	printf '%s\n' '{"data":{"anime":{"media":[{"id":128547,"idMal":44265,"title":{"romaji":"Odd Taxi"},"episodes":13}]},"manga":{"media":[]}}}'
+	printf '%s\n' '{"data":{"anime":{"media":[{"id":128547,"idMal":44265,"title":{"romaji":"Odd Taxi"},"episodes":13,"format":"TV"}]},"manga":{"media":[]}}}'
 	printf '200'
 	;;
 *'"search":"fullmetal"'*)
-	printf '%s\n' '{"data":{"anime":{"media":[{"id":5114,"idMal":5114,"title":{"romaji":"Fullmetal Alchemist: Brotherhood"},"episodes":64,"startDate":{"year":2009}},{"id":121,"idMal":121,"title":{"romaji":"Fullmetal Alchemist"},"episodes":51,"startDate":{"year":2003}}]},"manga":{"media":[]}}}'
+	printf '%s\n' '{"data":{"anime":{"media":[{"id":5114,"idMal":5114,"title":{"romaji":"Fullmetal Alchemist: Brotherhood"},"episodes":64,"format":"TV","startDate":{"year":2009}},{"id":121,"idMal":121,"title":{"romaji":"Fullmetal Alchemist"},"episodes":51,"format":"TV","startDate":{"year":2003}}]},"manga":{"media":[]}}}'
 	printf '200'
 	;;
 *)

@@ -157,6 +157,7 @@ TEST_CASE("malXml writes one media type and leaves out titles without an id") {
 	    MakeEntry()
 	        .MalId(52991)
 	        .Title("Sousou no Frieren")
+	        .Format(catalist::MediaFormat::kTv)
 	        .TotalUnits(28)
 	        .Progress(28)
 	        .Rewatched(1)
@@ -180,11 +181,11 @@ TEST_CASE("malXml writes one media type and leaves out titles without an id") {
 	      "\t<anime>\n"
 	      "\t\t<series_animedb_id>52991</series_animedb_id>\n"
 	      "\t\t<series_title><![CDATA[Sousou no Frieren]]></series_title>\n"
+	      "\t\t<series_type>TV</series_type>\n"
 	      "\t\t<series_episodes>28</series_episodes>\n"
 	      "\t\t<my_watched_episodes>28</my_watched_episodes>\n"
 	      "\t\t<my_times_watched>1</my_times_watched>\n"
 	      "\t\t<my_rewatching>0</my_rewatching>\n"
-	      "\t\t<my_rewatch_value></my_rewatch_value>\n"
 	      "\t\t<my_start_date>2023-09-29</my_start_date>\n"
 	      "\t\t<my_finish_date>2024-03-22</my_finish_date>\n"
 	      "\t\t<my_score>10</my_score>\n"
@@ -215,8 +216,8 @@ TEST_CASE("malXml reads back exactly what it wrote") {
 	        .Status(WatchStatus::kOnHold)
 	        .StartDate("2020-01-02"),
 	    MakeEntry().MalId(9).Title("Planned").Status(WatchStatus::kPlanToWatch),
-	    MakeEntry().MalId(5).Title("Loved").Status(WatchStatus::kCompleted).RewatchValue(
-	        catalist::RewatchValue::kVeryHigh),
+	    MakeEntry().MalId(5).Title("Loved").Status(WatchStatus::kCompleted).Format(
+	        catalist::MediaFormat::kTvSpecial),
 	    MakeEntry().MalId(3).Title("Again").Progress(4).Status(WatchStatus::kRewatching),
 	    MakeEntry()
 	        .MalId(2)
@@ -251,35 +252,36 @@ TEST_CASE("malXml reads back exactly what it wrote") {
 		CHECK(read_back[i].volumes == entries[i].volumes);
 		CHECK(read_back[i].total_volumes == entries[i].total_volumes);
 		CHECK(read_back[i].rewatched == entries[i].rewatched);
-		CHECK(read_back[i].rewatch_value == entries[i].rewatch_value);
+		CHECK(read_back[i].format == entries[i].format);
 		CHECK(read_back[i].start_date == entries[i].start_date);
 		CHECK(read_back[i].finish_date == entries[i].finish_date);
 	}
 }
 
-TEST_CASE("malXml reads the rewatch flag and value as enums") {
+TEST_CASE("malXml reads the rewatch flag and the series type as enums") {
+	using catalist::MediaFormat;
 	auto titles = mal_xml::Parse(
 	    "<anime><series_animedb_id>1</series_animedb_id><series_title>A</series_title>"
-	    "<my_status>Completed</my_status><my_rewatching>1</my_rewatching>"
-	    "<my_rewatch_value>2</my_rewatch_value></anime>"
+	    "<series_type>OVA</series_type><my_status>Completed</my_status>"
+	    "<my_rewatching>1</my_rewatching></anime>"
 	    "<anime><series_animedb_id>2</series_animedb_id><series_title>B</series_title>"
-	    "<my_status>Completed</my_status><my_rewatching>0</my_rewatching>"
-	    "<my_rewatch_value>9</my_rewatch_value></anime>"
+	    "<series_type>CM</series_type><my_status>Completed</my_status>"
+	    "<my_rewatching>0</my_rewatching></anime>"
 	    "<manga><manga_mangadb_id>3</manga_mangadb_id><manga_title>C</manga_title>"
-	    "<my_status>Completed</my_status><my_rereading>yes</my_rereading>"
-	    "<my_reread_value>5</my_reread_value></manga>"
+	    "<series_type>TV</series_type><my_status>Completed</my_status>"
+	    "<my_rereading>yes</my_rereading></manga>"
 	    "<manga><manga_mangadb_id>4</manga_mangadb_id><manga_title>D</manga_title>"
-	    "<my_status>Reading</my_status><my_rereading>NO</my_rereading>"
-	    "<my_reread_value></my_reread_value></manga>");
+	    "<my_status>Reading</my_status><my_rereading>NO</my_rereading></manga>");
 	REQUIRE(titles.size() == 4);
 	CHECK(titles[0].status == WatchStatus::kRewatching);
-	CHECK(titles[0].rewatch_value == catalist::RewatchValue::kLow);
+	CHECK(titles[0].format == MediaFormat::kOva);
 	CHECK(titles[1].status == WatchStatus::kCompleted);
-	CHECK(titles[1].rewatch_value == catalist::RewatchValue::kNone);
+	CHECK(titles[1].format == MediaFormat::kUnknown);
 	CHECK(titles[2].status == WatchStatus::kRewatching);
-	CHECK(titles[2].rewatch_value == catalist::RewatchValue::kVeryHigh);
+	CHECK(titles[2].format == MediaFormat::kUnknown);
 	CHECK(titles[3].status == WatchStatus::kWatching);
-	CHECK(titles[3].rewatch_value == catalist::RewatchValue::kNone);
+	CHECK(mal_xml::Write({titles[0]}, MediaType::kAnime).xml.find(
+	          "<series_type>OVA</series_type>") != std::string::npos);
 }
 
 TEST_CASE("malXml keeps a finish date only on a completed or rewatched title") {

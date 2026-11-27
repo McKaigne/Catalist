@@ -99,11 +99,11 @@ TEST_CASE_FIXTURE(MenuFixture, "menu lists one kind, numbered, with its menu und
 	          "  1  [W]  Odd Taxi           TV  ****-   5/13\n"
 	          "  2  [C]  Sousou no Frieren  -   *****  28/28\n"));
 	CHECK(Has(out,
-	          "  1  Open a Title      5  Clear Search/Filter\n"
-	          "  2  Search            6  Add from AniList\n"
-	          "  3  Filter            7  Stats\n"
-	          "  4  Sort              8  Next Page\n"
-	          "  0  Back              9  Previous Page\n"));
+	          "  1  Open a Title         6  Add from AniList\n"
+	          "  2  Search               7  Stats\n"
+	          "  3  Filter               8  Next Page\n"
+	          "  4  Sort                 9  Previous Page\n"
+	          "  5  Clear Search/Filter  0  Back\n"));
 	CHECK(Has(out, "> Enter choice [0-9]: "));
 	CHECK(Run("2\n0\n0\n") == 0);
 	CHECK(Has(out, "Catalist / Manga\n"));

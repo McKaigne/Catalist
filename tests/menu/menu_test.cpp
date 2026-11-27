@@ -103,8 +103,7 @@ TEST_CASE_FIXTURE(MenuFixture, "menu lists one kind, numbered, with its menu und
 	          "  2  Search            6  Add from AniList\n"
 	          "  3  Filter            7  Stats\n"
 	          "  4  Sort              8  Next Page\n"
-	          "                       9  Previous Page\n"
-	          "  0  Back\n"));
+	          "  0  Back              9  Previous Page\n"));
 	CHECK(Has(out, "> Enter choice [0-9]: "));
 	CHECK(Run("2\n0\n0\n") == 0);
 	CHECK(Has(out, "Catalist / Manga\n"));

@@ -109,24 +109,19 @@ constexpr const char* kListOptions[] = {
     "Add from AniList", "Stats",  "Next Page", "Previous Page",
 };
 
-// Two columns, 1 to 4 and 5 to 9, then 0 Back.
+// Two columns: 1 to 4 then 0 Back, and 5 to 9.
 void PrintListMenu(App& app) {
-	constexpr int kLeftRows = 4;
 	constexpr int kRows = 5;
 	constexpr int kLabelWidth = 16;
-	auto number = [&app](int n) {
-		return output::Paint(std::to_string(n), output::kCyan, app.color);
-	};
 	app.out << "\n";
 	for (int row = 1; row <= kRows; ++row) {
-		if (row <= kLeftRows)
-			app.out << std::format("  {}  {:<{}}", number(row), kListOptions[row - 1], kLabelWidth);
-		else
-			app.out << std::string(5 + kLabelWidth, ' ');
-		app.out << std::format("  {}  {}\n", number(row + kLeftRows),
-		                       kListOptions[row + kLeftRows - 1]);
+		int left = row < kRows ? row : 0;
+		app.out << std::format("  {}  {:<{}}  {}  {}\n",
+		                       output::Paint(std::to_string(left), output::kCyan, app.color),
+		                       left == 0 ? "Back" : kListOptions[left - 1], kLabelWidth,
+		                       output::Paint(std::to_string(row + 4), output::kCyan, app.color),
+		                       kListOptions[row + 3]);
 	}
-	DrawOption(app, 0, 1, "Back");
 	app.out << "\n";
 }
 

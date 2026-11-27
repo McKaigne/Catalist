@@ -262,7 +262,7 @@ DrawOptions(app, {"Anime", "Manga", "Import & Export"}, "Exit");
 *** 2.2 Breadcrumb headings
 Each screen is headed by its path, separated by slashes, such as =Catalist / Anime / Filter / By Status=. The last part is bold. A title's page includes its name.
 
-Source: =src/menu/list.cpp:257=
+Source: =src/menu/list.cpp:252=
 #+begin_src cpp
 std::string crumb = std::format("Catalist / {}", TypeToString(type));
 #+end_src
@@ -315,33 +315,28 @@ auto answer =
 #+end_src
 
 *** 2.5 The list menu
-Under a list is a numbered menu like every other: 1 Open a Title, 2 Search, 3 Filter, 4 Sort, 5 Clear Search/Filter, 6 Add from AniList, 7 Stats, 8 Next Page, 9 Previous Page and 0 Back. Open a Title and Search each ask their own question next, so a search is never mistaken for a choice. The numbers stay the same on every list, even with one page, and Next or Previous past the end says so. The nine choices sit in two columns so the titles keep the room.
+Under a list is a numbered menu like every other: 1 Open a Title, 2 Search, 3 Filter, 4 Sort, 5 Clear Search/Filter, 6 Add from AniList, 7 Stats, 8 Next Page, 9 Previous Page and 0 Back. Open a Title and Search each ask their own question next, so a search is never mistaken for a choice. The numbers stay the same on every list, even with one page, and Next or Previous past the end says so. The choices sit in two columns of five, with 0 Back under 4 Sort, so the titles keep the room.
 
-Source: =src/menu/list.cpp:107-131=
+Source: =src/menu/list.cpp:107-126=
 #+begin_src cpp
 constexpr const char* kListOptions[] = {
     "Open a Title",     "Search", "Filter",    "Sort",          "Clear Search/Filter",
     "Add from AniList", "Stats",  "Next Page", "Previous Page",
 };
 
-// Two columns, 1 to 4 and 5 to 9, then 0 Back.
+// Two columns: 1 to 4 then 0 Back, and 5 to 9.
 void PrintListMenu(App& app) {
-	constexpr int kLeftRows = 4;
 	constexpr int kRows = 5;
 	constexpr int kLabelWidth = 16;
-	auto number = [&app](int n) {
-		return output::Paint(std::to_string(n), output::kCyan, app.color);
-	};
 	app.out << "\n";
 	for (int row = 1; row <= kRows; ++row) {
-		if (row <= kLeftRows)
-			app.out << std::format("  {}  {:<{}}", number(row), kListOptions[row - 1], kLabelWidth);
-		else
-			app.out << std::string(5 + kLabelWidth, ' ');
-		app.out << std::format("  {}  {}\n", number(row + kLeftRows),
-		                       kListOptions[row + kLeftRows - 1]);
+		int left = row < kRows ? row : 0;
+		app.out << std::format("  {}  {:<{}}  {}  {}\n",
+		                       output::Paint(std::to_string(left), output::kCyan, app.color),
+		                       left == 0 ? "Back" : kListOptions[left - 1], kLabelWidth,
+		                       output::Paint(std::to_string(row + 4), output::kCyan, app.color),
+		                       kListOptions[row + 3]);
 	}
-	DrawOption(app, 0, 1, "Back");
 	app.out << "\n";
 }
 #+end_src
@@ -534,7 +529,7 @@ std::string Folded(const std::string& text) {
 *** 3.3 A typo gets a suggestion
 A search that finds nothing leaves the list as it was and names the closest title, such as "Nothing matches 'freiren'. Did you mean Sousou no Frieren?".
 
-Source: =src/menu/list.cpp:322-332=
+Source: =src/menu/list.cpp:317-327=
 #+begin_src cpp
 ListView searched = view;
 searched.search = *text;
@@ -580,7 +575,7 @@ bool Shows(const ListView& view, const Entry& e) {
 }
 #+end_src
 
-Source: =src/menu/list.cpp:193-224=
+Source: =src/menu/list.cpp:188-219=
 #+begin_src cpp
 void AskFilter(App& app, ListView& view, const std::string& crumb) {
 	bool anime = view.type == MediaType::kAnime;
@@ -640,7 +635,7 @@ int Compare(const Entry& a, const Entry& b, SortKey key) {
 }
 #+end_src
 
-Source: =src/menu/list.cpp:226-243=
+Source: =src/menu/list.cpp:221-238=
 #+begin_src cpp
 void AskSort(App& app, ListView& view, const std::string& crumb) {
 	ClearScreen(app);
@@ -685,7 +680,7 @@ std::string Narrowed(const ListView& view) {
 *** 3.7 Long lists are paged
 A list shows 20 titles a page, numbered from 1 on each page. 8 and 9 move between pages. 1 Open a Title asks for a title number, and one that is not on the page is refused with a note.
 
-Source: =src/menu/list.cpp:299-313=
+Source: =src/menu/list.cpp:294-308=
 #+begin_src cpp
 if (shown.empty()) {
 	notice = "There are no titles to open.";
@@ -704,7 +699,7 @@ else
 break;
 #+end_src
 
-Source: =src/menu/list.cpp:351-362=
+Source: =src/menu/list.cpp:346-357=
 #+begin_src cpp
 case 8:
 	if (view.page + 1 < pages)
@@ -821,7 +816,7 @@ if (columns[i].flexible and total > width)
 *** 4.5 Stats belong to each list
 7 Stats on the Anime or Manga list counts that kind: titles by status, mean score, episodes or chapters, rewatches and days spent.
 
-Source: =src/menu/list.cpp:133-160=
+Source: =src/menu/list.cpp:128-155=
 #+begin_src cpp
 void PrintStats(App& app, MediaType type) {
 	constexpr int kLabelWidth = 22;
@@ -1738,8 +1733,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 0
 [main menu]
@@ -1763,8 +1757,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 2
 > Search anime (Enter to go back): freiren
@@ -1780,8 +1773,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 ! Nothing matches 'freiren'. Did you mean Sousou no Frieren?
 > Enter choice [0-9]: 2
@@ -1797,8 +1789,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 0
 [main menu]
@@ -1822,8 +1813,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 3
 Catalist / Anime / Filter
@@ -1859,8 +1849,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 4
 Catalist / Anime / Sort
@@ -1887,8 +1876,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 0
 [main menu]
@@ -1912,8 +1900,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 6
 Catalist / Anime / Add
@@ -1953,8 +1940,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 0
 [main menu]
@@ -1978,8 +1964,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 1
 > Title number (Enter to go back): 2
@@ -2045,8 +2030,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 0
 [main menu]
@@ -2070,8 +2054,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 1
 > Title number (Enter to go back): 1
@@ -2137,8 +2120,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 0
 [main menu]
@@ -2162,8 +2144,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 2
 > Search anime (Enter to go back): taxi
@@ -2178,8 +2159,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 1
 > Title number (Enter to go back): 1
@@ -2255,8 +2235,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 0
 [main menu]
@@ -2280,8 +2259,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 2
 > Search anime (Enter to go back): taxi
@@ -2296,8 +2274,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 1
 > Title number (Enter to go back): 1
@@ -2339,8 +2316,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 0
 [main menu]
@@ -2364,8 +2340,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 7
 Catalist / Anime / Stats
@@ -2396,8 +2371,7 @@ Catalist / Anime
   2  Search            6  Add from AniList
   3  Filter            7  Stats
   4  Sort              8  Next Page
-                       9  Previous Page
-  0  Back
+  0  Back              9  Previous Page
 
 > Enter choice [0-9]: 0
 [main menu]

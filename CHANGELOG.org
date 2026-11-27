@@ -35,10 +35,11 @@ Entries below that describe them no longer apply.
 
 *** Added
 - The main menu is Anime, Manga, and Import & Export. Each list is numbered
-  20 a page; typing searches it, =f= filters by status, score or format, =s=
-  sorts by last updated, title, status, score, progress or start date (and
-  reverses), =a= adds from AniList, =t= shows that list's stats, and a
-  number opens the title. A title's page has its card and every action:
+  20 a page, with a numbered menu under it: Open a Title, Search, Filter (by
+  status, score or format), Sort (by last updated, title, status, score,
+  progress or start date, or reversed), Clear Search/Filter, Add from
+  AniList, Stats, Next Page and Previous Page. Search and Open a Title each
+  ask their own question, so a search is never read as a choice. A title's page has its card and every action:
   +1 episode or chapter, progress, status, score, Edit Details (total,
   volumes, dates, name) and Remove. View Lists, Log Progress, Edit Title,
   Remove Title and Stats are gone from the main menu.

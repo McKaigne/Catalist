@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cctype>
 #include <format>
 
 #include "core/lists.hpp"
@@ -105,16 +104,30 @@ void PrintRows(App& app, const ListView& view, const std::vector<Entry>& shown, 
 	app.out << output::Rows(columns, rows, app.columns, app.color);
 }
 
-void PrintKeys(App& app, bool paged) {
-	auto key = [&app](const char* letter, const char* label) {
-		return std::format("{} {}", output::Paint(letter, output::kCyan, app.color), label);
+constexpr const char* kListOptions[] = {
+    "Open a Title",     "Search", "Filter",    "Sort",          "Clear Search/Filter",
+    "Add from AniList", "Stats",  "Next Page", "Previous Page",
+};
+
+// Two columns, 1 to 4 and 5 to 9, then 0 Back.
+void PrintListMenu(App& app) {
+	constexpr int kLeftRows = 4;
+	constexpr int kRows = 5;
+	constexpr int kLabelWidth = 16;
+	auto number = [&app](int n) {
+		return output::Paint(std::to_string(n), output::kCyan, app.color);
 	};
-	app.out << "\n  " << key("#", "Open") << "   " << key("f", "Filter") << "   "
-	        << key("s", "Sort") << "   " << key("c", "Clear") << "   " << key("a", "Add") << "   "
-	        << key("t", "Stats");
-	if (paged)
-		app.out << "   " << key("n", "Next") << "   " << key("p", "Previous");
-	app.out << "   " << key("0", "Back") << "\n\n";
+	app.out << "\n";
+	for (int row = 1; row <= kRows; ++row) {
+		if (row <= kLeftRows)
+			app.out << std::format("  {}  {:<{}}", number(row), kListOptions[row - 1], kLabelWidth);
+		else
+			app.out << std::string(5 + kLabelWidth, ' ');
+		app.out << std::format("  {}  {}\n", number(row + kLeftRows),
+		                       kListOptions[row + kLeftRows - 1]);
+	}
+	DrawOption(app, 0, 1, "Back");
+	app.out << "\n";
 }
 
 void PrintStats(App& app, MediaType type) {
@@ -263,9 +276,9 @@ void ListScreen(App& app, MediaType type) {
 		if (shown.empty()) {
 			if (total == 0)
 				Note(app,
-				     std::format("Your {} list is empty. Choose a to add a title.", TypeKey(type)));
+				     std::format("Your {} list is empty. Choose 6 to add a title.", TypeKey(type)));
 			else
-				Note(app, "No titles match. Choose c to clear the search and filters.");
+				Note(app, "No titles match. Choose 5 to clear the search and filters.");
 		} else {
 			PrintRows(app, view, shown, first, last);
 		}
@@ -273,68 +286,80 @@ void ListScreen(App& app, MediaType type) {
 			app.out << output::Paint(std::format("\n  Page {} of {}", view.page + 1, pages),
 			                         output::kGray, app.color)
 			        << "\n";
-		PrintKeys(app, pages > 1);
+		PrintListMenu(app);
 		if (not notice.empty()) {
 			Warn(app, notice);
 			notice.clear();
 		}
 
-		auto answer = ReadLine(app, std::format("{} Number, letter, or text to search: ",
-		                                        output::Paint(">", output::kMagenta, app.color)));
-		if (not answer)
-			return;
-		if (answer->empty())
-			continue;
-		if (auto number = ParseNumber(*answer)) {
-			if (*number == 0)
+		switch (ReadChoice(app, static_cast<int>(std::size(kListOptions)))) {
+			case 0:
 				return;
-			if (static_cast<size_t>(*number) <= last - first)
-				TitleScreen(app, shown[first + static_cast<size_t>(*number) - 1]);
-			else
-				notice = std::format("There is no title {} on this page.", *number);
-			continue;
-		}
-		char letter =
-		    answer->size() == 1
-		        ? static_cast<char>(std::tolower(static_cast<unsigned char>((*answer)[0])))
-		        : '\0';
-		switch (letter) {
-			case 'f':
-				AskFilter(app, view, crumb);
+			case 1: {
+				if (shown.empty()) {
+					notice = "There are no titles to open.";
+					break;
+				}
+				auto text =
+				    AskText(app, std::format("{} Title number (Enter to go back): ",
+					                         output::Paint(">", output::kMagenta, app.color)));
+				if (not text)
+					break;
+				auto row = ParseNumber(*text);
+				if (row and *row > 0 and static_cast<size_t>(*row) <= last - first)
+					TitleScreen(app, shown[first + static_cast<size_t>(*row) - 1]);
+				else
+					notice = std::format("There is no title {} on this page.", *text);
 				break;
-			case 's':
-				AskSort(app, view, crumb);
-				break;
-			case 'c':
-				ClearFilters(view);
-				view.page = 0;
-				break;
-			case 'a':
-				AddScreen(app, type);
-				break;
-			case 't':
-				ShowStats(app, type, crumb);
-				break;
-			case 'n':
-				view.page = std::min(view.page + 1, pages - 1);
-				break;
-			case 'p':
-				view.page = view.page > 0 ? view.page - 1 : 0;
-				break;
-			default: {
+			}
+			case 2: {
+				auto text =
+				    AskText(app, std::format("{} Search {} (Enter to go back): ",
+					                         output::Paint(">", output::kMagenta, app.color),
+					                         TypeKey(type)));
+				if (not text)
+					break;
 				ListView searched = view;
-				searched.search = *answer;
+				searched.search = *text;
 				searched.page = 0;
 				if (Shown(app, searched).empty()) {
-					auto closest = ClosestTitle(app.db.GetEntries(type), *answer);
-					notice = closest ? std::format("Nothing matches '{}'. Did you mean {}?",
-					                               *answer, DisplayName(*closest))
-					                 : std::format("Nothing matches '{}'.", *answer);
+					auto closest = ClosestTitle(app.db.GetEntries(type), *text);
+					notice = closest ? std::format("Nothing matches '{}'. Did you mean {}?", *text,
+					                               DisplayName(*closest))
+					                 : std::format("Nothing matches '{}'.", *text);
 				} else {
 					view = searched;
 				}
 				break;
 			}
+			case 3:
+				AskFilter(app, view, crumb);
+				break;
+			case 4:
+				AskSort(app, view, crumb);
+				break;
+			case 5:
+				ClearFilters(view);
+				view.page = 0;
+				break;
+			case 6:
+				AddScreen(app, type);
+				break;
+			case 7:
+				ShowStats(app, type, crumb);
+				break;
+			case 8:
+				if (view.page + 1 < pages)
+					++view.page;
+				else
+					notice = "This is the last page.";
+				break;
+			case 9:
+				if (view.page > 0)
+					--view.page;
+				else
+					notice = "This is the first page.";
+				break;
 		}
 	}
 }

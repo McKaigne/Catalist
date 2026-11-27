@@ -28,7 +28,7 @@ void DrawHome(App& app) {
 	        << output::Rule(std::min(app.columns, 80), app.color) << "\n\n";
 	if (anime.empty() and manga.empty())
 		Note(app,
-		     "Your lists are empty. Open Anime or Manga and choose a to add a title, or "
+		     "Your lists are empty. Open Anime or Manga and choose 6 to add a title, or "
 		     "import a list.\n");
 }
 

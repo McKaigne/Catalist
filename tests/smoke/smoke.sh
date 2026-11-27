@@ -40,13 +40,13 @@ has "first run" "$shown" "Import & Export"
 has "first run" "$shown" "Goodbye!"
 [ ! -e "$work/catalist.csv" ] || fail "looking wrote a file"
 
-shown=$(menu '1\na\nfullmetal\n2\n1\n\n0\n0\n')
+shown=$(menu '1\n6\nfullmetal\n2\n1\n\n0\n0\n')
 has "add" "$shown" "Fullmetal Alchemist added as Plan to Watch."
 head -n 1 "$work/catalist.csv" | grep -q '^id,type,title,' || fail "csv header"
 grep -q '^1,anime,Fullmetal Alchemist,' "$work/catalist.csv" || fail "csv row"
 
-menu '1\na\nOdd Taxi\n2\n\n0\n0\n' >/dev/null
-shown=$(menu '1\ntaxi\n1\n1\n\n0\n0\n0\n')
+menu '1\n6\nOdd Taxi\n2\n\n0\n0\n' >/dev/null
+shown=$(menu '1\n2\ntaxi\n1\n1\n1\n\n0\n0\n0\n')
 has "count" "$shown" "progress 0 -> 1/13"
 shown=$(menu '0\n')
 has "reopened" "$shown" "2 anime"

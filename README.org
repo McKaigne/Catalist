@@ -49,12 +49,11 @@ A terminal at least 106 columns wide shows the big logo on the home screen.
 #+end_example
 
 - *Anime* and *Manga:* your list, numbered 20 a page, latest change first.
-  - Type a number to open that title, or any other text to search.
-  - =f= filters by status, score or (for anime) format; =s= sorts by last
-    updated, title, status, score, progress or start date, or reverses;
-    =c= clears both.
-  - =a= adds a title from AniList, =t= shows the list's stats, =n= and =p=
-    move between pages, =0= goes back.
+  - Under it is a numbered menu: 1 Open a Title (then type its number),
+    2 Search, 3 Filter, 4 Sort, 5 Clear Search/Filter, 6 Add from AniList,
+    7 Stats, 8 Next Page, 9 Previous Page and 0 Back.
+  - Filter narrows by status, score or (for anime) format. Sort orders by
+    last updated, title, status, score, progress or start date, or reverses.
 - *A title's page:* its card, then +1 Episode (or Chapter), Set Progress,
   Set Status, Set Score, Edit Details (total, volumes, dates, name) and
   Remove, which asks first.

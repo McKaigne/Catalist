@@ -17,7 +17,7 @@ Every screen is plain ASCII, so the sample runs below can be pasted into the PDF
 | Requirement                 | State | Where                                                 |
 |-----------------------------+-------+-------------------------------------------------------|
 | C++ language only           | Met   | All code is C++23. It runs the =curl= program to go online |
-| Create                      | Met   | =a= Add on a list, Import XML                         |
+| Create                      | Met   | Add from AniList on a list, Import XML                |
 | Read                        | Met   | Anime and Manga lists, search, filters, title page, Stats |
 | Update                      | Met   | Title page: +1, Set Progress, Status, Score, Edit Details |
 | Delete                      | Met   | Remove on the title page                              |
@@ -53,7 +53,7 @@ AniList and MyAnimeList are the main tracking websites. Both keep a person's lis
 
 * Proposed Solution
 Catalist keeps the list in a readable CSV file on the person's computer and goes online only to add a title.
-- Every action is a numbered menu choice or a one-letter key listed on screen.
+- Every action is a numbered menu choice.
 - Titles are found by any part of their name, and lists can be filtered and sorted.
 - Viewing and editing a title happen on one page.
 - No account is needed.
@@ -244,7 +244,7 @@ void DrawHome(App& app) {
 	        << output::Rule(std::min(app.columns, 80), app.color) << "\n\n";
 	if (anime.empty() and manga.empty())
 		Note(app,
-		     "Your lists are empty. Open Anime or Manga and choose a to add a title, or "
+		     "Your lists are empty. Open Anime or Manga and choose 6 to add a title, or "
 		     "import a list.\n");
 }
 #+end_src
@@ -262,7 +262,7 @@ DrawOptions(app, {"Anime", "Manga", "Import & Export"}, "Exit");
 *** 2.2 Breadcrumb headings
 Each screen is headed by its path, separated by slashes, such as =Catalist / Anime / Filter / By Status=. The last part is bold. A title's page includes its name.
 
-Source: =src/menu/list.cpp:244=
+Source: =src/menu/list.cpp:257=
 #+begin_src cpp
 std::string crumb = std::format("Catalist / {}", TypeToString(type));
 #+end_src
@@ -314,21 +314,35 @@ auto answer =
 	                          output::Paint(">", output::kMagenta, app.color), highest));
 #+end_src
 
-*** 2.5 The list keys
-Under a list, a number opens that title, and single letters choose the other actions: =f= Filter, =s= Sort, =c= Clear, =a= Add, =t= Stats, =n= Next and =p= Previous on a long list, and =0= Back. Anything else typed is a search.
+*** 2.5 The list menu
+Under a list is a numbered menu like every other: 1 Open a Title, 2 Search, 3 Filter, 4 Sort, 5 Clear Search/Filter, 6 Add from AniList, 7 Stats, 8 Next Page, 9 Previous Page and 0 Back. Open a Title and Search each ask their own question next, so a search is never mistaken for a choice. The numbers stay the same on every list, even with one page, and Next or Previous past the end says so. The nine choices sit in two columns so the titles keep the room.
 
-Source: =src/menu/list.cpp:108-118=
+Source: =src/menu/list.cpp:107-131=
 #+begin_src cpp
-void PrintKeys(App& app, bool paged) {
-	auto key = [&app](const char* letter, const char* label) {
-		return std::format("{} {}", output::Paint(letter, output::kCyan, app.color), label);
+constexpr const char* kListOptions[] = {
+    "Open a Title",     "Search", "Filter",    "Sort",          "Clear Search/Filter",
+    "Add from AniList", "Stats",  "Next Page", "Previous Page",
+};
+
+// Two columns, 1 to 4 and 5 to 9, then 0 Back.
+void PrintListMenu(App& app) {
+	constexpr int kLeftRows = 4;
+	constexpr int kRows = 5;
+	constexpr int kLabelWidth = 16;
+	auto number = [&app](int n) {
+		return output::Paint(std::to_string(n), output::kCyan, app.color);
 	};
-	app.out << "\n  " << key("#", "Open") << "   " << key("f", "Filter") << "   "
-	        << key("s", "Sort") << "   " << key("c", "Clear") << "   " << key("a", "Add") << "   "
-	        << key("t", "Stats");
-	if (paged)
-		app.out << "   " << key("n", "Next") << "   " << key("p", "Previous");
-	app.out << "   " << key("0", "Back") << "\n\n";
+	app.out << "\n";
+	for (int row = 1; row <= kRows; ++row) {
+		if (row <= kLeftRows)
+			app.out << std::format("  {}  {:<{}}", number(row), kListOptions[row - 1], kLabelWidth);
+		else
+			app.out << std::string(5 + kLabelWidth, ' ');
+		app.out << std::format("  {}  {}\n", number(row + kLeftRows),
+		                       kListOptions[row + kLeftRows - 1]);
+	}
+	DrawOption(app, 0, 1, "Back");
+	app.out << "\n";
 }
 #+end_src
 
@@ -444,7 +458,7 @@ std::string Bar(int done, int total, int width, bool color) {
 *** 3.1 One list per kind
 Anime and manga are listed apart, because episodes and chapters are different units. Each row has its number, status, name, format for anime, score and progress.
 
-Source: =src/menu/list.cpp:83-106=
+Source: =src/menu/list.cpp:82-105=
 #+begin_src cpp
 void PrintRows(App& app, const ListView& view, const std::vector<Entry>& shown, size_t first,
                size_t last) {
@@ -472,8 +486,8 @@ void PrintRows(App& app, const ListView& view, const std::vector<Entry>& shown, 
 }
 #+end_src
 
-*** 3.2 Typing searches the list
-Type any part of the English or romaji name. Words can be in any order, and capitals and punctuation are ignored, so =frieren beyond journeys end= finds "Frieren: Beyond Journey's End". A search stays until it is cleared or replaced.
+*** 3.2 Searching the list
+2 Search asks for any part of the English or romaji name. Words can be in any order, and capitals and punctuation are ignored, so =frieren beyond journeys end= finds "Frieren: Beyond Journey's End". A search stays until it is cleared or replaced.
 
 Source: =src/menu/find.cpp:30-38=
 #+begin_src cpp
@@ -520,20 +534,19 @@ std::string Folded(const std::string& text) {
 *** 3.3 A typo gets a suggestion
 A search that finds nothing leaves the list as it was and names the closest title, such as "Nothing matches 'freiren'. Did you mean Sousou no Frieren?".
 
-Source: =src/menu/list.cpp:325-336=
+Source: =src/menu/list.cpp:322-332=
 #+begin_src cpp
 ListView searched = view;
-searched.search = *answer;
+searched.search = *text;
 searched.page = 0;
 if (Shown(app, searched).empty()) {
-	auto closest = ClosestTitle(app.db.GetEntries(type), *answer);
-	notice = closest ? std::format("Nothing matches '{}'. Did you mean {}?",
-	                               *answer, DisplayName(*closest))
-	                 : std::format("Nothing matches '{}'.", *answer);
+	auto closest = ClosestTitle(app.db.GetEntries(type), *text);
+	notice = closest ? std::format("Nothing matches '{}'. Did you mean {}?", *text,
+	                               DisplayName(*closest))
+	                 : std::format("Nothing matches '{}'.", *text);
 } else {
 	view = searched;
 }
-break;
 #+end_src
 
 Source: =src/menu/find.cpp:13-26=
@@ -555,9 +568,9 @@ std::optional<int> TypoCost(const std::vector<std::string>& words, const std::st
 #+end_src
 
 *** 3.4 Filters by status, score and format
-=f= narrows the list to one status, one score (=0= for no score) or, for anime, one format. Filters and the search combine, and Clear Filters or =c= removes them all.
+3 Filter narrows the list to one status, one score (=0= for no score) or, for anime, one format. Filters and the search combine, and Clear Filters, or 5 Clear Search/Filter on the list, removes them all.
 
-Source: =src/menu/list.cpp:43-48=
+Source: =src/menu/list.cpp:42-47=
 #+begin_src cpp
 bool Shows(const ListView& view, const Entry& e) {
 	return (not view.status or e.status == *view.status) and
@@ -567,7 +580,7 @@ bool Shows(const ListView& view, const Entry& e) {
 }
 #+end_src
 
-Source: =src/menu/list.cpp:180-211=
+Source: =src/menu/list.cpp:193-224=
 #+begin_src cpp
 void AskFilter(App& app, ListView& view, const std::string& crumb) {
 	bool anime = view.type == MediaType::kAnime;
@@ -604,7 +617,7 @@ void AskFilter(App& app, ListView& view, const std::string& crumb) {
 #+end_src
 
 *** 3.5 Six sorts, and reverse
-=s= sorts by Last Updated, Title, Status, Score, Progress or Start Date. The latest change, the highest score, the most progress and the latest start come first; titles go A to Z; statuses go from in progress to planned. Reverse Order flips any of them. Ties go by name.
+4 Sort sorts by Last Updated, Title, Status, Score, Progress or Start Date. The latest change, the highest score, the most progress and the latest start come first; titles go A to Z; statuses go from in progress to planned. Reverse Order flips any of them. Ties go by name.
 
 Source: =src/core/lists.cpp:41-57=
 #+begin_src cpp
@@ -627,7 +640,7 @@ int Compare(const Entry& a, const Entry& b, SortKey key) {
 }
 #+end_src
 
-Source: =src/menu/list.cpp:213-230=
+Source: =src/menu/list.cpp:226-243=
 #+begin_src cpp
 void AskSort(App& app, ListView& view, const std::string& crumb) {
 	ClearScreen(app);
@@ -652,7 +665,7 @@ void AskSort(App& app, ListView& view, const std::string& crumb) {
 *** 3.6 The list says what it shows
 The line over the list gives how many titles are shown out of the whole list, the search and filters, and the sort, such as =1 of 2 titles: 'taxi', Watching   Sorted by Title=.
 
-Source: =src/menu/list.cpp:69-81=
+Source: =src/menu/list.cpp:68-80=
 #+begin_src cpp
 std::string Narrowed(const ListView& view) {
 	std::string text;
@@ -670,19 +683,41 @@ std::string Narrowed(const ListView& view) {
 #+end_src
 
 *** 3.7 Long lists are paged
-A list shows 20 titles a page, numbered from 1 on each page. =n= and =p= move between pages, and a number that is not on the page is refused with a note.
+A list shows 20 titles a page, numbered from 1 on each page. 8 and 9 move between pages. 1 Open a Title asks for a title number, and one that is not on the page is refused with a note.
 
-Source: =src/menu/list.cpp:288-296=
+Source: =src/menu/list.cpp:299-313=
 #+begin_src cpp
-if (auto number = ParseNumber(*answer)) {
-	if (*number == 0)
-		return;
-	if (static_cast<size_t>(*number) <= last - first)
-		TitleScreen(app, shown[first + static_cast<size_t>(*number) - 1]);
-	else
-		notice = std::format("There is no title {} on this page.", *number);
-	continue;
+if (shown.empty()) {
+	notice = "There are no titles to open.";
+	break;
 }
+auto text =
+    AskText(app, std::format("{} Title number (Enter to go back): ",
+	                         output::Paint(">", output::kMagenta, app.color)));
+if (not text)
+	break;
+auto row = ParseNumber(*text);
+if (row and *row > 0 and static_cast<size_t>(*row) <= last - first)
+	TitleScreen(app, shown[first + static_cast<size_t>(*row) - 1]);
+else
+	notice = std::format("There is no title {} on this page.", *text);
+break;
+#+end_src
+
+Source: =src/menu/list.cpp:351-362=
+#+begin_src cpp
+case 8:
+	if (view.page + 1 < pages)
+		++view.page;
+	else
+		notice = "This is the last page.";
+	break;
+case 9:
+	if (view.page > 0)
+		--view.page;
+	else
+		notice = "This is the first page.";
+	break;
 #+end_src
 
 ** 4. Display
@@ -784,9 +819,9 @@ if (columns[i].flexible and total > width)
 #+end_src
 
 *** 4.5 Stats belong to each list
-=t= on the Anime or Manga list counts that kind: titles by status, mean score, episodes or chapters, rewatches and days spent.
+7 Stats on the Anime or Manga list counts that kind: titles by status, mean score, episodes or chapters, rewatches and days spent.
 
-Source: =src/menu/list.cpp:120-147=
+Source: =src/menu/list.cpp:133-160=
 #+begin_src cpp
 void PrintStats(App& app, MediaType type) {
 	constexpr int kLabelWidth = 22;
@@ -1052,7 +1087,7 @@ actions.push_back({"Set Volumes Read", [&](const Entry& e) {
 ** 6. Adding a title
 
 *** 6.1 Add searches the list's kind, ten results
-=a= on the Anime list searches AniList for anime only, and on the Manga list for manga only, showing up to 10 matches.
+6 Add from AniList on the Anime list searches AniList for anime only, and on the Manga list for manga only, showing up to 10 matches.
 
 Source: =src/web/anilist.cpp:57-72=
 #+begin_src cpp
@@ -1535,7 +1570,8 @@ These were decided during development, then replaced when the course requirement
 - Plain-text menus (=1. Add Title=, a bold "Catalist" heading, =[y/N]=, =[k]eep=): replaced for a time by logos, Nerd Font icons and circled hints. The import keys K and F became r and t then, and both still work.
 - Nerd Font icons and circled numbers, letters and statuses: replaced by plain ASCII (2.3), so the program looks the same in any terminal and font, and in the PDF.
 - The seven-item main menu (Add Title, View Lists, Log Progress, Edit Title, Remove Title, Stats, Import & Export): replaced by Anime, Manga and Import & Export (1.1). Viewing and editing were on separate screens, so a title was looked up twice; now a title opens on one page with every action (4.2).
-- View Lists' In Progress, All Titles, By Status and Search Lists: replaced by typing to search, filters and six sorts on each list (3.2 to 3.5).
+- View Lists' In Progress, All Titles, By Status and Search Lists: replaced by search, filters and six sorts on each list (3.2 to 3.5).
+- One prompt under a list that took a title number, a letter key (=f=, =s=, =c=, =a=, =t=, =n=, =p=) or any other text as a search: replaced by the numbered list menu (2.5), because a search and a choice in one answer was confusing and did not look like the other menus.
 - Log Progress: replaced by +1 Episode on the title page (2.6).
 - Asking "Did you mean ...?" with yes or no: replaced by a note under the list that names the closest title (3.3).
 - Adding anime and manga in one search: Add now searches the kind of list it is on (6.1).
@@ -1559,16 +1595,18 @@ flowchart TD
     G -- 3 --> T[Import or export MyAnimeList XML]
     T --> E
     G -- 1 or 2 --> L[Show the Anime or Manga list]
-    L --> K[/Read a number, letter or text/]
-    K --> W{What was typed?}
+    L --> K[/Read choice/]
+    K --> W{Number from 0 to 9?}
+    W -- No --> K
     W -- 0 --> E
-    W -- f or s --> FS[Choose a filter or sort]
-    W -- c --> CL[Clear the search and filters]
-    W -- a --> AD[Search AniList, choose a match and status]
-    W -- t --> ST[Show the list's stats]
-    W -- n or p --> PG[Next or previous page]
-    W -- other text --> SR[Search the list]
-    W -- number --> TP[Open the title page]
+    W -- 1 --> ON[/Read a title number/]
+    ON --> TP[Open the title page]
+    W -- 2 --> SR[/Read text and search the list/]
+    W -- 3 or 4 --> FS[Choose a filter or sort]
+    W -- 5 --> CL[Clear the search and filters]
+    W -- 6 --> AD[Search AniList, choose a match and status]
+    W -- 7 --> ST[Show the list's stats]
+    W -- 8 or 9 --> PG[Next or previous page]
     TP --> TA{Action?}
     TA -- 1 to 5 --> UP[Change progress, status, score or details]
     TA -- 6 --> RM{Confirm remove?}
@@ -1604,13 +1642,15 @@ SHOW "Goodbye!"
 OPEN a list:
     LOOP
         SHOW the titles that match the search and filters, sorted, 20 a page
-        READ an answer
-        IF the input ended or the answer is 0 THEN return to the main menu
-        ELSE IF the answer is a number on the page THEN open that title
-        ELSE IF the answer is f, s, c, a, t, n or p THEN
-            filter, sort, clear, add from AniList, show stats or change page
-        ELSE search the list for the answer
-            IF nothing matches THEN keep the list and name the closest title
+        READ choice, asking again until it is a number from 0 to 9
+        SWITCH choice
+            CASE 0: return to the main menu
+            CASE 1: READ a title number; IF it is on the page THEN open it
+            CASE 2: READ text and search the list
+                    IF nothing matches THEN keep the list and name the closest title
+            CASE 3, 4: filter or sort        CASE 5: clear the search and filters
+            CASE 6: add from AniList         CASE 7: show stats
+            CASE 8, 9: next or previous page
 
 OPEN a title:
     LOOP
@@ -1694,9 +1734,14 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 0
+> Enter choice [0-9]: 0
 [main menu]
 > Enter choice [0-3]: 0
 Goodbye!
@@ -1714,9 +1759,15 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: freiren
+> Enter choice [0-9]: 2
+> Search anime (Enter to go back): freiren
 Catalist / Anime
 --------------------------------------------------------------------------------
 
@@ -1725,10 +1776,16 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
 ! Nothing matches 'freiren'. Did you mean Sousou no Frieren?
-> Number, letter, or text to search: frieren
+> Enter choice [0-9]: 2
+> Search anime (Enter to go back): frieren
 Catalist / Anime
 --------------------------------------------------------------------------------
 
@@ -1736,9 +1793,14 @@ Catalist / Anime
 
   1  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 0
+> Enter choice [0-9]: 0
 [main menu]
 > Enter choice [0-3]: 0
 Goodbye!
@@ -1756,9 +1818,14 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: f
+> Enter choice [0-9]: 3
 Catalist / Anime / Filter
 --------------------------------------------------------------------------------
 
@@ -1788,9 +1855,14 @@ Catalist / Anime
 
   1  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: s
+> Enter choice [0-9]: 4
 Catalist / Anime / Sort
 --------------------------------------------------------------------------------
 
@@ -1811,9 +1883,14 @@ Catalist / Anime
 
   1  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 0
+> Enter choice [0-9]: 0
 [main menu]
 > Enter choice [0-3]: 0
 Goodbye!
@@ -1831,9 +1908,14 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: a
+> Enter choice [0-9]: 6
 Catalist / Anime / Add
 --------------------------------------------------------------------------------
 
@@ -1867,9 +1949,14 @@ Catalist / Anime
   2  [C]  Odd Taxi             TV  ****-  13/13
   3  [W]  Sousou no Frieren    TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 0
+> Enter choice [0-9]: 0
 [main menu]
 > Enter choice [0-3]: 0
 Goodbye!
@@ -1887,9 +1974,15 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 2
+> Enter choice [0-9]: 1
+> Title number (Enter to go back): 2
 Catalist / Anime / Sousou no Frieren
 --------------------------------------------------------------------------------
 
@@ -1948,9 +2041,14 @@ Catalist / Anime
   1  [W]  Sousou no Frieren  TV  *****  13/28
   2  [C]  Odd Taxi           TV  ****-  13/13
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 0
+> Enter choice [0-9]: 0
 [main menu]
 > Enter choice [0-3]: 0
 Goodbye!
@@ -1968,9 +2066,15 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 1
+> Enter choice [0-9]: 1
+> Title number (Enter to go back): 1
 Catalist / Anime / Odd Taxi
 --------------------------------------------------------------------------------
 
@@ -2029,9 +2133,14 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****+  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 0
+> Enter choice [0-9]: 0
 [main menu]
 > Enter choice [0-3]: 0
 Goodbye!
@@ -2049,9 +2158,15 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: taxi
+> Enter choice [0-9]: 2
+> Search anime (Enter to go back): taxi
 Catalist / Anime
 --------------------------------------------------------------------------------
 
@@ -2059,9 +2174,15 @@ Catalist / Anime
 
   1  [C]  Odd Taxi  TV  ****-  13/13
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 1
+> Enter choice [0-9]: 1
+> Title number (Enter to go back): 1
 Catalist / Anime / Odd Taxi
 --------------------------------------------------------------------------------
 
@@ -2130,9 +2251,14 @@ Catalist / Anime
 
   1  [C]  Odd Taxi  TV  ****-  13/13
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 0
+> Enter choice [0-9]: 0
 [main menu]
 > Enter choice [0-3]: 0
 Goodbye!
@@ -2150,9 +2276,15 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: taxi
+> Enter choice [0-9]: 2
+> Search anime (Enter to go back): taxi
 Catalist / Anime
 --------------------------------------------------------------------------------
 
@@ -2160,9 +2292,15 @@ Catalist / Anime
 
   1  [C]  Odd Taxi  TV  ****-  13/13
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 1
+> Enter choice [0-9]: 1
+> Title number (Enter to go back): 1
 Catalist / Anime / Odd Taxi
 --------------------------------------------------------------------------------
 
@@ -2195,11 +2333,16 @@ Catalist / Anime
 
   0 of 1 titles: 'taxi'   Sorted by Last Updated
 
-- No titles match. Choose c to clear the search and filters.
+- No titles match. Choose 5 to clear the search and filters.
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 0
+> Enter choice [0-9]: 0
 [main menu]
 > Enter choice [0-3]: 0
 Goodbye!
@@ -2217,9 +2360,14 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: t
+> Enter choice [0-9]: 7
 Catalist / Anime / Stats
 --------------------------------------------------------------------------------
 
@@ -2244,9 +2392,14 @@ Catalist / Anime
   1  [C]  Odd Taxi           TV  ****-  13/13
   2  [W]  Sousou no Frieren  TV  *****  12/28
 
-  # Open   f Filter   s Sort   c Clear   a Add   t Stats   0 Back
+  1  Open a Title      5  Clear Search/Filter
+  2  Search            6  Add from AniList
+  3  Filter            7  Stats
+  4  Sort              8  Next Page
+                       9  Previous Page
+  0  Back
 
-> Number, letter, or text to search: 0
+> Enter choice [0-9]: 0
 [main menu]
 > Enter choice [0-3]: 0
 Goodbye!

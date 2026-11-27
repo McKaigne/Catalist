@@ -43,40 +43,43 @@ std::optional<anilist::Match> OnlyExact(const std::vector<anilist::Match>& match
 	return exact.size() == 1 ? std::optional(exact[0]) : std::nullopt;
 }
 
-void PrintMatches(App& app, const std::vector<anilist::Match>& matches) {
-	std::vector<output::Section> sections = {
-	    {std::format("{} Anime", output::icon::kAnime), {}},
-	    {std::format("{} Manga", output::icon::kManga), {}}};
+void PrintMatches(App& app, MediaType type, const std::vector<anilist::Match>& matches) {
+	bool anime = type == MediaType::kAnime;
 	int digits = static_cast<int>(std::to_string(matches.size()).size());
+	std::vector<std::vector<output::Styled>> rows;
 	for (size_t i = 0; i < matches.size(); ++i) {
 		const auto& match = matches[i];
 		auto mine = app.db.FindByIds(match.type, match.anilist_id, match.mal_id);
-		sections[match.type == MediaType::kAnime ? 0 : 1].rows.push_back(
-		    {{"  " + output::NumberHint(static_cast<int>(i + 1), digits), output::kCyan},
-		     {match.year.empty() ? "-" : match.year},
-		     {match.format == MediaFormat::kUnknown ? "" : MediaFormatLabel(match.format)},
-		     {ShownName(match)},
-		     {LengthOf(match)},
-		     {output::Stars(match.score), output::kYellow},
-		     {mine ? std::format("{} {}", StatusIcon(mine->status),
-		                         StatusLabel(mine->status, match.type))
-		           : "",
-		      mine ? StatusColor(mine->status) : nullptr}});
+		std::vector<output::Styled> row = {{std::format("  {:>{}}", i + 1, digits), output::kCyan},
+		                                   {match.year.empty() ? "-" : match.year}};
+		if (anime)
+			row.push_back({MediaFormatLabel(match.format)});
+		row.push_back({ShownName(match)});
+		row.push_back({LengthOf(match)});
+		row.push_back({output::Stars(match.score), output::kYellow});
+		row.push_back({mine ? std::format("{} {}", StatusMark(mine->status),
+		                                  StatusLabel(mine->status, match.type))
+		                    : "",
+		               mine ? StatusColor(mine->status) : nullptr});
+		rows.push_back(row);
 	}
-	app.out << output::Sections(
-	    {{}, {}, {}, {.flexible = true}, {.align_right = true}, {}, {}}, sections, app.columns,
-	    app.color);
+	std::vector<output::TableColumn> columns = {{}, {}};
+	if (anime)
+		columns.push_back({});
+	columns.insert(columns.end(), {{.flexible = true}, {.align_right = true}, {}, {}});
+	app.out << output::Rows(columns, rows, app.columns, app.color);
 }
 
-std::optional<anilist::Match> ChooseMatch(App& app, const std::vector<anilist::Match>& matches,
+std::optional<anilist::Match> ChooseMatch(App& app, MediaType type,
+                                          const std::vector<anilist::Match>& matches,
                                           const std::string& query) {
 	if (matches.size() == 1)
 		return matches[0];
 	if (auto exact = OnlyExact(matches, query))
 		return exact;
-	PrintMatches(app, matches);
+	PrintMatches(app, type, matches);
 	app.out << "\n";
-	DrawOption(app, 0, static_cast<int>(std::to_string(matches.size()).size()), kBackOption);
+	DrawOption(app, 0, static_cast<int>(std::to_string(matches.size()).size()), "Back");
 	app.out << "\n";
 	int choice = ReadChoice(app, static_cast<int>(matches.size()));
 	if (choice == 0)
@@ -94,56 +97,43 @@ void SaveNewTitle(App& app, const anilist::Match& match, WatchStatus status) {
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 		return;
 	}
-	Done(app, std::format("{} added as {}.", DisplayName(added),
-	                      StatusLabel(added.status, added.type)));
+	Done(app,
+	     std::format("{} added as {}.", DisplayName(added), StatusLabel(added.status, added.type)));
 }
 
 }  // namespace
 
-void AddScreen(App& app) {
+void AddScreen(App& app, MediaType type) {
+	std::string crumb = std::format("Catalist / {} / Add", TypeToString(type));
 	ClearScreen(app);
-	DrawMenu(app, "Catalist / Add Title",
-	         {{output::icon::kAddBoth, "Both"},
-	          {output::icon::kAnime, "Anime Only"},
-	          {output::icon::kManga, "Manga Only"}});
-	int where = ReadChoice(app, 3);
-	if (where == 0)
-		return;
-	std::optional<MediaType> only;
-	if (where == 2)
-		only = MediaType::kAnime;
-	else if (where == 3)
-		only = MediaType::kManga;
-
-	auto name = AskText(app, std::format("{} Search AniList (Enter to go back): ",
-	                                     output::Paint(output::icon::kSearch, output::kMagenta,
-	                                                   app.color)));
+	DrawHeading(app, crumb);
+	auto name =
+	    AskText(app, std::format("{} Search AniList for {} (Enter to go back): ",
+		                         output::Paint(">", output::kMagenta, app.color), TypeKey(type)));
 	if (not name)
 		return;
-	auto found = anilist::Search(app.net, only, *name);
+	auto found = anilist::Search(app.net, type, *name);
 	if (not found.has_value()) {
 		Fail(app, found.error());
 		Pause(app);
 		return;
 	}
 	if (found.value().empty()) {
-		app.out << std::format("{} AniList has no title matching '{}'.\n", output::icon::kInfo,
-		                       *name);
+		Note(app, std::format("AniList has no {} matching '{}'.", TypeKey(type), *name));
 		Pause(app);
 		return;
 	}
-	auto match = ChooseMatch(app, found.value(), *name);
+	auto match = ChooseMatch(app, type, found.value(), *name);
 	if (not match)
 		return;
 	if (auto mine = app.db.FindByIds(match->type, match->anilist_id, match->mal_id)) {
-		app.out << std::format("{} {} is in your {} list already ({}).\n", output::icon::kInfo,
-		                       DisplayName(*mine),
-		                       TypeKey(mine->type), StatusLabel(mine->status, mine->type));
+		Note(app, std::format("{} is in your {} list already ({}).", DisplayName(*mine),
+		                      TypeKey(mine->type), StatusLabel(mine->status, mine->type)));
 		Pause(app);
 		return;
 	}
 	ClearScreen(app);
-	auto status = AskStatus(app, std::format("Catalist / Add Title / {}", ShownName(*match)),
+	auto status = AskStatus(app, std::format("{} / {}", crumb, ShownName(*match)),
 	                        kStatusesForNewTitle, match->type);
 	if (not status)
 		return;

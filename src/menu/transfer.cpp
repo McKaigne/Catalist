@@ -5,8 +5,8 @@
 #include <string_view>
 #include <utility>
 
-#include "menu/common.hpp"
 #include "core/text.hpp"
+#include "menu/common.hpp"
 #include "menu/input.hpp"
 #include "menu/output.hpp"
 #include "storage/mal_xml.hpp"
@@ -56,8 +56,7 @@ void PrintClashes(App& app, const Entry& mine, const std::vector<Clash>& clashes
 		width = std::max(width, each.yours.size());
 		field_width = std::max(field_width, each.field.size() + 1);
 	}
-	app.out << std::format("{} {} ({})\n", TypeIcon(mine.type),
-	                       output::Paint(DisplayName(mine), output::kBold, app.color),
+	app.out << std::format("{} ({})\n", output::Paint(DisplayName(mine), output::kBold, app.color),
 	                       TypeKey(mine.type));
 	for (const auto& each : clashes)
 		app.out << std::format("  {:<{}} yours {:<{}}   file {}\n", each.field, field_width,
@@ -69,10 +68,12 @@ void PrintClashes(App& app, const Entry& mine, const std::vector<Clash>& clashes
 // q stops. K and F still mean r and t.
 char AskClash(App& app) {
 	std::string keys;
-	for (auto [key, label] : {std::pair{'k', "Keep"}, {'f', "File"}, {'r', "Keep Rest"},
-	                          {'t', "File Rest"}, {'q', "Quit"}})
-		keys += std::format("{} {}  ", output::Paint(output::LetterHint(key), output::kCyan,
-		                                             app.color),
+	for (auto [key, label] : {std::pair{'k', "Keep"},
+	                          {'f', "File"},
+	                          {'r', "Keep Rest"},
+	                          {'t', "File Rest"},
+	                          {'q', "Quit"}})
+		keys += std::format("{} {}  ", output::Paint(std::string(1, key), output::kCyan, app.color),
 		                    label);
 	while (true) {
 		auto answer = ReadLine(app, keys.substr(0, keys.size() - 2) + ": ");
@@ -130,7 +131,7 @@ void ImportFile(App& app) {
 	}
 	auto take_file = AskClashes(app, titles);
 	if (not take_file) {
-		app.out << std::format("{} Cancelled. Nothing was imported.\n", output::icon::kInfo);
+		Note(app, "Cancelled. Nothing was imported.");
 		return;
 	}
 
@@ -146,20 +147,20 @@ void ImportFile(App& app) {
 		Fail(app, std::format("could not save {}", app.db.file().string()));
 		return;
 	}
-	Done(app, std::format("{}: {} titles, {} added, {} in your lists already.", path,
-	                      titles.size(), added, titles.size() - added));
+	Done(app, std::format("{}: {} titles, {} added, {} in your lists already.", path, titles.size(),
+	                      added, titles.size() - added));
 }
 
 void ExportList(App& app, MediaType type) {
-	auto typed = AskText(app, std::format("File to save the {} list in (Enter to go back): ",
-	                                      TypeKey(type)));
+	auto typed = AskText(
+	    app, std::format("File to save the {} list in (Enter to go back): ", TypeKey(type)));
 	if (not typed)
 		return;
 	std::string path = ExpandHome(*typed);
 	std::error_code ignored;
 	if (std::filesystem::exists(path, ignored) and
 	    not AskYes(app, std::format("{} exists. Replace it?", path))) {
-		app.out << std::format("{} Nothing was saved.\n", output::icon::kInfo);
+		Note(app, "Nothing was saved.");
 		return;
 	}
 	auto written = mal_xml::Write(app.db.GetEntries(type), type);
@@ -169,8 +170,7 @@ void ExportList(App& app, MediaType type) {
 	}
 	Done(app, std::format("Saved {}.", path));
 	if (written.skipped > 0)
-		app.out << std::format("{} {} without a MyAnimeList id left out.\n", output::icon::kInfo,
-		                       written.skipped);
+		Note(app, std::format("{} without a MyAnimeList id left out.", written.skipped));
 }
 
 }  // namespace
@@ -179,10 +179,7 @@ void TransferScreen(App& app) {
 	int choice = 0;
 	do {
 		ClearScreen(app);
-		DrawMenu(app, "Catalist / Import & Export",
-		         {{output::icon::kImport, "Import XML"},
-		          {output::icon::kExport, "Export Anime"},
-		          {output::icon::kExport, "Export Manga"}});
+		DrawMenu(app, "Catalist / Import & Export", {"Import XML", "Export Anime", "Export Manga"});
 		choice = ReadChoice(app, 3);
 		switch (choice) {
 			case 1:

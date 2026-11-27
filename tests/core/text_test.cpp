@@ -21,9 +21,10 @@ TEST_CASE("utf8 width counts the columns a terminal gives the text") {
 
 TEST_CASE("utf8 fit clips at a whole glyph and pads to the width") {
 	CHECK(utf8::Fit("Odd Taxi", 10) == "Odd Taxi  ");
-	CHECK(utf8::Fit("Sousou no Frieren", 8) == "Sousou …");
-	CHECK(utf8::Fit("葬送のフリーレン", 6) == "葬送… ");
-	CHECK(utf8::Width(utf8::Fit("葬送のフリーレン", 6)) == 6);
+	CHECK(utf8::Fit("Sousou no Frieren", 8) == "Souso...");
+	CHECK(utf8::Fit("Sousou no Frieren", 10) == "Sousou ...");
+	CHECK(utf8::Fit("葬送のフリーレン", 8) == "葬送... ");
+	CHECK(utf8::Width(utf8::Fit("葬送のフリーレン", 8)) == 8);
 }
 
 TEST_CASE("utf8 folded ignores case and punctuation") {

@@ -36,11 +36,9 @@ std::optional<std::string> AskText(App& app, const std::string& prompt) {
 }
 
 bool AskYes(App& app, const std::string& question) {
-	auto answer = ReadLine(app, std::format("{} {} Yes  {} No: ", question,
-	                                        output::Paint(output::LetterHint('y'), output::kCyan,
-	                                                      app.color),
-	                                        output::Paint(output::LetterHint('n'), output::kCyan,
-	                                                      app.color)));
+	auto answer = ReadLine(
+	    app, std::format("{} ({}/{}): ", question, output::Paint("y", output::kCyan, app.color),
+		                 output::Paint("n", output::kCyan, app.color)));
 	if (not answer)
 		return false;
 	std::string word = utf8::Lowercase(*answer);
@@ -48,26 +46,24 @@ bool AskYes(App& app, const std::string& question) {
 }
 
 std::optional<int> ParseNumber(const std::string& text) {
-	bool digits = not text.empty() and text.size() <= 6 and
-	              std::all_of(text.begin(), text.end(),
-	                          [](unsigned char c) { return std::isdigit(c); });
+	bool digits =
+	    not text.empty() and text.size() <= 6 and
+	    std::all_of(text.begin(), text.end(), [](unsigned char c) { return std::isdigit(c); });
 	return digits ? std::optional<int>(std::stoi(text)) : std::nullopt;
 }
 
 int ReadChoice(App& app, int highest) {
 	while (true) {
-		auto answer = ReadLine(
-		    app, std::format("{} Enter choice [{}-{}]: ",
-		                     output::Paint(output::icon::kPrompt, output::kMagenta, app.color),
-		                     output::NumberHint(0), output::NumberHint(highest)));
+		auto answer =
+		    ReadLine(app, std::format("{} Enter choice [0-{}]: ",
+			                          output::Paint(">", output::kMagenta, app.color), highest));
 		if (not answer)
 			return 0;
 		auto number = ParseNumber(*answer);
 		if (number and *number <= highest)
 			return *number;
 		app.out << std::format("{} Enter a number from 0 to {}.\n",
-		                       output::Paint(output::icon::kError, output::kYellow, app.color),
-		                       highest);
+		                       output::Paint("!", output::kYellow, app.color), highest);
 	}
 }
 

@@ -8,8 +8,11 @@
 
 namespace catalist {
 
-enum class SortKey { kUpdated, kTitle };
+enum class SortKey { kUpdated, kTitle, kStatus, kScore, kProgress, kStartDate };
 
+// The latest change, the highest score, the most progress and the latest start
+// come first; titles A to Z; statuses in progress first, planned last. Ties
+// go by name.
 void SortEntries(std::vector<Entry>& entries, SortKey key);
 
 [[nodiscard]] size_t CountByStatus(const std::vector<Entry>& list, WatchStatus status);

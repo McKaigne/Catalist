@@ -35,8 +35,8 @@ TEST_CASE("sortEntries orders by the shown name") {
 }
 
 TEST_CASE("sortEntries ignores capitals and punctuation") {
-	std::vector<catalist::Entry> entries = {MakeEntry().Title("Zom 100"), MakeEntry().Title("citrus"),
-	                                        MakeEntry().Title("\"Alpha\"")};
+	std::vector<catalist::Entry> entries = {
+	    MakeEntry().Title("Zom 100"), MakeEntry().Title("citrus"), MakeEntry().Title("\"Alpha\"")};
 	CHECK(TitlesSortedBy(entries, SortKey::kTitle) == TitleList{"\"Alpha\"", "citrus", "Zom 100"});
 }
 
@@ -50,6 +50,31 @@ TEST_CASE("sortEntries puts the latest change first, then breaks ties by name") 
 	tied.changed_at = late.changed_at;
 	CHECK(TitlesSortedBy({day, early, late, tied}, SortKey::kUpdated) ==
 	      TitleList{"Also late", "Late", "Early", "Day only"});
+}
+
+TEST_CASE("sortEntries orders by status, score, progress and start date") {
+	std::vector<catalist::Entry> entries = {
+	    MakeEntry().Title("Planned").Status(WatchStatus::kPlanToWatch),
+	    MakeEntry()
+	        .Title("Done")
+	        .Status(WatchStatus::kCompleted)
+	        .Score(9)
+	        .Progress(12)
+	        .StartDate("2024-01-01"),
+	    MakeEntry().Title("Again").Status(WatchStatus::kRewatching).Score(6).Progress(3),
+	    MakeEntry()
+	        .Title("Now")
+	        .Status(WatchStatus::kWatching)
+	        .Score(9)
+	        .Progress(5)
+	        .StartDate("2026-01-01")};
+	CHECK(TitlesSortedBy(entries, SortKey::kStatus) ==
+	      TitleList{"Now", "Again", "Done", "Planned"});
+	CHECK(TitlesSortedBy(entries, SortKey::kScore) == TitleList{"Done", "Now", "Again", "Planned"});
+	CHECK(TitlesSortedBy(entries, SortKey::kProgress) ==
+	      TitleList{"Done", "Now", "Again", "Planned"});
+	CHECK(TitlesSortedBy(entries, SortKey::kStartDate) ==
+	      TitleList{"Now", "Done", "Again", "Planned"});
 }
 
 TEST_CASE("list statistics count, average and estimate time") {

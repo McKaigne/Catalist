@@ -3,9 +3,7 @@
 #include <algorithm>
 #include <format>
 
-#include "core/lists.hpp"
 #include "core/text.hpp"
-#include "menu/find.hpp"
 #include "menu/input.hpp"
 #include "menu/logo.hpp"
 #include "menu/output.hpp"
@@ -39,8 +37,8 @@ std::vector<FieldChange> ChangedFields(const Entry& was, const Entry& now) {
 	};
 	std::vector<FieldChange> changed;
 	for (const auto& each : all) {
-		bool same = each.field == "progress" ? was.progress == now.progress
-		                                     : each.before == each.after;
+		bool same =
+		    each.field == "progress" ? was.progress == now.progress : each.before == each.after;
 		if (not same)
 			changed.push_back(each);
 	}
@@ -50,18 +48,19 @@ std::vector<FieldChange> ChangedFields(const Entry& was, const Entry& now) {
 }  // namespace
 
 void Fail(App& app, const std::string& message) {
-	app.out << output::Paint(std::format("{} Error:", output::icon::kError), output::kRed, app.color)
-	        << " " << message << "\n";
+	app.out << output::Paint("Error:", output::kRed, app.color) << " " << message << "\n";
 }
 
 void Done(App& app, const std::string& message) {
-	app.out << output::Paint(output::icon::kDone, output::kGreen, app.color) << " " << message
-	        << "\n";
+	app.out << output::Paint("OK", output::kGreen, app.color) << " " << message << "\n";
 }
 
 void Warn(App& app, const std::string& message) {
-	app.out << output::Paint(output::icon::kError, output::kYellow, app.color) << " " << message
-	        << "\n";
+	app.out << output::Paint("!", output::kYellow, app.color) << " " << message << "\n";
+}
+
+void Note(App& app, const std::string& message) {
+	app.out << output::Paint("-", output::kCyan, app.color) << " " << message << "\n";
 }
 
 void ClearScreen(App& app) {
@@ -69,13 +68,13 @@ void ClearScreen(App& app) {
 		app.out << "\x1b[H\x1b[2J";
 }
 
-void DrawLogo(App& app, bool big) {
+void DrawLogo(App& app) {
 	static const char* const kShades[] = {"38;5;117", "38;5;111", "38;5;141",
 	                                      "38;5;177", "38;5;213", "38;5;219"};
-	bool fits_big = big and app.columns >= logo::kBigWidth;
-	if (not fits_big and app.columns < logo::kMiniWidth)
+	bool big = app.columns >= logo::kBigWidth;
+	if (not big and app.columns < logo::kMiniWidth)
 		return;
-	std::string art = fits_big ? logo::kBig : logo::kMini;
+	std::string art = big ? logo::kBig : logo::kMini;
 	std::vector<std::string> lines;
 	for (size_t start = 1, end; start < art.size(); start = end + 1) {
 		end = art.find('\n', start);
@@ -89,9 +88,8 @@ void DrawLogo(App& app, bool big) {
 }
 
 void DrawHeading(App& app, const std::string& heading) {
-	DrawLogo(app, false);
 	const std::string separator = " / ";
-	std::string drawn = output::Paint(output::icon::kHome, output::kMagenta, app.color) + " ";
+	std::string drawn;
 	size_t start = 0;
 	while (true) {
 		size_t end = heading.find(separator, start);
@@ -103,18 +101,17 @@ void DrawHeading(App& app, const std::string& heading) {
 		drawn += output::Paint(separator, output::kGray, app.color);
 		start = end + separator.size();
 	}
-	int width = std::min(app.columns, std::max(utf8::Width(heading) + 2, logo::kMiniWidth));
+	int width = std::min(app.columns, std::max(utf8::Width(heading), logo::kMiniWidth));
 	app.out << drawn << "\n" << output::Rule(width, app.color) << "\n\n";
 }
 
-void DrawOption(App& app, int number, int digits, const Option& option) {
-	app.out << std::format("  {}  {} {}\n",
-	                       output::Paint(output::NumberHint(number, digits), output::kCyan,
-	                                     app.color),
-	                       output::Paint(option.icon, output::kMagenta, app.color), option.label);
+void DrawOption(App& app, int number, int digits, const std::string& label) {
+	app.out << std::format(
+	    "  {}  {}\n",
+	    output::Paint(std::format("{:>{}}", number, digits), output::kCyan, app.color), label);
 }
 
-void DrawOptions(App& app, const std::vector<Option>& items, const Option& leave) {
+void DrawOptions(App& app, const std::vector<std::string>& items, const std::string& leave) {
 	int digits = static_cast<int>(std::to_string(items.size()).size());
 	for (size_t i = 0; i < items.size(); ++i)
 		DrawOption(app, static_cast<int>(i + 1), digits, items[i]);
@@ -122,9 +119,14 @@ void DrawOptions(App& app, const std::vector<Option>& items, const Option& leave
 	app.out << "\n";
 }
 
-void DrawMenu(App& app, const std::string& heading, const std::vector<Option>& items) {
+void DrawMenu(App& app, const std::string& heading, const std::vector<std::string>& items) {
 	DrawHeading(app, heading);
 	DrawOptions(app, items);
+}
+
+void CardRow(App& app, const std::string& label, const std::string& value, int width) {
+	app.out << "  " << output::Paint(std::format("{:<{}}", label, width), output::kDim, app.color)
+	        << value << "\n";
 }
 
 const char* StatusColor(WatchStatus status) {
@@ -145,35 +147,31 @@ const char* StatusColor(WatchStatus status) {
 	return nullptr;
 }
 
-const char* StatusIcon(WatchStatus status) {
+std::string StatusMark(WatchStatus status) {
 	switch (status) {
 		case WatchStatus::kWatching:
-			return output::icon::kWatching;
+			return "[W]";
 		case WatchStatus::kCompleted:
-			return output::icon::kCompleted;
+			return "[C]";
 		case WatchStatus::kOnHold:
-			return output::icon::kOnHold;
+			return "[H]";
 		case WatchStatus::kDropped:
-			return output::icon::kDropped;
+			return "[D]";
 		case WatchStatus::kPlanToWatch:
-			return output::icon::kPlanned;
+			return "[P]";
 		case WatchStatus::kRewatching:
-			return output::icon::kRewatching;
+			return "[R]";
 	}
-	return output::icon::kInfo;
+	return "[?]";
 }
 
-const char* TypeIcon(MediaType type) {
-	return type == MediaType::kAnime ? output::icon::kAnime : output::icon::kManga;
-}
-
-std::string StatusLabel(WatchStatus status, std::optional<MediaType> type) {
+std::string StatusLabel(WatchStatus status, MediaType type) {
 	bool manga = type == MediaType::kManga;
 	switch (status) {
 		case WatchStatus::kPlanToWatch:
-			return not type ? "Planned" : manga ? "Plan to Read" : "Plan to Watch";
+			return manga ? "Plan to Read" : "Plan to Watch";
 		case WatchStatus::kWatching:
-			return not type ? "Watching/Reading" : manga ? "Reading" : "Watching";
+			return manga ? "Reading" : "Watching";
 		case WatchStatus::kCompleted:
 			return "Completed";
 		case WatchStatus::kOnHold:
@@ -181,7 +179,7 @@ std::string StatusLabel(WatchStatus status, std::optional<MediaType> type) {
 		case WatchStatus::kDropped:
 			return "Dropped";
 		case WatchStatus::kRewatching:
-			return not type ? "Rewatching/Rereading" : manga ? "Rereading" : "Rewatching";
+			return manga ? "Rereading" : "Rewatching";
 	}
 	return "";
 }
@@ -196,91 +194,17 @@ std::string OutOf(int done, int total) {
 	return std::format("{}/{}", done, total > 0 ? std::to_string(total) : std::string("?"));
 }
 
-std::vector<Entry> InProgress(const Catalogue& db) {
-	std::vector<Entry> open;
-	for (MediaType type : {MediaType::kAnime, MediaType::kManga})
-		for (const auto& each : db.GetEntries(type))
-			if (each.status == WatchStatus::kWatching or each.status == WatchStatus::kRewatching)
-				open.push_back(each);
-	return open;
-}
-
 std::optional<WatchStatus> AskStatus(App& app, const std::string& heading, int count,
-                                     std::optional<MediaType> type) {
-	std::vector<Option> labels;
+                                     MediaType type) {
+	std::vector<std::string> labels;
 	for (int i = 0; i < count; ++i)
-		labels.push_back({StatusIcon(kStatusOrder[i]), StatusLabel(kStatusOrder[i], type)});
+		labels.push_back(
+		    std::format("{} {}", StatusMark(kStatusOrder[i]), StatusLabel(kStatusOrder[i], type)));
 	DrawMenu(app, heading, labels);
 	int choice = ReadChoice(app, count);
 	if (choice == 0)
 		return std::nullopt;
 	return kStatusOrder[choice - 1];
-}
-
-std::optional<Entry> ChooseFrom(App& app, std::vector<Entry> titles) {
-	SortEntries(titles, SortKey::kUpdated);
-	size_t pages = (titles.size() + kPageSize - 1) / kPageSize;
-	size_t page = 0;
-	while (true) {
-		size_t first = page * kPageSize;
-		size_t shown = std::min(kPageSize, titles.size() - first);
-		int highest = static_cast<int>(shown) + (pages > 1 ? 2 : 0);
-		int digits = static_cast<int>(std::to_string(highest).size());
-		std::vector<std::vector<output::Styled>> rows;
-		for (size_t i = 0; i < shown; ++i) {
-			const Entry& e = titles[first + i];
-			rows.push_back({{"  " + output::NumberHint(static_cast<int>(i + 1), digits),
-			                 output::kCyan},
-			                {TypeIcon(e.type), StatusColor(e.status)},
-			                {DisplayName(e)},
-			                {OutOf(e.progress, e.total_units)}});
-		}
-		app.out << output::Rows({{}, {}, {.flexible = true}, {.align_right = true}}, rows,
-		                        app.columns, app.color);
-		app.out << "\n";
-		if (pages > 1) {
-			app.out << output::Paint(std::format("  Page {} of {}", page + 1, pages),
-			                         output::kGray, app.color)
-			        << "\n";
-			DrawOption(app, static_cast<int>(shown + 1), digits, {output::icon::kNext, "Next Page"});
-			DrawOption(app, static_cast<int>(shown + 2), digits,
-			           {output::icon::kPrevious, "Previous Page"});
-		}
-		DrawOption(app, 0, digits, kBackOption);
-		app.out << "\n";
-
-		int choice = ReadChoice(app, highest);
-		if (choice == 0)
-			return std::nullopt;
-		auto picked = static_cast<size_t>(choice);
-		if (picked <= shown)
-			return titles[first + picked - 1];
-		page = picked == shown + 1 ? std::min(page + 1, pages - 1) : (page > 0 ? page - 1 : 0);
-		app.out << "\n";
-	}
-}
-
-std::optional<Entry> ChooseTitle(App& app) {
-	while (true) {
-		auto text = AskText(app, std::format("{} Enter title (Enter to go back): ",
-	                                     output::Paint(output::icon::kSearch, output::kMagenta, app.color)));
-		if (not text)
-			return std::nullopt;
-		auto found = FindTitles(app.db, *text);
-		if (found.size() == 1)
-			return found[0];
-		if (not found.empty()) {
-			if (auto chosen = ChooseFrom(app, found))
-				return chosen;
-			continue;
-		}
-		auto closest = ClosestTitle(app.db, *text);
-		if (closest and AskYes(app, std::format("Did you mean {}?", DisplayName(*closest))))
-			return closest;
-		if (not closest)
-			app.out << std::format("{} Nothing in your lists matches '{}'.\n", output::icon::kInfo,
-			                       *text);
-	}
 }
 
 void ChangeTitle(App& app, const Entry& title, const std::function<Entry(const Entry&)>& change) {
@@ -292,7 +216,7 @@ void ChangeTitle(App& app, const Entry& title, const std::function<Entry(const E
 	Entry after = change(*current);
 	auto fields = ChangedFields(*current, after);
 	if (fields.empty()) {
-		app.out << std::format("{} Nothing changed.\n", output::icon::kInfo);
+		Note(app, "Nothing changed.");
 		return;
 	}
 	app.db.UpdateEntry(after);
@@ -301,7 +225,7 @@ void ChangeTitle(App& app, const Entry& title, const std::function<Entry(const E
 		return;
 	}
 	std::string name = output::Paint(DisplayName(after), output::kBold, app.color);
-	std::string arrow = output::Paint(output::icon::kArrow, output::kCyan, app.color);
+	std::string arrow = output::Paint("->", output::kCyan, app.color);
 	for (const auto& each : fields)
 		Done(app, std::format("{}  {} {} {} {}", name, each.field, each.before, arrow, each.after));
 }

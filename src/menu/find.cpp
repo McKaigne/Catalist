@@ -31,43 +31,24 @@ bool TitleHolds(const Entry& shown, const std::string& text) {
 	auto words = utf8::Words(text);
 	auto holds = [&words](const std::string& name) {
 		std::string folded = utf8::Folded(name);
-		return std::ranges::all_of(
-		    words, [&folded](const auto& word) { return folded.contains(word); });
+		return std::ranges::all_of(words,
+		                           [&folded](const auto& word) { return folded.contains(word); });
 	};
 	return holds(shown.title) or (not shown.english_title.empty() and holds(shown.english_title));
 }
 
-std::vector<Entry> FindTitles(const Catalogue& db, const std::string& text) {
-	std::string wanted = utf8::Folded(text);
-	std::vector<Entry> exact;
-	std::vector<Entry> holding;
-	if (wanted.empty())
-		return holding;
-	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
-		for (const auto& each : db.GetEntries(type)) {
-			if (utf8::Folded(each.title) == wanted or utf8::Folded(each.english_title) == wanted)
-				exact.push_back(each);
-			else if (TitleHolds(each, text))
-				holding.push_back(each);
-		}
-	}
-	return exact.empty() ? holding : exact;
-}
-
-std::optional<Entry> ClosestTitle(const Catalogue& db, const std::string& text) {
+std::optional<Entry> ClosestTitle(const std::vector<Entry>& titles, const std::string& text) {
 	auto words = utf8::Words(text);
 	if (words.empty())
 		return std::nullopt;
 	std::optional<Entry> closest;
 	int lowest = 0;
-	for (MediaType type : {MediaType::kAnime, MediaType::kManga}) {
-		for (const auto& each : db.GetEntries(type)) {
-			for (const auto& name : {each.title, each.english_title}) {
-				auto cost = name.empty() ? std::nullopt : TypoCost(words, name);
-				if (cost and (not closest or *cost < lowest)) {
-					closest = each;
-					lowest = *cost;
-				}
+	for (const auto& each : titles) {
+		for (const auto& name : {each.title, each.english_title}) {
+			auto cost = name.empty() ? std::nullopt : TypoCost(words, name);
+			if (cost and (not closest or *cost < lowest)) {
+				closest = each;
+				lowest = *cost;
 			}
 		}
 	}

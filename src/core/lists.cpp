@@ -19,12 +19,49 @@ std::string LastChange(const Entry& e) {
 	return e.changed_at.empty() ? FormatDate(e.updated_at) : e.changed_at;
 }
 
+int StatusRank(WatchStatus status) {
+	switch (status) {
+		case WatchStatus::kWatching:
+			return 0;
+		case WatchStatus::kRewatching:
+			return 1;
+		case WatchStatus::kCompleted:
+			return 2;
+		case WatchStatus::kOnHold:
+			return 3;
+		case WatchStatus::kDropped:
+			return 4;
+		case WatchStatus::kPlanToWatch:
+			return 5;
+	}
+	return 6;
+}
+
+// Negative when a goes first, positive when b does, 0 for a tie.
+int Compare(const Entry& a, const Entry& b, SortKey key) {
+	switch (key) {
+		case SortKey::kUpdated:
+			return LastChange(b).compare(LastChange(a));
+		case SortKey::kStatus:
+			return StatusRank(a.status) - StatusRank(b.status);
+		case SortKey::kScore:
+			return b.score - a.score;
+		case SortKey::kProgress:
+			return b.progress - a.progress;
+		case SortKey::kStartDate:
+			return FormatDate(b.start_date).compare(FormatDate(a.start_date));
+		case SortKey::kTitle:
+			break;
+	}
+	return 0;
+}
+
 }  // namespace
 
 void SortEntries(std::vector<Entry>& entries, SortKey key) {
 	std::stable_sort(entries.begin(), entries.end(), [key](const Entry& a, const Entry& b) {
-		if (key == SortKey::kUpdated and LastChange(a) != LastChange(b))
-			return LastChange(a) > LastChange(b);
+		if (int order = Compare(a, b, key); order != 0)
+			return order < 0;
 		std::string name_a = utf8::Folded(DisplayName(a));
 		std::string name_b = utf8::Folded(DisplayName(b));
 		return name_a != name_b ? name_a < name_b : DisplayName(a) < DisplayName(b);

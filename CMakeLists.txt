@@ -29,13 +29,13 @@ add_library(catalistLib STATIC
   src/web/json.cpp
   src/menu/add.cpp
   src/menu/common.cpp
-  src/menu/edit.cpp
   src/menu/find.cpp
   src/menu/input.cpp
+  src/menu/list.cpp
   src/menu/menu.cpp
   src/menu/output.cpp
+  src/menu/title.cpp
   src/menu/transfer.cpp
-  src/menu/view.cpp
   src/system.cpp
 )
 target_include_directories(catalistLib PUBLIC src "${CATALIST_GENERATED_DIR}")

@@ -18,8 +18,7 @@ TEST_CASE("output paints only when colours are on") {
 }
 
 TEST_CASE("output aligns rows to what they hold") {
-	std::vector<output::TableColumn> columns = {
-	    {}, {.flexible = true}, {.align_right = true}, {}};
+	std::vector<output::TableColumn> columns = {{}, {.flexible = true}, {.align_right = true}, {}};
 	CHECK(output::Rows(columns,
 	                   {{{"1"}, {"Odd Taxi"}, {"8"}, {"+8"}}, {{"12"}, {"Berserk"}, {"-"}, {""}}},
 	                   80, false) ==
@@ -29,17 +28,17 @@ TEST_CASE("output aligns rows to what they hold") {
 
 TEST_CASE("output counts a CJK glyph as two columns") {
 	std::vector<output::TableColumn> columns = {{.flexible = true}, {.align_right = true}};
-	CHECK(output::Rows(columns, {{{"葬送のフリーレン"}, {"10"}}, {{"Odd Taxi"}, {"8"}}}, 80, false) ==
-	      "葬送のフリーレン  10\n"
-	      "Odd Taxi           8\n");
+	CHECK(
+	    output::Rows(columns, {{{"葬送のフリーレン"}, {"10"}}, {{"Odd Taxi"}, {"8"}}}, 80, false) ==
+	    "葬送のフリーレン  10\n"
+	    "Odd Taxi           8\n");
 }
 
 TEST_CASE("output cuts the flexible column to fit the terminal") {
-	std::vector<output::TableColumn> columns = {
-	    {}, {.flexible = true}, {.align_right = true}};
+	std::vector<output::TableColumn> columns = {{}, {.flexible = true}, {.align_right = true}};
 	std::vector<std::vector<output::Styled>> rows = {
 	    {{"1"}, {"Sousou no Frieren: Beyond Journey's End"}, {"10"}}};
-	CHECK(output::Rows(columns, rows, 24, false) == "1  Sousou no Friere…  10\n");
+	CHECK(output::Rows(columns, rows, 24, false) == "1  Sousou no Frie...  10\n");
 }
 
 TEST_CASE("output groups rows under headings, leaving out empty sections") {
@@ -48,18 +47,20 @@ TEST_CASE("output groups rows under headings, leaving out empty sections") {
 	                       {{"ANIME", {{{"Odd Taxi"}, {"5/13"}}}},
 	                        {"MANGA", {}},
 	                        {"OTHER", {{{"Berserk"}, {"1/?"}}}}},
-	                       80, false) ==
-	      "ANIME\nOdd Taxi  5/13\n\nOTHER\nBerserk   1/?\n");
+	                       80, false) == "ANIME\nOdd Taxi  5/13\n\nOTHER\nBerserk   1/?\n");
 }
 
-TEST_CASE("a score is five Nerd Font stars: full, half filled and empty") {
-	const std::string f = "\U000F04CE";
-	const std::string h = "\U000F04D0";
-	const std::string e = "\U000F04D2";
-	CHECK(catalist::output::Stars(10) == f + f + f + f + f);
-	CHECK(catalist::output::Stars(7) == f + f + f + h + e);
-	CHECK(catalist::output::Stars(1) == h + e + e + e + e);
-	CHECK(catalist::output::Stars(8.5) == f + f + f + f + h);
-	CHECK(catalist::output::Stars(8.4) == f + f + f + f + e);
-	CHECK(catalist::output::Stars(0) == "-");
+TEST_CASE("a score is five stars: full, half and empty") {
+	CHECK(output::Stars(10) == "*****");
+	CHECK(output::Stars(7) == "***+-");
+	CHECK(output::Stars(1) == "+----");
+	CHECK(output::Stars(8.5) == "****+");
+	CHECK(output::Stars(8.4) == "****-");
+	CHECK(output::Stars(0) == "-");
+}
+
+TEST_CASE("output draws bars and rules in ASCII") {
+	CHECK(output::Bar(5, 10, 10, false) == "[#####-----]");
+	CHECK(output::Bar(3, 0, 10, false).empty());
+	CHECK(output::Rule(4, false) == "----");
 }

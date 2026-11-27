@@ -100,17 +100,17 @@ std::string Fit(const std::string& text, int columns) {
 	int used = Width(text);
 	if (used <= columns)
 		return text + std::string(static_cast<size_t>(columns - used), ' ');
-	// Leave a column for the ellipsis.
+	// Leave three columns for the dots.
 	std::string fitted;
 	used = 0;
 	for (const auto& glyph : SplitGlyphs(text)) {
 		int columns_taken = GlyphWidth(glyph);
-		if (used + columns_taken > columns - 1)
+		if (used + columns_taken > columns - 3)
 			break;
 		fitted += glyph;
 		used += columns_taken;
 	}
-	return fitted + "…" + std::string(static_cast<size_t>(std::max(0, columns - 1 - used)), ' ');
+	return fitted + "..." + std::string(static_cast<size_t>(std::max(0, columns - 3 - used)), ' ');
 }
 
 std::string Lowercase(std::string text) {

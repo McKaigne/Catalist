@@ -39,7 +39,7 @@ inline const char* const kRemove = "\U000F01B4";
 inline const char* const kStats = "\U000F154D";
 inline const char* const kTransfer = "\U000F0BCD";
 inline const char* const kExit = "\U000F0206";
-inline const char* const kBack = "\U000F0731";
+inline const char* const kBack = "\U000F0CDD";
 inline const char* const kHome = "\U000F02DC";
 inline const char* const kAnime = "\U000F0502";
 inline const char* const kManga = "\U000F14F7";
@@ -58,18 +58,18 @@ inline const char* const kRename = "\U000F060E";
 inline const char* const kRewatch = "\U000F04E6";
 inline const char* const kImport = "\U000F01DA";
 inline const char* const kExport = "\U000F0552";
-inline const char* const kNext = "\U000F0142";
-inline const char* const kPrevious = "\U000F0141";
+inline const char* const kNext = "\U000F0B2A";
+inline const char* const kPrevious = "\U000F0B28";
 inline const char* const kError = "\U000F0026";
 inline const char* const kDone = "\U000F0E1E";
 inline const char* const kPrompt = "\U000F0734";
 inline const char* const kArrow = "\U000F0054";
-inline const char* const kWatching = "\U000F040A";
-inline const char* const kCompleted = "\U000F0E1E";
-inline const char* const kOnHold = "\U000F03E4";
-inline const char* const kDropped = "\U000F1398";
+inline const char* const kWatching = "\U000F040C";
+inline const char* const kCompleted = "\U000F05E0";
+inline const char* const kOnHold = "\U000F03E5";
+inline const char* const kDropped = "\U000F0159";
 inline const char* const kPlanned = "\U000F0954";
-inline const char* const kRewatching = "\U000F04E6";
+inline const char* const kRewatching = "\U000F1378";
 }  // namespace icon
 
 // A number as filled numeric circles, one per digit, padded on the left to

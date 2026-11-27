@@ -474,8 +474,8 @@ std::vector<output::Section> sections = {
     {std::format("{} Manga", output::icon::kManga), {}}};
 #+end_src
 
-*** 2.15 Nerd Font icons, circles only for hints
-Options, statuses, types and messages carry plain Nerd Font icons, such as a pencil for Edit Title and a chart for Stats. Circles are kept for the number and letter hints (2.3), so an option's icon is never a circle. Each status has its own icon and colour: play for Watching, check for Completed, pause for On Hold, a cross for Dropped, a clock for Planned and sync arrows for Rewatching. Scores stay as five stars.
+*** 2.15 Nerd Font icons, circles for hints, statuses and moving
+Options, types and messages carry plain Nerd Font icons, such as a pencil for Edit Title and a chart for Stats. Filled circles are kept for the number and letter hints (2.3), the statuses, Back, and the next and previous page. Each status has its own icon and colour: a play circle for Watching, a check circle for Completed, a pause circle for On Hold, a cross circle for Dropped, a clock for Planned and a sync circle for Rewatching. Scores stay as five stars.
 
 Source: =src/menu/common.cpp:148-164=
 #+begin_src cpp
@@ -1560,7 +1560,7 @@ These were decided during development, then replaced when the course requirement
 - Undo, redo and the change history: removed because they made the program too complex.
 - The Continue section on the main screen: removed to keep the screen simple.
 - Plain-text menus (=1. Add Title=, a bold "Catalist" heading, =[y/N]=, =[k]eep=): replaced by the logos, Nerd Font icons and circled hints (2.3, 2.15). The import keys K and F became r and t, because circled letters have no capitals.
-- Circled icons on the options: replaced by plain icons, so only the hints are circles (2.15).
+- Circled icons on every option: replaced by plain icons, keeping circles for the hints, statuses, Back and the page controls (2.15).
 - The rewatch value (MyAnimeList's 1 to 5 scale) as a column, a card row and an Edit Title option: removed, because AniList has no such field (7.6).
 
 ** One-time English name fill
@@ -1650,7 +1650,7 @@ These runs are real output from a small sample list, captured at an 80-column te
     \:\__\         /:/  /                      /:/  /       \:\__\   \/__/        \::/  /
      \/__/         \/__/                       \/__/         \/__/                 \/__/
 
-  󰔂 2 anime    󱓷 1 manga    󰐊 2 in progress
+  󰔂 2 anime    󱓷 1 manga    󰐌 2 in progress
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   󰲠  󰐕 Add Title
@@ -1688,7 +1688,7 @@ Goodbye!
   󰲠  󰌴 Both
   󰲢  󰔂 Anime Only
   󰲤  󱓷 Manga Only
-  󰲞  󰜱 Back
+  󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲤]: 1
 󰍉 Search AniList (Enter to go back): fullmetal
@@ -1696,7 +1696,7 @@ Goodbye!
   󰲠  2009  TV  Fullmetal Alchemist: Brotherhood  64 episodes  -
   󰲢  2003  TV  Fullmetal Alchemist               51 episodes  -
 
-  󰲞  󰜱 Back
+  󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲢]: 2
 [logo]
@@ -1704,11 +1704,11 @@ Goodbye!
 ────────────────────────────────────────────────────────────────────────────────
 
   󰲠  󰥔 Plan to Watch
-  󰲢  󰐊 Watching
-  󰲤  󰸞 Completed
-  󰲦  󰏤 On Hold
-  󰲨  󱎘 Dropped
-  󰲞  󰜱 Back
+  󰲢  󰐌 Watching
+  󰲤  󰗠 Completed
+  󰲦  󰏥 On Hold
+  󰲨  󰅙 Dropped
+  󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲨]: 1
 󰸞 Fullmetal Alchemist added as Plan to Watch.
@@ -1727,14 +1727,14 @@ Goodbye!
 󰋜 Catalist / View Lists
 ────────────────────────────────────────────────────────────────────────────────
 
-  󰲠  󰐊 In Progress
+  󰲠  󰐌 In Progress
   󰲢  󰕲 All Titles
   󰲤  󰔂 Anime
   󰲦  󱓷 Manga
   󰲨  󰈲 By Status
   󰲪  󰍉 Search Lists
   󰲬  󰋼 Title Details
-  󰲞  󰜱 Back
+  󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲬]: 1
 [logo]
@@ -1742,24 +1742,24 @@ Goodbye!
 ────────────────────────────────────────────────────────────────────────────────
 
 󰔂 Anime
-  󰐊  Sousou no Frieren  Watching  󰓎󰓎󰓎󰓎󰓎  12/28
+  󰐌  Sousou no Frieren  Watching  󰓎󰓎󰓎󰓎󰓎  12/28
 
 󱓷 Manga
-  󰐊  Berserk            Reading   󰓎󰓎󰓎󰓎󰓐  364/?
+  󰐌  Berserk            Reading   󰓎󰓎󰓎󰓎󰓐  364/?
 
 Press Enter to continue...
 [logo]
 󰋜 Catalist / View Lists
 ────────────────────────────────────────────────────────────────────────────────
 
-  󰲠  󰐊 In Progress
+  󰲠  󰐌 In Progress
   󰲢  󰕲 All Titles
   󰲤  󰔂 Anime
   󰲦  󱓷 Manga
   󰲨  󰈲 By Status
   󰲪  󰍉 Search Lists
   󰲬  󰋼 Title Details
-  󰲞  󰜱 Back
+  󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲬]: 0
 [main menu]
@@ -1778,7 +1778,7 @@ Goodbye!
   󰲠  󱓷  Berserk            364/?
   󰲢  󰔂  Sousou no Frieren  12/28
 
-  󰲞  󰜱 Back
+  󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲢]: 1
 󰸞 Berserk  progress 364 󰁔 365/?
@@ -1808,7 +1808,7 @@ Did you mean Sousou no Frieren? 󰰴 Yes  󰰓 No: y
   󰔂 Format        TV
   󰋼 AniList       -
   󰋼 MyAnimeList   52991
-  󰐊 Status        Watching
+  󰐌 Status        Watching
   󰓎 Score         󰓎󰓎󰓎󰓎󰓎  10/10
   󰦕 Progress      █████████░░░░░░░░░░░  12/28 episodes
   󰐤 Rewatched     0
@@ -1826,7 +1826,7 @@ Did you mean Sousou no Frieren? 󰰴 Yes  󰰓 No: y
    󰲮  󰃭 Set Start Date
    󰲰  󰃯 Set Finish Date
   󰲠󰲞  󰘎 Rename Title
-   󰲞  󰜱 Back
+   󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲠󰲞]: 4
 Score from 0 to 10 (Enter to go back): 9
@@ -1841,7 +1841,7 @@ Press Enter to continue...
   󰔂 Format        TV
   󰋼 AniList       -
   󰋼 MyAnimeList   52991
-  󰐊 Status        Watching
+  󰐌 Status        Watching
   󰓎 Score         󰓎󰓎󰓎󰓎󰓐  9/10
   󰦕 Progress      █████████░░░░░░░░░░░  12/28 episodes
   󰐤 Rewatched     0
@@ -1859,7 +1859,7 @@ Press Enter to continue...
    󰲮  󰃭 Set Start Date
    󰲰  󰃯 Set Finish Date
   󰲠󰲞  󰘎 Rename Title
-   󰲞  󰜱 Back
+   󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲠󰲞]: 0
 [main menu]
@@ -1884,7 +1884,7 @@ Goodbye!
   󰔂 Format        TV
   󰋼 AniList       -
   󰋼 MyAnimeList   44265
-  󰸞 Status        Completed
+  󰗠 Status        Completed
   󰓎 Score         󰓎󰓎󰓎󰓎󰓒  8/10
   󰦕 Progress      ████████████████████  13/13 episodes
   󰐤 Rewatched     0
@@ -1902,7 +1902,7 @@ Goodbye!
    󰲮  󰃭 Set Start Date
    󰲰  󰃯 Set Finish Date
   󰲠󰲞  󰘎 Rename Title
-   󰲞  󰜱 Back
+   󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲠󰲞]: 5
 [logo]
@@ -1910,12 +1910,12 @@ Goodbye!
 ────────────────────────────────────────────────────────────────────────────────
 
   󰲠  󰥔 Plan to Watch
-  󰲢  󰐊 Watching
-  󰲤  󰸞 Completed
-  󰲦  󰏤 On Hold
-  󰲨  󱎘 Dropped
-  󰲪  󰓦 Rewatching
-  󰲞  󰜱 Back
+  󰲢  󰐌 Watching
+  󰲤  󰗠 Completed
+  󰲦  󰏥 On Hold
+  󰲨  󰅙 Dropped
+  󰲪  󱍸 Rewatching
+  󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲪]: 2
 󰀦 Error: Odd Taxi is completed; choose Rewatching to start it again
@@ -1929,7 +1929,7 @@ Press Enter to continue...
   󰔂 Format        TV
   󰋼 AniList       -
   󰋼 MyAnimeList   44265
-  󰸞 Status        Completed
+  󰗠 Status        Completed
   󰓎 Score         󰓎󰓎󰓎󰓎󰓒  8/10
   󰦕 Progress      ████████████████████  13/13 episodes
   󰐤 Rewatched     0
@@ -1947,7 +1947,7 @@ Press Enter to continue...
    󰲮  󰃭 Set Start Date
    󰲰  󰃯 Set Finish Date
   󰲠󰲞  󰘎 Rename Title
-   󰲞  󰜱 Back
+   󰲞  󰳝 Back
 
 󰜴 Enter choice [󰲞-󰲠󰲞]: 0
 [main menu]
@@ -1983,12 +1983,12 @@ Goodbye!
 
 󰔂 Anime
   󰕲 Titles                2
-  󰐊 Watching              1      ██████████░░░░░░░░░░
-  󰸞 Completed             1      ██████████░░░░░░░░░░
-  󰏤 On Hold               0      ░░░░░░░░░░░░░░░░░░░░
-  󱎘 Dropped               0      ░░░░░░░░░░░░░░░░░░░░
+  󰐌 Watching              1      ██████████░░░░░░░░░░
+  󰗠 Completed             1      ██████████░░░░░░░░░░
+  󰏥 On Hold               0      ░░░░░░░░░░░░░░░░░░░░
+  󰅙 Dropped               0      ░░░░░░░░░░░░░░░░░░░░
   󰥔 Plan to Watch         0      ░░░░░░░░░░░░░░░░░░░░
-  󰓦 Rewatching            0      ░░░░░░░░░░░░░░░░░░░░
+  󱍸 Rewatching            0      ░░░░░░░░░░░░░░░░░░░░
   󰓎 Mean score            9.00  󰓎󰓎󰓎󰓎󰓐
   󰦕 Episodes              25
   󰓦 Rewatched             0
@@ -1996,12 +1996,12 @@ Goodbye!
 
 󱓷 Manga
   󰕲 Titles                1
-  󰐊 Reading               1      ████████████████████
-  󰸞 Completed             0      ░░░░░░░░░░░░░░░░░░░░
-  󰏤 On Hold               0      ░░░░░░░░░░░░░░░░░░░░
-  󱎘 Dropped               0      ░░░░░░░░░░░░░░░░░░░░
+  󰐌 Reading               1      ████████████████████
+  󰗠 Completed             0      ░░░░░░░░░░░░░░░░░░░░
+  󰏥 On Hold               0      ░░░░░░░░░░░░░░░░░░░░
+  󰅙 Dropped               0      ░░░░░░░░░░░░░░░░░░░░
   󰥔 Plan to Read          0      ░░░░░░░░░░░░░░░░░░░░
-  󰓦 Rereading             0      ░░░░░░░░░░░░░░░░░░░░
+  󱍸 Rereading             0      ░░░░░░░░░░░░░░░░░░░░
   󰓎 Mean score            9.00  󰓎󰓎󰓎󰓎󰓐
   󰦕 Chapters              364
   󱓷 Volumes               0

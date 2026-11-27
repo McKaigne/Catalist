@@ -36,8 +36,9 @@ Entries below that describe them no longer apply.
 *** Added
 - The menus are drawn with Nerd Font icons: the big Catalist logo on the home
   screen when the terminal is wide enough, the small logo and a breadcrumb rule
-  on every other screen, plain icons for options and statuses, circled digits
-  and letters for the hints, and progress bars on the title card and in Stats.
+  on every other screen, plain icons for options, filled circle icons for
+  statuses, Back and the page controls, circled digits and letters for the
+  hints, and progress bars on the title card and in Stats.
 - An anime's format (TV, TV Short, TV Special, Movie, Special, OVA, ONA or
   Music), which both AniList and MyAnimeList XML give. It shows in AniList
   search and on the title card, and export writes it back as =series_type=.

@@ -17,7 +17,7 @@ Every screen is plain ASCII, so the sample runs below can be pasted into the PDF
 | Requirement                 | State | Where                                                 |
 |-----------------------------+-------+-------------------------------------------------------|
 | C++ language only           | Met   | All code is C++23. It runs the =curl= program to go online |
-| Create                      | Met   | Add from AniList on a list, Import XML                |
+| Create                      | Met   | Add from AniList on a list, Import Anime or Manga XML |
 | Read                        | Met   | Anime and Manga lists, search, filters, title page, Stats |
 | Update                      | Met   | Title page: +1, Set Progress, Status, Score, Edit Details |
 | Delete                      | Met   | Remove on the title page                              |
@@ -26,7 +26,7 @@ Every screen is plain ASCII, so the sample runs below can be pasted into the PDF
 | Input validation and errors | Met   | =ReadChoice=, =AskCount=, =AskScore=, =AskDate=, =AskScoreFilter= |
 | User-friendly menu          | Met   | Numbered main menu and submenus, keys listed under each list |
 | Exit option                 | Met   | =0= on the main menu                                  |
-| Clean, readable code        | Met   | Google naming, 129 passing tests                      |
+| Clean, readable code        | Met   | Google naming, 130 passing tests                      |
 
 * Title Page
 *APP NAME:* Catalist
@@ -394,11 +394,33 @@ std::string StatusLabel(WatchStatus status, MediaType type) {
 #+end_src
 
 *** 2.9 Import & Export options
-Import XML, Export Anime and Export Manga.
+Import Anime XML, Import Manga XML, Export Anime XML and Export Manga XML. Each kind has its own import, like the Anime and Manga lists, and a file holding the other kind is refused with the choice to use instead.
 
-Source: =src/menu/transfer.cpp:182=
+Source: =src/menu/transfer.cpp:228-229=
 #+begin_src cpp
-DrawMenu(app, "Catalist / Import & Export", {"Import XML", "Export Anime", "Export Manga"});
+const std::vector<std::string> options = {"Import Anime XML", "Import Manga XML",
+                                          "Export Anime XML", "Export Manga XML"};
+#+end_src
+
+**** 2.9.1 Each file prompt says how a path is read
+Before asking for a file, import and export say what file they want and how a path is read: a name alone is in the folder Catalist runs in, shown in full, =~= is the home folder, also shown, and three example paths that would all work. Messages name the file by its full path, so it is clear where Catalist looked. Enter goes back without the pause.
+
+Source: =src/menu/transfer.cpp:119-132=
+#+begin_src cpp
+void ShowPathHelp(App& app, MediaType type) {
+	std::error_code ignored;
+	std::string name = ExampleFile(type);
+	auto gray = [&app](const std::string& text) {
+		return output::Paint(text, output::kGray, app.color);
+	};
+	app.out << std::format("  A name alone means this folder: {}\n",
+	                       gray(std::filesystem::current_path(ignored).string()))
+	        << std::format("  ~ means your home folder: {}\n\n", gray(ExpandHome("~")))
+	        << "  For example:\n";
+	for (const auto& path : {name, "~/Downloads/" + name, ExpandHome("~/Downloads/" + name)})
+		app.out << "    " << output::Paint(path, output::kCyan, app.color) << "\n";
+	app.out << "\n";
+}
 #+end_src
 
 *** 2.10 The pause
@@ -1295,28 +1317,35 @@ Entry TakeImported(Entry existing, const Entry& incoming) {
 *** 7.3 Export writes one list to a file
 It asks before replacing a file that exists.
 
-Source: =src/menu/transfer.cpp:154-174=
+Source: =src/menu/transfer.cpp:195-222=
 #+begin_src cpp
-void ExportList(App& app, MediaType type) {
-	auto typed = AskText(
-	    app, std::format("File to save the {} list in (Enter to go back): ", TypeKey(type)));
+bool ExportList(App& app, MediaType type, const std::string& heading) {
+	ClearScreen(app);
+	DrawHeading(app, heading);
+	app.out << std::format(
+	    "  Saves your {} list as MyAnimeList XML, which AniList and MyAnimeList import.\n\n",
+	    TypeKey(type));
+	ShowPathHelp(app, type);
+	auto typed = AskText(app, std::format("{} File to save (Enter to go back): ",
+	                                      output::Paint(">", output::kMagenta, app.color)));
 	if (not typed)
-		return;
-	std::string path = ExpandHome(*typed);
+		return false;
+	std::string path = FullPath(*typed);
 	std::error_code ignored;
 	if (std::filesystem::exists(path, ignored) and
 	    not AskYes(app, std::format("{} exists. Replace it?", path))) {
 		Note(app, "Nothing was saved.");
-		return;
+		return true;
 	}
 	auto written = mal_xml::Write(app.db.GetEntries(type), type);
 	if (not WriteFile(path, written.xml)) {
 		Fail(app, std::format("could not write {}", path));
-		return;
+		return true;
 	}
 	Done(app, std::format("Saved {}.", path));
 	if (written.skipped > 0)
 		Note(app, std::format("{} without a MyAnimeList id left out.", written.skipped));
+	return true;
 }
 #+end_src
 
@@ -1673,11 +1702,11 @@ Capture these at a terminal, then caption them Figure 1, Figure 2 and so on. The
 8. Edit Details.
 9. Remove: the confirmation.
 10. Stats.
-11. Import XML: the keep or file prompt.
+11. Import Anime XML: the keep or file prompt.
 12. Exit.
 
 * Testing and Sample Runs
-The project has 129 automated tests, including a smoke test that runs the real program, and all of them pass at this commit. They use temporary data and a stand-in for AniList.
+The project has 130 automated tests, including a smoke test that runs the real program, and all of them pass at this commit. They use temporary data and a stand-in for AniList.
 
 These runs are real output from a small sample list, captured at an 80-column terminal (the first at 120 columns, so the big logo shows). The Add run uses the same stand-in for AniList. =[main menu]= marks where the home screen was drawn again.
 

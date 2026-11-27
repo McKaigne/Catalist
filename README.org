@@ -57,8 +57,12 @@ A terminal at least 106 columns wide shows the big logo on the home screen.
 - *A title's page:* its card, then +1 Episode (or Chapter), Set Progress,
   Set Status, Set Score, Edit Details (total, volumes, dates, name) and
   Remove, which asks first.
-- *Import & Export:* MyAnimeList XML. Unpack =.xml.gz= files with =gunzip=
-  first. Where an import differs from your lists, you choose title by title.
+- *Import & Export:* Import Anime XML, Import Manga XML, Export Anime XML and
+  Export Manga XML, all in MyAnimeList's format. Each asks for a file path and
+  shows how one is read: a name alone is in the folder Catalist runs in, =~=
+  is your home folder, and a full path works too. Unpack =.xml.gz= files with
+  =gunzip= first. Where an import differs from your list, you choose title by
+  title.
 
 Statuses are shown as =[W]= Watching or Reading, =[C]= Completed, =[H]= On
 Hold, =[D]= Dropped, =[P]= Planned and =[R]= Rewatching or Rereading. A score

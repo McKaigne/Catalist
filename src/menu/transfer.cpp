@@ -110,29 +110,69 @@ std::optional<std::set<const Entry*>> AskClashes(App& app, const std::vector<Ent
 	return take_file;
 }
 
-void ImportFile(App& app) {
-	auto typed = AskText(app, "MyAnimeList XML file to import (Enter to go back): ");
+// The file name MyAnimeList gives an export, as an example.
+std::string ExampleFile(MediaType type) {
+	return std::format("{}list.xml", TypeKey(type));
+}
+
+// How a typed path is read, with examples that would all work here.
+void ShowPathHelp(App& app, MediaType type) {
+	std::error_code ignored;
+	std::string name = ExampleFile(type);
+	auto gray = [&app](const std::string& text) {
+		return output::Paint(text, output::kGray, app.color);
+	};
+	app.out << std::format("  A name alone means this folder: {}\n",
+	                       gray(std::filesystem::current_path(ignored).string()))
+	        << std::format("  ~ means your home folder: {}\n\n", gray(ExpandHome("~")))
+	        << "  For example:\n";
+	for (const auto& path : {name, "~/Downloads/" + name, ExpandHome("~/Downloads/" + name)})
+		app.out << "    " << output::Paint(path, output::kCyan, app.color) << "\n";
+	app.out << "\n";
+}
+
+std::string FullPath(const std::string& typed) {
+	std::error_code ignored;
+	auto full = std::filesystem::absolute(ExpandHome(typed), ignored);
+	return full.empty() ? typed : full.lexically_normal().string();
+}
+
+// False when the user went back without choosing a file.
+bool ImportFile(App& app, MediaType type, const std::string& heading) {
+	ClearScreen(app);
+	DrawHeading(app, heading);
+	app.out << std::format(
+	    "  Choose the {} list you exported from MyAnimeList, an .xml file.\n"
+	    "  If it ends in .xml.gz, unpack it first: gunzip {}.gz\n\n",
+	    TypeKey(type), ExampleFile(type));
+	ShowPathHelp(app, type);
+	auto typed = AskText(app, std::format("{} File to import (Enter to go back): ",
+	                                      output::Paint(">", output::kMagenta, app.color)));
 	if (not typed)
-		return;
-	std::string path = ExpandHome(*typed);
+		return false;
+	std::string path = FullPath(*typed);
 	auto content = ReadFile(path);
 	if (not content) {
 		Fail(app, std::format("cannot read {}", path));
-		return;
+		return true;
 	}
 	if (content->starts_with("\x1f\x8b")) {
 		Fail(app, std::format("{} is compressed; unpack it first with gunzip", path));
-		return;
+		return true;
 	}
 	auto titles = mal_xml::Parse(*content);
+	auto others = std::erase_if(titles, [type](const Entry& e) { return e.type != type; });
 	if (titles.empty()) {
-		Fail(app, std::format("no anime or manga found in {}", path));
-		return;
+		MediaType other = type == MediaType::kAnime ? MediaType::kManga : MediaType::kAnime;
+		Fail(app, others > 0 ? std::format("{} holds {}, not {}; choose Import {} XML for it", path,
+		                                   TypeKey(other), TypeKey(type), TypeToString(other))
+		                     : std::format("no {} found in {}", TypeKey(type), path));
+		return true;
 	}
 	auto take_file = AskClashes(app, titles);
 	if (not take_file) {
 		Note(app, "Cancelled. Nothing was imported.");
-		return;
+		return true;
 	}
 
 	size_t added = 0;
@@ -145,56 +185,72 @@ void ImportFile(App& app) {
 	}
 	if (not app.db.Save(app.Stamp())) {
 		Fail(app, std::format("could not save {}", app.db.file().string()));
-		return;
+		return true;
 	}
-	Done(app, std::format("{}: {} titles, {} added, {} in your lists already.", path, titles.size(),
-	                      added, titles.size() - added));
+	Done(app, std::format("{}: {} titles, {} added, {} in your {} list already.", path,
+	                      titles.size(), added, titles.size() - added, TypeKey(type)));
+	return true;
 }
 
-void ExportList(App& app, MediaType type) {
-	auto typed = AskText(
-	    app, std::format("File to save the {} list in (Enter to go back): ", TypeKey(type)));
+bool ExportList(App& app, MediaType type, const std::string& heading) {
+	ClearScreen(app);
+	DrawHeading(app, heading);
+	app.out << std::format(
+	    "  Saves your {} list as MyAnimeList XML, which AniList and MyAnimeList import.\n\n",
+	    TypeKey(type));
+	ShowPathHelp(app, type);
+	auto typed = AskText(app, std::format("{} File to save (Enter to go back): ",
+	                                      output::Paint(">", output::kMagenta, app.color)));
 	if (not typed)
-		return;
-	std::string path = ExpandHome(*typed);
+		return false;
+	std::string path = FullPath(*typed);
 	std::error_code ignored;
 	if (std::filesystem::exists(path, ignored) and
 	    not AskYes(app, std::format("{} exists. Replace it?", path))) {
 		Note(app, "Nothing was saved.");
-		return;
+		return true;
 	}
 	auto written = mal_xml::Write(app.db.GetEntries(type), type);
 	if (not WriteFile(path, written.xml)) {
 		Fail(app, std::format("could not write {}", path));
-		return;
+		return true;
 	}
 	Done(app, std::format("Saved {}.", path));
 	if (written.skipped > 0)
 		Note(app, std::format("{} without a MyAnimeList id left out.", written.skipped));
+	return true;
 }
 
 }  // namespace
 
 void TransferScreen(App& app) {
+	const std::string crumb = "Catalist / Import & Export";
+	const std::vector<std::string> options = {"Import Anime XML", "Import Manga XML",
+	                                          "Export Anime XML", "Export Manga XML"};
 	int choice = 0;
 	do {
 		ClearScreen(app);
-		DrawMenu(app, "Catalist / Import & Export", {"Import XML", "Export Anime", "Export Manga"});
-		choice = ReadChoice(app, 3);
+		DrawMenu(app, crumb, options);
+		choice = ReadChoice(app, static_cast<int>(options.size()));
+		std::string heading = choice > 0 ? crumb + " / " + options[choice - 1] : "";
+		bool acted = false;
 		switch (choice) {
 			case 1:
-				ImportFile(app);
+				acted = ImportFile(app, MediaType::kAnime, heading);
 				break;
 			case 2:
-				ExportList(app, MediaType::kAnime);
+				acted = ImportFile(app, MediaType::kManga, heading);
 				break;
 			case 3:
-				ExportList(app, MediaType::kManga);
+				acted = ExportList(app, MediaType::kAnime, heading);
+				break;
+			case 4:
+				acted = ExportList(app, MediaType::kManga, heading);
 				break;
 			default:
 				break;
 		}
-		if (choice != 0)
+		if (acted)
 			Pause(app);
 	} while (choice != 0);
 }

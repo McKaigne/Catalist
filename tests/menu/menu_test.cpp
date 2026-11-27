@@ -79,9 +79,9 @@ TEST_CASE_FIXTURE(MenuFixture, "menu asks again after a choice that is not on it
 TEST_CASE_FIXTURE(MenuFixture, "menu ends when the input ends, wherever it is") {
 	Seed();
 	for (const char* typed :
-	     {"", "1\n", "1\n1\n", "1\n2\n", "1\n1\n1\n", "1\n1\n1\n2\n", "1\n1\n1\n3\n", "1\n1\n1\n5\n",
-	      "1\n1\n1\n5\n1\n", "1\n1\n1\n6\n", "1\n3\n", "1\n3\n2\n", "1\n4\n", "1\n6\n", "1\n7\n",
-	      "2\n", "3\n", "3\n1\n"}) {
+	     {"", "1\n", "1\n1\n", "1\n2\n", "1\n1\n1\n", "1\n1\n1\n2\n", "1\n1\n1\n3\n",
+	      "1\n1\n1\n5\n", "1\n1\n1\n5\n1\n", "1\n1\n1\n6\n", "1\n3\n", "1\n3\n2\n", "1\n4\n",
+	      "1\n6\n", "1\n7\n", "2\n", "3\n", "3\n1\n", "3\n3\n"}) {
 		CAPTURE(typed);
 		CHECK(Run(typed) == 0);
 		CHECK(Has(out, "Goodbye!\n"));
@@ -226,8 +226,9 @@ TEST_CASE_FIXTURE(MenuFixture, "menu counts the next episode and stays on the ti
 
 TEST_CASE_FIXTURE(MenuFixture, "menu edits a title from its page") {
 	Seed();
-	CHECK(Run("1\n1\n1\n2\n10\n\n4\n9\n\n5\n1\n20\n\n2\n2026-01-02\n\n4\nOdd Cab\n\n0\n0\n0\n0\n") ==
-	      0);
+	CHECK(
+	    Run("1\n1\n1\n2\n10\n\n4\n9\n\n5\n1\n20\n\n2\n2026-01-02\n\n4\nOdd Cab\n\n0\n0\n0\n0\n") ==
+	    0);
 	CHECK(Has(out,
 	          "  1  Set Total\n  2  Set Start Date\n  3  Set Finish Date\n  4  Rename\n"
 	          "  0  Back\n"));
@@ -352,20 +353,24 @@ TEST_CASE_FIXTURE(MenuFixture, "menu add says when AniList cannot help") {
 
 TEST_CASE_FIXTURE(MenuFixture, "menu exports to a file and imports it") {
 	Seed();
-	CHECK(Run("3\n2\nanime.xml\n\n0\n0\n") == 0);
-	CHECK(Has(out, "  1  Import XML\n  2  Export Anime\n  3  Export Manga\n  0  Back\n"));
-	CHECK(Has(out, "OK Saved anime.xml.\n"));
+	CHECK(Run("3\n3\nanime.xml\n\n0\n0\n") == 0);
+	CHECK(Has(out,
+	          "  1  Import Anime XML\n  2  Import Manga XML\n  3  Export Anime XML\n"
+	          "  4  Export Manga XML\n  0  Back\n"));
+	CHECK(Has(out, "Catalist / Import & Export / Export Anime XML\n"));
+	CHECK(Has(out, std::format("OK Saved {}.\n",
+	                           (std::filesystem::current_path() / "anime.xml").string())));
 	CHECK(Has(catalist::test::ReadText("anime.xml"), "Odd Taxi"));
 
 	Put("anime.xml", "keep me");
-	CHECK(Run("3\n2\nanime.xml\nn\n\n0\n0\n") == 0);
+	CHECK(Run("3\n3\nanime.xml\nn\n\n0\n0\n") == 0);
 	CHECK(catalist::test::ReadText("anime.xml") == "keep me");
-	CHECK(Run("3\n2\nanime.xml\ny\n\n0\n0\n") == 0);
+	CHECK(Run("3\n3\nanime.xml\ny\n\n0\n0\n") == 0);
 	CHECK(Has(catalist::test::ReadText("anime.xml"), "Odd Taxi"));
 
 	std::filesystem::remove("catalist.csv");
 	CHECK(Run("3\n1\nanime.xml\n\n0\n0\n") == 0);
-	CHECK(Has(out, "2 titles, 2 added, 0 in your lists already.\n"));
+	CHECK(Has(out, "/anime.xml: 2 titles, 2 added, 0 in your anime list already.\n"));
 	CHECK(Saved(MediaType::kAnime).size() == 2);
 }
 
@@ -375,10 +380,28 @@ TEST_CASE_FIXTURE(MenuFixture, "menu import reports a file it cannot use") {
 	Put("bad.xml", "not a list");
 	Put("packed.xml", "\x1f\x8b rest");
 	CHECK(Run("3\n1\nmissing.xml\n\n1\nbad.xml\n\n1\npacked.xml\n\n0\n0\n") == 0);
-	CHECK(Has(out, "Error: cannot read missing.xml\n"));
-	CHECK(Has(out, "Error: no anime or manga found in bad.xml\n"));
+	std::string here = std::filesystem::current_path().string();
+	CHECK(Has(out, std::format("Error: cannot read {}/missing.xml\n", here)));
+	CHECK(Has(out, std::format("Error: no anime found in {}/bad.xml\n", here)));
 	CHECK(Has(out, "is compressed"));
+	Put("anime.xml", catalist::test::kAnimeXml);
+	CHECK(Run("3\n2\nanime.xml\n\n0\n0\n") == 0);
+	CHECK(Has(out, "anime.xml holds anime, not manga; choose Import Anime XML for it\n"));
 	CHECK(catalist::test::ReadText("catalist.csv") == before);
+}
+
+TEST_CASE_FIXTURE(MenuFixture, "menu import and export say how a path is read") {
+	CHECK(Run("3\n1\n\n0\n0\n") == 0);
+	CHECK(Has(out, "Catalist / Import & Export / Import Anime XML\n"));
+	CHECK(Has(out, "If it ends in .xml.gz, unpack it first: gunzip animelist.xml.gz\n"));
+	CHECK(Has(out, std::format("  A name alone means this folder: {}\n",
+	                           std::filesystem::current_path().string())));
+	CHECK(Has(out, "  For example:\n    animelist.xml\n    ~/Downloads/animelist.xml\n"));
+	CHECK(Has(out, "> File to import (Enter to go back): "));
+	CHECK_FALSE(Has(out, "Press Enter to continue"));
+	CHECK(Run("3\n4\n\n0\n0\n") == 0);
+	CHECK(Has(out, "    mangalist.xml\n"));
+	CHECK(Has(out, "> File to save (Enter to go back): "));
 }
 
 TEST_CASE_FIXTURE(MenuFixture, "menu import asks title by title where the file differs") {

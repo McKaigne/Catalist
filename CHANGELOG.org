@@ -43,6 +43,11 @@ Entries below that describe them no longer apply.
   +1 episode or chapter, progress, status, score, Edit Details (total,
   volumes, dates, name) and Remove. View Lists, Log Progress, Edit Title,
   Remove Title and Stats are gone from the main menu.
+- Import & Export has Import Anime XML, Import Manga XML, Export Anime XML
+  and Export Manga XML. Each opens on its own screen that says which file it
+  wants and how a path is read, with examples, and messages name the file by
+  its full path. Importing an anime file as manga, or the other way round,
+  says which choice to use.
 - Everything on screen is plain ASCII: the logo, =[W]= =[C]= =[H]= =[D]= =[P]=
   =[R]= for the statuses, five =*= =+= =-= stars for a score, =#= and =-=
   progress bars, and =...= for a cut name. The Nerd Font icons and circles

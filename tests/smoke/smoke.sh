@@ -55,7 +55,7 @@ has "reopened" "$shown" "1 in progress"
 grep -q ',Odd Taxi,,watching,0,1,' "$work/catalist.csv" || fail "count reached the file"
 grep -q ",44265,128547,tv$" "$work/catalist.csv" || fail "the AniList format reached the file"
 
-shown=$(menu "3\n2\n$work/anime.xml\n\n0\n0\n")
+shown=$(menu "3\n3\n$work/anime.xml\n\n0\n0\n")
 has "export" "$shown" "Saved $work/anime.xml."
 rm "$work/catalist.csv"
 shown=$(menu "3\n1\n$work/anime.xml\n\n0\n0\n")

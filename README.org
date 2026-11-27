@@ -26,50 +26,74 @@ elsewhere, such as with Nix, uses =catalist.csv= in the folder you run it from.
 On Nix, run =nix develop= first to get the compiler and tools.
 
 ** The menu
-A terminal at least 106 columns wide shows the big logo on the home screen.
+Catalist opens on the main menu. A terminal at least 106 columns wide shows
+the big logo.
 
-#+begin_example
-    ___       ___       ___       ___       ___       ___       ___       ___
-   /\  \     /\  \     /\  \     /\  \     /\__\     /\  \     /\  \     /\  \
-  /::\  \   /::\  \    \:\  \   /::\  \   /:/  /    _\:\  \   /::\  \    \:\  \
- /:/\:\__\ /::\:\__\   /::\__\ /::\:\__\ /:/__/    /\/::\__\ /\:\:\__\   /::\__\
- \:\ \/__/ \/\::/  /  /:/\/__/ \/\::/  / \:\  \    \::/\/__/ \:\:\/__/  /:/\/__/
-  \:\__\     /:/  /   \/__/      /:/  /   \:\__\    \:\__\    \::/  /   \/__/
-   \/__/     \/__/               \/__/     \/__/     \/__/     \/__/
+[[file:docs/screenshots/home.png]]
 
-  354 anime    326 manga    247 in progress
---------------------------------------------------------------------------------
+*** Anime and Manga
+Each list is numbered, 20 a page, latest change first. Under it is a
+numbered menu: 1 Open a Title (then type its number), 2 Search, 3 Filter,
+4 Sort, 5 Clear Search/Filter, 6 Add from AniList, 7 Stats, 8 Next Page,
+9 Previous Page and 0 Back.
 
-  1  Anime
-  2  Manga
-  3  Import & Export
-  0  Exit
+[[file:docs/screenshots/anime-list.png]]
 
-> Enter choice [0-3]:
-#+end_example
+2 Search keeps the titles that hold every word typed.
 
-- *Anime* and *Manga:* your list, numbered 20 a page, latest change first.
-  - Under it is a numbered menu: 1 Open a Title (then type its number),
-    2 Search, 3 Filter, 4 Sort, 5 Clear Search/Filter, 6 Add from AniList,
-    7 Stats, 8 Next Page, 9 Previous Page and 0 Back.
-  - Filter narrows by status, score or (for anime) format. Sort orders by
-    last updated, title, status, score, progress or start date, or reverses.
-- *A title's page:* its card, then +1 Episode (or Chapter), Set Progress,
-  Set Status, Set Score, Edit Details (total, volumes, dates, name) and
-  Remove, which asks first.
-- *Import & Export:* Import Anime XML, Import Manga XML, Export Anime XML and
-  Export Manga XML, all in MyAnimeList's format. Each asks for a file path and
-  shows how one is read: a name alone is in the folder Catalist runs in, =~=
-  is your home folder, and a full path works too. Unpack =.xml.gz= files with
-  =gunzip= first. Where an import differs from your list, you choose title by
-  title.
+[[file:docs/screenshots/search.png]]
 
+3 Filter narrows by status, score or (for anime) format. 4 Sort orders by
+last updated, title, status, score, progress or start date, or reverses.
+
+[[file:docs/screenshots/filter.png]]
+
+[[file:docs/screenshots/sort.png]]
+
+7 Stats counts the list.
+
+[[file:docs/screenshots/stats.png]]
+
+6 Add from AniList searches AniList for that kind of title, then asks for its
+status.
+
+[[file:docs/screenshots/add.png]]
+
+The Manga list works the same way, counting chapters and volumes.
+
+[[file:docs/screenshots/manga-list.png]]
+
+*** A title's page
+Its card, then +1 Episode (or Chapter), Set Progress, Set Status, Set Score,
+Edit Details and Remove, which asks first.
+
+[[file:docs/screenshots/title.png]]
+
+Edit Details holds the changes made less often: the total, volumes read for
+manga, the start and finish dates, and the name.
+
+[[file:docs/screenshots/edit-details.png]]
+
+*** Import & Export
+Import Anime XML, Import Manga XML, Export Anime XML and Export Manga XML, all
+in MyAnimeList's format. Unpack =.xml.gz= files with =gunzip= first. Where an
+import differs from your list, you choose title by title.
+
+[[file:docs/screenshots/import-export.png]]
+
+Each asks for a file path and shows how one is read: a name alone is in the
+folder Catalist runs in, =~= is your home folder, and a full path works too.
+
+[[file:docs/screenshots/import.png]]
+
+*** Marks and search
 Statuses are shown as =[W]= Watching or Reading, =[C]= Completed, =[H]= On
 Hold, =[D]= Dropped, =[P]= Planned and =[R]= Rewatching or Rereading. A score
 is five stars, =*= full, =+= half and =-= empty. An anime's format (TV, Movie,
 OVA and so on) comes from AniList or the XML.
 
-To find a title, type any part of its English or romaji name. The words can be
+To find a title, choose 2 Search and type any part of its English or romaji
+name. The words can be
 in any order, and capitals and punctuation do not matter.
 
 ** Data and backups
